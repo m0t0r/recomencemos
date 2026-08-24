@@ -1,0 +1,26 @@
+{
+  "name": "ai-native-project",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "check-types": "turbo run check-types",
+    "test": "turbo run test test:gates",
+    "test:gates": "bash .claude/hooks/gate-test.sh \"$PWD/.claude/hooks\"",
+    "lint": "oxlint . --max-warnings 0",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.64.0",
+    "oxlint": "^1.79.0",
+    "turbo": "^2.10.11",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11"
+  },
+  "packageManager": "pnpm@11.22.0"
+}

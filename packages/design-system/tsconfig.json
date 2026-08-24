@@ -1,0 +1,12 @@
+{
+  "extends": "@repo/typescript-config/react-library.json",
+  "compilerOptions": {
+    "strictNullChecks": true,
+    "types": ["vitest/globals"],
+    "paths": {
+      "@repo/design-system/*": ["./src/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

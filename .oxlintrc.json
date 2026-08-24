@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "es2024": true,
+    "node": true
+  },
+  "rules": {
+    "no-console": [
+      "error",
+      {
+        "allow": ["error", "warn"]
+      }
+    ],
+    "import/no-unassigned-import": [
+      "warn",
+      {
+        "allow": ["**/*.css"]
+      }
+    ]
+  },
+  "ignorePatterns": [
+    ".agents/**",
+    ".claude/**",
+    "**/.next/**",
+    "**/.turbo/**",
+    "**/dist/**",
+    "**/out/**",
+    "**/build/**",
+    "**/next-env.d.ts"
+  ]
+}

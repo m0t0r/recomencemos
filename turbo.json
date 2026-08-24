@@ -1,0 +1,58 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
+  "globalPassThroughEnv": ["LOG_LEVEL", "LOG_FORMAT", "LOG_MAX_LINE_BYTES"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      "env": ["NEXT_PUBLIC_SENTRY_DSN", "SENTRY_ORG", "SENTRY_PROJECT", "NEXT_PUBLIC_RELEASE"]
+    },
+    "web#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      "env": ["NEXT_PUBLIC_SENTRY_DSN", "SENTRY_ORG", "SENTRY_PROJECT", "NEXT_PUBLIC_RELEASE"],
+      "passThroughEnv": ["SENTRY_AUTH_TOKEN"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": []
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "//#test:gates": {
+      "inputs": [".claude/hooks/**"],
+      "outputs": []
+    },
+    "//#lint": {
+      "inputs": ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}", ".oxlintrc.json", "**/.oxlintrc.json"]
+    },
+    "//#lint:fix": {
+      "cache": false
+    },
+    "//#format": {
+      "inputs": [
+        "**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc,md,css}",
+        ".oxfmtrc.json",
+        ".gitignore"
+      ]
+    },
+    "//#format:fix": {
+      "dependsOn": ["//#lint:fix"],
+      "cache": false
+    },
+    "//#quality": {
+      "dependsOn": ["//#lint", "//#format"]
+    },
+    "//#quality:fix": {
+      "dependsOn": ["//#lint:fix", "//#format:fix"]
+    }
+  }
+}

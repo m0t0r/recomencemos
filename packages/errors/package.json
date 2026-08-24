@@ -1,0 +1,21 @@
+{
+  "name": "@repo/errors",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./app-error": "./src/app-error.ts",
+    "./error-response": "./src/error-response.ts",
+    "./redaction": "./src/redaction.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

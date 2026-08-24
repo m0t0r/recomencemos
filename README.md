@@ -1,0 +1,436 @@
+# ai-native-project
+
+A starting point for products built with an **AI-native SDLC** — the working model described in [The AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), where an agent participates at every stage and humans hold the judgment calls.
+
+This repository is a **template**. Clone it, work through the checklist below, and you have a typed monorepo whose conventions are already written down in a form Claude Code can act on.
+
+## What's inside
+
+A [Turborepo](https://turborepo.dev) monorepo on pnpm, TypeScript throughout:
+
+| Workspace                    | Package name              | Purpose                                                                                                              |
+| ---------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`                   | `web`                     | Next.js 16 App Router app (React 19) — the placeholder product surface                                               |
+| `packages/design-system`     | `@repo/design-system`     | shadcn/ui on Base UI + Tailwind v4, consumed as source (no build step)                                               |
+| `packages/errors`            | `@repo/errors`            | The owned error shape and the shared redaction list — isomorphic, **zero runtime dependencies**, consumed as source  |
+| `packages/observability`     | `@repo/observability`     | The pino logger, the single report site, and the trace-context reader — **server-only**, the other half of the split |
+| `packages/typescript-config` | `@repo/typescript-config` | Shared tsconfigs: `base`, `nextjs`, `react-library`                                                                  |
+
+Requires the **active Node LTS** (24.x — see `.nvmrc`) and **pnpm 11** (pinned via `packageManager`). The Node requirement is enforced, not suggested: `engineStrict` in `pnpm-workspace.yaml` makes `pnpm install` fail outright on an older runtime. Run `fnm use` or `nvm use` first.
+
+```sh
+pnpm install
+pnpm dev          # web on http://localhost:3000
+pnpm build
+pnpm check-types
+pnpm test         # vitest + the stage-hook suite
+pnpm lint         # oxlint, whole repo
+pnpm format       # oxfmt --check
+pnpm lint:fix     # oxlint --fix
+pnpm format:fix   # oxfmt, writes changes
+```
+
+### Design system
+
+`packages/design-system` is [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) primitives, generated from preset [`b1Z6BvKBU`](https://ui.shadcn.com/create?preset=b1Z6BvKBU) (`vega` style, `zinc` base, `blue` theme, `lucide` icons, Inter, small radius, pointer cursor on buttons). Components ship as raw TSX — `import { Button } from "@repo/design-system/components/button"` — and Tailwind v4 tokens live in `packages/design-system/src/styles/globals.css`, which `apps/web/app/layout.tsx` imports.
+
+Add components with the CLI rather than by hand, pointing it at the package:
+
+```sh
+pnpm dlx shadcn@latest add <component> -c packages/design-system
+```
+
+Linting and formatting are [Oxc](https://oxc.rs) tools — `oxlint` and `oxfmt` — wired as Turborepo [root tasks](https://turborepo.dev/docs/guides/tools/oxc), so one pass covers every workspace. `pnpm exec turbo run quality` runs both checks together, `quality:fix` fixes both. Per-workspace rules live in nested `.oxlintrc.json` files that extend the root one; `oxfmt` runs on defaults (note `printWidth` is 100).
+
+Scope any task to one workspace with a filter:
+
+```sh
+pnpm exec turbo dev --filter=web
+```
+
+### Next.js: Cache Components
+
+`apps/web/next.config.ts` sets `cacheComponents: true`. Data is dynamic by default and you opt into caching with the [`use cache`](https://nextjs.org/docs/app/api-reference/directives/use-cache) directive. The same flag makes [Partial Prerendering](https://nextjs.org/docs/app/api-reference/config/next-config-js/cacheComponents) the App Router default — a static shell is prerendered and dynamic content streams in — so there is no separate `experimental.ppr` to enable; it was removed in Next 16.
+
+Reading uncached data outside a `<Suspense>` boundary is a build error by design. The error prints the three ways to fix it (`[stream]`, `[cache]`, `[block]`) with the trade-off of each.
+
+### The error page, and the reference a user quotes
+
+Both error boundaries — `apps/web/app/error.tsx` inside the app shell, `apps/web/app/global-error.tsx` when the root layout itself failed — show the user one line they can quote to support:
+
+```
+Reference: 3846760449
+```
+
+**What that string is depends on where the error was thrown**, and the difference matters to whoever answers the support ticket:
+
+| The reference looks like  | It is                             | Because                                                                                                                   |
+| ------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| a short number            | the framework's `digest`          | The error was thrown on the **server**. It was reported there, once, and the browser deliberately did not report it again |
+| a 32-character hex string | the reporting platform's event id | The error was thrown in the **browser**, so the browser is what reported it, and the id is the one it was given           |
+
+**A digest identifies an error class, not an occurrence.** It is a hash of the error, so two users hitting the same bug quote the **same** string, and one user hitting it twice quotes it twice — it answers "what broke", never "when, for whom". To get from a quoted digest to a single occurrence, pivot: digest → the issue in the reporting platform → a `trace_id` on one of its events → that request's lines in the log drain. Every reported server error puts `event_id` and `trace_id` on its log line precisely so that pivot works from either end.
+
+Nothing else about the failure reaches the page. Neither boundary renders a message, a stack, or a route — an error crossing to the browser from the server has already been replaced with a generic one by the framework, and the operator detail stays in the log line.
+
+### Set up for coding agents
+
+Configured per [Next.js: set up your project for AI coding agents](https://nextjs.org/docs/app/guides/ai-agents):
+
+| File                                   | Role                                                                                                                                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                            | Repo-root pointer at `CLAUDE.md`, for agents that read `AGENTS.md`                                                                                                                                                                          |
+| `apps/web/AGENTS.md`                   | Managed block written and re-added by `next dev`; points agents at the version-matched docs bundled in `node_modules/next/dist/docs/`. Commit it — deleting it only recreates the diff. Your own notes go outside the `BEGIN`/`END` markers |
+| `apps/web/CLAUDE.md`                   | `@AGENTS.md`                                                                                                                                                                                                                                |
+| `.mcp.json`                            | [`next-devtools-mcp`](https://nextjs.org/docs/app/guides/mcp) — live errors, logs, routes, and per-route compilation from the running dev server                                                                                            |
+| `.agents/skills/` + `skills-lock.json` | Vendored skills, symlinked into `.claude/skills/`. Add more with `npx skills add <owner>/<repo> --skill <name>`                                                                                                                             |
+
+Bundled tool skills: [`next-dev-loop`](https://www.skills.sh/vercel/next.js/next-dev-loop) (verify a change against a running dev server), [`next-partial-prefetching-adoption`](https://www.skills.sh/vercel/next.js/next-partial-prefetching-adoption) (move the app onto a shared App Shell), [`turborepo`](https://www.skills.sh/vercel/turborepo), and [`shadcn`](https://www.skills.sh/shadcn/ui). The Plan-stage workflow skills are covered under [The Plan stage](#the-plan-stage).
+
+Two more Next.js skills are worth adding once a project has real routes — [`next-cache-components-adoption`](https://www.skills.sh/vercel/next.js/next-cache-components-adoption) (unnecessary here: the flag is already on) and [`next-cache-components-optimizer`](https://www.skills.sh/vercel/next.js/next-cache-components-optimizer) (needs a test runner in `apps/web`, which is wired in the change that first puts real code there).
+
+`logging.browserToTerminal` is enabled, so browser console errors surface in `next dev` stdout where an agent can read them.
+
+The runner is **Vitest**, wired in `packages/design-system` (happy-dom + React Testing Library), `packages/errors`, and `packages/observability` (both Node environment, no plugins). Tests sit beside their source as `src/**/*.test.{ts,tsx}`, and **Vitest globals are on** — a test never imports `describe`/`it`/`expect` from `"vitest"`. The DOM environment is happy-dom rather than the jsdom Next's docs prescribe — a deviation that was measured, not preferred: jsdom 30 would raise the repo's Node floor from any 24.x to 24.15+, pulls 39 transitive packages against happy-dom's 10, costs ~330 ms of per-test-file environment setup against ~135 ms, and is missing nine of the DOM APIs a component library reaches for (`matchMedia`, `ResizeObserver`, `scrollIntoView`, `inert`, `elementFromPoint` among them) where happy-dom has them. `dialog.test.tsx` renders a Base UI portal through a real click to keep the swap honest. `pnpm test` runs it alongside `//#test:gates`, the suite that drives the stage hooks — so the repo's own logic is covered by the same command as its code.
+
+> **`apps/web` has no `test` script on purpose.** It is showcase scaffolding you delete, so a suite there would be vacuously green or test code destined for deletion. Copy the design system's `vitest.config.mts` in the change that first puts real code in the app. Note Vitest cannot test `async` Server Components — Next's docs point at E2E for those, which is what [`next-dev-loop`](https://www.skills.sh/vercel/next.js/next-dev-loop) covers here.
+
+## Placeholders to change
+
+Everything below is scaffolding from `create-turbo` / `create-next-app`. Work down the list when starting a new project — or run `/bootstrap`, which executes the mechanical rows, verifies with the full gate, and hands the human rows to `scripts/setup.sh`. This table stays the source of truth: the skill reads it rather than carrying a copy, so a new placeholder belongs here and nowhere else.
+
+| Placeholder                                                                | Where                                                                                                                                             | Change it to                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ai-native-project`                                                        | `package.json` → `name`                                                                                                                           | Your project's name                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `web`                                                                      | `apps/web/package.json` → `name`, and every `--filter=web`                                                                                        | Your app's name (e.g. `dashboard`, `api`)                                                                                                                                                                                                                                                                                                                                                                                       |
+| `@repo` scope                                                              | `packages/*/package.json`, all `workspace:*` imports, `packages/design-system` import paths and `components.json` aliases                         | Your org scope (e.g. `@acme`) — rename consistently or keep `@repo` deliberately                                                                                                                                                                                                                                                                                                                                                |
+| `title: "Create Next App"` / `description: "Generated by create next app"` | `apps/web/app/layout.tsx`                                                                                                                         | Real product metadata                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Design system showcase page                                                | `apps/web/app/page.tsx`, `apps/web/app/showcase.tsx`                                                                                              | Your own landing content                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Next.js favicon                                                            | `apps/web/app/favicon.ico`                                                                                                                        | Your own assets                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| shadcn preset `b1Z6BvKBU` (theme, radius, fonts, icon set)                 | `packages/design-system/components.json` + `src/styles/globals.css`                                                                               | Your brand's preset — build one at [ui.shadcn.com/create](https://ui.shadcn.com/create), then `pnpm dlx shadcn@latest apply <code> -c packages/design-system`                                                                                                                                                                                                                                                                   |
+| Inter / Geist Mono via `next/font/google`                                  | `apps/web/app/layout.tsx`                                                                                                                         | Your typeface                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Port `3000`                                                                | `apps/web/package.json` → `dev` script                                                                                                            | Whatever your setup needs                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `create-next-app` boilerplate README                                       | `apps/web/README.md`                                                                                                                              | Notes specific to the app, or delete it                                                                                                                                                                                                                                                                                                                                                                                         |
+| This README                                                                | `README.md`                                                                                                                                       | Your project's README — keep the "Placeholders" table only if you re-template                                                                                                                                                                                                                                                                                                                                                   |
+| GitHub Issues as the tracker                                               | `docs/agents/*.md`, written by `/setup-matt-pocock-skills`                                                                                        | Re-run that skill if you track work elsewhere, then re-apply the publish section of `issue-tracker.md`                                                                                                                                                                                                                                                                                                                          |
+| Product context for _this template_                                        | `PRODUCT.md`                                                                                                                                      | Your product's own truth — users, purpose, positioning, constraints. Rewrite it, don't edit around it                                                                                                                                                                                                                                                                                                                           |
+| Design tokens for the default preset                                       | `DESIGN.md` — **the YAML frontmatter only**                                                                                                       | Your own tokens, after applying your preset. The prose body is durable method, not a placeholder — inherit it                                                                                                                                                                                                                                                                                                                   |
+| `service` base field (`"web"`)                                             | `packages/observability/src/logger-options.ts` — the `SERVICE_NAME` constant                                                                      | Your service's name. It is a constant rather than an environment variable on purpose: an undeclared variable is filtered out of the task environment entirely by Turborepo's strict mode, so adding one means declaring it in `turbo.json` too. Every log line carries it, and a drain filters on it                                                                                                                            |
+| Redaction key names (`authorization`, `cookie`, `token`, `api_key`, …)     | `packages/errors/src/redaction.ts` — the module-internal list                                                                                     | Your own names, added to it. The shipped list is **advisory**: a floor that proves the mechanism works, never a claim that these names are sufficient for your data. It is deliberately not exported, so extend the list in place rather than pinning it from a downstream project                                                                                                                                              |
+| `NEXT_PUBLIC_SENTRY_DSN` (unset)                                           | The environment; `apps/web/instrumentation-client.ts` and `instrumentation.ts` both read it, `turbo.json` declares it on `build`                  | Your Sentry project's DSN. Leave it unset and the SDK is never initialised at all — not merely disabled — on **both** sides: `register()` checks it before importing `sentry.server.config.ts`, so a clone runs, builds and tests with no monitoring account. It is public by construction: anything holding it can post into your quota, so the runbook's spike protection and inbound filters are the mitigation, not secrecy |
+| `SENTRY_ORG` / `SENTRY_PROJECT` (unset)                                    | The environment; `turbo.json` declares both on `build`                                                                                            | Your Sentry org and project slugs. Source-map upload is attempted only when these **and** `SENTRY_AUTH_TOKEN` are all present. **The token never goes in a `.env` file** — `turbo.json` declares `.env*` a `build` input, so its content is hashed into the cache key however the variable is declared, and under remote caching it would travel with the artifact. It is passed through to `web#build` alone                   |
+| `NEXT_PUBLIC_RELEASE` (unset)                                              | The environment; the `release` base field on every log line, the release on every Sentry event, and the name uploaded source maps are filed under | A commit SHA — `git rev-parse --short HEAD` — set by whatever builds your app. Tweak the expression per project if you version differently. **It is published to every browser, so nothing else belongs in it.** Left unset, the build plugin detects the `HEAD` SHA itself and log lines read `release: "unknown"`                                                                                                             |
+| Error-boundary copy (heading, body, button label, reference line)          | `apps/web/app/error.tsx`, `apps/web/app/global-error.tsx`                                                                                         | Your product's voice. The shipped wording was settled at Design and is deliberately plain — "Something went wrong", a retry, and a reference identifier. Rewrite the strings; keep the shape, since the reference line is what support asks the user for                                                                                                                                                                        |
+| Root-boundary palette (six hex values, twice)                              | `apps/web/app/global-error.tsx` — the `styles` string                                                                                             | Colours matching your brand. They are literal hex rather than design-system tokens because this boundary **replaces the root layout**: no stylesheet is mounted, so it cannot reach the token layer and follows the OS colour scheme through two `prefers-color-scheme` queries instead. Whatever you put here must clear your `wcag-level` in **both** schemes on its own                                                      |
+| Worked example Route Handler                                               | `apps/web/app/api/example-error/route.ts`                                                                                                         | Delete it. It is scaffolding: one handler, two branches, showing the handled-and-returned path and the rethrown one so a reader learns **thrown is reported, returned is logged** from running code rather than from a test file. Nothing else refers to it, and deleting the folder is the whole removal. Keep it only while you are still learning the error design                                                           |
+| Pinned vendor figures in the go-live runbook                               | `docs/runbooks/observability-go-live.md` — the "Date figures checked" row, §3's free-tier table, §5's two band numbers, and §8's CSP host         | Your plan's actual numbers, re-derived. The free-tier caps are **pinned at a date** (2026-08-23, Sentry Developer) precisely so a stale figure is visible as stale rather than trusted; the two bands are arithmetic on the error allowance, so changing plan changes both; and the CSP host is read off your own DSN's origin. Re-check them before go-live, and re-stamp the date                                             |
+| Every `UNSET` value                                                        | `docs/policy/*.md`                                                                                                                                | Your organization's answers. `grep -rn UNSET docs/policy/` is the whole list; an unset key surfaces as a flagged concern on every spec that needs it. Two keys are **already set** by the observability effort — `observability-vendor` and `log-level-production` — because the template ships code implementing them; changing the vendor is costed in `docs/adr/0002-reporting-vendor-seam.md`                               |
+
+Repo-level things to set up outside the code: a remote cache (`pnpm exec turbo login && pnpm exec turbo link`), branch protection so an agent cannot approve its own code, and CI.
+
+## Adopting the AI-native SDLC
+
+The playbook chains a versioned artifact through each stage; the next stage reads the previous one, and git becomes the decision record.
+
+| Stage    | Artifact               | Lives in                                            | What happens                                                                                                                                                                                                                                                                                                                |
+| -------- | ---------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan     | `intent.md`            | `docs/efforts/<NNNN>-<slug>/` + a GitHub issue stub | Problem, proposed outcome, affected users/systems, constraints, open questions                                                                                                                                                                                                                                              |
+| Design   | `spec.md`              | the same folder + a GitHub issue stub               | The architect drafts, four advisors consult in isolation, the architect synthesizes. Flagged concerns resolved with their owners before engineering picks it up                                                                                                                                                             |
+| Build    | Tickets + code         | sub-issues of the spec's issue; code in git         | `/to-tickets` cuts one tracer-bullet slice per user story, with blocking edges, each sized to one session. Every NFR that named that story rides along as an acceptance criterion. Then `/implement` works one ticket per session: claim, plan onto the ticket, `/tdd` at the spec's seams, verify with evidence, open a PR |
+| Test     | Evals in CI            | `.github/workflows/`                                | A suite of real tasks with acceptance checks, re-run whenever `CLAUDE.md`, skills, or hooks change; every incident becomes a permanent eval                                                                                                                                                                                 |
+| Deploy   | PR + review findings   | the GitHub PR                                       | `/code-review` runs two axes in parallel — Standards and Spec — and `REVIEW.md` adds whatever else your organization needs. The agent may open a PR and may not approve or merge one; a hook enforces it                                                                                                                    |
+| Maintain | A `needs-triage` issue | GitHub Issues                                       | Deterministic monitoring escalates by tier — log, diagnose read-only, propose a fix. `/triage` promotes what deserves it back into Plan                                                                                                                                                                                     |
+
+Per the playbook, each artifact names **one** system as its source of truth and everything else links to it. Here that split is: intents and specs are files in git, tickets are GitHub issues, and every published artifact gets an issue holding a summary and a permalink. `docs/agents/issue-tracker.md` is the rule every skill reads.
+
+**The plan is a query, not a document.** The playbook's Build artifact is a `plan.md`; here that role is played by the spec's issue with its tickets as sub-issues, because a prose plan goes stale the moment a ticket is split and nothing forces it back in line. GitHub computes progress and blocked-by from the edges themselves, so `gh issue view <spec-issue>` is always the current plan. An `/implement` session opens by querying the frontier — the open, unblocked, unassigned tickets — and claims one by assigning it. The session holds no position, the tracker does, which is what makes `/clear` between tickets safe and lets one plan outlive any number of sessions. See "Build operations" in `docs/agents/issue-tracker.md`.
+
+### The Plan stage
+
+Plan, Design, and Build are wired up in this template. Test, Deploy, and Maintain are yours to wire as you reach them — though `code-review` and `diagnosing-bugs` are vendored, so Deploy and Maintain need `REVIEW.md` and CI rather than a from-scratch start.
+
+**What's installed.** Eleven skills from [mattpocock/skills](https://github.com/mattpocock/skills), vendored into `.agents/skills/` like every other skill here, plus `to-intent`, which is ours, and `to-spec`, which started as Matt's and was rewritten far enough to become a **fork** — it leaves `skills-lock.json` so `npx skills update` cannot clobber it, and [`docs/agents/forked-skills.md`](./docs/agents/forked-skills.md) records what it forked from and at which hash. Only some are model-invocable; the rest carry `disable-model-invocation: true`, so you type them and the agent cannot reach them on its own. That split is deliberate: user-invoked skills orchestrate, model-invoked skills hold reusable discipline.
+
+**The loop.** Three on-ramps into Plan, plus one shortcut past it:
+
+```
+NEW IDEA, one session's worth
+  /grill-with-docs  ─┐   (+ /research in the background, /prototype when a
+                     │    question needs a runnable answer)
+BIG FOGGY EFFORT     │
+  /wayfinder  ───────┼──▶  /to-intent  ──▶  intent.md  ──▶  /to-spec  ──▶  spec.md
+   a map of decision │                          │
+   tickets, one per  │                    human approves             /to-tickets
+   session           │                     (the Plan gate)                │
+INBOUND WORK         │                                                    ▼
+  /triage  ──────────┘                                            /implement per ticket
+      └──────────── ready-for-agent: small and clear ───────────────────▲
+```
+
+**Triage has two exits, and that is deliberate.** Something small and clear leaves as a
+`ready-for-agent` issue that `/implement` picks up directly — no intent, no spec, no effort folder,
+because a three-artifact chain buys nothing for a one-line fix. Something large or ambiguous goes
+through `/to-intent` and gets promoted to a numbered effort. A human picks the exit at triage, so a
+folder under `docs/efforts/` means someone decided this is work. See
+[ADR-0001](./docs/adr/0001-findings-enter-through-triage.md) for why findings enter as issues rather
+than as intents the way the playbook describes.
+
+| Command            | Use it when                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| `/grill-with-docs` | An idea you can hold in one session. Interviews you in rounds, and writes `CONTEXT.md` + ADRs             |
+| `/wayfinder`       | An effort too big for one session. Charts a map of decision tickets and works them one by one             |
+| `/triage`          | Work that arrived rather than started — bug reports, monitoring findings. Closes the Maintain → Plan loop |
+| `/to-intent`       | The thinking is done. Synthesizes the conversation into `intent.md` and publishes it                      |
+| `/to-spec`         | The intent is `approved`. Runs the three-phase Design stage and publishes `spec.md`                       |
+| `/spec-review`     | The spec is written. Checks it against the advisories it was built from                                   |
+
+`/research` and `/prototype` are model-invoked, so the agent reaches for them when a question needs a fact or a runnable answer. Name either one to force it.
+
+**The Plan gate.** An intent stays `status: draft` while any open question is unchecked, and every open question has to name what it blocks — that is what makes the list something a human can approve against. Moving it to `approved` is the human's call.
+
+A `PreToolUse` hook enforces it — [`.claude/hooks/plan-to-design-gate.sh`](./.claude/hooks/plan-to-design-gate.sh), wired in [`.claude/settings.json`](./.claude/settings.json). Two rules:
+
+| Rule                   | Refuses                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| **Approval integrity** | any agent write setting `status: approved` in an `intent.md`                                        |
+| **The gate**           | writing a `spec.md` whose sibling intent is missing, still `draft`, or has unchecked open questions |
+
+The first rule is the one that matters. Without it the second is theatre: an agent that wants to finish flips the intent to `approved` and walks straight through. Approval has to be an act the agent cannot perform.
+
+It gates `spec.md` and **never a PR**, so the playbook's 3σ route — "Claude may act, though only by opening a PR into the review gate or triggering a pre-approved runbook" — stays open.
+
+The hook watches `Write` and `Edit`, and pattern-matches `Bash` for shell redirects at those paths, which is a heuristic rather than a seal.
+
+**That heuristic used to fight the publish protocol.** `docs/agents/issue-tracker.md` puts a `Source of truth:` line naming the artifact inside an issue body, and the original pattern matched a `>` followed by the path _anywhere later on the line_ — so a markdown blockquote or an `intent -> spec.md` arrow in a `gh issue create` body read as a write, and the very protocol the gate exists to protect was refused. Two narrowings fixed it: heredoc bodies are stripped before matching, because a body is prose however often it says `intent.md`; and a redirect's target must be the token **immediately** after the operator, with a preceding `-` excluding the arrow. Nine protocol shapes are now regression cases in `gate-test.sh`. One ambiguity is left on purpose: a blockquote of the bare form `> docs/efforts/…/intent.md` is still refused, because that is also exactly what a shell redirect looks like. It also binds only agents on a machine that has this repo's settings loaded. Neither stops _you_: editing `intent.md` in your own editor is exactly how approval is meant to happen.
+
+Both gates share [`gate-lib.sh`](./.claude/hooks/gate-lib.sh) and are covered by [`gate-test.sh`](./.claude/hooks/gate-test.sh) — 58 cases across all nine rules, run by `pnpm test` as the `//#test:gates` task:
+
+```sh
+pnpm test:gates            # the hooks alone — one line per rule
+pnpm test:gates -- -v      # every case enumerated, for reading what is covered
+pnpm test                  # the hooks plus the design system's suite
+```
+
+It is **quiet on success**, like the runners beside it: a clean rule collapses to one line carrying
+its count, and only failures print in full — with their section header, so a red case still reads in
+context. The full enumeration was the default once, and 58 ok-lines scrolled the rest of `pnpm test`
+off the screen; Turborepo replays a cache hit's stdout verbatim, so that volume was paid on every run
+rather than only on a real one.
+
+**Wiring it in a fresh clone.** The vendored skills travel with the template; the per-repo configuration does not.
+
+```sh
+npx skills update      # or `npx skills add mattpocock/skills`
+# `gh label create` takes one name per call, so loop
+for l in needs-triage needs-info ready-for-agent ready-for-human wontfix \
+         wayfinder:map wayfinder:research wayfinder:prototype wayfinder:grilling wayfinder:task; do
+  gh label create "$l" --force
+done
+```
+
+`bug` and `enhancement` — the two triage _category_ roles — ship as GitHub defaults, so they need no creating. Then run `/setup-matt-pocock-skills` once. It rewrites `docs/agents/issue-tracker.md` from its own seed template, so **re-apply the "publish to the issue tracker" section afterward** or intents and specs go back to being issue bodies. Take single-context on the domain-docs question: `pnpm-workspace.yaml` trips its monorepo detection, but the workspaces here are build targets, not bounded contexts.
+
+If you install Matt's skills as a Claude Code plugin rather than vendoring them, uninstall the plugin first (`claude plugin uninstall mattpocock-skills --scope user`) — running both gives you every skill twice.
+
+### The Design stage
+
+Design turns an approved `intent.md` into a `spec.md` shaped like a system design doc: requirements → core entities → API contract → high-level design → deep dives. It runs in **three phases**, because the interview is a pipeline and not a fan-out — the API depends on the entities, and an advisor spawned before the API exists is guessing.
+
+```
+intent.md [approved]
+     │
+     ▼
+  /to-spec
+     │
+   PHASE A   the architect drafts a skeleton, alone, in interview order
+     │       user stories → NFRs → core entities → API → high-level design
+     │       (deep dives left empty; seams checked with you)
+     ▼
+   PHASE B   four advisors fan out, isolated, concurrent
+     │       security · data · operability · simplicity      ← subagents
+     │       ux                                              ← main session, it may interview you
+     │       each returns an ADVISORY, committed to advisories/
+     ▼
+   PHASE C   the architect synthesizes, writes the deep dives,
+     │       records every override, proposes ADRs where precedent is set
+     ▼
+  spec.md [draft]  +  ## Flagged concerns
+     │
+     ▼
+  /spec-review     one fidelity check: what did synthesis drop or dilute?
+     │             (--adversarial re-runs all four against the finished spec)
+     ▼
+  you resolve the concerns → status: approved → /to-tickets
+```
+
+**Advisors advise; the architect writes.** If each advisor authored its own section the spec would read as four documents stapled together, and the genuine conflicts between them — security wants the check in the data layer, latency wants the cached read — would get buried instead of surfaced. Two advisors reaching opposite conclusions becomes one concern stating both positions, arbitrated by the Tech lead.
+
+**Method and policy are separate, and that is the whole design.** The skills carry craft that no downstream project rewrites; [`docs/policy/`](./docs/policy/) carries the answers only your organization can give. Every policy value is set or literally `UNSET`, and a skill that needs an `UNSET` value raises a concern naming the file and the key rather than picking a default:
+
+```sh
+grep -rn UNSET docs/policy/     # the whole day-one list
+```
+
+| Skill                | Runs as               | Carries                                                                                                                    |
+| -------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `system-design`      | the architect         | The interview method, back-of-envelope, deep-dive selection, monorepo placement, ADRs                                      |
+| `security-design`    | `security-advisor`    | Secure by design, zero trust, least privilege — STRIDE per boundary, where authorization lives, what crosses to the client |
+| `data-design`        | `data-advisor`        | Entities → schema, indexes from access patterns, expand–contract, cache ownership, classification                          |
+| `operability-design` | `operability-advisor` | SLI before SLO, control bands, golden signals, rollback classes, the release moment                                        |
+| `simplicity`         | `simplicity-advisor`  | The counterweight — the fewest moving parts that satisfy the intent                                                        |
+| `ux-design`          | the architect         | A **router**, not a rulebook: [impeccable](https://impeccable.style/docs/) owns the depth                                  |
+
+**The UX lens is a router**, and it runs in the main session because one of its cases interviews you. It asks who consumes the surface this change adds:
+
+| Case                                | What runs                    | The spec's UX section says                          |
+| ----------------------------------- | ---------------------------- | --------------------------------------------------- |
+| No consumed surface                 | nothing                      | `_No consumed surface._` and why                    |
+| Local change to an existing surface | nothing at Design            | the surface, its brief, the states this change adds |
+| New surface or flow                 | `/impeccable shape <target>` | the decisions, and a link to the surface brief      |
+| Agent-facing (a skill, `CLAUDE.md`) | `writing-for-agents`         | the consumer, its trigger, its failure mode         |
+
+It keeps only what nobody else holds at spec time: the six-state set, the Suspense-fallback-as-designed-state bridge, and the actual copy. [`DESIGN.md`](./DESIGN.md) is the visual authority — **its frontmatter is a placeholder, its prose body is not**.
+
+**The spec reaches Build through the artifact, not through a modified skill.** Each non-functional requirement names the user stories it binds, and `/to-tickets` — vendored and unmodified — cuts one ticket per story and copies the spec's criteria onto it. So a `p95 under 200 ms` that named story 1 arrives as a checkbox on story 1's ticket, rather than sitting in a section nobody re-reads at implementation time. An NFR binding no story is a finding, reported at the end of `/to-spec`.
+
+**`/prototype` complements `shape` rather than competing with it.** `shape` decides direction in prose and produces a durable brief; `/prototype` tests a hypothesis in throwaway code. Its LOGIC branch answers "does this state model or API shape hold up" (a Phase A/C question, and the validated reducer gets inlined into the spec); its UI branch answers "which concrete alternative wins" and needs an existing page to sit against, which is why it belongs to the local-change case. Prototypes at Design are the one exception to "no code yet" — throwaway branch, never promoted, and the architect proposes rather than auto-runs.
+
+**The Design gate.** A spec stays `status: draft` while any concern is unchecked. [`design-to-build-gate.sh`](./.claude/hooks/design-to-build-gate.sh) adds three rules to the Plan gate's two:
+
+| Rule                   | Refuses                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| **Approval integrity** | any agent write setting `status: approved` in a `spec.md`                        |
+| **Concerns exist**     | writing a `spec.md` with no `## Flagged concerns` section, even an empty one     |
+| **The gate**           | hanging a ticket off the issue of a spec still `draft` or carrying open concerns |
+
+The middle rule is what gives the third something to read. A concerns list that can be silently omitted is a gate that never fires.
+
+### The Build stage
+
+Build turns an approved `spec.md` into tickets and then into merged code. **Both of its skills are
+vendored and unmodified** — everything that makes them fit this repo lives in artifacts the repo
+owns, which is the same move the Design stage makes with the spec template.
+
+```
+spec.md [approved]
+     │
+     ▼
+  /to-tickets     one tracer-bullet ticket per user story, with blocking edges
+     │            each bound NFR rides along as an acceptance criterion
+     │            published as sub-issues of the spec's issue — that IS the plan
+     ▼
+  the frontier    open · unblocked · unassigned
+     │
+     ▼
+  /implement      one ticket, one session
+     │  claim ──▶ plan (posted as a ticket comment) ──▶ /tdd at the spec's seams
+     │                                                        │
+     │                                     verify: lint · check-types · test
+     │                                     + next-dev-loop where apps/web changed
+     │                                                        ▼
+     │                                     tick each criterion WITH its evidence
+     ▼
+  a PR            ← the agent stops here. Merging is the human's act
+```
+
+**The plan is a query, and the ticket-level plan is a comment.** The playbook commits a `plan.md`;
+here the effort-level plan is the spec's issue with its tickets hanging off it, because a prose plan
+goes stale the moment a ticket is split. The _ticket_-level plan is still written — plan mode, then
+posted as a comment on the ticket before any code — because the playbook wants the PR review to check
+the diff against it, and that is precisely what the **Spec** axis of `/code-review` does.
+
+**The seams were already agreed at Design.** `tdd` refuses to write a test at an unconfirmed seam;
+`/to-spec` A5 checks the seams with you before Phase B. So Build reads the spec rather than
+re-interviewing you — a coupling that existed before this stage was wired and just needed saying.
+
+**Verification is two-legged.** `packages/design-system` has Vitest. `apps/web` does not, and its leg
+is [`next-dev-loop`](https://www.skills.sh/vercel/next.js/next-dev-loop) against a running dev
+server, because Vitest cannot test `async` Server Components — Next's own docs say so. A criterion
+ticked without naming its evidence is a claim, not a check.
+
+| Skill                       | Runs as       | Carries                                                                                  |
+| --------------------------- | ------------- | ---------------------------------------------------------------------------------------- |
+| `to-tickets`                | you type it   | Vertical slices, blocking edges, expand–contract for a wide refactor                     |
+| `implement`                 | you type it   | The session. Thin on purpose — the repo's half is in `docs/agents/issue-tracker.md`      |
+| `tdd`                       | model-invoked | Red/green, what a good test is, and "no test at an unconfirmed seam"                     |
+| `code-review`               | you type it   | Two axes in parallel subagents: Standards (with a Fowler smell baseline) and Spec        |
+| `codebase-design`           | model-invoked | The deep-module vocabulary `tdd` cites when the interface's shape is itself the question |
+| `resolving-merge-conflicts` | model-invoked | The tax on stacked PRs                                                                   |
+
+#### Stacked pull requests
+
+Off by default — `stacked-prs` is `UNSET` in [`docs/policy/build.md`](./docs/policy/build.md). Turn
+it on and a chain of blocking edges is published as a chain of PRs, each based on the last:
+
+```sh
+gh extension install github/gh-stack
+gh stack init && gh stack add ticket/124-slug && gh stack submit
+```
+
+The reason it fits is that **`/to-tickets` already emits the structure**: every ticket declares what
+blocks it, and a chain of blocking edges _is_ a stack. Nothing new has to be recorded. What it buys
+is `implement-spec`'s concurrency with `/implement`'s reviewability — a blocked ticket can start
+before its blocker merges, and a reviewer still gets one small PR per slice instead of one large one
+per effort.
+
+**A stack is a path; the ticket graph is a DAG.** Maximal chains become stacks, a ticket with two
+blockers stays serialized, and unrelated tickets are never stacked for tidiness — a stack asserts an
+ordering, and asserting one that does not exist makes the review worse. The rule is in
+[`docs/agents/issue-tracker.md`](./docs/agents/issue-tracker.md). The canonical case is the
+expand–contract sequence `/to-tickets` produces for a wide refactor: a single chain by construction,
+and `gh stack merge`'s all-or-nothing merge is exactly the "green is promised only at the integrate
+ticket" guarantee that skill describes.
+
+It costs rebase churn — a fix low in the stack rebases everything above it — and it multiplies PRs,
+which is why `REVIEW.md` has to say what runs per-PR and what runs once at the top.
+
+**The Build gate.** Two `PreToolUse` hooks and one `Stop` hook add four rules to the five before them:
+
+| Rule                   | Refuses                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| **F. The ship gate**   | `gh pr merge`, an approving `gh pr review`, or `gh stack merge` — a stack merge is a merge |
+| **G. No side door**    | `git push` to the default branch. Without it F is theatre                                  |
+| **H. Protected paths** | hand-editing a vendored skill, a committed advisory, or `pnpm-lock.yaml`                   |
+| **I. Credentials**     | writing an AWS key, GitHub token, Anthropic key, Slack token, or private key into the repo |
+
+Rule F is the load-bearing one, exactly as **A** is for Plan and **C** for Design: the act has to be
+one the agent cannot perform. Unlike **B** and **E** it reads no artifact, because there is no state
+under which an agent may merge — `build.md` records that as a fixed fact rather than a key.
+
+Rule H's test is **`skills-lock.json`** rather than a hand-kept list, and that is what makes it
+survive: a skill named in the lock is one `skills update` overwrites, and this repo's own skills sit
+in the same directory precisely because forking one means leaving the lock.
+
+`verify-before-stop.sh` closes the loop the playbook cares most about — _"a session checks its own
+work and fixes its own mistakes before an engineer sees them."_ It refuses to let the session stop
+while lint, `check-types`, `test`, or `test:gates` is red, fires only when code actually changed, and
+never twice. **A hook edit counts as code here** — the stage hooks are this repo's own logic, so a
+session that changes one runs `gate-test.sh` before it may stop.
+
+**A gate that blocks correct work is a gate someone turns off.** All four false refusals found while
+writing these were exactly that, and two are worth knowing about: a commit message _naming_ the
+commands rule F refuses tripped rule F, so `gate-lib.sh` now strips heredoc bodies before matching;
+and BSD `sed` has no `\b`, so a silently-non-matching strip made rule G refuse nothing at all. Every
+new rule gets a prose case in `gate-test.sh`.
+
+### Extension points this template leaves for you
+
+| File                                                    | Role                                                                                                                                                                               |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`CLAUDE.md`](./CLAUDE.md) / [`AGENTS.md`](./AGENTS.md) | **Included.** Commands, conventions, architecture, recurring mistakes, how to verify work. Update whenever a correction has to be repeated                                         |
+| [`.mcp.json`](./.mcp.json)                              | **Included.** `next-devtools-mcp`, so agents can read the running dev server's errors, routes, and compilation state                                                               |
+| `.agents/skills/<name>/SKILL.md`                        | **Included** — tool skills, the Plan-stage set, and the Design-stage method. These carry craft, not policy, so inherit them rather than rewriting them                             |
+| [`docs/policy/`](./docs/policy/)                        | **Where your policy goes.** Five short files of keys, mostly `UNSET`. This is the half of the Design stage a template genuinely cannot write                                       |
+| [`.claude/agents/<name>.md`](./.claude/agents/)         | **Included** — four Design advisors and the fidelity checker. Yours go here too: verification, research, whatever recurs                                                           |
+| [`.claude/settings.json`](./.claude/settings.json)      | **Included.** Both stage gates as `PreToolUse` hooks, plus impeccable's design detector. Yours go here too: protected paths, formatters, credential scanning, deploy authorization |
+| `REVIEW.md`                                             | The review passes beyond `code-review`'s two axes, the severity that blocks a merge, and — under stacked PRs — what runs per-PR versus once at the top of the stack                |
+| `.github/workflows/`                                    | CI, plus the non-interactive eval suite                                                                                                                                            |
+
+The rest are deliberately empty — they encode _your_ organization's policy, and are worth writing as the need for each one shows up rather than upfront.
+
+## Useful links
+
+- [The AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook)
+- [Claude Code docs](https://docs.claude.com/en/docs/claude-code/overview)
+- Next.js for agents: [setup guide](https://nextjs.org/docs/app/guides/ai-agents) · [MCP server](https://nextjs.org/docs/app/guides/mcp) · [Cache Components](https://nextjs.org/docs/app/getting-started/caching) · [skills on skills.sh](https://www.skills.sh/vercel/next.js)
+- [Turborepo: tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks) · [caching](https://turborepo.dev/docs/crafting-your-repository/caching) · [filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)

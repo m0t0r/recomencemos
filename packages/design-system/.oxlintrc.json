@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "extends": ["../../.oxlintrc.json"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "react", "jsx-a11y"],
+  "env": {
+    "browser": true
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/components/label.tsx"],
+      "rules": {
+        "jsx-a11y/label-has-associated-control": "off"
+      }
+    },
+    {
+      "files": ["src/components/field.tsx"],
+      "rules": {
+        "jsx-a11y/prefer-tag-over-role": "off",
+        "react/no-array-index-key": "off"
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "check-types": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/design-system": "workspace:*",
+    "@repo/errors": "workspace:*",
+    "@repo/observability": "workspace:*",
+    "@sentry/nextjs": "^10.70.0",
+    "lucide-react": "^1.33.0",
+    "next": "16.3.2",
+    "next-themes": "^0.4.6",
+    "pino": "^10.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4.2.6",
+    "@types/node": "^24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "tailwindcss": "^4.2.6",
+    "typescript": "7.0.2"
+  },
+  "//": "`pino` is here even though nothing in this app imports it, and it is not cruft to prune. Its importer arrives with #35, which puts `@repo/observability` on a server path: Next externalises the logger out of the server bundle and then resolves it from this workspace's directory, which pnpm's isolated store has not hoisted it into. It is declared ahead of that importer because #34 owns this manifest and #35 should not have to reopen it, so until #35 lands the failure this guards against cannot be reproduced here. The spec (DD2) names `pino` alone and not the two packages Next externalises alongside it; whether that is sufficient becomes testable at the same moment. Delete this line only together with the last server-side import of `@repo/observability`."
+}

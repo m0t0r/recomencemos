@@ -1,0 +1,58 @@
+{
+  "name": "@repo/observability",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./logger": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/logger.ts"
+    },
+    "./logger-options": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/logger-options.ts"
+    },
+    "./log-request-complete": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/log-request-complete.ts"
+    },
+    "./log-request-error": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/log-request-error.ts"
+    },
+    "./server-only": "./src/server-only.ts",
+    "./startup-notice": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/startup-notice.ts"
+    },
+    "./report-error": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/report-error.ts"
+    },
+    "./report-request-error": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/report-request-error.ts"
+    },
+    "./trace-context": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/trace-context.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@repo/errors": "workspace:*",
+    "@sentry/nextjs": "^10.70.0",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^24.13.3",
+    "typescript": "7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,48 @@
+# Fail installs outright when the running Node does not satisfy `engines.node`
+# in package.json, instead of printing a warning and continuing.
+engineStrict: true
+
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# `@sentry/nextjs` loads these two module-interception packages by bare specifier
+# from inside its own server instrumentation, so pnpm's isolated store has to put
+# them where a bare `require`/`import` from the app can see them. pnpm 11 reads
+# its settings from this file, not `.npmrc` (see CLAUDE.md), which is also why
+# the entry lands in a file pnpm owns and oxfmt ignores.
+#
+# This replaces pnpm's default pattern list (`*eslint*`, `*prettier*`); neither
+# tool is used here — linting and formatting are oxlint and oxfmt.
+publicHoistPattern:
+  - "import-in-the-middle"
+  - "require-in-the-middle"
+minimumReleaseAgeExclude:
+  - "@next/env@16.3.2"
+  - "@next/swc-darwin-arm64@16.3.2"
+  - "@next/swc-darwin-x64@16.3.2"
+  - "@next/swc-linux-arm64-gnu@16.3.2"
+  - "@next/swc-linux-arm64-musl@16.3.2"
+  - "@next/swc-linux-x64-gnu@16.3.2"
+  - "@next/swc-linux-x64-musl@16.3.2"
+  - "@next/swc-win32-arm64-msvc@16.3.2"
+  - "@next/swc-win32-x64-msvc@16.3.2"
+  - next@16.3.2
+  - shadcn@4.19.0
+
+# `@sentry/cli`'s postinstall is a *fallback* downloader, not the install step:
+# it resolves `@sentry/cli-<platform>` — an optional dependency pnpm has already
+# placed — and exits 0 when it finds one, fetching from the CDN only for installs
+# run with `--no-optional`. Denying it therefore costs nothing on any supported
+# platform, and keeps a fresh clone's `pnpm install` free of both an arbitrary
+# postinstall and the `ERR_PNPM_IGNORED_BUILDS` non-zero exit an undecided entry
+# here produces.
+#
+# What was checked rather than assumed: `require("@sentry/cli").getPath()`
+# returns a path inside `@sentry/cli-darwin` and that file exists, so the binary
+# the upload needs is present without the postinstall. What that does *not*
+# prove is an upload — that needs real credentials, so the first credentialed
+# build is the one to watch. If it ever fails to find the binary, the fix is to
+# flip this to `true`, not to unpick anything else.
+allowBuilds:
+  "@sentry/cli": false

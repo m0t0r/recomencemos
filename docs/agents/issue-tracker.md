@@ -1,0 +1,246 @@
+# Issue tracker: GitHub
+
+Issues for this repo live as GitHub issues, driven by the `gh` CLI. Intents and specs are files in
+`docs/efforts/`, published to an issue that points at them: see "When a skill says publish to the issue
+tracker" below.
+
+## Conventions
+
+- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
+- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
+- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
+- **Comment on an issue**: `gh issue comment <number> --body "..."`
+- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
+- **Close**: `gh issue close <number> --comment "..."`
+
+Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
+
+## Pull requests as a triage surface
+
+**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
+
+When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
+
+- **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
+- **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
+- **Comment / label / close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
+
+GitHub shares one number space across issues and PRs, so a bare `#42` may be either: resolve with `gh pr view 42` and fall back to `gh issue view 42`.
+
+## When a skill says "publish to the issue tracker"
+
+Two kinds of artifact publish differently.
+
+**Intents and specs are files.** `intent.md` and `spec.md` are the versioned artifacts of the
+AI-native SDLC: git is their **source of truth**, and the GitHub issue is a workflow surface that
+points at the file. `/to-intent` and `/to-spec` publish these.
+
+**Every other ticket is a GitHub issue and nothing more.** `/to-tickets`, `/wayfinder`, and
+`/triage` call `gh issue create` directly. Tickets are decomposition, not the audit trail.
+
+### Publishing an intent or a spec
+
+Efforts live at `docs/efforts/<NNNN>-<slug>/`, numbered from `0001`. Take the next number by scanning
+`docs/efforts/`; reuse the existing folder when the effort already has one.
+
+1. Write `docs/efforts/<NNNN>-<slug>/<stage>.md`, leaving `issue:` empty:
+
+   ```yaml
+   ---
+   stage: spec # intent | spec
+   status: draft # draft | approved | superseded
+   issue: # filled in at step 3
+   intent: ./intent.md # spec only: the intent this derives from
+   ---
+   ```
+
+2. `gh issue create --label ready-for-agent --title "<Stage>: <title>"`. The body is a **stub**: a
+   one-paragraph summary, then a `Source of truth:` line linking the file on the default branch.
+3. Write the issue number `gh` returned into the file's `issue:` field.
+4. Commit the file: `docs(effort): <NNNN> <stage> — <title>`. See "Commit messages" below.
+5. **Push, and confirm the commit reached the remote.** A permalink pins a SHA, and GitHub cannot
+   serve a blob for an object it has never received — a link to an unpushed commit 404s, while
+   looking exactly like a working one. Effort artifacts land on the **default branch**, which
+   [`../policy/build.md`](../policy/build.md) forbids an agent from pushing to, so an agent
+   **stops here and asks the human to push**. Confirm before step 6:
+
+   ```sh
+   git branch -r --contains <sha>          # names a remote branch, or the commit is not published
+   ```
+
+6. `gh issue comment <n>` with a permalink pinned to that commit's SHA. Read the SHA from git —
+   `SHA=$(git rev-parse HEAD)` — rather than extending a short hash by hand.
+
+The stub summarises and the file carries the content, so the tracker has one link to follow rather
+than a copy that goes stale the first time the file is edited.
+
+**Revising a published artifact**: edit the file, commit, push (step 5 again — the same 404 applies),
+then add one comment carrying the new commit-pinned permalink and a line on what changed. The issue's
+comment history is the artifact's changelog.
+
+### Commit messages for an effort artifact
+
+Every commit touching one takes the same shape, so `git log --oneline --grep "<NNNN> <stage>"` is
+the artifact's whole history:
+
+| When          | Message                                                            |
+| ------------- | ------------------------------------------------------------------ |
+| First publish | `docs(effort): 0001 intent — observability`                        |
+| Revision      | `docs(effort): 0001 intent — record answers to the open questions` |
+| Approval      | `docs(effort): 0001 intent — approved`                             |
+
+A bare `approve <slug>` is **not** it. [`../policy/build.md`](../policy/build.md) fixes Conventional
+Commits, and a message with no type is outside the convention. One such message is already in this
+repo's history — do not copy it. `build.md` cites the history itself as the record of the
+convention, which is precisely how a non-conforming message propagates, so the format is written
+here rather than left to be inferred.
+
+## When a skill says "fetch the relevant ticket"
+
+Run `gh issue view <number> --comments`.
+
+## Build operations
+
+Used by `/to-tickets` and `/implement`. The **plan** is not a document: it is the spec's issue with
+its tickets hanging off it, so it reports its own state and cannot fall out of date.
+
+- **Parent**: the spec's issue, the number recorded in `spec.md`'s `issue:` field. `/to-tickets`
+  publishes every ticket as a **sub-issue** of it, so the effort needs no extra bookkeeping field.
+- **Sub-issues, blocking edges, and the frontier query** work exactly as in Wayfinding operations
+  below: the same `gh api` calls, the same numeric database id for dependency edges, and the same
+  fallbacks where sub-issues or dependencies are unavailable.
+- **Reading the plan**: `gh issue view <parent> --comments` lists the sub-issues with each ticket's
+  state, and GitHub renders progress and blocked-by in its own UI. This is what answers "where did
+  we get to" at the top of a session.
+- **Resuming across sessions**: an `/implement` session opens by running the frontier query against
+  the parent, then claims the first open, unblocked, unassigned ticket with
+  `gh issue edit <n> --add-assignee @me`. The session holds no position; the tracker does. That is
+  what makes `/clear` between tickets safe.
+- **Changing the plan**: splitting a ticket adds a sub-issue and rewires the edges around it, and
+  the parent's progress follows on its own — there is no plan document to bring back in line.
+- **Summaries lag their edges.** `sub_issues_summary` and `issue_dependencies_summary` are computed
+  a second or two behind the writes that change them, so a frontier query run immediately after
+  wiring edges can read a ticket as unblocked when it isn't. When the answer has to be right straight
+  after a write, read the edges themselves — `gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by`
+  returns the blocking issues with their `state`, and is consistent immediately.
+
+### A Build session, start to finish
+
+`/implement` is vendored unmodified and is deliberately thin — it says to implement the work, use
+`/tdd` at agreed seams, run `/code-review`, and commit. Everything below is the part that is
+**this repo's**, and it reaches the skill the same way `/to-tickets`' sub-issue convention does:
+through `CLAUDE.md` pointing here. Do not fork the skill to add any of it.
+
+Read [`../policy/build.md`](../policy/build.md) first. It holds the branch pattern, the merge rules,
+and the four conditions that define **done**.
+
+1. **Claim.** Run the frontier query against the parent, take the first open, unblocked, unassigned
+   ticket, and `gh issue edit <n> --add-assignee @me`. This is the session's first write. One ticket
+   per session — `/clear` between them, which is safe because the position lives in the tracker.
+2. **Branch.** `ticket/<issue-number>-<slug>`, so the branch names its ticket. Where `stacked-prs` is
+   `yes`, base it on its blocker's branch rather than the default branch; see below.
+3. **Plan, and post it.** Plan the change, then post the approved plan as a **comment on the ticket**
+   before writing code. The playbook commits a `plan.md` for this reason — _"the PR review play
+   checks the eventual diff against it"_ — and the Spec axis of `/code-review` is what does the
+   checking. A comment rather than a file because the plan is decomposition, not the audit trail:
+   the same reason tickets are issues and specs are files.
+4. **Build.** `/tdd` at the seams **the spec already agreed** — they are in the spec's
+   `## Testing Decisions` section, which `/to-spec` A5 fills in after checking them with the user
+   before Phase B. That section is the answer to `tdd`'s "no test is written at an unconfirmed seam",
+   so read it rather than re-interviewing the user about something Design settled.
+5. **Verify, with evidence.** Work `build.md`'s definition of done. Tick each acceptance criterion on
+   the issue and **name what proves it** — the test, or the command and its output. A criterion
+   ticked with no evidence is a claim.
+6. **Open a PR.** Title from the ticket. Body: what changed, the evidence from step 5, and
+   `Closes #<ticket>` so merging closes it. Never `--fill` from commits alone; the ticket is the
+   contract, and the PR body is what the reviewer compares against.
+7. **Stop.** The agent may open a PR and may not approve or merge one — `build-to-deploy-gate.sh`
+   refuses both. Report the PR and the ticket, and say which acceptance criteria carry weak evidence.
+
+Where the ticket came from `/triage` rather than `/to-tickets` there is no parent and no spec. Steps
+1–7 are unchanged except that step 4 has no agreed seam to read, so the seams are confirmed with the
+user in-session, as `tdd` requires.
+
+**A ticket or brief may not sequence its work on another PR merging first.** The agent cannot merge
+(`build-to-deploy-gate.sh`), so "land #63 before starting" is an instruction no Build session can
+satisfy — it either stalls the ticket or gets silently ignored, and effort 0001 hit exactly that on
+#55. A document the work depends on rides the ticket's own branch, or is referenced by its
+default-branch path with a note that the reference resolves when both merge — and the PR body says
+so, so the human merging knows the order that makes both links true.
+
+### Stacked pull requests
+
+Only when [`../policy/build.md`](../policy/build.md) sets `stacked-prs: yes`. While it is `UNSET`,
+every ticket gets an independent PR based on the default branch, and the rest of this section does
+not apply.
+
+`/to-tickets` already emits what a stack needs: each ticket declares the tickets that **block** it,
+and a chain of blocking edges is a stack. Publishing it as one lets a blocked ticket start before its
+blocker merges while keeping one small PR per slice.
+
+**A stack is a path; the ticket graph is a DAG.** Decompose before you publish:
+
+- Walk the blocking edges and take each **maximal chain** — a run of tickets where each has exactly
+  one blocker and at most one dependent. Each chain becomes one stack, in dependency order.
+- A ticket with **two or more blockers** cannot sit above both. It ends the chains that reach it and
+  stays serialized: it starts once its blockers have merged, on its own branch off the default.
+- A ticket that **fans out** to several dependents ends its chain too; each dependent starts a new
+  stack once it merges, or waits.
+- Tickets with no edges at all are independent PRs. Do not stack them for tidiness — a stack asserts
+  an ordering, and asserting one that does not exist makes the review worse.
+
+The expand–contract sequence `/to-tickets` produces for a wide refactor is the canonical case: expand
+→ migrate batches → contract is a single chain by construction, and `gh stack merge` is atomic up to
+a chosen PR, which is exactly the "green is promised only at the integrate-and-verify ticket"
+guarantee that skill describes.
+
+```sh
+gh stack init                     # start a stack targeting the default branch
+gh stack add ticket/124-slug      # add the next ticket's branch on top
+gh stack submit                   # push and create/update the PRs (--auto to skip the editor)
+gh stack sync                     # after a lower PR changes — this is the tax
+gh stack view                     # where am I
+```
+
+Two things to hold onto:
+
+- **Rebase churn is the cost.** A review fix on a lower PR rebases everything above it. `gh stack
+sync` does the mechanical part; `/resolving-merge-conflicts` is for when it does not.
+- **`gh stack merge` is a merge**, so the gate refuses it to an agent exactly as it refuses
+  `gh pr merge`. Stacks change how work is _published_, never who may ship it.
+
+`gh stack` is the `github/gh-stack` extension at `v0.1.0` — `gh extension install github/gh-stack`.
+Its version is one of the reasons `stacked-prs` is `UNSET` rather than `yes`.
+
+## Triage operations
+
+Used by `/triage`, which is vendored unmodified — these rules reach it the same way Build operations
+reach `/implement`: through `CLAUDE.md` pointing here. They apply at step 3 (verify) and step 5
+(promote) of that skill's loop.
+
+**A verified bug names its class, and the brief answers "where else?".** Reproducing the reported
+case scopes the fix to the level the reproduction happened to exercise, and that is how effort 0001
+fixed "a record dropped whole loses its ids" at `err.context` (#52) while the same defect sat at
+top-level `context` (#65) — same file, same mechanism, one level up. So before a bug brief is
+posted, state the general class in one sentence ("a record-valued field outside the admit loops is
+dropped whole") and sweep for its other instances. What the sweep finds is folded into the ticket
+when it is the same fix, or filed as sibling findings when it is not; either way the brief records
+that the sweep ran and where it looked. A brief that scopes to the reproduction alone is the
+point-fix bias written down.
+
+**Three post-merge fix tickets in one module is a churn trigger.** The fourth finding in the same
+area is promoted as a **redesign ticket** — "make the mechanism one thing" — rather than another
+patch, and any open point-fix in that area is folded into it instead of landing first (a fix inside
+the old shape is one more loop for the redesign to unwind). Effort 0001's line-cap subsystem is the
+worked example: five sequential patches (#48, #52, #53, #54, #55) each fixed the level its finding
+exercised, and the residue is three admit loops whose seams are where #65 lived. Three is a working
+default in the `build.md` sense — a project may move it, but `UNSET` it is not.
+
+Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
+
+- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
+- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
+- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only, the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
+- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
+- **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
+- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
