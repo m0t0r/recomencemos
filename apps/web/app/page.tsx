@@ -1,5 +1,4 @@
 import { Badge } from "@repo/design-system/components/badge";
-import { ThemeToggle } from "@repo/design-system/components/theme-toggle";
 import { Showcase } from "./showcase";
 
 export default function Home() {
@@ -18,7 +17,6 @@ export default function Home() {
             .
           </p>
         </div>
-        <ThemeToggle />
       </header>
 
       <Showcase />

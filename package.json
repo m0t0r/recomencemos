@@ -1,5 +1,5 @@
 {
-  "name": "ai-native-project",
+  "name": "recomencemos",
   "private": true,
   "scripts": {
     "build": "turbo run build",

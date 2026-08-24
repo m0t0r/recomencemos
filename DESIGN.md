@@ -1,25 +1,28 @@
 ---
-name: ai-native-project
-description: The template's default design system — shadcn/ui on Base UI, Tailwind v4 tokens, light and dark.
+name: Recomencemos
+description: shadcn/ui on Base UI, Tailwind v4 tokens copied from m0t0r/workforpereira. Light only — there is no dark mode.
 colors:
   background: "oklch(1 0 0)"
-  foreground: "oklch(0.141 0.005 285.823)"
+  foreground: "oklch(0.2 0.012 248)"
   card: "oklch(1 0 0)"
-  card-foreground: "oklch(0.141 0.005 285.823)"
+  card-foreground: "oklch(0.2 0.012 248)"
   popover: "oklch(1 0 0)"
-  popover-foreground: "oklch(0.141 0.005 285.823)"
-  primary: "oklch(0.488 0.243 264.376)"
-  primary-foreground: "oklch(0.97 0.014 254.604)"
-  secondary: "oklch(0.967 0.001 286.375)"
-  secondary-foreground: "oklch(0.21 0.006 285.885)"
-  muted: "oklch(0.967 0.001 286.375)"
-  muted-foreground: "oklch(0.552 0.016 285.938)"
-  accent: "oklch(0.967 0.001 286.375)"
-  accent-foreground: "oklch(0.21 0.006 285.885)"
-  destructive: "oklch(0.577 0.245 27.325)"
-  border: "oklch(0.92 0.004 286.32)"
-  input: "oklch(0.92 0.004 286.32)"
-  ring: "oklch(0.705 0.015 286.067)"
+  popover-foreground: "oklch(0.2 0.012 248)"
+  primary: "oklch(0.48 0.122 248)"
+  primary-foreground: "oklch(1 0 0)"
+  secondary: "oklch(0.955 0.008 248)"
+  secondary-foreground: "oklch(0.2 0.012 248)"
+  muted: "oklch(0.97 0.004 248)"
+  muted-foreground: "oklch(0.54 0.02 248)"
+  accent: "oklch(0.955 0.008 248)"
+  accent-foreground: "oklch(0.2 0.012 248)"
+  destructive: "oklch(0.45 0.13 22)"
+  destructive-foreground: "oklch(1 0 0)"
+  success: "oklch(0.45 0.1 155)"
+  warning: "oklch(0.45 0.094 75)"
+  border: "oklch(0.915 0.006 248)"
+  input: "oklch(0.65 0.02 248)"
+  ring: "oklch(0.48 0.122 248)"
 typography:
   display:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
@@ -40,10 +43,10 @@ typography:
     lineHeight: 1.5
     letterSpacing: "normal"
 rounded:
-  sm: "0.27rem"
-  md: "0.36rem"
-  lg: "0.45rem"
-  xl: "0.63rem"
+  sm: "0.375rem"
+  md: "0.5rem"
+  lg: "0.625rem"
+  xl: "0.875rem"
 spacing:
   xs: "0.25rem"
   sm: "0.5rem"
