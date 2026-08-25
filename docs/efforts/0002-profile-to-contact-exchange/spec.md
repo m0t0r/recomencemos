@@ -226,7 +226,14 @@ inside its own ticket. See **UX design** for target paths and the ordering const
 - **NFR14 — Admin authentication is a property of the session, not the principal.** Every `/admin/*`
   response — page and Server Action alike — to a session **not established through password + TOTP**
   is a **403**, even where the principal has both factors enrolled. An Admin who signed in through the
-  magic link every Account can use is not an authenticated Admin. **Binds:** 7, 20.
+  magic link every Account can use is not an authenticated Admin.
+  **The mechanism, because "a property of the session" is not free.** Better Auth records 2FA on the
+  **user** (`twoFactorEnabled`), not on the session, and its 2FA flow guards only the credential
+  path — so a magic-link session on an Admin account would carry full Admin authority having presented
+  no second factor at all. Two things close that, and both are required: magic-link sign-in is
+  **refused** for an account holding the Admin grant, and the session records the method that created
+  it, through `session.additionalFields` written by a `databaseHooks.session.create.before` hook.
+  `requireAdmin` reads that field, not `twoFactorEnabled`. **Binds:** 7, 20.
 - **NFR15 — A Report freezes without waiting for a human, and the freeze is race-free.** From commit
   of a Report the reported Hirer sends **0** further Offers. `sendOffer` takes a row lock on the
   Hirer's Account inside its transaction: under READ COMMITTED an unlocked read of `offerSendingState`
@@ -297,8 +304,19 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   **≤ 5/hour per address and ≤ 20/hour per IP**. One Account holds at most one CapabilityProfile, by
   unique constraint rather than by the form. The counter lives in Postgres, not process memory,
   because deploys are continuous and an in-memory limiter resets several times a day. It **fails
-  closed**. **Second half:** a refusal returns a typed value and does **not** throw, so a crawler
-  cannot spend the month's Sentry error quota. **Binds:** 16, 2, 6, 10.
+  closed**.
+  **Better Auth's own endpoints are a second door, and this requirement does not reach them.**
+  `/api/auth/*` is directly reachable; a ceiling on the `requestMagicLink` Server Action does nothing
+  for `/api/auth/sign-in/magic-link`. Better Auth's built-in limiter is on in production by default
+  but keeps counters **in memory** unless told otherwise — resetting on every deploy, which is the
+  exact defect this requirement already rejects for our own counter. So `rateLimit.storage` is
+  **`"database"`** and the sensitive-endpoint rules are set explicitly rather than inherited.
+  **And every per-IP bound depends on reading the right IP.** Fly's proxy sits in front of the app, so
+  unless `advanced.ipAddress.ipAddressHeaders` names `x-forwarded-for`, every request appears to come
+  from one address and **every per-IP ceiling above collapses into a single global one** — which would
+  lock out legitimate users while barely inconveniencing an attacker.
+  **Second half:** a refusal returns a typed value and does **not** throw, so a crawler cannot spend
+  the month's Sentry error quota. **Binds:** 16, 2, 6, 10.
 - **NFR27 — Sign-in actually completes.** **≥ 70%** of `requestMagicLink` calls are followed by a
   completed sign-in within 30 minutes, rolling 7 days; a **drop of > 20 points** against the trailing
   30-day value is the actionable signal. This replaces a bounce-rate-only indicator, which goes green
@@ -745,7 +763,62 @@ is fine, and it is written here so nobody later reads it as a regression.
 Story 19 is `Should`. If it slips, filtering by Skill slug and city is a `WHERE` clause over indexes
 that already exist, and NFR21 slips with it.
 
-### DD5 — The shared device, and the mechanism the intent's vocabulary did not have (NFR13)
+### DD5 — Auth configuration, sessions, and the Admin's second factor (NFR13, NFR14, NFR26)
+
+Read against `better-auth@1.7.1`'s own guidance rather than recalled. Eleven settings below are
+**not defaults** — each is either off, memory-backed, or pointed at the wrong thing until set, and
+three of them would ship as security holes rather than as rough edges.
+
+| Setting                                          | Value here                               | Why it is not the default                                                                     |
+| ------------------------------------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `rateLimit.storage`                              | `"database"`                             | Defaults to memory; deploys are continuous, so the limiter resets several times a day (NFR26) |
+| `rateLimit.customRules`                          | explicit on the magic-link and 2FA paths | Inheriting "3 per 10 s" leaves the one credential in this system on a default                 |
+| `advanced.ipAddress.ipAddressHeaders`            | `["x-forwarded-for"]`                    | Fly proxies every request; unset, every per-IP ceiling becomes one global ceiling             |
+| `session.cookieCache`                            | **disabled**                             | Enabled, every revocation in NFR13 and NFR15's zero lag by its TTL                            |
+| `session.expiresIn` / `updateAge`                | per NFR13, per device class              | Defaults are 7 days / 1 day for everyone                                                      |
+| `session.additionalFields`                       | records the sign-in method               | NFR14's mechanism; there is no built-in equivalent                                            |
+| `user.changeEmail.enabled`                       | `true`                                   | **Disabled by default** — the contract's `changeEmail` silently does nothing otherwise        |
+| `user.deleteUser.enabled`                        | `true`                                   | **Disabled by default** — same for story 13, which is a Ley 1581 surface                      |
+| `emailAndPassword.requireEmailVerification`      | `true`                                   | Admin only; the credential account is the one worth it                                        |
+| `emailAndPassword.revokeSessionsOnPasswordReset` | `true`                                   | Off by default, so a reset would leave the attacker's session alive                           |
+| `emailAndPassword.minPasswordLength`             | `16`                                     | Default is 8, for the one account that can read every phone number                            |
+
+**The Admin second factor has a hole that is easy to miss.** Better Auth's `twoFactor` plugin can
+only be enabled for **credential accounts**, and its flow is credentials → session removed →
+temporary 2FA cookie → verify → session created. That is sound, and it guards exactly one path. Every
+Account in this product can also sign in by **magic link**, which never touches that flow — so an
+Admin arriving by magic link would hold a full Admin session having presented no second factor, and
+`twoFactorEnabled` on the user would still read `true`. NFR14 now carries both halves of the fix:
+refuse magic link for an Admin-granted account, **and** stamp the session with the method that
+created it.
+
+**`trustDevice` works against NFR13 and is turned off for the Admin.** Verifying with
+`trustDevice: true` skips the second factor for `trustDeviceMaxAge` — **30 days** by default. NFR13
+gives the Admin an 8-hour non-rolling session precisely because that account can take down a profile
+and read every phone number in the system; a 30-day trusted device means 8-hour sessions
+re-established all month on a password alone. See concern C44.
+
+**`BETTER_AUTH_SECRET` is load-bearing beyond sessions.** It encrypts TOTP secrets and backup codes
+at rest, so rotating it invalidates every Admin second factor — which makes rotation an operational
+event with a recovery step, not a routine hygiene task. 32+ characters,
+`openssl rand -base64 32`, and it belongs in the go-live runbook beside that warning. Better Auth
+rejects placeholder secrets in production and warns below 120 bits of entropy.
+
+**What Better Auth already does, so this spec does not rebuild it.** Origin and Fetch-Metadata CSRF
+checks are on by default (`disableCSRFCheck` stays `false`). `trustedOrigins` validates
+`callbackURL`, `redirectTo`, `errorCallbackURL` and `newUserCallbackURL` and returns 403 — which is
+**not** the same as the API contract's `returnPath` rule, since that one guards _our_ post-sign-in
+redirect; both are needed and they guard different hops. Account enumeration is already handled by
+constant responses and dummy operations, matching the contract's `{ ok: true }`-always shape.
+`databaseHooks` on `session.create`, `session.delete` and `user.update` are where DD11's
+`session.revoked`, `account.deleted` and email-change events come from, rather than hand-wiring each
+call site.
+
+**Not applicable, stated rather than omitted:** `advanced.backgroundTasks.handler` exists for
+serverless platforms that kill the process after a response. This runs as a long-lived Node process
+on a Fly machine, so email sends complete without it.
+
+#### The shared device, and the mechanism the intent's vocabulary did not have
 
 [Intent Q5](./intent.md) settles the shape — the risk is the device, not the clock, so one checkbox at
 sign-in puts the choice where the knowledge is — and says explicitly that Design verifies the
@@ -1306,11 +1379,11 @@ on the DOM environment itself.
 
 ## Flagged concerns
 
-**Forty-two concerns, in two blocks.** C1–C20 were raised at authoring time: six are contradictions
+**Forty-four concerns, in three blocks.** C1–C20 were raised at authoring time: six are contradictions
 between binding documents or between two advisories, and the rest are policy keys this spec needs and
 may not set. C21–C42 were appended by `/spec-review` — eighteen advisory recommendations the synthesis
 dropped or diluted, plus four from the mechanical shape checks and the intent's own obligations on
-Design.
+Design. C43–C44 came from reviewing the auth design against `better-auth@1.7.1`'s own guidance.
 
 Every proposal carries the value its author would defend, because a concern with a number gets
 answered and a concern asking "what should this be?" gets deferred.
@@ -1606,6 +1679,29 @@ on its own — each concern below names its advisory.
       **Risk if wrong:** the platform's only impact evidence ships unmeasured, and any figure published
       from it carries an unknown response rate on top of ADR-0007's self-reporting qualification.
       **Owner:** Tech lead (with On-call lead on the number).
+
+### Appended after the Better Auth review (2026-08-25)
+
+- [ ] **C43** — **There is one Admin, and losing the TOTP device locks the platform's only moderator
+      out of the queue.** Backup codes are the sole recovery path (10 codes, encrypted at rest with
+      `BETTER_AUTH_SECRET`, single-use), and rotating that secret invalidates the second factor
+      entirely. Meanwhile every Offer stays undelivered behind NFR7's 24 h band and every reported
+      Hirer stays frozen, because `unfreezeHirer` is an Admin action. Proposal: backup codes printed
+      and stored offline at setup, a second Admin grant held by the same person on a separate device,
+      and a documented break-glass in the go-live runbook — a `UPDATE` disabling 2FA, executed
+      against the direct connection, which is itself a credential worth naming.
+      **Risk if wrong:** the moderation queue — the one control ADR-0008 leaves standing after
+      choosing not to verify anyone — stops, with no way back in and nobody on call.
+      **Owner:** Security owner (with On-call lead).
+- [ ] **C44** — **`trustDevice` at its 30-day default contradicts NFR13's 8-hour Admin session.**
+      Trusting a device skips the _second factor_ on re-authentication, so an 8-hour non-rolling
+      session would be re-established on a password alone for a month — on the account that can take
+      down a profile and read every phone number in the system. Proposal: **disable trusted devices
+      for the Admin outright**; if that is judged too costly for a person moderating daily, cap
+      `trustDeviceMaxAge` at the session length so the two numbers stop disagreeing.
+      **Risk if wrong:** NFR14 is satisfied on paper — the session did complete 2FA once — while the
+      practical factor count drops to one for thirty days at a time.
+      **Owner:** Security owner.
 
 ## Out of Scope
 
