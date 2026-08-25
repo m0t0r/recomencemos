@@ -59,15 +59,19 @@ Offers. Spanish UI: _Muro_.
 _Avoid_: Feed, directory, listings, board
 
 **Report**:
-A Worker's assertion that an Offer she received is abusive. It hides the Offer from her, freezes
-the Hirer's ability to send further Offers, and waits for an Admin. Spanish UI: _Reportar_.
+A Worker's assertion that an Offer she received is abusive. It hides the Offer from her, freezes the
+Hirer — he can send nothing further, his undelivered Offers are held rather than rejected, and his
+reading of any full profile is suspended — and waits for an Admin. The freeze is temporary and
+reversible, which is why it reaches further than a Block. Spanish UI: _Reportar_.
 _Avoid_: Flag, complaint, abuse ticket
 
 **Block**:
-A Worker's unilateral and permanent refusal of one Hirer: her CapabilityProfile becomes invisible
-to him and he can send her nothing further. It reaches only the platform — after Contact Exchange
-it cannot undo what he already knows. Spanish UI: _Bloquear_.
-_Avoid_: Ban, mute, hide
+A Worker's unilateral and permanent refusal of one Hirer: **he can send her nothing further**, and
+that is the whole of it. Her public card stays public — the Wall is readable by anyone, signed in or
+not — and he keeps whatever reading access any signed-in Account has. It reaches only the platform:
+after Contact Exchange it cannot undo what he already knows, and it does not survive his deleting his
+Account, because deletion frees his email address. Spanish UI: _Bloquear_.
+_Avoid_: Ban, mute, hide — and avoid describing it as making her invisible, which it never was
 
 **Admin**:
 A staff Account. Holds the daily queue — photos, Offers, Reports — plus takedown, unfreeze, and

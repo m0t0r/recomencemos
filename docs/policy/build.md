@@ -16,13 +16,13 @@ every new project on a question with no wrong answer, which is not what that mec
 
 | Key                 | Value          | What it settles                                                                                                                                                                                                                                     |
 | ------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stacked-prs`       | `UNSET`        | Whether a chain of blocking edges is published as a stack of PRs (`gh stack`) or as independent ones. See the section below                                                                                                                         |
-| `pr-merge-method`   | `UNSET`        | Squash, merge commit, or rebase. Decides what a ticket looks like in the history, and interacts with `stacked-prs`                                                                                                                                  |
+| `stacked-prs`       | **Yes**, for genuine chains only — a maximal chain of blocking edges publishes as a stack; a ticket with two blockers stays serialized; unrelated tickets are never stacked | Whether a chain of blocking edges is published as a stack of PRs (`gh stack`) or as independent ones. See the section below                                                                                                                         |
+| `pr-merge-method`   | **Rebase**     | Squash, merge commit, or rebase. Decides what a ticket looks like in the history, and interacts with `stacked-prs` — a stack is a chain of branches each based on the one below, and squashing a lower PR rewrites the base every branch above it was cut from                                                                                                                                  |
 | `who-may-merge`     | **Repo owner** | The role that may merge to the default branch. Never the agent — that part is fixed below, not a choice                                                                                                                                             |
-| `required-checks`   | `UNSET`        | The checks that must be green before a PR is mergeable. Until CI exists, this is what a human runs by hand                                                                                                                                          |
+| `required-checks`   | **`lint`, `check-types`, `test` (including `test:gates`), `build`, and a dependency audit failing on `high` or above in a direct dependency** | The checks that must be green before a PR is mergeable. Until CI exists, this is what a human runs by hand                                                                                                                                          |
 | `pr-size-ceiling`   | `1000`         | Changed lines (additions + deletions) counting only files a person reviews — lockfiles and generated files are excluded. Above it, the PR body must say why the ticket was not split; effort 0001's largest PR was +1,832 with nothing measuring it |
 | `coverage-floor`    | `UNSET`        | The coverage number a change may not drop below, or "none" — a real answer that stops `/tdd` asking                                                                                                                                                 |
-| `branch-protection` | `UNSET`        | Whether the remote enforces no-direct-push and required reviews. Until set, the hooks are the only thing enforcing it                                                                                                                               |
+| `branch-protection` | **Required status checks and no direct push to the default branch; no required reviews** — on a one-person repository a required review either locks the operator out or normalizes admin bypass | Whether the remote enforces no-direct-push and required reviews. Until set, the hooks are the only thing enforcing it                                                                                                                               |
 
 ## Fixed by this repo
 
@@ -57,9 +57,10 @@ definition of done that only a human can evaluate is a definition of done that e
 
 ## Stacked pull requests
 
-`stacked-prs` is `UNSET`, so `/implement` opens one independent PR per ticket until someone sets it.
+`stacked-prs` is **yes** for genuine chains, set by effort 0002 (concern C16). `/implement` publishes a
+maximal chain of blocking edges as a stack and opens an independent PR for everything else.
 
-Setting it to `yes` is worth understanding before you do. `/to-tickets` already emits the structure a
+What that buys, and what it costs, is worth understanding. `/to-tickets` already emits the structure a
 stack needs: every ticket declares the tickets that **block** it, and a chain of blocking edges _is_
 a stack. Publishing it as one means ticket N's branch is based on ticket N-1's rather than on the
 default branch, so a blocked ticket can start before its blocker merges, and a reviewer still gets
@@ -76,5 +77,7 @@ Three things it costs, and they are the reason this is a decision rather than a 
   compliance-against-spec pass runs once, at the top of the stack — otherwise the spec gets reviewed
   five times and the effort never gets reviewed as a whole.
 
-It requires the `gh stack` extension (`gh extension install github/gh-stack`), which is `v0.1.0`.
-That is the other reason this key is `UNSET` rather than `yes`.
+It requires the `gh stack` extension (`gh extension install github/gh-stack`), which is `v0.1.0` — a
+young tool on the critical path of every chained ticket. That immaturity was the standing reason to
+leave this key open; effort 0002 accepted it knowingly, against 17 `Must` stories whose diffs are
+smaller and more reviewable stacked than independent.

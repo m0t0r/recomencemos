@@ -40,3 +40,30 @@ require registration, because the Hirer is the scarce side.
 
 **Full name is released at Contact Exchange**, at which point she has read complete Offer terms
 and chosen. That is the moment consent exists, and it is the only moment identity crosses.
+
+## Amendment (proposed, 2026-08-25) — collecting a name is not crossing one
+
+This ADR says *where* a full name is released and never says *where it is collected*, and the two
+readings of that silence produce different products. Effort 0002's concern C1 forced the question:
+`ExchangedContact.fullName` had no source anywhere in the design.
+
+**The amendment: her full name is collected at publish and released at Contact Exchange.** It is a
+`personal` field on the CapabilityProfile — gated at rest, absent from the public card **and** from
+the gated profile a signed-in Hirer reads, reaching him only in the exchange payload. Everything the
+Consequences above say about crossing is unchanged; what is added is that the collection happens
+earlier and is invisible until that moment.
+
+**Why not collect it at acceptance**, which is the minimal-collection reading. Acceptance is the
+highest-stakes action in the product, taken on a phone, in the moment she is deciding — a new required
+input there is friction where it costs most, and a blank or joke name typed under pressure is
+unfixable afterwards. The marginal privacy cost of asking at publish is small, because publish already
+takes her **phone number** ([intent Q1](../efforts/0002-profile-to-contact-exchange/intent.md)); the
+database is already one of reachable people, and a name adds little to that exposure.
+
+**What forced it now: two sign-in doors return different things.** Google returns a real name at
+sign-up and a magic link returns none. Without a collection point of its own, a Contact Exchange would
+deliver a full name for a Worker who signed in with Google and nothing for one who used email — an
+identity guarantee that depends on which button she pressed. Collecting at publish makes the two doors
+produce the same exchange, with the Google value prefilled and editable rather than authoritative.
+
+**Accepting this amendment is a human's act**, the same as approving the spec that proposes it.
