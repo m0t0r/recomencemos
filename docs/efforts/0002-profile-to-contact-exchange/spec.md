@@ -325,7 +325,8 @@ concerns.
   effort introduces appears in `turbo.json`: build-baked values in `env` on `build`, runtime-only
   values in `globalPassThroughEnv`. **No runtime credential appears in any turbo task at all** —
   `DATABASE_URL`, `DIRECT_DATABASE_URL`, `RESEND_API_KEY`, the webhook signing secret, the R2
-  credentials, the Google OAuth client id and secret, and Better Auth's secret are needed by no turbo task, and `.env*` files are `build`
+  credentials, the Google OAuth client id and secret, Better Auth's secret, and the **job endpoint's
+  shared secret** (DD10) are needed by no turbo task, and `.env*` files are `build`
   inputs. They reach the app through `fly secrets` only. `turbo build --dry` lists what remains.
   **Binds:** 1, 2, 9, 15.
 - **NFR25 — The gate runs off a developer's terminal, and a bad deploy cannot take the site.**
@@ -593,7 +594,31 @@ endpoint and a page-level check does not extend to it. Every one also **rate-lim
 `POST /api/webhooks/resend` — signature-verified with a timestamp window against replay, idempotent
 on the event id, bodyless `401` on failure, and **one `info` line on every rejection carrying the
 event id and an enum reason — `bad_signature`, `stale_timestamp`, `replayed_id` — and nothing from
-the body** (C27). A forged bounce is an account-denial primitive, because
+the body** (C27).
+
+### Scheduled jobs — Trigger.dev calls in; it never reads the database
+
+Four Route Handlers, **not** Server Actions: a Server Action is reached by a browser and these are
+reached by a scheduler, and conflating the two would put a job behind session authorization it can
+never present. Each is `noindex`, returns **`204` with no body**, and authorizes on a shared secret
+compared in constant time plus a timestamp window against replay — the Resend webhook's discipline,
+applied to the other direction of the same problem.
+
+| Endpoint | Cron (UTC unless stated) | What it does | Bound per invocation |
+| -------- | ------------------------ | ------------ | -------------------- |
+| `POST /api/jobs/rotation-key` | `0 3 * * *` | Rewrites the stored `rotationKey`, NFR22's ordering input | Whole published set; one `UPDATE` |
+| `POST /api/jobs/offer-expiry` | `0 * * * *` | Expires delivered Offers past their window | **≤ 500 Offers**, oldest first |
+| `POST /api/jobs/check-ins` | `0 9 * * *` | Sends the seven-day check-ins (NFR31) | **≤ 200 sends**, oldest exchange first |
+| `POST /api/jobs/queue-digest` | `0 8 * * *` **America/Bogotá** | C10's daily digest of NFR7's queue depths and the age of the oldest | One send |
+
+**Every one is idempotent**, because Trigger.dev retries: a second call inside the same window
+completes and changes nothing. **Every one is bounded**, and the second half of that bound is
+stated — a capped run does the oldest work first and **leaves the rest for the next tick**, so the
+cap delays work and never drops it. A run that hits its cap emits one `info` line saying so, which is
+how a backlog that outgrows the cadence becomes visible instead of silently permanent.
+
+A rejected call is logged exactly as C27's webhook rejection is — `event: "job_rejected"`, the job
+name and an enum reason, nothing else — and returns a bodyless `401`. A forged bounce is an account-denial primitive, because
 magic link is the only sign-in.
 
 ### Cross-boundary types
@@ -1283,10 +1308,31 @@ enumerable afterwards, and a written notification procedure. Without that line t
 even knowable. `fly secrets set` restarts the machine, so a config change is redeploy-class too; there
 is no feature-flag mechanism in this repo, so "behind a flag" is unavailable rather than unchosen.
 
-**Three scheduled jobs at launch, and one scheduler**: the daily `rotationKey` rewrite, Offer expiry,
-and the seven-day check-ins. They run as one heartbeat job so that **one** cron monitor covers them —
-the free tier includes one, and a job that silently stops running is a growing Ley 1581 exposure with
-no symptom.
+**Four scheduled jobs at launch, and the scheduler is Trigger.dev** — the daily `rotationKey` rewrite,
+Offer expiry, the seven-day check-ins, and C10's queue digest at **08:00 America/Bogotá**, which is
+scheduled work the draft's list omitted. Free tier, verified 2026-08-25: **$5/month of credits, 20
+concurrent runs, 10 schedules**, minute-granularity cron with full IANA timezone support, 1-day log
+retention. Four of the ten slots.
+
+**The rule that shapes the whole integration: Trigger.dev never holds a database credential.** Its
+scheduled tasks run on **its** infrastructure, not ours — a task lives in a `/trigger` folder and is
+deployed to them — so a task body that queried Postgres would put a third party's workers on the far
+end of a credential reading displaced people's phone numbers. Instead each task's entire body is an
+authenticated **`POST` to a Route Handler on Fly**, and every job runs where the data already is.
+
+Three consequences follow, and they are why this shape was chosen over the idiomatic one:
+
+- **No personal data crosses, so Trigger.dev is not a processor.** It appears in **no** _aviso de
+  privacidad_ and adds **no** transmission under Ley 1581 (C15). It learns that a request was made and
+  that it returned `204`, and nothing else.
+- **The boundary is inbound, not outbound**, which is a boundary class DD16 already knows how to
+  authorize — the same discipline as the Resend webhook.
+- **A Fly rollback stays meaningful.** The task bodies never change, so they are deployed once and a
+  release of ours does not need a second deploy to stay consistent with them.
+
+The one thing it costs: **an unmonitored schedule is invisible**, so Sentry's single free cron monitor
+sits on the **queue digest** — the job whose silence nobody would otherwise notice, because the other
+three announce themselves through the product.
 
 **The retention purge is deliberately not among them** (C36). Every table in NFR17's graph has its
 first purgeable row around August 2027, so building the job now is twelve months of carrying cost for
@@ -1333,11 +1379,14 @@ Every safety-relevant transition emits one `info` line with a stable `event` fie
 values only**: `offer.delivered`, `offer.rejected_by_admin`, `photo.approved`, `photo.rejected`,
 `report.created` (with the freeze), `block.created`, `session.revoked`, `account.deleted`,
 `exchange.created`, `notification.sent`, `magic_link.requested`, `magic_link.consumed`, and
-`webhook.rejected` — the last carrying the event id and an enum reason and nothing from the body
-(C27). `magic_link.*` are NFR27's measurement. Ids-only satisfies NFR18 by construction rather than by
+`webhook.rejected` and `job.rejected` — the last two carrying an id and an enum reason and nothing
+from the body (C27, DD10). `magic_link.*` are NFR27's measurement. Ids-only satisfies NFR18 by construction rather than by
 discipline.
 
-**Membership is closed: exactly these thirteen** (C40). Adding a fourteenth is a spec amendment, not a
+**Membership is closed: exactly these fourteen** (C40). `job.rejected` is the fourteenth, added by the
+amendment that adopted Trigger.dev (DD10) — which is the rule working rather than an exception to it:
+a new safety-relevant transition arrived, and it reached the list through a spec change rather than
+through someone's judgment at Build time. Adding a fifteenth is a spec amendment too, not a
 judgment call made at Build time by whoever happens to be writing that action. This is the discipline
 the cross-boundary types already use — "exactly these keys are present on the wire" — and the reason
 `CLAUDE.md` treats the guaranteed log field names as a stability contract: a drain's queries bind to
@@ -1547,13 +1596,18 @@ called the right instinct with the walk missing. Seven boundaries, and what auth
 | 1 | Browser → Server Action | Every write in the product | Per-action authorization (never the page's), NFR26's ceiling, the principal as first parameter |
 | 2 | Browser → public read | `PublicProfile` only | Nothing — public by design, `noindex` absent by design |
 | 3 | Browser → gated read | `GatedProfile` | A session, not `frozen` (C22); charged against the read ceiling |
+| 3b | **Trigger.dev → job endpoint** | A signed request carrying **no data**; the reply is `204` with no body | A shared secret compared in constant time, a timestamp window, and idempotency. Inbound by design: the scheduler holds no database credential (DD10) |
 | 4 | Server → Postgres | Everything | `@repo/domain` is the only door ([ADR-0010](../../adr/0010-the-domain-package-is-the-only-door-to-the-database.md)); the connection is unexported |
 | 5 | **Server → object storage** | Photo bytes, presigned PUT into a quarantine prefix | A short-lived presigned URL; the public URL derives only at `photoState = approved` |
 | 6 | **Server → Resend** | Email address, Offer notification, exchanged contact details | The notification seam; React Email templates; NFR18's zero on everything else |
 | 7 | **Server → Sentry** | Errors and 10% of traces | `beforeSend` / `beforeSendTransaction` scrubbing, and NFR19's query-string fix |
 
 Boundaries 5–7 are where personal data **leaves the system**, which is why they get the walk and the
-inbound four do not — those are already answered by DD5, DD7 and DD9 letter by letter.
+inbound ones do not — those are already answered by DD5, DD7 and DD9 letter by letter. **Boundary 3b
+is inbound precisely so that it stays off the outbound list**: a scheduler that ran the jobs itself
+would be an eighth boundary carrying personal data, and a seventh processor in the _aviso_ with it.
+Its one real threat is spoofing — an unauthenticated caller triggering `check-ins` repeatedly to spend
+the sending quota — which the shared secret and the per-invocation cap close together.
 
 | | Object storage (5) | Resend (6) | Sentry (7) |
 | - | ------------------ | ---------- | ---------- |
@@ -2723,7 +2777,7 @@ not a problem to work around.
       lead (with On-call lead, whose band depends on it).
 - [ ] **C56** — **DD16's boundary list states no membership.** It opens "Seven boundaries, and what
       authorizes each" without saying whether that is exhaustive or illustrative. DD11's event list
-      received exactly this treatment at **C40** ("exactly these thirteen; a fourteenth is a spec
+      received exactly this treatment at **C40** ("exactly these fourteen; a fifteenth is a spec
       amendment"); the boundary table added in the same round did not.
       **Risk if wrong:** a new egress is added at Build without anyone treating it as a boundary,
       because the table read as illustrative — and the table is also what `/security-audit` is handed
@@ -2778,7 +2832,7 @@ Still `UNSET` and **not** raised by this spec: `motion-policy` and `analytics-co
 
 ## Runbook obligations
 
-**Fifteen of the answers above end in a step only a human can perform**, and a spec that names such a
+**Fifteen of the answers above, plus DD10's scheduler, end in a step only a human can perform**, and a spec that names such a
 step without producing a ticket has moved the work nowhere. They are collected in
 [`docs/runbooks/recomencemos-go-live.md`](../../runbooks/recomencemos-go-live.md), which this effort
 writes, and **`/to-tickets` cuts one ticket to execute it** — the document is written; running it is
@@ -2790,7 +2844,8 @@ the work, and several steps cannot be taken until the infrastructure they config
 | 2 | Read the connection limit; enable extensions; set backup retention to 7 days; rehearse one restore | C35, C17, C23 |
 | 3 | Create the bucket with a non-readable quarantine prefix; enable Cloudflare transformations | DD6 |
 | 4 | Publish DNS, verify SPF/DKIM/DMARC with `dig`, warm the domain from the first deploy, hold a fallback subdomain, stage the announcement, measure into Colombian inboxes | C45 |
-| 5 | 1 GB machine, enforced CSP, uptime probe at 60 s / 2 failures, the 08:00 digest, machine bands to `needs-triage` | C34, C6, C33, C10 |
+| 5 | 1 GB machine, enforced CSP, uptime probe at 60 s / 2 failures, machine bands to `needs-triage` | C34, C6, C33, C10 |
+| 5b | Create the Trigger.dev project, set the shared secret in both places, deploy four schedules, prove each endpoint rejects an unsigned call and is idempotent, point Sentry's cron monitor at the digest | DD10 |
 | 6 | Grant the first Admin, print backup codes offline, create a second Admin device, rehearse break-glass | C43, C44 |
 | 7 | Name every processor in the _aviso_, take express transmission consent, file each DPA, check Circular 005 | C15 |
 | 8 | Required status checks, dependency audit, `gh-stack`, one rehearsed rollback | C7, C16, NFR25 |
@@ -2876,7 +2931,11 @@ regions and extension support; Fly's region list and `flyctl` v0.4.87's `release
 flags (run locally); Better Auth 1.7.1's magic-link options, session options, `dont_remember` cookie
 and issue #4491's closure; Ley 1581's arts. 14–15 clocks and the RNBD threshold in Decreto 1074 de
 2015; CUOC's establishing decree and resolution; Baseline's 30-month definition; the `engines.node` of
-every dependency this spec pins; and `CARRIER_PATHS` in the shipped `packages/errors/src/redaction.ts`.
+every dependency this spec pins; `CARRIER_PATHS` in the shipped `packages/errors/src/redaction.ts`;
+and **Trigger.dev's free-tier figures and execution model**, read from its pricing and scheduled-tasks
+documentation on 2026-08-25 — $5/month of credits, 20 concurrent runs, 10 schedules, minute-granularity
+cron with IANA timezones, 1-day log retention, and the fact that **task code runs on Trigger.dev's
+infrastructure rather than in the application**, which is the fact that decided DD10's shape.
 
 ### What was not verified, and should be before Build
 

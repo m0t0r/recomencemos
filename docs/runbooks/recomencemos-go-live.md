@@ -8,7 +8,8 @@ surface, and the sending domain.
 
 **It exists because effort
 [`0002-profile-to-contact-exchange`](../efforts/0002-profile-to-contact-exchange/spec.md) answered
-forty-five flagged concerns and fifteen of the answers ended in a step only a person can perform.**
+forty-five flagged concerns and fifteen of the answers ended in a step only a person can perform**
+— plus DD10's scheduler, decided after that review and added here in §5b.
 Each one names the concern it discharges, so a reader can go back to the reasoning rather than trust
 the instruction.
 
@@ -20,7 +21,7 @@ the instruction.
 
 ---
 
-## 1. Credentials — seven, and where each lives (C5, C43)
+## 1. Credentials — eight, and where each lives (C5, C43, DD10)
 
 `secret-store` is **`fly secrets`, mirrored in the operator's password manager**. No secret reaches a
 repo `.env` file: `turbo.json` declares `.env*` a `build` input, so the file's content is hashed into
@@ -35,14 +36,15 @@ the cache key and travels with the artifact under remote caching.
 | 5 | R2 access key + secret | Cloudflare → R2 → Manage API tokens | Create new, deploy, delete old | Scope to the one bucket |
 | 6 | Google OAuth **client secret** | Google Cloud console → Credentials | Rotate; existing sessions unaffected | The redirect URI must match the deployed origin exactly |
 | 7 | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` | **See the warning below** | 32+ chars. Better Auth rejects placeholders in production |
+| 8 | `JOB_SHARED_SECRET` | `openssl rand -base64 32` | Rotate in both places at once | The only thing Trigger.dev holds. Set identically as a Fly secret **and** as a Trigger.dev environment variable — rotating one without the other stops every scheduled job |
 
 ```sh
 fly secrets set DATABASE_URL='…' RESEND_API_KEY='…'      # restarts the machine — a deploy-class act
 fly secrets list                                          # names and digests only, never values
 ```
 
-- [ ] All seven set with `fly secrets`
-- [ ] All seven mirrored into the password manager — a lost machine must not be a lost platform, and
+- [ ] All eight set with `fly secrets` (#8 also in Trigger.dev's environment)
+- [ ] All eight mirrored into the password manager — a lost machine must not be a lost platform, and
       **#3 and #5 are not recoverable from Fly**, only replaceable
 - [ ] No `.env` file in the repo contains any of them (`git grep -nE '(RESEND|DATABASE_URL|BETTER_AUTH)'`)
 
@@ -121,6 +123,38 @@ spike onto a domain that has never sent anything.
 - [ ] **Daily digest at 08:00 America/Bogotá** wired through the notification seam, carrying NFR7's
       queue depths and the age of the oldest item (C10)
 - [ ] **Machine bands open a `needs-triage` issue from CI** ([ADR-0001](../adr/0001-findings-enter-through-triage.md))
+
+---
+
+## 5b. The scheduler (DD10)
+
+Trigger.dev free tier, verified 2026-08-25: **$5/month of credits, 20 concurrent runs, 10 schedules**,
+minute-granularity cron, full IANA timezones, 1-day log retention. Four of the ten slots are used.
+
+**The rule this integration rests on: Trigger.dev never holds a database credential.** Each task body
+is one authenticated `POST` to a Route Handler on Fly, so the work runs where the data already is.
+That is what keeps the scheduler out of §7's processor list — no personal data crosses to it, so it is
+not a _transmisión_ and belongs in no _aviso_. **If a task is ever changed to query the database
+directly, §7 has to be reopened before it ships.**
+
+- [ ] Project created; `JOB_SHARED_SECRET` set as a Trigger.dev environment variable, identical to the
+      Fly secret
+- [ ] Four schedules deployed, each a `POST` and nothing more:
+
+| Task | Cron | Timezone | Calls |
+| ---- | ---- | -------- | ----- |
+| `rotation-key` | `0 3 * * *` | UTC | `POST /api/jobs/rotation-key` |
+| `offer-expiry` | `0 * * * *` | UTC | `POST /api/jobs/offer-expiry` |
+| `check-ins` | `0 9 * * *` | UTC | `POST /api/jobs/check-ins` |
+| `queue-digest` | `0 8 * * *` | **America/Bogotá** | `POST /api/jobs/queue-digest` |
+
+- [ ] **Each endpoint verified to reject an unsigned call** — `curl -X POST` with no secret returns a
+      bodyless `401` and writes one `job.rejected` line
+- [ ] **Each verified idempotent**: called twice inside one window, the second call changes nothing
+- [ ] Sentry's single free **cron monitor** pointed at `queue-digest` — the one job whose silence
+      nobody would otherwise notice, because the other three announce themselves through the product
+- [ ] A run that hits its per-invocation cap (500 Offers, 200 check-in sends) emits the line that says
+      so, and the backlog is checked after the first week
 
 ---
 
@@ -204,6 +238,7 @@ restated as the last checklist a human reads:
 - [ ] Rollback rehearsed
 - [ ] Restore rehearsed
 - [ ] Cloudflare transformations on
+- [ ] Four schedules live, each rejecting an unsigned call, cron monitor on the digest
 - [ ] SPF / DKIM / DMARC resolving, domain warmed to the expected day-one volume
 - [ ] Load test shows NFR2 held at its stated concurrency
 - [ ] `trace_id` correlation proven end to end
