@@ -2605,6 +2605,137 @@ on its own — each concern below names its advisory.
       **Follows:** the go-live runbook gains the warm-up curve, the staged announcement plan, the fallback
       subdomain, and the inbox check as separate numbered steps.
 
+### Appended by `/spec-review` (2026-08-25, fidelity — second pass)
+
+C46–C57. The first pass checked the **synthesis** against the advisories; this one checks the
+**answer-and-reconcile round** that resolved C1–C45, because that round rewrote roughly a thousand
+lines and is its own opportunity to lose something. C46–C53 come from the fidelity agent, C54–C57
+from the three mechanical shape checks. Every box is unchecked, which means the Design gate stops
+tickets until an owner resolves them — that is the correct outcome of reviewing an approved spec,
+not a problem to work around.
+
+- [ ] **C46** — **C3's answer reversed two advisories, and Further Notes does not record it.** Both
+      the security and the data advisory asked for the **opposite** of what C3 decided, and each was
+      explicit that the gated read was the half the design *could* deliver: security.md — "The design
+      can deliver invisibility at `/perfil/[slug]` and refusal at `sendOffer`, and it cannot deliver
+      it on the public list without giving up the cache"; data.md — "The design can honour 'he can
+      send her nothing' **and** 'he cannot open her gated profile'; it cannot honour invisibility."
+      The spec now says the reverse in three places, including "**A Blocked caller is served
+      normally** — a Block reaches the send only". C3's answer carries the reasoning, and story 11's
+      copy is honest, so nobody is sold a protection that does not exist. **Two things are still
+      wrong.** First, **Further Notes** opens "Six, each recorded because a silent override is what
+      `/spec-review` exists to catch" and this is not among the six — the same bookkeeping failure
+      C36 was raised for, one round later. Second, it sits against C22's own argument: a *frozen*
+      Hirer, accused and unreviewed, loses his gated reads, while a *Blocked* one, permanently
+      refused by name, keeps them.
+      **Risk if wrong:** the person she refused reads her `about` and work history indefinitely, and
+      the override list an approver trusts as complete is not. **Owner:** Security owner (with Data
+      lead — both advisories raised it).
+- [ ] **C47** — **The fifth abuse case was dropped, and C4 made it worse.** DD7 carries four of the
+      security advisory's five cases in substance and omits this one: "As an attacker I accept an
+      Offer, so that a real person's name, phone and email are delivered to me for the cost of one
+      email address." It is the case that runs **against the Worker's counterpart** rather than
+      against her, which is the advisory's central charge — "almost every protective mechanism in
+      the draft points at the bad Hirer." C4 now collects `hirerName` and `hirerPhone` and snapshots
+      them into `ExchangedContact`, so a fake profile that accepts an Offer harvests self-asserted
+      Hirer identity **as well as** an email. Nothing in the spec says why the case is absent.
+      **Risk if wrong:** the exchange is a two-way disclosure and only one direction is threat-modelled
+      — after this session widened what crosses in the undefended direction. **Owner:** Security owner.
+- [ ] **C48** — **C26 accepted half of what the advisory asked; the `href` half is nowhere.** The ask
+      was "explicit escaping at the template seam **and no raw `<a href>` built from user text**".
+      React Email's escaping — the mechanism C26 accepts as satisfying this — constrains element
+      **content** and not an **attribute**, so a `javascript:` or attacker-controlled URL interpolated
+      into a link survives it, as do both clauses of the replacement rule (no
+      `dangerouslySetInnerHTML`, no `<Markdown>` over user text). The nearest text in the spec is an
+      accessibility line about descriptive link text, which is a different requirement.
+      **Risk if wrong:** stored injection into an inbox by attribute rather than by content, reaching
+      both sides of an unverified market, past a control everyone believes is closed. **Owner:**
+      Security owner.
+- [ ] **C49** — **The Report-rate queue signal has a rate and still no threshold and no surface.**
+      The advisory asked for "a Report rate per profile, **and a queue signal when one profile
+      reports many Hirers**". The rate landed with a number (`reportOffer ≤ 10/day`, NFR26); the
+      signal survives only as DD7 prose. This is the identical shape **C24** was raised for one pass
+      ago and answered with a number — and the API contract's `/admin` row now enumerates its signals
+      exhaustively ("plus two signals that are not queue items: the publish rate above 10/hour and
+      the duplicate-phone flag"), so this one is excluded by a list that reads as closed.
+      **Risk if wrong:** a handful of bad-faith Reports removes the scarce side of the market for a
+      day, undetected. **Owner:** Security owner. **Proposal, by analogy with C24:** a signal above
+      **3 Reports from one profile in 7 days**, informing rather than blocking.
+- [ ] **C50** — **NFR2's user-measured number has no instrument, and Further Notes claims it as
+      accepted.** The operability advisory's finding was the *absence of an instrument* — "nothing in
+      this design measures the user's experience of latency, anywhere, ever… a regression that
+      doubles real Worker-side page load is invisible to every instrument this spec names." **Further
+      Notes** #1 records it as "**accepted** and became NFR2's second number", and C12 has since made
+      ≤ 1200 ms the inherited default. But nothing produces the figure: analytics and RUM are **Out of
+      Scope**, the uptime monitor probes `/api/health` in ≤ 50 ms, and NFR28's load test runs against
+      the machine. _What was not verified_ confirms the gap in passing.
+      **Risk if wrong:** two policy keys and one NFR commit to a number nobody can read, and the users
+      on the most constrained connections pay a latency tax no instrument reports. **Owner:** On-call
+      lead.
+- [ ] **C51** — **The 404 half of the Sentry-quota finding was dropped, and the spec has since
+      multiplied 404s.** The advisory said "rate-limit refusals **and any throwing 404** will burn the
+      Sentry error quota, and a spent quota means the second incident of the month is invisible."
+      NFR26's second half answers the rate-limit clause exactly and the 404 clause is nowhere. Five
+      surfaces in the UX state table now refuse with `404`, and C22 added another: a frozen caller at
+      `GET /profile/[slug]` gets "the same response as a missing profile". An unauthenticated
+      enumeration sweep of `/profile/[slug]` is precisely the shape the advisory named, against a
+      5,000-error monthly allowance.
+      **Risk if wrong:** a crawler spends the month's allowance in a day and the second real incident
+      is invisible. **Owner:** On-call lead. **Proposal:** a not-found is a **returned** response, not
+      a thrown error, on every one of those surfaces — which is DD11's "thrown is reported; returned
+      is logged" applied to the case the advisory named.
+- [ ] **C52** — **Story 15 grew where the simplicity advisory asked it to shrink, and the override is
+      unrecorded.** The ask: "Story 15 shrinks to two files and a runbook line… What CI adds is the
+      *human* path and the deploy trigger." The CI and deploy half landed exactly as asked. The
+      shrink was overridden by NFR30 and DD13 — a machine-checked migration-integrity suite **no
+      advisory requested** — and story 15 now reads "**This story is expected to split into two
+      PRs**", which is the opposite of the recommendation's direction. **Further Notes** records six
+      overrides and this is not among them.
+      **Risk if wrong:** the advisory's arithmetic — "The `Must` list is not a scope statement; it is
+      a date. Every story kept in it is a day the Hirer side is not being asked for anything" — and an
+      override list that is again incomplete. **Owner:** Tech lead (with Repo owner on the CI half).
+- [ ] **C53** — **NFR16 adopted the distinction and kept the binding.** The advisory: "NFR16 is a
+      runbook, not an NFR… As an NFR it binds stories 13 and 14, and `/to-tickets` copies bound
+      criteria onto tickets — producing an acceptance criterion no diff can satisfy and no reviewer
+      can tick with evidence." The spec adopts the distinction in words ("**The clock is a runbook,
+      not a diff.**"), routes the calendar correctly into the runbook's §7, and carves out a
+      genuinely buildable half in `@repo/domain/export` — then keeps the business-day clocks **and**
+      `**Binds:** 13, 14`, so the unsatisfiable criterion still travels to a ticket beside the
+      satisfiable one.
+      **Risk if wrong:** a `Must` ticket carries a criterion whose evidence is a calendar, which is
+      how a definition of done stops meaning anything. **The weakest finding of this pass** — it may
+      well be the right call, and nothing in the spec says it is a weaker commitment than the
+      advisory asked for. **Owner:** Tech lead (with Security owner on the compliance half).
+- [ ] **C54** — **Two stories are bound by no NFR, and one of them is now `Must`.** All 32 NFRs carry
+      a non-empty `Binds:` and every story they name exists — but nothing binds **story 22** or
+      **story 23**, and C25 promoted story 23 into the announcement gate this session. This is the
+      defect class **C42** was raised for ("story 18 is bound by no NFR"), closed there by adding
+      NFR31 and re-opened one story over by a promotion in the same round.
+      **Risk if wrong:** a `Must` ticket ships with no requirement measuring whether it works — for
+      story 23, the audit record a Ley 1581 _reclamo_ depends on. **Owner:** Tech lead.
+- [ ] **C55** — **The Admin queue's cap has no second half.** Each of the five branches is
+      `` `LIMIT`-capped``, justified as "an unbounded union after three days away is exactly when the
+      surface needs to still load" — and nothing states whether the **count and the age-of-oldest are
+      computed over the whole branch or over the capped page**. NFR7's band and story 7's
+      age-on-every-screen are both read off that number.
+      **Risk if wrong:** the backlog is understated exactly when it is worst, by the instrument built
+      to catch it — a bound that passes green while the thing it measures is lost. **Owner:** Tech
+      lead (with On-call lead, whose band depends on it).
+- [ ] **C56** — **DD16's boundary list states no membership.** It opens "Seven boundaries, and what
+      authorizes each" without saying whether that is exhaustive or illustrative. DD11's event list
+      received exactly this treatment at **C40** ("exactly these thirteen; a fourteenth is a spec
+      amendment"); the boundary table added in the same round did not.
+      **Risk if wrong:** a new egress is added at Build without anyone treating it as a boundary,
+      because the table read as illustrative — and the table is also what `/security-audit` is handed
+      as input. **Owner:** Tech lead.
+- [ ] **C57** — **NFR26's own rule contradicts the list that implements it.** The third half says
+      "every surface with a ceiling carries a rate-limited state in the UX state table". NFR26 names
+      seven action ceilings plus the read ceiling; the table covers seven of the eight and omits
+      **`requestSkill`** (≤ 5/day) — which is story 3's path, hit by a Worker **mid-publish**, the
+      exact moment C39 was raised about.
+      **Risk if wrong:** the concern that existed to stop a Worker meeting silence at a ceiling leaves
+      one ceiling meeting silence. **Owner:** Design lead (with Tech lead), matching C39.
+
 ### Policy keys set by this effort
 
 C13's sweep, discharged. Every key below moved from `UNSET` to a value in the same change that
@@ -2647,7 +2778,7 @@ Still `UNSET` and **not** raised by this spec: `motion-policy` and `analytics-co
 
 ## Runbook obligations
 
-**Twelve of the answers above end in a step only a human can perform**, and a spec that names such a
+**Fifteen of the answers above end in a step only a human can perform**, and a spec that names such a
 step without producing a ticket has moved the work nowhere. They are collected in
 [`docs/runbooks/recomencemos-go-live.md`](../../runbooks/recomencemos-go-live.md), which this effort
 writes, and **`/to-tickets` cuts one ticket to execute it** — the document is written; running it is

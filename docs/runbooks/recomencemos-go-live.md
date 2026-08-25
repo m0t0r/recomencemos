@@ -8,7 +8,7 @@ surface, and the sending domain.
 
 **It exists because effort
 [`0002-profile-to-contact-exchange`](../efforts/0002-profile-to-contact-exchange/spec.md) answered
-forty-five flagged concerns and a dozen of the answers ended in a step only a person can perform.**
+forty-five flagged concerns and fifteen of the answers ended in a step only a person can perform.**
 Each one names the concern it discharges, so a reader can go back to the reasoning rather than trust
 the instruction.
 
