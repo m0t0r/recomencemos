@@ -1,6 +1,6 @@
 ---
 stage: spec
-status: draft
+status: approved
 reviewed: 2026-08-25 fidelity
 issue: 3
 intent: ./intent.md
