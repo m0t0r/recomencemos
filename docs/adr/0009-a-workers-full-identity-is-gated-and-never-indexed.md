@@ -43,7 +43,7 @@ and chosen. That is the moment consent exists, and it is the only moment identit
 
 ## Amendment (proposed, 2026-08-25) — collecting a name is not crossing one
 
-This ADR says *where* a full name is released and never says *where it is collected*, and the two
+This ADR says _where_ a full name is released and never says _where it is collected_, and the two
 readings of that silence produce different products. Effort 0002's concern C1 forced the question:
 `ExchangedContact.fullName` had no source anywhere in the design.
 

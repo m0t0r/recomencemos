@@ -1,7 +1,7 @@
 ---
 stage: spec
 status: approved
-reviewed: 2026-08-25 fidelity
+reviewed: 2026-08-25 fidelity (second pass, C46–C57 resolved)
 issue: 3
 intent: ./intent.md
 ---
@@ -153,28 +153,28 @@ inside its own ticket. See **UX design** for target paths and the ordering const
 **Also `Must`, promoted while resolving the flagged concerns.** Story numbers are stable across this
 document, so each keeps its original one.
 
- 1. As an Admin, I want to take down a CapabilityProfile and to see the realized attention spread
+1.  As an Admin, I want to take down a CapabilityProfile and to see the realized attention spread
     over the last seven days, so that the corrective half of moderation exists and the fairness
     property is observed rather than only asserted. **Promoted by C32:** the Wall stays newest-first,
     so the spread mechanism is bypassed by most traffic and measuring it is what replaces reordering.
 
 And the audit record, which two other sections of this spec already assert unconditionally:
 
- 1. As an Admin, I want an audit record of every action I take, so that an abuse incident and a Ley
+1.  As an Admin, I want an audit record of every action I take, so that an abuse incident and a Ley
     1581 _reclamo_ can be reconstructed from something other than mutable rows. **Promoted by C25:**
     repudiation is the one STRIDE letter with no other answer here, and logs live 30 days while a
     Report lives 24 months.
 
 **Should**
 
- 1. As a Worker and as a Hirer, I want a check-in seven days after a Contact Exchange asking whether
+1.  As a Worker and as a Hirer, I want a check-in seven days after a Contact Exchange asking whether
     the work happened and whether I was paid, so that there is evidence of whether any of this worked
     and a way to say "no me pagaron" without accusing anyone.
- 2. As a Hirer, I want to search and filter the browsable list by Skill and city in Spanish, including
+2.  As a Hirer, I want to search and filter the browsable list by Skill and city in Spanish, including
     when I type without accents, so that I can find the person I need rather than scroll.
- 3. As a Worker whose email address hard-bounced, I want the site to tell me and let me change it from
+3.  As a Worker whose email address hard-bounced, I want the site to tell me and let me change it from
     a session I still hold, so that a wrong address is not silently the end of my account.
- 4. As a maintainer, I want `PRODUCT.md`, `README.md` and the template-facing sections of `CLAUDE.md`
+4.  As a maintainer, I want `PRODUCT.md`, `README.md` and the template-facing sections of `CLAUDE.md`
     rewritten to describe Recomencemos, so that a future agent stops judging product code by whether
     it improves a template.
 
@@ -188,10 +188,21 @@ concerns.
 - **NFR1 — Publish latency, end to end.** A Worker completing the form reaches the Wall in **≤ 5 s**,
   measured from submission to visibility on a fresh `/` load. No human review sits on this path.
   **Binds:** 2.
-- **NFR2 — Read latency.** p95 **≤ 400 ms** server-side for `/` and `/profiles` on the Fly `iad`
-  machine, and **≤ 1200 ms** measured from a Colombian client — the number that includes the
-  ~90–110 ms Bogotá↔`iad` round trip the server-side figure excludes. Held at **50 req/s sustained**
-  and **500 concurrent**. There is no cache, so there is no warm/cold distinction to state.
+- **NFR2 — Read latency, and which half of it is instrumented.** p95 **≤ 400 ms** server-side for `/`
+  and `/profiles` on the Fly `iad` machine, and **≤ 1200 ms** measured from a Colombian client — the
+  number that includes the ~90–110 ms Bogotá↔`iad` round trip the server-side figure excludes. Held at
+  **50 req/s sustained** and **500 concurrent**. There is no cache, so there is no warm/cold
+  distinction to state.
+  **The two numbers are measured by different things, and only one is continuous** (C50). The
+  server-side p95 is read from the log line on every request. The client-side 1200 ms has **no
+  instrument in this product** — analytics and RUM are Out of Scope, the uptime monitor probes
+  `/api/health`, and NFR28's load test runs against the machine — so it is a **measured figure on a
+  cadence, not a monitored SLI**: taken at go-live from a real Colombian connection under 4× network
+  and 4× CPU throttling (runbook §11), and re-taken **monthly** and **after any change to the Wall's
+  payload or the photo path**. Stating it that way is the point: the honest cost is that a regression
+  between two measurements is invisible, and pretending otherwise is what the operability advisory
+  objected to. `default-latency` is set to both numbers on that understanding, and the row in the policy
+  table below says which half is monitored.
   **Binds:** 2, 4, 19.
 - **NFR3 — Worker-path page weight.** `/` and `/publish` each ship **≤ 120 KB** of compressed
   JavaScript on first load and reach **LCP ≤ 2.5 s at p75** under 4× network and 4× CPU throttling.
@@ -267,13 +278,20 @@ concerns.
   interleaves with the freeze and an Offer gets through, and a Report plus a burst of Offers from the
   same Hirer is the expected shape of the incident rather than an exotic one. `UNIQUE (offer_id)` on
   ContactExchange is the same discipline against a double accept. **Binds:** 10.
-- **NFR16 — Habeas data.** A _consulta_ is answered within **10 business days**, extensible once by
-  **≤ 5**; a _reclamo_ within **15 business days**, extensible once by **≤ 8**; an incomplete
-  _reclamo_ returned for correction within **5 days**. Verified against Ley 1581 de 2012 arts. 14–15
-  rather than recalled. **The clock is a runbook, not a diff.** What this spec makes buildable is the
-  **subject-access export**: one function producing everything held about one person, built from the
-  same whitelist mechanism as the three projections, so a new `personal` column omitted from the
-  export fails the same class of sentinel test as NFR10. **Binds:** 13, 14.
+- **NFR16 — Habeas data, as the half a diff can satisfy.** One function produces the
+  **subject-access export**: everything held about one person, built from the same whitelist mechanism
+  as the three projections, so a new `personal` column omitted from the export fails the same class of
+  sentinel test as NFR10. That is the whole of this requirement, and it is the whole of what
+  `/to-tickets` copies onto a ticket. **Binds:** 13, 14.
+  **The clocks are a runbook, and they are deliberately not part of this NFR** (C53). A _consulta_ is
+  answered within **10 business days**, extensible once by **≤ 5**; a _reclamo_ within **15 business
+  days**, extensible once by **≤ 8**; an incomplete _reclamo_ returned for correction within **5
+  days** — verified against Ley 1581 de 2012 arts. 14–15 rather than recalled, and carried by the
+  go-live runbook's §7, which is where a step ending in a calendar belongs. The previous wording
+  adopted that distinction in prose while keeping the clocks inside a bound requirement, so an
+  unsatisfiable acceptance criterion still travelled to a `Must` ticket beside a satisfiable one. **A
+  business-day clock binds no story**, because no diff advances it and no reviewer can tick it with
+  evidence.
 - **NFR17 — Retention, as a graph with a purge order.** Reports **24 months**; Offers **12 months from
   send**, except an Offer referenced by a live Report, which is pinned until that Report purges;
   ContactExchange **12 months**, then reduced to non-identifying counts; CheckIns follow their
@@ -355,12 +373,19 @@ concerns.
   from one address and **every per-IP ceiling above collapses into a single global one** — which would
   lock out legitimate users while barely inconveniencing an attacker.
   **Second half:** a refusal returns a typed value and does **not** throw, so a crawler cannot spend
-  the month's Sentry error quota.
+  the month's Sentry error quota. **And the same holds for every not-found** (C51), which is the other
+  half of the finding this half came from: **0** of the surfaces that answer `404` — the five in the UX
+  state table plus C22's frozen caller at `GET /profile/[slug]` — reach `onRequestError`. A not-found
+  is a **returned** response carrying a `warn` line, never a thrown error, which is DD11's "thrown is
+  reported; returned is logged" applied to the case the advisory named. An unauthenticated enumeration
+  sweep of `/profile/[slug]` is otherwise the cheapest way there is to spend a 5,000-error monthly
+  allowance in a day and make the second real incident of the month invisible.
   **Third half, which the second was missing (C39): a refusal is legible to the person who hit it.**
   Every ceiling returns an `AppError` carrying `code: "rate_limited"`, a **`retryAfter`**, and a
   `userMessage` in her terms, and every surface with a ceiling carries a rate-limited state in the UX
-  state table. A Worker who trips `publishProfile ≤ 3/day` after two failed attempts must not be
-  stopped by silence. **Binds:** 16, 2, 6, 10.
+  state table — **all eight ceilings, checked as a list against that table rather than by eye** (C57).
+  A Worker who trips `publishProfile ≤ 3/day` after two failed attempts must not be stopped by
+  silence. **Binds:** 16, 2, 6, 10.
 - **NFR27 — Sign-in actually completes.** **≥ 70%** of `requestMagicLink` calls are followed by a
   completed sign-in within 30 minutes, rolling 7 days; a **drop of > 20 points** against the trailing
   30-day value is the actionable signal. This replaces a bounce-rate-only indicator, which goes green
@@ -376,7 +401,9 @@ concerns.
   rollback has been
   rehearsed once against production, the domain is a Cloudflare zone with **transformations enabled**
   (DD6 — a dashboard step, and photos serve at full size until it is done), and a load test shows NFR2
-  held at its stated concurrency.
+  held at its stated concurrency. **NFR2's client-side number is measured here too** (C50, runbook
+  §11) — from a real Colombian connection rather than from the machine, because it is the only number
+  in this spec whose instrument is a person with a stopwatch.
   **Two email preconditions, because the announcement is the spike and the magic link is the only door
   (DD14):** SPF, DKIM and DMARC resolve for the sending subdomain — verified with `dig`, not assumed —
   and the domain has been **warmed** to a daily volume that covers the announcement's expected sign-ups.
@@ -430,8 +457,28 @@ concerns.
   Above **50%** of the 30-day budget, deploys are limited to fixes and cadence drops to once daily
   until the trailing window recovers (C11). **Binds:** 15.
 
-Both numbers above were concerns rather than requirements in the draft — C9 and C42 — because each
-depended on a decision this spec had not yet taken. They are requirements now that it has.
+- **NFR33 — Every Admin action is auditable, and the audit cannot be skipped.** **100%** of the
+  eleven `/admin` actions write an `AdminAction` row **in the same transaction as the action itself**,
+  so **0** of them can commit unaudited — asserted by a table-driven test over the action registry
+  (the same registry seam 3's authorization table already enumerates, C38), which is red for an action
+  added without one. The row carries **actor, action, target id, timestamp — ids and enum values only**
+  and **0** sentinels from NFR10's set, because an audit table that accumulates personal data is a
+  second copy of the thing NFR11 counts. It is retained **24 months**, matching a Report rather than a
+  log line, since logs live 30 days and the incident it reconstructs may not surface for a year.
+  **Binds:** 23.
+- **NFR34 — The repository describes the product, not the template it came from.** **0** rows remain
+  unresolved in `README.md`'s "Placeholders to change" table; `PRODUCT.md` names Recomencemos and the
+  three municipalities; **0** statements in `CLAUDE.md` instruct a reader to judge a change by whether
+  it improves a template. The check is a reading, not a script — but the counts are what make it one
+  a reviewer can tick, and this story exists because a future agent inheriting the template's judging
+  criterion will apply it to product code. **Binds:** 22.
+
+Both availability numbers above were concerns rather than requirements in the draft — C9 and C42 —
+because each depended on a decision this spec had not yet taken. They are requirements now that it
+has. **NFR33 and NFR34 were added while resolving C54**: every NFR carried a non-empty `Binds:` and
+every story it named existed, but stories 22 and 23 were bound by nothing — story 23 having been
+promoted into the announcement gate by C25 in the same round that C42 closed the identical gap one
+story over.
 
 ## Core entities
 
@@ -546,48 +593,48 @@ endpoint and a page-level check does not extend to it. Every one also **rate-lim
 
 ### Public — no Account
 
-| Surface                           | What it is                                      | Shape                                                              | Who may call                                                                                                    |
-| --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `GET /`                           | Server Component. Newest published profiles     | `PublicProfile[]`                                                  | Anyone. Indexable                                                                                               |
-| `GET /profiles`                   | Server Component. Fewest delivered Offers first | `PublicProfile[]`, keyset-paginated                                | Anyone. Indexable                                                                                               |
-| `GET /sign-in`                    | Server Component + one Client Component         | —                                                                  | Anyone                                                                                                          |
-| action `requestMagicLink`         | Server Action                                   | `{ email, sharedDevice, returnPath? }` → `{ ok: true }` **always** | Anyone. Rate-limited. `returnPath` must be a single-leading-slash relative path; `//host` and `/\host` rejected |
-| `GET /api/auth/sign-in/social` (Google) | Route Handler (Better Auth) | its own; PKCE automatic | Anyone **except** an Admin-granted account (NFR14). Links to an existing Account only on a **verified** email match (DD5). Provider tokens are not stored |
-| `GET /api/auth/*`                 | Route Handler (Better Auth)                     | its own                                                            | Anyone. `trustedOrigins` set explicitly. Token is a **query** parameter, single-use, TTL in DD5                 |
-| `GET /api/health`                 | Route Handler                                   | `200`, empty, after a trivial DB round trip, in **≤ 50 ms**        | The deploy health gate and the uptime monitor. `noindex`, returns no data                                       |
-| `GET /robots.txt`, `/sitemap.xml` | Route Handlers                                  | —                                                                  | Anyone. The sitemap lists `/` and `/profiles` and **no** profile                                                |
+| Surface                                 | What it is                                      | Shape                                                              | Who may call                                                                                                                                              |
+| --------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                 | Server Component. Newest published profiles     | `PublicProfile[]`                                                  | Anyone. Indexable                                                                                                                                         |
+| `GET /profiles`                         | Server Component. Fewest delivered Offers first | `PublicProfile[]`, keyset-paginated                                | Anyone. Indexable                                                                                                                                         |
+| `GET /sign-in`                          | Server Component + one Client Component         | —                                                                  | Anyone                                                                                                                                                    |
+| action `requestMagicLink`               | Server Action                                   | `{ email, sharedDevice, returnPath? }` → `{ ok: true }` **always** | Anyone. Rate-limited. `returnPath` must be a single-leading-slash relative path; `//host` and `/\host` rejected                                           |
+| `GET /api/auth/sign-in/social` (Google) | Route Handler (Better Auth)                     | its own; PKCE automatic                                            | Anyone **except** an Admin-granted account (NFR14). Links to an existing Account only on a **verified** email match (DD5). Provider tokens are not stored |
+| `GET /api/auth/*`                       | Route Handler (Better Auth)                     | its own                                                            | Anyone. `trustedOrigins` set explicitly. Token is a **query** parameter, single-use, TTL in DD5                                                           |
+| `GET /api/health`                       | Route Handler                                   | `200`, empty, after a trivial DB round trip, in **≤ 50 ms**        | The deploy health gate and the uptime monitor. `noindex`, returns no data                                                                                 |
+| `GET /robots.txt`, `/sitemap.xml`       | Route Handlers                                  | —                                                                  | Anyone. The sitemap lists `/` and `/profiles` and **no** profile                                                                                          |
 
 ### Worker — Account required, `noindex`
 
-| Surface                                                 | Shape                                                                                                                                 | Who may call                                                                                                                                                                                                               |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /publish`                                          | —                                                                                                                                     | Signed-in Account with no CapabilityProfile                                                                                                                                                                                |
+| Surface                                                 | Shape                                                                                                                                                                                                          | Who may call                                                                                                                                                                                                               |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /publish`                                          | —                                                                                                                                                                                                              | Signed-in Account with no CapabilityProfile                                                                                                                                                                                |
 | action `publishProfile`                                 | `{ fullName, firstName, lastInitial, city, headline, about, phone, skillSlugs[], workHistory[], consentVersion }` → `{ ok } \| { fieldErrors }`. `fullName` is gated at rest and crosses only at exchange (C1) | Itself only                                                                                                                                                                                                                |
-| action `createPhotoUpload`                              | `{ contentType, byteLength }` → `{ uploadUrl, photoKey }`, a presigned PUT into a quarantine prefix                                   | The owner. **Not** a multipart Server Action — the body limit defaults to 1 MB and a phone photo is 2–5 MB (DD6)                                                                                                           |
-| action `attachPhoto`                                    | `{ photoKey }` → `{ photoState: "pending" }`                                                                                          | The owner                                                                                                                                                                                                                  |
-| action `requestSkill`                                   | `{ text }` → `{ ok }`                                                                                                                 | The owner                                                                                                                                                                                                                  |
-| `GET /my-profile`                                       | `OwnProfile` — the gated shape plus her own photo whatever its state                                                                  | The owner                                                                                                                                                                                                                  |
-| `GET /offers`, `GET /offers/[id]`                       | `ReceivedOffer[]`, `ReceivedOffer`                                                                                                    | The owner, scoped by profile ownership                                                                                                                                                                                     |
-| action `acceptOffer`                                    | `{ offerId, confirmed: true }` → `{ exchange }`                                                                                       | The addressee. Two-step: the confirmation names which details cross and that it is irreversible                                                                                                                            |
-| actions `declineOffer`, `reportOffer`, `blockFromOffer` | `{ offerId, reason? }` → `{ ok }`                                                                                                     | Same. `blockFromOffer` takes the **Offer** id, so Hirer account ids never cross to a browser                                                                                                                               |
-| action `signOutEverywhere`                              | `{}` → `{ ok }`                                                                                                                       | Itself                                                                                                                                                                                                                     |
-| action `changeEmail`                                    | `{ email }` → `{ ok: "verification_sent" }`                                                                                           | Itself. **Two-phase**: the new address is verified before the switch, the old address is notified, and all other sessions end on completion. A one-shot switch is an account-takeover primitive from any abandoned session |
-| action `deleteAccount`                                  | `{ confirmationPhrase }` → `{ ok }`                                                                                                   | Itself, and only from a **fresh** sign-in                                                                                                                                                                                  |
+| action `createPhotoUpload`                              | `{ contentType, byteLength }` → `{ uploadUrl, photoKey }`, a presigned PUT into a quarantine prefix                                                                                                            | The owner. **Not** a multipart Server Action — the body limit defaults to 1 MB and a phone photo is 2–5 MB (DD6)                                                                                                           |
+| action `attachPhoto`                                    | `{ photoKey }` → `{ photoState: "pending" }`                                                                                                                                                                   | The owner                                                                                                                                                                                                                  |
+| action `requestSkill`                                   | `{ text }` → `{ ok }`                                                                                                                                                                                          | The owner                                                                                                                                                                                                                  |
+| `GET /my-profile`                                       | `OwnProfile` — the gated shape plus her own photo whatever its state                                                                                                                                           | The owner                                                                                                                                                                                                                  |
+| `GET /offers`, `GET /offers/[id]`                       | `ReceivedOffer[]`, `ReceivedOffer`                                                                                                                                                                             | The owner, scoped by profile ownership                                                                                                                                                                                     |
+| action `acceptOffer`                                    | `{ offerId, confirmed: true }` → `{ exchange }`                                                                                                                                                                | The addressee. Two-step: the confirmation names which details cross and that it is irreversible                                                                                                                            |
+| actions `declineOffer`, `reportOffer`, `blockFromOffer` | `{ offerId, reason? }` → `{ ok }`                                                                                                                                                                              | Same. `blockFromOffer` takes the **Offer** id, so Hirer account ids never cross to a browser                                                                                                                               |
+| action `signOutEverywhere`                              | `{}` → `{ ok }`                                                                                                                                                                                                | Itself                                                                                                                                                                                                                     |
+| action `changeEmail`                                    | `{ email }` → `{ ok: "verification_sent" }`                                                                                                                                                                    | Itself. **Two-phase**: the new address is verified before the switch, the old address is notified, and all other sessions end on completion. A one-shot switch is an account-takeover primitive from any abandoned session |
+| action `deleteAccount`                                  | `{ confirmationPhrase }` → `{ ok }`                                                                                                                                                                            | Itself, and only from a **fresh** sign-in                                                                                                                                                                                  |
 
 ### Hirer — Account required, `noindex`
 
-| Surface               | Shape                                                                                                | Who may call                                                                                                                      |
-| --------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /profile/[slug]` | `GatedProfile`                                                                                       | Any signed-in Account **whose `offerSendingState` is not `frozen`**. Charged against NFR26's read ceiling. A frozen caller gets the same response as a missing profile (C22). **A Blocked caller is served normally** — a Block reaches the send only (C3) |
-| action `sendOffer`    | `{ profileSlug, hirerName, hirerPhone, workDescription, payTerms, whenText, consentVersion }` → `{ ok } \| { fieldErrors }`. The two identity fields are collected once, on the first Offer, and stored on Account (C4) | Signed-in Account whose `offerSendingState` is read **from the row under a lock**, never from the session, and who is not Blocked |
-| `GET /sent-offers`    | `SentOffer[]` — state only; no contact details unless exchanged. Carries the derived `reviewDelayed` (C41) | The sender                                                                                                                        |
+| Surface               | Shape                                                                                                                                                                                                                   | Who may call                                                                                                                                                                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /profile/[slug]` | `GatedProfile`                                                                                                                                                                                                          | Any signed-in Account **whose `offerSendingState` is not `frozen`**. Charged against NFR26's read ceiling. A frozen caller gets the same response as a missing profile (C22). **A Blocked caller is served normally** — a Block reaches the send only (C3) |
+| action `sendOffer`    | `{ profileSlug, hirerName, hirerPhone, workDescription, payTerms, whenText, consentVersion }` → `{ ok } \| { fieldErrors }`. The two identity fields are collected once, on the first Offer, and stored on Account (C4) | Signed-in Account whose `offerSendingState` is read **from the row under a lock**, never from the session, and who is not Blocked                                                                                                                          |
+| `GET /sent-offers`    | `SentOffer[]` — state only; no contact details unless exchanged. Carries the derived `reviewDelayed` (C41)                                                                                                              | The sender                                                                                                                                                                                                                                                 |
 
 ### Admin — password **and** TOTP on the session itself
 
-| Surface                                                                                                                                                                                 | Shape                                                                                     | Who may call                                                      |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `GET /admin`                                                                                                                                                                            | `QueueItem[]` across five sources, each branch `LIMIT`-capped, with the age of the oldest, plus two signals that are not queue items: the publish rate above 10/hour (C24) and the duplicate-phone flag (C30) | An Admin **session** (NFR14)                                      |
-| actions `deliverOffer`, `rejectOffer`, `approvePhoto`, `rejectPhoto`, `resolveReport`, `unfreezeHirer`, `banHirer`, `promoteSkill`, `declineSkill`, `takeDownProfile`, `revokeSessions` | `{ id, ... }` → `{ ok }`. `unfreezeHirer` releases his `on_hold` Offers and restores his gated reads (C22) | An Admin session, each re-checking, each writing an `AdminAction` in the same transaction (C25) |
+| Surface                                                                                                                                                                                 | Shape                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Who may call                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `GET /admin`                                                                                                                                                                            | `QueueItem[]` across five sources, each branch `LIMIT`-capped for display while its **count and age-of-oldest are computed over the whole branch** (C55), plus **exactly four** signals that are not queue items — the publish rate above 10/hour (C24), the duplicate-phone flag (C30), a profile filing more than 3 Reports in 7 days (C49), and a profile completing more than 5 Contact Exchanges with distinct Hirers in 7 days (C47). A fifth signal is a spec amendment | An Admin **session** (NFR14)                                                                    |
+| actions `deliverOffer`, `rejectOffer`, `approvePhoto`, `rejectPhoto`, `resolveReport`, `unfreezeHirer`, `banHirer`, `promoteSkill`, `declineSkill`, `takeDownProfile`, `revokeSessions` | `{ id, ... }` → `{ ok }`. `unfreezeHirer` releases his `on_hold` Offers and restores his gated reads (C22)                                                                                                                                                                                                                                                                                                                                                                     | An Admin session, each re-checking, each writing an `AdminAction` in the same transaction (C25) |
 
 ### Webhook
 
@@ -604,12 +651,12 @@ never present. Each is `noindex`, returns **`204` with no body**, and authorizes
 compared in constant time plus a timestamp window against replay — the Resend webhook's discipline,
 applied to the other direction of the same problem.
 
-| Endpoint | Cron (UTC unless stated) | What it does | Bound per invocation |
-| -------- | ------------------------ | ------------ | -------------------- |
-| `POST /api/jobs/rotation-key` | `0 3 * * *` | Rewrites the stored `rotationKey`, NFR22's ordering input | Whole published set; one `UPDATE` |
-| `POST /api/jobs/offer-expiry` | `0 * * * *` | Expires delivered Offers past their window | **≤ 500 Offers**, oldest first |
-| `POST /api/jobs/check-ins` | `0 9 * * *` | Sends the seven-day check-ins (NFR31) | **≤ 200 sends**, oldest exchange first |
-| `POST /api/jobs/queue-digest` | `0 8 * * *` **America/Bogotá** | C10's daily digest of NFR7's queue depths and the age of the oldest | One send |
+| Endpoint                      | Cron (UTC unless stated)       | What it does                                                        | Bound per invocation                   |
+| ----------------------------- | ------------------------------ | ------------------------------------------------------------------- | -------------------------------------- |
+| `POST /api/jobs/rotation-key` | `0 3 * * *`                    | Rewrites the stored `rotationKey`, NFR22's ordering input           | Whole published set; one `UPDATE`      |
+| `POST /api/jobs/offer-expiry` | `0 * * * *`                    | Expires delivered Offers past their window                          | **≤ 500 Offers**, oldest first         |
+| `POST /api/jobs/check-ins`    | `0 9 * * *`                    | Sends the seven-day check-ins (NFR31)                               | **≤ 200 sends**, oldest exchange first |
+| `POST /api/jobs/queue-digest` | `0 8 * * *` **America/Bogotá** | C10's daily digest of NFR7's queue depths and the age of the oldest | One send                               |
 
 **Every one is idempotent**, because Trigger.dev retries: a second call inside the same window
 completes and changes nothing. **Every one is bounded**, and the second half of that bound is
@@ -715,11 +762,16 @@ his self-asserted `hirerName` and `hirerPhone` onto the Account (C4). Nothing is
 confirmation says a person reads it first, that this usually takes under a day, and that he cannot
 change it.
 
-**Story 7 — the queue.** `/admin` unions five sources — plus C24's publish-rate signal and C30's
-duplicate-phone flag, which inform rather than queue — each served by a **partial index** on its
-pending predicate, so the age-of-oldest is an index-only scan over a handful of rows rather than five
-sequential scans that grow with total table size forever. Each branch is `LIMIT`-capped — an unbounded
-union after three days away is exactly when the surface needs to still load. Every action re-checks
+**Story 7 — the queue.** `/admin` unions five sources — plus the four signals that inform rather
+than queue (C24's publish rate, C30's duplicate phone, C49's Report rate, C47's exchange rate) — each
+served by a **partial index** on its pending predicate, so the age-of-oldest is an index-only scan over
+a handful of rows rather than five sequential scans that grow with total table size forever. Each
+branch is `LIMIT`-capped — an unbounded union after three days away is exactly when the surface needs
+to still load — and **the cap bounds the rows rendered, never the numbers read off them** (C55): the
+count and the age-of-oldest per branch come from a separate `COUNT(*)` / `MIN(created_at)` over the
+**whole** predicate, on the same partial index. A page capped at 50 that reported a depth of 50 would
+be an instrument that goes green exactly when the backlog is worst, and NFR7's band and story 7's
+age-on-every-screen are both read off that number. Every action re-checks
 the Admin session **[trust]**, writes an `AdminAction`, and renders only the fields NFR11 permits that
 item type. `deliverOffer` sets `deliveredAt`, increments the counter, and notifies **[network]**.
 
@@ -936,19 +988,19 @@ Read against `better-auth@1.7.1`'s own guidance rather than recalled. Eleven set
 **not defaults** — each is either off, memory-backed, or pointed at the wrong thing until set, and
 three of them would ship as security holes rather than as rough edges.
 
-| Setting                                          | Value here                               | Why it is not the default                                                                     |
-| ------------------------------------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `rateLimit.storage`                              | `"database"`                             | Defaults to memory; deploys are continuous, so the limiter resets several times a day (NFR26) |
-| `rateLimit.customRules`                          | explicit on the magic-link and 2FA paths | Inheriting "3 per 10 s" leaves the one credential in this system on a default                 |
-| `advanced.ipAddress.ipAddressHeaders`            | `["x-forwarded-for"]`                    | Fly proxies every request; unset, every per-IP ceiling becomes one global ceiling             |
-| `session.cookieCache`                            | **disabled**                             | Enabled, every revocation in NFR13 and NFR15's zero lag by its TTL                            |
-| `session.expiresIn` / `updateAge`                | per NFR13, per device class              | Defaults are 7 days / 1 day for everyone                                                      |
-| `session.additionalFields`                       | records the sign-in method               | NFR14's mechanism; there is no built-in equivalent                                            |
-| `user.changeEmail.enabled`                       | `true`                                   | **Disabled by default** — the contract's `changeEmail` silently does nothing otherwise        |
-| `user.deleteUser.enabled`                        | `true`                                   | **Disabled by default** — same for story 13, which is a Ley 1581 surface                      |
-| `emailAndPassword.requireEmailVerification`      | `true`                                   | Admin only; the credential account is the one worth it                                        |
-| `emailAndPassword.revokeSessionsOnPasswordReset` | `true`                                   | Off by default, so a reset would leave the attacker's session alive                           |
-| `emailAndPassword.minPasswordLength`             | `16`                                     | Default is 8, for the one account that can read every phone number                            |
+| Setting                                          | Value here                               | Why it is not the default                                                                                                     |
+| ------------------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `rateLimit.storage`                              | `"database"`                             | Defaults to memory; deploys are continuous, so the limiter resets several times a day (NFR26)                                 |
+| `rateLimit.customRules`                          | explicit on the magic-link and 2FA paths | Inheriting "3 per 10 s" leaves the one credential in this system on a default                                                 |
+| `advanced.ipAddress.ipAddressHeaders`            | `["x-forwarded-for"]`                    | Fly proxies every request; unset, every per-IP ceiling becomes one global ceiling                                             |
+| `session.cookieCache`                            | **disabled**                             | Enabled, every revocation in NFR13 and NFR15's zero lag by its TTL                                                            |
+| `session.expiresIn` / `updateAge`                | per NFR13, per device class              | Defaults are 7 days / 1 day for everyone                                                                                      |
+| `session.additionalFields`                       | records the sign-in method               | NFR14's mechanism; there is no built-in equivalent                                                                            |
+| `user.changeEmail.enabled`                       | `true`                                   | **Disabled by default** — the contract's `changeEmail` silently does nothing otherwise                                        |
+| `user.deleteUser.enabled`                        | `true`                                   | **Disabled by default** — same for story 13, which is a Ley 1581 surface                                                      |
+| `emailAndPassword.requireEmailVerification`      | `true`                                   | Admin only; the credential account is the one worth it                                                                        |
+| `emailAndPassword.revokeSessionsOnPasswordReset` | `true`                                   | Off by default, so a reset would leave the attacker's session alive                                                           |
+| `emailAndPassword.minPasswordLength`             | `16`                                     | Default is 8, for the one account that can read every phone number                                                            |
 | `twoFactor.trustDevice`                          | **`false`**                              | At its 30-day default it re-establishes an Admin session on a password alone for a month, contradicting NFR13's 8 hours (C44) |
 
 **Trusted devices are disabled outright rather than capped** (C44). Capping `trustDeviceMaxAge` at the
@@ -1173,10 +1225,31 @@ against in those words:
   complete key set — nothing left to guess — and an Account costs one disposable address. Answered by
   NFR26's read ceiling, which turns a twenty-minute script into weeks, and into a signal.
 - _I Report every Offer I receive, freezing legitimate Hirers with no human in the loop._ The freeze is
-  a Worker-side weapon and the draft treated it only as a shield. Kept, with the counterweight: a
-  Report rate per profile, and a queue signal when one profile reports many Hirers.
+  a Worker-side weapon and the draft treated it only as a shield. Kept, with the counterweight in both
+  halves: the rate is `reportOffer` **≤ 10/day** (NFR26), and the signal is **more than 3 Reports from
+  one profile in 7 days** (C49), surfaced on `/admin` beside C24's publish rate and **informing rather
+  than blocking** — a Report is never silently dropped, because the freeze is what protects her while
+  she waits. Without the signal a handful of bad-faith Reports removes the scarce side of the market
+  for a day and nothing says so.
 - _I send hundreds of Offers, so the 24-hour queue held by one unpaid person becomes unholdable._
   NFR7's depth and arrival-rate halves are the detector; `sendOffer` at ≤ 10/day is the bound.
+- _I publish a profile that is not a person, accept the Offers it attracts, and harvest a real
+  Hirer's name, phone and email for the cost of one email address._ **This case runs against the
+  Worker's counterpart rather than against her**, and it is the one the security advisory named as the
+  point of the exercise — almost every mechanism above points at the bad Hirer. It matters more since
+  C4: `sendOffer` now snapshots his self-asserted `hirerName` and `hirerPhone` onto the Account and
+  `ExchangedContact` carries them, so what an acceptance discloses in that direction grew.
+  **What already bounds it:** the exchange happens only on **her** acceptance of **his** Offer, so the
+  attacker cannot initiate — he must attract an Offer, and every Offer is human-reviewed before it is
+  delivered; `publishProfile` ≤ 3/day and one profile per Account bound the fleet; the photo is
+  reviewed before it is public (NFR6); C30's duplicate-phone flag catches the reused number; and story
+  11 tells a Hirer in plain words that nobody here is verified and that his own name and phone are
+  self-asserted like everyone else's (C4). **What was missing and is added here:** a queue signal above
+  **5 completed Contact Exchanges with distinct Hirers from one profile in 7 days** — the shape a
+  harvester makes and an ordinary Worker does not — informing rather than blocking, because the same
+  shape is what success looks like and blocking it would be the platform working against its own
+  purpose. No ceiling sits on `acceptOffer`: refusing a Worker the acceptance she has waited for, to
+  slow an attacker who can simply wait a day, spends the wrong side's patience.
 
 **The scarcest resource in this design is one person's attention, and nothing in the draft protected
 it.** That is what NFR26 is for.
@@ -1200,8 +1273,20 @@ concern C6.
 **No user-supplied text is ever rendered as HTML or Markdown, anywhere.** React escapes by
 construction — and since DD14 makes the email templates React Email components, that now holds on the
 email path too, which is where the draft said it did not. The rule that replaces the exception is
-narrower and mechanical: **no `dangerouslySetInnerHTML` and no `<Markdown>` over user text**, in the
-app or in a template.
+narrower and mechanical, and it has **three** clauses rather than two: **no `dangerouslySetInnerHTML`,
+no `<Markdown>` over user text, and no `href` — or any other URL-valued attribute — built from user
+text**, in the app or in a template.
+
+**The third clause is the one C48 caught missing, and it is not covered by the first two.** React's
+escaping constrains element **content**; it does not sanitise an **attribute**, so
+`<a href={userText}>` interpolating `javascript:…` or an attacker-chosen host survives every mechanism
+above and reaches an inbox on both sides of an unverified market. Every URL this product renders or
+sends is therefore **constructed server-side from values the server owns** — a slug, an Offer id, a
+route constant, `NEXT_PUBLIC_APP_URL` — and never from a field a person typed. Free text stays text:
+the rejector (DD3, NFR12) already refuses a messaging-app URL inside it, and what survives that is
+rendered as content, never linkified. Seam 1 tests the rule with a sentinel `javascript:` fragment in
+every free-text field; the accessibility requirement about descriptive link text is a different
+requirement and does not discharge this one.
 
 ### DD8 — Retention, deletion, and habeas data (NFR16, NFR17)
 
@@ -1476,9 +1561,15 @@ rendering one.** DD7 called the email templates "the one rendering path where Re
 not apply", and the security advisory asked for explicit escaping at that seam (concern C26). With
 React Email the templates **are** React components rendered through `render()`, so interpolating an
 Offer body or a headline escapes by construction, exactly as it does in the app. The exception
-dissolves; what remains is narrower and easier to hold: **no `dangerouslySetInnerHTML`, and no
-`<Markdown>` component over user-supplied text**, ever. That is a mechanism rather than a discipline,
-which is the difference C26 was actually asking for.
+dissolves; what remains is narrower and easier to hold: **no `dangerouslySetInnerHTML`, no
+`<Markdown>` component over user-supplied text, and no `href` built from user text**, ever. That is a
+mechanism rather than a discipline, which is the difference C26 was actually asking for.
+
+**The third clause is not a restatement of the first two** (C48). Escaping constrains element content
+and leaves an attribute alone, so a link whose `href` interpolates a typed field is the one injection
+this seam still admits — into an inbox, on both sides, past a control everyone believes is closed.
+Every URL in every template is built from server-owned values: the app origin, a route constant, an
+Offer or exchange id. DD7 states the rule for the app and the template alike.
 
 **Sends are idempotent, because the one irreversible act in this system is a send.** Every call
 carries an idempotency key in Resend's `<event-type>/<entity-id>` form — `contact-exchange/<id>`,
@@ -1589,18 +1680,21 @@ different egress, and a gap effort 0001 named rather than a decision it made.
 ### DD16 — Trust boundaries, and a STRIDE walk on the three that leak (C21)
 
 The draft carried `[trust]` and `[network]` markers and no boundary table, which the security advisory
-called the right instinct with the walk missing. Seven boundaries, and what authorizes each:
+called the right instinct with the walk missing. Seven boundaries, and what authorizes each.
+**Membership is closed: exactly these seven** (C56), by the same rule DD11's event list carries — an
+eighth boundary is a **spec amendment**, not a Build decision. The table is what `/security-audit` is
+handed as its input, so a table read as illustrative is an egress added at Build that nobody modelled:
 
-| # | Boundary | What crosses | What authorizes it |
-| - | -------- | ------------ | ------------------ |
-| 1 | Browser → Server Action | Every write in the product | Per-action authorization (never the page's), NFR26's ceiling, the principal as first parameter |
-| 2 | Browser → public read | `PublicProfile` only | Nothing — public by design, `noindex` absent by design |
-| 3 | Browser → gated read | `GatedProfile` | A session, not `frozen` (C22); charged against the read ceiling |
-| 3b | **Trigger.dev → job endpoint** | A signed request carrying **no data**; the reply is `204` with no body | A shared secret compared in constant time, a timestamp window, and idempotency. Inbound by design: the scheduler holds no database credential (DD10) |
-| 4 | Server → Postgres | Everything | `@repo/domain` is the only door ([ADR-0010](../../adr/0010-the-domain-package-is-the-only-door-to-the-database.md)); the connection is unexported |
-| 5 | **Server → object storage** | Photo bytes, presigned PUT into a quarantine prefix | A short-lived presigned URL; the public URL derives only at `photoState = approved` |
-| 6 | **Server → Resend** | Email address, Offer notification, exchanged contact details | The notification seam; React Email templates; NFR18's zero on everything else |
-| 7 | **Server → Sentry** | Errors and 10% of traces | `beforeSend` / `beforeSendTransaction` scrubbing, and NFR19's query-string fix |
+| #   | Boundary                       | What crosses                                                           | What authorizes it                                                                                                                                   |
+| --- | ------------------------------ | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Browser → Server Action        | Every write in the product                                             | Per-action authorization (never the page's), NFR26's ceiling, the principal as first parameter                                                       |
+| 2   | Browser → public read          | `PublicProfile` only                                                   | Nothing — public by design, `noindex` absent by design                                                                                               |
+| 3   | Browser → gated read           | `GatedProfile`                                                         | A session, not `frozen` (C22); charged against the read ceiling                                                                                      |
+| 3b  | **Trigger.dev → job endpoint** | A signed request carrying **no data**; the reply is `204` with no body | A shared secret compared in constant time, a timestamp window, and idempotency. Inbound by design: the scheduler holds no database credential (DD10) |
+| 4   | Server → Postgres              | Everything                                                             | `@repo/domain` is the only door ([ADR-0010](../../adr/0010-the-domain-package-is-the-only-door-to-the-database.md)); the connection is unexported    |
+| 5   | **Server → object storage**    | Photo bytes, presigned PUT into a quarantine prefix                    | A short-lived presigned URL; the public URL derives only at `photoState = approved`                                                                  |
+| 6   | **Server → Resend**            | Email address, Offer notification, exchanged contact details           | The notification seam; React Email templates; NFR18's zero on everything else                                                                        |
+| 7   | **Server → Sentry**            | Errors and 10% of traces                                               | `beforeSend` / `beforeSendTransaction` scrubbing, and NFR19's query-string fix                                                                       |
 
 Boundaries 5–7 are where personal data **leaves the system**, which is why they get the walk and the
 inbound ones do not — those are already answered by DD5, DD7 and DD9 letter by letter. **Boundary 3b
@@ -1609,14 +1703,14 @@ would be an eighth boundary carrying personal data, and a seventh processor in t
 Its one real threat is spoofing — an unauthenticated caller triggering `check-ins` repeatedly to spend
 the sending quota — which the shared secret and the per-invocation cap close together.
 
-| | Object storage (5) | Resend (6) | Sentry (7) |
-| - | ------------------ | ---------- | ---------- |
-| **S**poofing | A forged presigned URL needs the R2 credential (C5) | The webhook is the spoofable direction: signature + timestamp window + idempotency, and every rejection logged (C27) | Ingest is one-way; a forged event is noise, not disclosure |
-| **T**ampering | Quarantine prefix is not publicly readable; the served object is server-produced, so EXIF cannot survive | Templates are React components, so escaping is by construction; no `dangerouslySetInnerHTML` (C26) | Nothing crossing back is trusted |
-| **R**epudiation | `AdminAction` records approve/reject (C25) | `notification.sent` is on DD11's closed list | Event ids reach the log line, so an incident is traceable both ways |
-| **I**nformation disclosure | **The real risk**: a pending photo at a readable URL. Bounded over the object, not the page (NFR6) | **The real risk**: the exchange payload is the most sensitive thing this product sends. One recipient per send, no bcc, no batching across people | **The real risk**: NFR19's magic-link token in a query string — a fix to shipped code, not a future guard |
-| **D**enial of service | 2 MB cap, browser-side downscale, 1 GB machine floor (C34) | Warm-up curve and staged announcement (C45); a burnt domain is a self-inflicted outage | A crawler cannot spend the quota, because a refusal returns rather than throws (NFR26) |
-| **E**levation of privilege | No path from an object to an identity | A forged bounce is an account-denial primitive, which the webhook rules close | None — Sentry holds no authority over this app |
+|                            | Object storage (5)                                                                                       | Resend (6)                                                                                                                                                                                | Sentry (7)                                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **S**poofing               | A forged presigned URL needs the R2 credential (C5)                                                      | The webhook is the spoofable direction: signature + timestamp window + idempotency, and every rejection logged (C27)                                                                      | Ingest is one-way; a forged event is noise, not disclosure                                                |
+| **T**ampering              | Quarantine prefix is not publicly readable; the served object is server-produced, so EXIF cannot survive | Templates are React components, so escaping is by construction; no `dangerouslySetInnerHTML`, and **no `href` built from user text** — escaping covers content, not attributes (C26, C48) | Nothing crossing back is trusted                                                                          |
+| **R**epudiation            | `AdminAction` records approve/reject (C25)                                                               | `notification.sent` is on DD11's closed list                                                                                                                                              | Event ids reach the log line, so an incident is traceable both ways                                       |
+| **I**nformation disclosure | **The real risk**: a pending photo at a readable URL. Bounded over the object, not the page (NFR6)       | **The real risk**: the exchange payload is the most sensitive thing this product sends. One recipient per send, no bcc, no batching across people                                         | **The real risk**: NFR19's magic-link token in a query string — a fix to shipped code, not a future guard |
+| **D**enial of service      | 2 MB cap, browser-side downscale, 1 GB machine floor (C34)                                               | Warm-up curve and staged announcement (C45); a burnt domain is a self-inflicted outage                                                                                                    | A crawler cannot spend the quota, because a refusal returns rather than throws (NFR26)                    |
+| **E**levation of privilege | No path from an object to an identity                                                                    | A forged bounce is an account-denial primitive, which the webhook rules close                                                                                                             | None — Sentry holds no authority over this app                                                            |
 
 **What this walk does not replace** is the code audit. `/security-audit` runs against the built system
 before the announcement (C8); design-time modelling catches a wrong shape, which is a rewrite by the
@@ -1660,36 +1754,43 @@ statistician register into the words a Worker uses about herself **is** voice wo
 `partial` is the one this design actually hits, because the Wall streams and a photo resolves on its
 own schedule.
 
-| Surface              | Target                        | `empty`                                                                                                        | `loading`                                                                        | `partial`                                                                                                                        | `error`                                                                                                                                                                                                                                 | `permission denied`                                                                                                                                      | `success`                                                                                                                                                                                   |
-| -------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Wall**             | `app/page.tsx`                | Before the first profile exists: the proposition and a route into `/publish`. Never a blank region             | Card skeletons at the card's exact height, so the notices above them do not move | Cards rendered, a photo slot still resolving → the initial, which is also the approved-photo-absent state. One shape, two causes | The Wall failed to load: what failed, that retrying helps, and the notices still render                                                                                                                                                 | n/a — public                                                                                                                                             | n/a                                                                                                                                                                                         |
-| **Browse**           | `app/profiles/page.tsx`       | No match for this Skill/city: say which filter is narrowing, offer to clear it. Distinct from the Wall's empty | Skeletons holding the grid                                                       | Some cards, more streaming                                                                                                       | Search failed; the unfiltered list is still reachable                                                                                                                                                                                   | n/a — public                                                                                                                                             | n/a                                                                                                                                                                                         |
-| **Full profile**     | `app/profile/[slug]/page.tsx` | n/a                                                                                                            | Skeleton at the profile's height                                                 | Identity rendered, work history streaming                                                                                        | Profile failed to load                                                                                                                                                                                                                  | **Signed out** → the Account gate and why it exists. **Frozen** (a Report is open against him) → indistinguishable from "not found" (C22). **Blocked** → served normally: a Block reaches the send only, and the send is where he is refused (C3) | n/a                                                                                                                                                                                         |
-| **Sign in** | `app/sign-in/page.tsx` | n/a | Per-door: the Google button and the email button busy independently; the form stays readable | n/a | Send failed, retry available, address still in the field. **Google failed** → the email door is still offered, never a dead end | n/a | Email → "Check your email", said **whether or not the address exists**, because the honest reply and the enumeration-safe reply are the same one; a consumed link offers an immediate resend. **Google** → the surface names the account it is about to use, because on a borrowed Android it may be the phone owner's (DD5) |
-| **Publish**          | `app/publish/page.tsx`        | Skill picker before a query                                                                                    | Per-field, never a whole-form spinner                                            | Fields accepted, photo still uploading — the profile is already live                                                             | Per-field errors **and** a focused form-level summary; the contact-detail rejection names the fragment and keeps everything typed (NFR12); a photo rejected at the size ceiling says so in her terms rather than failing opaquely (DD6) | Already has a profile → route to `/my-profile`                                                                                                           | Published, with the live profile linked and the pending photo explained without a badge                                                                                                     |
-| **Own profile**      | `app/my-profile/page.tsx`     | n/a                                                                                                            | Skeleton                                                                         | Photo pending → **her own photo shown**, dignified, described as under review, not flagged                                       | Load failed                                                                                                                                                                                                                             | Not the owner → 404                                                                                                                                      | Edit saved                                                                                                                                                                                  |
-| **Received Offers**  | `app/offers/page.tsx`         | No Offers yet: say what makes one arrive, and that a person reads each first                                   | Row skeletons                                                                    | Some rows, terms streaming                                                                                                       | Load failed                                                                                                                                                                                                                             | Not the owner → 404                                                                                                                                      | n/a                                                                                                                                                                                         |
-| **One Offer**        | `app/offers/[id]/page.tsx`    | n/a                                                                                                            | Skeleton at the terms' height                                                    | Terms rendered, Hirer identity streaming                                                                                         | Load failed                                                                                                                                                                                                                             | Not the addressee → 404                                                                                                                                  | Accepted → the Contact Exchange below. Declined → confirmed, and it stays confirmed rather than vanishing                                                                                   |
-| **Contact Exchange** | same route, post-accept       | n/a                                                                                                            | n/a                                                                              | Details on screen, the email still sending — and the screen says the email is a copy, not the original                           | Email failed to send: the details are **still on screen**, which is why they are on screen                                                                                                                                              | Not a party to it → 404                                                                                                                                  | Both sides' details, once, plus the standing safety guidance and the no-money notice                                                                                                        |
-| **Sent Offers**      | `app/sent-offers/page.tsx`    | None sent: route into `/profiles`                                                                              | Row skeletons                                                                    | Rows, states streaming. `pending_review` states the normal window up front; past 24 h the derived `reviewDelayed` says plainly that this one is taking longer than usual (C41)                                                                                                           | Load failed                                                                                                                                                                                                                             | Not the sender → 404                                                                                                                                     | n/a                                                                                                                                                                                         |
-| **Account**          | `app/account/page.tsx`        | n/a                                                                                                            | Per-action                                                                       | n/a                                                                                                                              | Action failed                                                                                                                                                                                                                           | Signed out → `/sign-in`                                                                                                                                  | Signed out everywhere / email change **pending verification** (DD5) / **deletion**, whose confirmation carries NFR11's second number: it reaches nothing a Hirer already read               |
-| **Admin queue**      | `app/admin/page.tsx`          | Queue empty — a real and good state, and it says the oldest-item age is zero                                   | Skeletons                                                                        | Some sources loaded, others streaming; **the age of the oldest item renders first** (story 7)                                    | A source failed: say **which**, because a silently missing source is an unreviewed Offer                                                                                                                                                | Not an Admin session → 403, not a redirect (NFR14)                                                                                                       | Per-action, and the item leaves the queue                                                                                                                                                   |
+| Surface              | Target                        | `empty`                                                                                                        | `loading`                                                                                    | `partial`                                                                                                                                                                      | `error`                                                                                                                                                                                                                                 | `permission denied`                                                                                                                                                                                                                               | `success`                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Wall**             | `app/page.tsx`                | Before the first profile exists: the proposition and a route into `/publish`. Never a blank region             | Card skeletons at the card's exact height, so the notices above them do not move             | Cards rendered, a photo slot still resolving → the initial, which is also the approved-photo-absent state. One shape, two causes                                               | The Wall failed to load: what failed, that retrying helps, and the notices still render                                                                                                                                                 | n/a — public                                                                                                                                                                                                                                      | n/a                                                                                                                                                                                                                                                                                                                          |
+| **Browse**           | `app/profiles/page.tsx`       | No match for this Skill/city: say which filter is narrowing, offer to clear it. Distinct from the Wall's empty | Skeletons holding the grid                                                                   | Some cards, more streaming                                                                                                                                                     | Search failed; the unfiltered list is still reachable                                                                                                                                                                                   | n/a — public                                                                                                                                                                                                                                      | n/a                                                                                                                                                                                                                                                                                                                          |
+| **Full profile**     | `app/profile/[slug]/page.tsx` | n/a                                                                                                            | Skeleton at the profile's height                                                             | Identity rendered, work history streaming                                                                                                                                      | Profile failed to load                                                                                                                                                                                                                  | **Signed out** → the Account gate and why it exists. **Frozen** (a Report is open against him) → indistinguishable from "not found" (C22). **Blocked** → served normally: a Block reaches the send only, and the send is where he is refused (C3) | n/a                                                                                                                                                                                                                                                                                                                          |
+| **Sign in**          | `app/sign-in/page.tsx`        | n/a                                                                                                            | Per-door: the Google button and the email button busy independently; the form stays readable | n/a                                                                                                                                                                            | Send failed, retry available, address still in the field. **Google failed** → the email door is still offered, never a dead end                                                                                                         | n/a                                                                                                                                                                                                                                               | Email → "Check your email", said **whether or not the address exists**, because the honest reply and the enumeration-safe reply are the same one; a consumed link offers an immediate resend. **Google** → the surface names the account it is about to use, because on a borrowed Android it may be the phone owner's (DD5) |
+| **Publish**          | `app/publish/page.tsx`        | Skill picker before a query                                                                                    | Per-field, never a whole-form spinner                                                        | Fields accepted, photo still uploading — the profile is already live                                                                                                           | Per-field errors **and** a focused form-level summary; the contact-detail rejection names the fragment and keeps everything typed (NFR12); a photo rejected at the size ceiling says so in her terms rather than failing opaquely (DD6) | Already has a profile → route to `/my-profile`                                                                                                                                                                                                    | Published, with the live profile linked and the pending photo explained without a badge                                                                                                                                                                                                                                      |
+| **Own profile**      | `app/my-profile/page.tsx`     | n/a                                                                                                            | Skeleton                                                                                     | Photo pending → **her own photo shown**, dignified, described as under review, not flagged                                                                                     | Load failed                                                                                                                                                                                                                             | Not the owner → 404                                                                                                                                                                                                                               | Edit saved                                                                                                                                                                                                                                                                                                                   |
+| **Received Offers**  | `app/offers/page.tsx`         | No Offers yet: say what makes one arrive, and that a person reads each first                                   | Row skeletons                                                                                | Some rows, terms streaming                                                                                                                                                     | Load failed                                                                                                                                                                                                                             | Not the owner → 404                                                                                                                                                                                                                               | n/a                                                                                                                                                                                                                                                                                                                          |
+| **One Offer**        | `app/offers/[id]/page.tsx`    | n/a                                                                                                            | Skeleton at the terms' height                                                                | Terms rendered, Hirer identity streaming                                                                                                                                       | Load failed                                                                                                                                                                                                                             | Not the addressee → 404                                                                                                                                                                                                                           | Accepted → the Contact Exchange below. Declined → confirmed, and it stays confirmed rather than vanishing                                                                                                                                                                                                                    |
+| **Contact Exchange** | same route, post-accept       | n/a                                                                                                            | n/a                                                                                          | Details on screen, the email still sending — and the screen says the email is a copy, not the original                                                                         | Email failed to send: the details are **still on screen**, which is why they are on screen                                                                                                                                              | Not a party to it → 404                                                                                                                                                                                                                           | Both sides' details, once, plus the standing safety guidance and the no-money notice                                                                                                                                                                                                                                         |
+| **Sent Offers**      | `app/sent-offers/page.tsx`    | None sent: route into `/profiles`                                                                              | Row skeletons                                                                                | Rows, states streaming. `pending_review` states the normal window up front; past 24 h the derived `reviewDelayed` says plainly that this one is taking longer than usual (C41) | Load failed                                                                                                                                                                                                                             | Not the sender → 404                                                                                                                                                                                                                              | n/a                                                                                                                                                                                                                                                                                                                          |
+| **Account**          | `app/account/page.tsx`        | n/a                                                                                                            | Per-action                                                                                   | n/a                                                                                                                                                                            | Action failed                                                                                                                                                                                                                           | Signed out → `/sign-in`                                                                                                                                                                                                                           | Signed out everywhere / email change **pending verification** (DD5) / **deletion**, whose confirmation carries NFR11's second number: it reaches nothing a Hirer already read                                                                                                                                                |
+| **Admin queue**      | `app/admin/page.tsx`          | Queue empty — a real and good state, and it says the oldest-item age is zero                                   | Skeletons                                                                                    | Some sources loaded, others streaming; **the age of the oldest item renders first** (story 7)                                                                                  | A source failed: say **which**, because a silently missing source is an unreviewed Offer                                                                                                                                                | Not an Admin session → 403, not a redirect (NFR14)                                                                                                                                                                                                | Per-action, and the item leaves the queue                                                                                                                                                                                                                                                                                    |
 
 **A seventh state, on every surface that has a ceiling: `rate limited`** (C39). NFR26's refusal returns
 rather than throws, which protects the Sentry quota and says nothing to the person who hit it. Each
 one renders the `userMessage` and the `retryAfter` in her terms:
 
-| Surface | Ceiling | What she is told |
-| ------- | ------- | ---------------- |
-| **Sign in** | `requestMagicLink` ≤ 5/hour per address | Too many links requested; when she may ask again; the Google door is still there |
-| **Publish** | `publishProfile` ≤ 3/day | How many attempts today, when the window resets, and that nothing she typed was lost |
-| **Publish** | `createPhotoUpload` ≤ 10/day | Same, and that the profile is already live without the photo |
-| **Full profile** | reads ≤ 60/hour, ≤ 300/day | Reading paused, when it resumes — the honest reply, since a harvester learns nothing he did not already know from being stopped |
-| **One Offer** | `sendOffer` ≤ 10/day, `reportOffer` ≤ 10/day | When he may send again; a Report is never silently dropped |
-| **Account** | `changeEmail` ≤ 3/day | When she may try again, and that the address on file is unchanged |
+| Surface          | Ceiling                                      | What she is told                                                                                                                                                                                                                                        |
+| ---------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sign in**      | `requestMagicLink` ≤ 5/hour per address      | Too many links requested; when she may ask again; the Google door is still there                                                                                                                                                                        |
+| **Publish**      | `publishProfile` ≤ 3/day                     | How many attempts today, when the window resets, and that nothing she typed was lost                                                                                                                                                                    |
+| **Publish**      | `createPhotoUpload` ≤ 10/day                 | Same, and that the profile is already live without the photo                                                                                                                                                                                            |
+| **Publish**      | `requestSkill` ≤ 5/day (C57)                 | That the requests already sent are queued and not lost, when she may ask again, and that she can publish now with the closest Skill on the list and edit later — she is **mid-publish** when she meets this, which is the moment silence costs the most |
+| **Full profile** | reads ≤ 60/hour, ≤ 300/day                   | Reading paused, when it resumes — the honest reply, since a harvester learns nothing he did not already know from being stopped                                                                                                                         |
+| **One Offer**    | `sendOffer` ≤ 10/day, `reportOffer` ≤ 10/day | When he may send again; a Report is never silently dropped                                                                                                                                                                                              |
+| **Account**      | `changeEmail` ≤ 3/day                        | When she may try again, and that the address on file is unchanged                                                                                                                                                                                       |
 
 The case that motivated this is concrete: a Worker who trips `publishProfile` after two failed
 attempts currently meets silence, from a requirement that passes green.
+
+**Every `404` in the table above is a returned response, not a thrown error** (C51). Five surfaces
+refuse that way and C22 added a sixth — a frozen caller at `/profile/[slug]`, deliberately
+indistinguishable from a missing profile — which makes profile enumeration the cheapest path there is
+to the month's 5,000-event Sentry allowance. NFR26 states the rule; it is repeated here because the
+person implementing a `permission denied` cell is the one who reaches for `notFound()` out of habit.
 
 ### Suspense boundaries and their fallbacks
 
@@ -1835,10 +1936,13 @@ session — still earns its own case.
 
 **Two more cases belong at seam 1**, both cheap and both guarding something no other test reaches:
 
-- **Template escaping** (C26). Each React Email template carrying user text is rendered with a scripted
-  payload in the user-controlled field, asserting the output is escaped. React escapes by construction;
-  the guarantee holds right up until someone reaches for `dangerouslySetInnerHTML` to make a line break
-  work, and this is what catches that.
+- **Template escaping, content and attribute** (C26, C48). Each React Email template carrying user
+  text is rendered twice: once with a scripted payload in the user-controlled field, asserting the
+  output is escaped, and once with a `javascript:` fragment, asserting **no `href` in the rendered
+  output derives from the payload**. React escapes by construction; the guarantee holds right up until
+  someone reaches for `dangerouslySetInnerHTML` to make a line break work, or linkifies a typed
+  fragment, and this is what catches both. The same attribute assertion runs at seam 1 over every
+  free-text field the app renders.
 - **The purge tripwire** (C36). A test that **fails once 2027-06-01 passes with no retention purge job
   registered**. The job is deferred because its first purgeable row is roughly a year out; the reminder
   is red CI rather than memory.
@@ -1986,7 +2090,7 @@ answered and a concern asking "what should this be?" gets deferred.
       `docs/policy/security.md` → `csp-policy`.
       **Answer: ship the proposed policy, enforcing from the first deploy.**
       `default-src 'self'; frame-ancestors 'none'; img-src 'self' <image-host> data:; connect-src 'self'
-      <sentry-ingest>; base-uri 'self'; form-action 'self'`. `frame-ancestors 'none'` is the load-bearing
+<sentry-ingest>; base-uri 'self'; form-action 'self'`. `frame-ancestors 'none'` is the load-bearing
       directive — without it `acceptOffer` is clickjackable, and that is one click releasing a displaced
       person's name, phone and email. Report-only first was rejected on exactly that point: the
       directive that matters does nothing in report-only mode, and the week spent measuring is the
@@ -2362,14 +2466,11 @@ on its own — each concern below names its advisory.
       regeneration therefore re-emits the declared field every time; it cannot silently drop it. The
       generated schema file is an artifact, not a source of truth, which is what the Account entity's note
       already says.
-      What is actually true, and is the whole of the standing cost:
-      1. **Never hand-edit the generated schema file** — a hand-added column is what a regeneration drops,
-         and that is the failure the concern was reaching for.
-      2. **Re-run the CLI after adding a plugin.** The two-factor plugin brings its own tables; forgetting
-         this is the common Better Auth mistake, not a lost custom field.
-      3. An upgrade that changes Better Auth's own tables produces an ordinary Drizzle migration, reviewed
-         as any migration is under C14's expand/contract, and **DD13's integrity test (NFR30) already
-         fails** if the generated schema and the migrations disagree.
+      What is actually true, and is the whole of the standing cost: 1. **Never hand-edit the generated schema file** — a hand-added column is what a regeneration drops,
+      and that is the failure the concern was reaching for. 2. **Re-run the CLI after adding a plugin.** The two-factor plugin brings its own tables; forgetting
+      this is the common Better Auth mistake, not a lost custom field. 3. An upgrade that changes Better Auth's own tables produces an ordinary Drizzle migration, reviewed
+      as any migration is under C14's expand/contract, and **DD13's integrity test (NFR30) already
+      fails** if the generated schema and the migrations disagree.
       A second dedicated test was rejected as duplicate machinery for a failure DD13 already catches.
       **Follows:** DD5 gains those three lines; no new test, no per-upgrade review process.
 - [x] **C30** — **The duplicate-phone moderation signal was lost.** `phone (E.164)` landed; the
@@ -2664,13 +2765,15 @@ on its own — each concern below names its advisory.
 C46–C57. The first pass checked the **synthesis** against the advisories; this one checks the
 **answer-and-reconcile round** that resolved C1–C45, because that round rewrote roughly a thousand
 lines and is its own opportunity to lose something. C46–C53 come from the fidelity agent, C54–C57
-from the three mechanical shape checks. Every box is unchecked, which means the Design gate stops
-tickets until an owner resolves them — that is the correct outcome of reviewing an approved spec,
-not a problem to work around.
+from the three mechanical shape checks. Every box was unchecked when this section was appended, which
+stopped tickets at the Design gate until an owner resolved them — the correct outcome of reviewing an
+approved spec, not a problem to work around. **All twelve are now answered**, and each answer names
+what it changed in the document above; two of them (C46's Block scope, C50's client-side instrument)
+were decisions the repo owner took rather than findings with one obvious resolution.
 
-- [ ] **C46** — **C3's answer reversed two advisories, and Further Notes does not record it.** Both
+- [x] **C46** — **C3's answer reversed two advisories, and Further Notes does not record it.** Both
       the security and the data advisory asked for the **opposite** of what C3 decided, and each was
-      explicit that the gated read was the half the design *could* deliver: security.md — "The design
+      explicit that the gated read was the half the design _could_ deliver: security.md — "The design
       can deliver invisibility at `/perfil/[slug]` and refusal at `sendOffer`, and it cannot deliver
       it on the public list without giving up the cache"; data.md — "The design can honour 'he can
       send her nothing' **and** 'he cannot open her gated profile'; it cannot honour invisibility."
@@ -2679,13 +2782,27 @@ not a problem to work around.
       copy is honest, so nobody is sold a protection that does not exist. **Two things are still
       wrong.** First, **Further Notes** opens "Six, each recorded because a silent override is what
       `/spec-review` exists to catch" and this is not among the six — the same bookkeeping failure
-      C36 was raised for, one round later. Second, it sits against C22's own argument: a *frozen*
-      Hirer, accused and unreviewed, loses his gated reads, while a *Blocked* one, permanently
+      C36 was raised for, one round later. Second, it sits against C22's own argument: a _frozen_
+      Hirer, accused and unreviewed, loses his gated reads, while a _Blocked_ one, permanently
       refused by name, keeps them.
       **Risk if wrong:** the person she refused reads her `about` and work history indefinitely, and
       the override list an approver trusts as complete is not. **Owner:** Security owner (with Data
       lead — both advisories raised it).
-- [ ] **C47** — **The fifth abuse case was dropped, and C4 made it worse.** DD7 carries four of the
+      **Answer: the decision stands, and the record is corrected.** C3's narrowing is kept — a Blocked
+      caller is served normally and the Block is checked at `sendOffer` alone — and it is now
+      **override 7** in Further Notes, quoting both advisories, naming what it costs her (the person she
+      refused keeps reading her `about` and work history), and stating the C22 asymmetry as accepted
+      rather than unnoticed. The bookkeeping failure is the part that was actually wrong: the list said
+      "Six" one round after C36 was raised for an incomplete list.
+      **Why not the other way.** Closing the gated read is cheap to build, and the reason against it is
+      not cost: it makes a Block mean two different things on two surfaces — refused at the send,
+      invisible at the profile, still visible on the Wall — and story 11 has to describe that to a woman
+      deciding whether she is safe. One edge checked at one place is the version of this whose copy can
+      be true. **The trigger that would reverse it is named**: a Report whose substance is "he kept
+      reading my profile after I blocked him", arriving through `/triage`.
+      **Follows:** Further Notes gains override 7; the API contract, the high-level design and the UX
+      table already state the behaviour and are unchanged.
+- [x] **C47** — **The fifth abuse case was dropped, and C4 made it worse.** DD7 carries four of the
       security advisory's five cases in substance and omits this one: "As an attacker I accept an
       Offer, so that a real person's name, phone and email are delivered to me for the cost of one
       email address." It is the case that runs **against the Worker's counterpart** rather than
@@ -2695,7 +2812,21 @@ not a problem to work around.
       Hirer identity **as well as** an email. Nothing in the spec says why the case is absent.
       **Risk if wrong:** the exchange is a two-way disclosure and only one direction is threat-modelled
       — after this session widened what crosses in the undefended direction. **Owner:** Security owner.
-- [ ] **C48** — **C26 accepted half of what the advisory asked; the `href` half is nowhere.** The ask
+      **Answer: the fifth case is restored to DD7, with one new control.** It is written as the case
+      running **against the Worker's counterpart** — a profile that is not a person, accepting the
+      Offers it attracts to harvest a real Hirer's name, phone and email — and it names why C4 widened
+      it. The controls that already bound it are listed rather than assumed (the exchange happens only
+      on **her** acceptance of **his** Offer, so the attacker cannot initiate; every Offer is
+      human-reviewed before delivery; `publishProfile` ≤ 3/day and one profile per Account; the photo is
+      reviewed before it is public; C30's duplicate-phone flag; story 11's plain statement that a
+      Hirer's own name and phone are self-asserted). The gap that was real is closed with a **queue
+      signal above 5 completed Contact Exchanges with distinct Hirers from one profile in 7 days** —
+      informing, never blocking.
+      **No ceiling on `acceptOffer`, deliberately.** Refusing a Worker the acceptance she has waited for,
+      to slow an attacker who can simply wait a day, spends the wrong side's patience — and the same
+      shape is what success looks like, which is why the answer is a signal a human reads.
+      **Follows:** DD7 gains the fifth bullet; the `/admin` API row and story 7 gain the fourth signal.
+- [x] **C48** — **C26 accepted half of what the advisory asked; the `href` half is nowhere.** The ask
       was "explicit escaping at the template seam **and no raw `<a href>` built from user text**".
       React Email's escaping — the mechanism C26 accepts as satisfying this — constrains element
       **content** and not an **attribute**, so a `javascript:` or attacker-controlled URL interpolated
@@ -2705,7 +2836,21 @@ not a problem to work around.
       **Risk if wrong:** stored injection into an inbox by attribute rather than by content, reaching
       both sides of an unverified market, past a control everyone believes is closed. **Owner:**
       Security owner.
-- [ ] **C49** — **The Report-rate queue signal has a rate and still no threshold and no surface.**
+      **Answer: the rule gains a third clause, and it is the attribute one.** DD7 and DD14 now read
+      **no `dangerouslySetInnerHTML`, no `<Markdown>` over user text, and no `href` — or any other
+      URL-valued attribute — built from user text**, in the app and in a template alike. The reasoning
+      is stated where the rule is, because the mistake is subtle: React's escaping constrains element
+      **content** and leaves an attribute alone, so `<a href={userText}>` carrying `javascript:` or an
+      attacker-chosen host passes every mechanism C26 accepted. Every URL this product renders or sends
+      is **constructed server-side from values the server owns** — the app origin, a route constant, a
+      slug, an Offer or exchange id — and never from a field a person typed. Free text stays text: the
+      rejector already refuses a messaging-app URL inside it, and what survives is rendered as content
+      and never linkified.
+      **Follows:** DD7's rule, DD14's rule, DD16's Tampering cell, and the Testing Decisions entry,
+      which now renders each template twice — once for content escaping, once asserting **no rendered
+      `href` derives from a `javascript:` payload** — with the same attribute assertion at seam 1 over
+      every free-text field.
+- [x] **C49** — **The Report-rate queue signal has a rate and still no threshold and no surface.**
       The advisory asked for "a Report rate per profile, **and a queue signal when one profile
       reports many Hirers**". The rate landed with a number (`reportOffer ≤ 10/day`, NFR26); the
       signal survives only as DD7 prose. This is the identical shape **C24** was raised for one pass
@@ -2715,8 +2860,16 @@ not a problem to work around.
       **Risk if wrong:** a handful of bad-faith Reports removes the scarce side of the market for a
       day, undetected. **Owner:** Security owner. **Proposal, by analogy with C24:** a signal above
       **3 Reports from one profile in 7 days**, informing rather than blocking.
-- [ ] **C50** — **NFR2's user-measured number has no instrument, and Further Notes claims it as
-      accepted.** The operability advisory's finding was the *absence of an instrument* — "nothing in
+      **Answer: the proposal, taken as written — more than 3 Reports from one profile in 7 days.**
+      Informing rather than blocking, beside C24's publish rate on `/admin`, because the freeze is what
+      protects her while she waits and a Report is never silently dropped. The rate half
+      (`reportOffer` ≤ 10/day) was already there; what was missing was the number and the surface, which
+      is the identical shape C24 was raised for and answered with.
+      **Follows:** DD7's third bullet carries both halves; the `/admin` API row's signal enumeration
+      grows from two to four and now **states its own membership** — exactly four, a fifth is a spec
+      amendment — so this class of omission stops being possible in that row.
+- [x] **C50** — **NFR2's user-measured number has no instrument, and Further Notes claims it as
+      accepted.** The operability advisory's finding was the _absence of an instrument_ — "nothing in
       this design measures the user's experience of latency, anywhere, ever… a regression that
       doubles real Worker-side page load is invisible to every instrument this spec names." **Further
       Notes** #1 records it as "**accepted** and became NFR2's second number", and C12 has since made
@@ -2726,7 +2879,24 @@ not a problem to work around.
       **Risk if wrong:** two policy keys and one NFR commit to a number nobody can read, and the users
       on the most constrained connections pay a latency tax no instrument reports. **Owner:** On-call
       lead.
-- [ ] **C51** — **The 404 half of the Sentry-quota finding was dropped, and the spec has since
+      **Answer: the number stays and stops claiming an instrument it does not have.** NFR2 is rewritten
+      to say that its two numbers are measured by different things and only one is continuous: the
+      server-side p95 is read from the log line on every request; the client-side 1200 ms is a
+      **measured figure on a cadence, not a monitored SLI** — taken at go-live from a real Colombian
+      connection under 4× network and 4× CPU throttling, and re-taken monthly and after any change to
+      the Wall's payload or the photo path.
+      **Why not a beacon.** A ~1 KB `PerformanceObserver` posting to a Route Handler would close the gap
+      and was considered. It was declined because it is product instrumentation on a page a displaced
+      person loads, in a product whose `analytics-consent` is `UNSET` under Ley 1581, and because the
+      thing it would buy — continuous p95 — is a number nobody is on call to read. **The residual risk
+      is stated rather than closed:** a regression between two measurements is invisible, and the users
+      on the most constrained connections are the ones who pay for it.
+      **Follows:** NFR2 rewritten; NFR28 names the measurement in the announcement leg; the go-live
+      runbook gains **§11**; Further Notes #1 is corrected from "accepted" to "accepted in part"; the
+      `default-latency` row in the policy table — and the key itself in
+      [`docs/policy/operability.md`](../../policy/operability.md) — say which half is monitored; the
+      Pereira↔`iad` RTT moves out of _What was not verified_ and into §11 beside the figure it explains.
+- [x] **C51** — **The 404 half of the Sentry-quota finding was dropped, and the spec has since
       multiplied 404s.** The advisory said "rate-limit refusals **and any throwing 404** will burn the
       Sentry error quota, and a spent quota means the second incident of the month is invisible."
       NFR26's second half answers the rate-limit clause exactly and the 404 clause is nowhere. Five
@@ -2738,9 +2908,19 @@ not a problem to work around.
       is invisible. **Owner:** On-call lead. **Proposal:** a not-found is a **returned** response, not
       a thrown error, on every one of those surfaces — which is DD11's "thrown is reported; returned
       is logged" applied to the case the advisory named.
-- [ ] **C52** — **Story 15 grew where the simplicity advisory asked it to shrink, and the override is
+      **Answer: the proposal, taken as written — a not-found is a returned response, never a thrown
+      error.** NFR26's second half now counts both: **0** rate-limit refusals and **0** of the `404`
+      surfaces reach `onRequestError`. That is six surfaces — the five in the UX state table plus C22's
+      frozen caller at `GET /profile/[slug]` — and profile enumeration is the cheapest path there is to
+      a 5,000-error monthly allowance, which is precisely the shape the advisory named. It is DD11's
+      "thrown is reported; returned is logged" applied to the case the advisory named rather than a new
+      rule.
+      **Follows:** NFR26's second half; a line under the UX state table repeating it where a person
+      implementing a `permission denied` cell will read it, because `notFound()` is the habit this
+      overrides.
+- [x] **C52** — **Story 15 grew where the simplicity advisory asked it to shrink, and the override is
       unrecorded.** The ask: "Story 15 shrinks to two files and a runbook line… What CI adds is the
-      *human* path and the deploy trigger." The CI and deploy half landed exactly as asked. The
+      _human_ path and the deploy trigger." The CI and deploy half landed exactly as asked. The
       shrink was overridden by NFR30 and DD13 — a machine-checked migration-integrity suite **no
       advisory requested** — and story 15 now reads "**This story is expected to split into two
       PRs**", which is the opposite of the recommendation's direction. **Further Notes** records six
@@ -2748,7 +2928,16 @@ not a problem to work around.
       **Risk if wrong:** the advisory's arithmetic — "The `Must` list is not a scope statement; it is
       a date. Every story kept in it is a day the Hirer side is not being asked for anything" — and an
       override list that is again incomplete. **Owner:** Tech lead (with Repo owner on the CI half).
-- [ ] **C53** — **NFR16 adopted the distinction and kept the binding.** The advisory: "NFR16 is a
+      **Answer: the override stands and is recorded as override 8.** NFR30 and DD13 stay `Must`, for a
+      reason the advisory's arithmetic does not reach: this repo has **no migration history yet**, and a
+      guardrail is cheap on day zero and expensive after the first hand-edited migration reaches the
+      default branch — building it later means building it against drift that already exists. The
+      advisory's quoted arithmetic ("The `Must` list is not a scope statement; it is a date") is carried
+      in the entry rather than paraphrased, because it is the strongest thing against this decision.
+      **The two-PR split is not an exception to anything**: `stacked-prs` is **yes** for genuine chains,
+      and the CI/deploy half blocking the guardrail half is exactly such a chain.
+      **Follows:** Further Notes gains override 8; story 15 is unchanged.
+- [x] **C53** — **NFR16 adopted the distinction and kept the binding.** The advisory: "NFR16 is a
       runbook, not an NFR… As an NFR it binds stories 13 and 14, and `/to-tickets` copies bound
       criteria onto tickets — producing an acceptance criterion no diff can satisfy and no reviewer
       can tick with evidence." The spec adopts the distinction in words ("**The clock is a runbook,
@@ -2760,14 +2949,38 @@ not a problem to work around.
       how a definition of done stops meaning anything. **The weakest finding of this pass** — it may
       well be the right call, and nothing in the spec says it is a weaker commitment than the
       advisory asked for. **Owner:** Tech lead (with Security owner on the compliance half).
-- [ ] **C54** — **Two stories are bound by no NFR, and one of them is now `Must`.** All 32 NFRs carry
+      **Answer: the binding is scoped to the half a diff can satisfy.** NFR16 is now the
+      **subject-access export** and nothing else — one function, built from the same whitelist mechanism
+      as the three projections, so a new `personal` column omitted from it fails the same class of
+      sentinel test as NFR10 — and that is what `Binds: 13, 14` carries to a ticket. The business-day
+      clocks move out of the requirement and into the go-live runbook's §7, where a step ending in a
+      calendar belongs, and the NFR says in one line why: **a business-day clock binds no story, because
+      no diff advances it and no reviewer can tick it with evidence.**
+      Nothing is weakened — the clocks are still stated, still verified against Ley 1581 arts. 14–15,
+      still owned — but they stop travelling to a ticket as an acceptance criterion nobody can satisfy.
+      **Follows:** NFR16 rewritten in two parts; runbook §7 keeps the clocks.
+- [x] **C54** — **Two stories are bound by no NFR, and one of them is now `Must`.** All 32 NFRs carry
       a non-empty `Binds:` and every story they name exists — but nothing binds **story 22** or
       **story 23**, and C25 promoted story 23 into the announcement gate this session. This is the
       defect class **C42** was raised for ("story 18 is bound by no NFR"), closed there by adding
       NFR31 and re-opened one story over by a promotion in the same round.
       **Risk if wrong:** a `Must` ticket ships with no requirement measuring whether it works — for
       story 23, the audit record a Ley 1581 _reclamo_ depends on. **Owner:** Tech lead.
-- [ ] **C55** — **The Admin queue's cap has no second half.** Each of the five branches is
+      **Answer: two NFRs, one per unbound story.** **NFR33** binds story 23: **100%** of the eleven
+      `/admin` actions write an `AdminAction` **in the same transaction as the action itself**, so **0**
+      commit unaudited — asserted by a table-driven test over the same action registry C38's
+      authorization table already enumerates, so an action added without a row is red rather than
+      forgotten — carrying ids and enum values only, **0** of NFR10's sentinels, retained 24 months.
+      **NFR34** binds story 22: **0** unresolved rows in `README.md`'s placeholder table, `PRODUCT.md`
+      naming Recomencemos and the three municipalities, **0** statements in `CLAUDE.md` instructing a
+      reader to judge a change by whether it improves a template.
+      **NFR34 is a reading rather than a script, and the counts are what make it tickable.** A
+      documentation story with no requirement is the one that quietly ships half-done, and this one
+      exists because a future agent inheriting the template's judging criterion will apply it to product
+      code.
+      **Follows:** two NFRs added; the closing paragraph of the section says why, and names C42 as the
+      same defect one story over.
+- [x] **C55** — **The Admin queue's cap has no second half.** Each of the five branches is
       `` `LIMIT`-capped``, justified as "an unbounded union after three days away is exactly when the
       surface needs to still load" — and nothing states whether the **count and the age-of-oldest are
       computed over the whole branch or over the capped page**. NFR7's band and story 7's
@@ -2775,52 +2988,73 @@ not a problem to work around.
       **Risk if wrong:** the backlog is understated exactly when it is worst, by the instrument built
       to catch it — a bound that passes green while the thing it measures is lost. **Owner:** Tech
       lead (with On-call lead, whose band depends on it).
-- [ ] **C56** — **DD16's boundary list states no membership.** It opens "Seven boundaries, and what
+      **Answer: over the whole branch, always — the cap bounds the rows rendered, never the numbers
+      read off them.** Each branch's count and age-of-oldest come from a separate `COUNT(*)` /
+      `MIN(created_at)` over the **full** pending predicate, on the same partial index that serves the
+      capped page, so both are index-only scans. A page capped at 50 that reported a depth of 50 would
+      be an instrument that goes green exactly when the backlog is worst — and NFR7's band and story 7's
+      age-on-every-screen are both read off that number.
+      **Follows:** story 7 in the high-level design states it; the `/admin` API row states it in the same
+      cell as the cap, so the two are read together.
+- [x] **C56** — **DD16's boundary list states no membership.** It opens "Seven boundaries, and what
       authorizes each" without saying whether that is exhaustive or illustrative. DD11's event list
       received exactly this treatment at **C40** ("exactly these fourteen; a fifteenth is a spec
       amendment"); the boundary table added in the same round did not.
       **Risk if wrong:** a new egress is added at Build without anyone treating it as a boundary,
       because the table read as illustrative — and the table is also what `/security-audit` is handed
       as input. **Owner:** Tech lead.
-- [ ] **C57** — **NFR26's own rule contradicts the list that implements it.** The third half says
+      **Answer: closed — exactly these seven, and an eighth is a spec amendment.** The same rule DD11's
+      event list carries since C40, written into DD16's opening for the same reason: the table is what
+      `/security-audit` is handed as its input, and a table read as illustrative is an egress added at
+      Build that nobody modelled.
+      **Follows:** DD16's opening sentence.
+- [x] **C57** — **NFR26's own rule contradicts the list that implements it.** The third half says
       "every surface with a ceiling carries a rate-limited state in the UX state table". NFR26 names
       seven action ceilings plus the read ceiling; the table covers seven of the eight and omits
       **`requestSkill`** (≤ 5/day) — which is story 3's path, hit by a Worker **mid-publish**, the
       exact moment C39 was raised about.
       **Risk if wrong:** the concern that existed to stop a Worker meeting silence at a ceiling leaves
       one ceiling meeting silence. **Owner:** Design lead (with Tech lead), matching C39.
+      **Answer: `requestSkill` gains its row, and the rule gains a check.** The rate-limited table now
+      covers all eight ceilings, and NFR26's third half says the coverage is **checked as a list against
+      that table rather than by eye** — the omission was one ceiling out of eight, which is exactly what
+      eye-checking misses. What she is told at `requestSkill ≤ 5/day`: that the requests already sent
+      are queued and not lost, when she may ask again, and that she can publish now with the closest
+      Skill on the list and edit later — she is **mid-publish** when she meets this, which is the moment
+      silence costs the most, and the case C39 existed for.
+      **Follows:** one row in the rate-limited state table; one clause in NFR26's third half.
 
 ### Policy keys set by this effort
 
 C13's sweep, discharged. Every key below moved from `UNSET` to a value in the same change that
 answered the concern naming it.
 
-| Key | File | Set to | From |
-| --- | ---- | ------ | ---- |
-| `session-lifetime` | security.md | 30 d own device / 8 h shared / 8 h Admin, non-rolling | NFR13 |
-| `secret-store` | security.md | `fly secrets`, mirrored in a password manager | C5 |
-| `csp-policy` | security.md | `default-src 'self'; frame-ancestors 'none'; …`, enforced | C6 |
-| `dependency-policy` | security.md | CI fails on `high`+ in a direct dependency | C7 |
-| `pentest-cadence` | security.md | None external; two tiers of agent review | C8 |
-| `orm` | data.md | Drizzle, schema in the ORM, committed SQL migrations | DD2 |
-| `pk-strategy` | data.md | `BIGINT IDENTITY`; UUIDv7 only where an id reaches a URL | DD2 |
-| `soft-delete` | data.md | No — hard delete plus objects plus reduction to counts | DD8 |
-| `migration-policy` | data.md | Expand/contract, forward-fix, no `down` | C14 |
-| `retention-personal` | data.md | NFR17's graph, purged leaf-first | NFR17 |
-| `retention-internal` | data.md | Monthly counts indefinite; `AdminAction` 24 mo | C18, C25 |
-| `retention-logs` / `log-retention` | data.md, operability.md | 30 days | NFR17 |
-| `retention-backups` | data.md | 7 days | C23 |
-| `backup-rpo` / `backup-rto` | data.md | ≤ 1 h / ≤ 4 h, proven by one real restore | C17 |
-| `alert-destination` | operability.md | Daily digest for human queues; `needs-triage` for machine | C10 |
-| `default-availability` | operability.md | 99.5% monthly, externally measured | C9, C33 |
-| `default-latency` | operability.md | p95 ≤ 400 ms server / ≤ 1200 ms user-measured | C12 |
-| `error-budget-policy` | operability.md | >50% burn → fixes only, daily cadence | C11 |
-| `rollback-mechanism` | operability.md | Bluegreen, health-gated, ≤ 5 min by one command | NFR25 |
-| `required-checks` | build.md | lint, check-types, test, build, dependency audit | NFR25, C7 |
-| `branch-protection` | build.md | Required status checks, no required reviews | C16 |
-| `stacked-prs` | build.md | Yes, for genuine chains only | C16 |
-| `browser-support` | ux.md | Baseline Widely Available | NFR5 |
-| `voice-guide` | ux.md | **`UNSET` by decision** — blocks the first copy-bearing ticket | C2 |
+| Key                                | File                    | Set to                                                                                                                  | From      |
+| ---------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------- |
+| `session-lifetime`                 | security.md             | 30 d own device / 8 h shared / 8 h Admin, non-rolling                                                                   | NFR13     |
+| `secret-store`                     | security.md             | `fly secrets`, mirrored in a password manager                                                                           | C5        |
+| `csp-policy`                       | security.md             | `default-src 'self'; frame-ancestors 'none'; …`, enforced                                                               | C6        |
+| `dependency-policy`                | security.md             | CI fails on `high`+ in a direct dependency                                                                              | C7        |
+| `pentest-cadence`                  | security.md             | None external; two tiers of agent review                                                                                | C8        |
+| `orm`                              | data.md                 | Drizzle, schema in the ORM, committed SQL migrations                                                                    | DD2       |
+| `pk-strategy`                      | data.md                 | `BIGINT IDENTITY`; UUIDv7 only where an id reaches a URL                                                                | DD2       |
+| `soft-delete`                      | data.md                 | No — hard delete plus objects plus reduction to counts                                                                  | DD8       |
+| `migration-policy`                 | data.md                 | Expand/contract, forward-fix, no `down`                                                                                 | C14       |
+| `retention-personal`               | data.md                 | NFR17's graph, purged leaf-first                                                                                        | NFR17     |
+| `retention-internal`               | data.md                 | Monthly counts indefinite; `AdminAction` 24 mo                                                                          | C18, C25  |
+| `retention-logs` / `log-retention` | data.md, operability.md | 30 days                                                                                                                 | NFR17     |
+| `retention-backups`                | data.md                 | 7 days                                                                                                                  | C23       |
+| `backup-rpo` / `backup-rto`        | data.md                 | ≤ 1 h / ≤ 4 h, proven by one real restore                                                                               | C17       |
+| `alert-destination`                | operability.md          | Daily digest for human queues; `needs-triage` for machine                                                               | C10       |
+| `default-availability`             | operability.md          | 99.5% monthly, externally measured                                                                                      | C9, C33   |
+| `default-latency`                  | operability.md          | p95 ≤ 400 ms server, monitored; ≤ 1200 ms user-measured, on a cadence by a human (runbook §11) rather than instrumented | C12, C50  |
+| `error-budget-policy`              | operability.md          | >50% burn → fixes only, daily cadence                                                                                   | C11       |
+| `rollback-mechanism`               | operability.md          | Bluegreen, health-gated, ≤ 5 min by one command                                                                         | NFR25     |
+| `required-checks`                  | build.md                | lint, check-types, test, build, dependency audit                                                                        | NFR25, C7 |
+| `branch-protection`                | build.md                | Required status checks, no required reviews                                                                             | C16       |
+| `stacked-prs`                      | build.md                | Yes, for genuine chains only                                                                                            | C16       |
+| `browser-support`                  | ux.md                   | Baseline Widely Available                                                                                               | NFR5      |
+| `voice-guide`                      | ux.md                   | **`UNSET` by decision** — blocks the first copy-bearing ticket                                                          | C2        |
 
 `pr-merge-method` is set to **rebase** in the same sweep. It was not raised as a concern, but C16
 turned `stacked-prs` on and the two interact directly: a stack is a chain of branches each based on
@@ -2832,25 +3066,26 @@ Still `UNSET` and **not** raised by this spec: `motion-policy` and `analytics-co
 
 ## Runbook obligations
 
-**Fifteen of the answers above, plus DD10's scheduler, end in a step only a human can perform**, and a spec that names such a
+**Sixteen of the answers above, plus DD10's scheduler, end in a step only a human can perform**, and a spec that names such a
 step without producing a ticket has moved the work nowhere. They are collected in
 [`docs/runbooks/recomencemos-go-live.md`](../../runbooks/recomencemos-go-live.md), which this effort
 writes, and **`/to-tickets` cuts one ticket to execute it** — the document is written; running it is
 the work, and several steps cannot be taken until the infrastructure they configure exists.
 
-| Runbook § | What a human does | From |
-| --------- | ----------------- | ---- |
-| 1 | Set seven credentials in `fly secrets`, mirror them, keep them out of every `.env` | C5, C43 |
-| 2 | Read the connection limit; enable extensions; set backup retention to 7 days; rehearse one restore | C35, C17, C23 |
-| 3 | Create the bucket with a non-readable quarantine prefix; enable Cloudflare transformations | DD6 |
-| 4 | Publish DNS, verify SPF/DKIM/DMARC with `dig`, warm the domain from the first deploy, hold a fallback subdomain, stage the announcement, measure into Colombian inboxes | C45 |
-| 5 | 1 GB machine, enforced CSP, uptime probe at 60 s / 2 failures, machine bands to `needs-triage` | C34, C6, C33, C10 |
-| 5b | Create the Trigger.dev project, set the shared secret in both places, deploy four schedules, prove each endpoint rejects an unsigned call and is idempotent, point Sentry's cron monitor at the digest | DD10 |
-| 6 | Grant the first Admin, print backup codes offline, create a second Admin device, rehearse break-glass | C43, C44 |
-| 7 | Name every processor in the _aviso_, take express transmission consent, file each DPA, check Circular 005 | C15 |
-| 8 | Required status checks, dependency audit, `gh-stack`, one rehearsed rollback | C7, C16, NFR25 |
-| 9 | Wire `/security-review` per PR; run `/security-audit` once before the announcement | C8 |
-| 10 | Walk the announcement gate | NFR28 |
+| Runbook § | What a human does                                                                                                                                                                                                           | From              |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| 1         | Set seven credentials in `fly secrets`, mirror them, keep them out of every `.env`                                                                                                                                          | C5, C43           |
+| 2         | Read the connection limit; enable extensions; set backup retention to 7 days; rehearse one restore                                                                                                                          | C35, C17, C23     |
+| 3         | Create the bucket with a non-readable quarantine prefix; enable Cloudflare transformations                                                                                                                                  | DD6               |
+| 4         | Publish DNS, verify SPF/DKIM/DMARC with `dig`, warm the domain from the first deploy, hold a fallback subdomain, stage the announcement, measure into Colombian inboxes                                                     | C45               |
+| 5         | 1 GB machine, enforced CSP, uptime probe at 60 s / 2 failures, machine bands to `needs-triage`                                                                                                                              | C34, C6, C33, C10 |
+| 5b        | Create the Trigger.dev project, set the shared secret in both places, deploy four schedules, prove each endpoint rejects an unsigned call and is idempotent, point Sentry's cron monitor at the digest                      | DD10              |
+| 6         | Grant the first Admin, print backup codes offline, create a second Admin device, rehearse break-glass                                                                                                                       | C43, C44          |
+| 7         | Name every processor in the _aviso_, take express transmission consent, file each DPA, check Circular 005                                                                                                                   | C15               |
+| 8         | Required status checks, dependency audit, `gh-stack`, one rehearsed rollback                                                                                                                                                | C7, C16, NFR25    |
+| 9         | Wire `/security-review` per PR; run `/security-audit` once before the announcement                                                                                                                                          | C8                |
+| 10        | Walk the announcement gate                                                                                                                                                                                                  | NFR28             |
+| 11        | Measure the client-side figure from a real Colombian connection under 4× network and 4× CPU throttling, record it beside NFR2's number, and re-take it monthly and after any change to the Wall's payload or the photo path | C50, NFR2         |
 
 **The ordering constraint that matters: §4 starts at the first deploy, not at the end.** Domain warm-up
 is the only step here with a lead time measured in weeks, and it is the one whose failure is silent.
@@ -2890,16 +3125,24 @@ deploy.
 
 ### Advisor recommendations overridden, and why
 
-Six, each recorded because a silent override is what `/spec-review` exists to catch. The sixth was
+Eight, each recorded because a silent override is what `/spec-review` exists to catch. The sixth was
 added while resolving the flagged concerns, and it reverses a fifth-listed decision rather than
-defending it — which is the point of keeping the list complete.
+defending it — which is the point of keeping the list complete. **The seventh and eighth were added by
+the second review pass** (C46, C52), which found the list incomplete one round after C36 was raised
+for exactly that — the bookkeeping, not the decisions, is what keeps failing here.
 
 1. **Operability C-OP8 — move the region from `iad` to `mia`.** Overridden on fact and on decision.
    **Fly has no Miami region**; its only South American region is `gru` (São Paulo), and Colombian
    international traffic routes north, so `gru` is worse for Pereira than `iad`. PlanetScale offers no
    Colombian region either. The repo owner confirmed N. Virginia. The advisory's underlying point —
-   that a server-side p95 measures our comfort rather than hers — was **accepted** and became NFR2's
-   second number.
+   that a server-side p95 measures our comfort rather than hers — was **accepted in part**, and C50 is
+   the correction to what this entry used to claim. It became NFR2's second number, but the advisory's
+   actual finding was the **absence of an instrument**, and this product still has none: analytics and
+   RUM are Out of Scope, the uptime monitor probes `/api/health`, and the load test runs against the
+   machine. NFR2 now says so, and the number is measured on a cadence by a human (runbook §11) rather
+   than monitored. **The residual risk is named rather than closed:** a regression between two
+   measurements is invisible, and the users on the most constrained connections are the ones who pay
+   for it.
 2. **Simplicity — cut story 3 (in-form Skill request) to `Should`.** Overridden.
    [Intent Q2](./intent.md) makes the request path "the vocabulary's only growth path", and a closed
    list with no way in silently excludes. The advisory's real finding — that the request was `Must`
@@ -2922,6 +3165,35 @@ defending it — which is the point of keeping the list complete.
    that a silently-stopped purge is an undetected exposure — argued for monitoring it, not for
    building it early, and is answered by a test that fails once 2027-06-01 passes with no job
    registered. **The override is withdrawn**; the advisory's recommendation stands.
+7. **Security and data — a Block closes the Blocked Hirer's gated read of her profile.** Overridden,
+   knowingly, at C3 and recorded here at **C46**. Both advisories asked for this and both were explicit
+   that it was the half the design _could_ deliver — security.md: "The design can deliver invisibility
+   at `/perfil/[slug]` and refusal at `sendOffer`, and it cannot deliver it on the public list without
+   giving up the cache"; data.md: "The design can honour 'he can send her nothing' **and** 'he cannot
+   open her gated profile'; it cannot honour invisibility." The spec goes the other way: **a Blocked
+   caller is served normally, and the Block is checked at `sendOffer` alone.** The reasoning is C3's —
+   one edge, checked at one place, is a Block that behaves the way its copy says it does, and a partial
+   protection is the kind a person relies on. **What this costs is stated rather than softened:** the
+   person she refused can keep reading her `about` and her work history for as long as the profile is
+   up, and story 11's copy says so in her words rather than implying more.
+   **The asymmetry with C22 is real and is accepted.** A _frozen_ Hirer — accused, unreviewed — loses
+   his gated reads, while a _Blocked_ one, permanently refused by name, keeps them. The freeze is a
+   platform state with a human reviewing it on a 24-hour clock; the Block is her own permanent edge and
+   is deliberately narrow, because a Block that quietly reshaped what the site serves would be a
+   protection nobody could describe accurately on the notice. **If this is revisited, the trigger to
+   watch for is a Report whose substance is "he kept reading my profile after I blocked him"** — that
+   is the evidence this override was wrong, and it arrives through `/triage` rather than through
+   prediction.
+8. **Simplicity — story 15 shrinks to two files and a runbook line.** Overridden on the shrink,
+   accepted on the CI-and-deploy half, recorded here at **C52**. The advisory's arithmetic is quoted
+   because it is the strongest thing against this: "The `Must` list is not a scope statement; it is a
+   date. Every story kept in it is a day the Hirer side is not being asked for anything." NFR30 and
+   DD13 — a machine-checked migration-integrity suite no advisory requested — stay `Must` anyway, for
+   one reason: this repo has **no migration history yet**, and a guardrail is cheap on day zero and
+   expensive after the first hand-edited migration reaches the default branch. Building it later means
+   building it against drift that already exists. The story is **expected to split into two PRs**,
+   which `docs/policy/build.md`'s `stacked-prs` = yes makes an ordinary chain rather than an
+   exception — the CI/deploy half is the blocker, the guardrail half sits on top of it.
 
 ### What was verified rather than recalled
 
@@ -2949,8 +3221,9 @@ infrastructure rather than in the application**, which is the fact that decided 
 - **PlanetScale's connection limit** on the chosen plan. DD2 now caps the pool at **10 per machine**
   (C35), so what remains unverified is the ceiling that cap sits under — a numbered go-live runbook
   check rather than a dangling forward reference.
-- **Actual Pereira↔`iad` RTT.** The 90–110 ms in NFR2 is an estimate and is worth one measurement
-  before the number is committed to.
+- **Actual Pereira↔`iad` RTT.** The 90–110 ms in NFR2 is an estimate. It is measured at runbook §11
+  alongside the client-side figure it explains (C50), rather than left as a dangling forward
+  reference.
 - **Whether SIC's Circular Externa 005 de 2017 lists the processors' countries as offering an adequate
   level of protection.** C15 deliberately does not depend on the answer — express authorization for the
   international transmission is taken either way — but the answer changes what the go-live runbook's

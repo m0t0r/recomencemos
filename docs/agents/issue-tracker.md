@@ -119,7 +119,7 @@ its tickets hanging off it, so it reports its own state and cannot fall out of d
 - **Changing the plan**: splitting a ticket adds a sub-issue and rewires the edges around it, and
   the parent's progress follows on its own — there is no plan document to bring back in line.
 - **A spec's `## Runbook obligations` section is a ticket, and `/to-tickets` cuts it like any other.**
-  The skill drafts *tracer-bullet vertical slices*, which is a shape a runbook step does not have —
+  The skill drafts _tracer-bullet vertical slices_, which is a shape a runbook step does not have —
   provisioning a bucket, printing backup codes and filing a DPA are nobody's user-visible behaviour,
   so left to the default reading they are read as prose and dropped. Where a spec carries that
   section, its rows are the ticket's acceptance criteria and the runbook file is what the ticket

@@ -8,8 +8,9 @@ surface, and the sending domain.
 
 **It exists because effort
 [`0002-profile-to-contact-exchange`](../efforts/0002-profile-to-contact-exchange/spec.md) answered
-forty-five flagged concerns and fifteen of the answers ended in a step only a person can perform**
-— plus DD10's scheduler, decided after that review and added here in §5b.
+fifty-seven flagged concerns and sixteen of the answers ended in a step only a person can perform**
+— plus DD10's scheduler, decided after that review and added here in §5b, and §11, added when the
+second review pass (C50) found NFR2's user-measured number had no instrument.
 Each one names the concern it discharges, so a reader can go back to the reasoning rather than trust
 the instruction.
 
@@ -27,16 +28,16 @@ the instruction.
 repo `.env` file: `turbo.json` declares `.env*` a `build` input, so the file's content is hashed into
 the cache key and travels with the artifact under remote caching.
 
-| # | Secret | Issued from | Rotation | Notes |
-| - | ------ | ----------- | -------- | ----- |
-| 1 | PlanetScale **app** connection string | PlanetScale → database → Connect | Rotate the password; redeploy | The pooled connection the app runs on |
-| 2 | PlanetScale **direct** connection string | Same | Same | Migrations, and the C43 break-glass. Higher blast radius than #1 — treat as the most dangerous string in the list |
-| 3 | `RESEND_API_KEY` | Resend → API Keys | Create new, deploy, delete old | Sending-scoped, not full access |
-| 4 | Resend **webhook signing secret** | Resend → Webhooks | Rotate at the endpoint | Without it a forged bounce is an account-denial primitive |
-| 5 | R2 access key + secret | Cloudflare → R2 → Manage API tokens | Create new, deploy, delete old | Scope to the one bucket |
-| 6 | Google OAuth **client secret** | Google Cloud console → Credentials | Rotate; existing sessions unaffected | The redirect URI must match the deployed origin exactly |
-| 7 | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` | **See the warning below** | 32+ chars. Better Auth rejects placeholders in production |
-| 8 | `JOB_SHARED_SECRET` | `openssl rand -base64 32` | Rotate in both places at once | The only thing Trigger.dev holds. Set identically as a Fly secret **and** as a Trigger.dev environment variable — rotating one without the other stops every scheduled job |
+| #   | Secret                                   | Issued from                         | Rotation                             | Notes                                                                                                                                                                      |
+| --- | ---------------------------------------- | ----------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | PlanetScale **app** connection string    | PlanetScale → database → Connect    | Rotate the password; redeploy        | The pooled connection the app runs on                                                                                                                                      |
+| 2   | PlanetScale **direct** connection string | Same                                | Same                                 | Migrations, and the C43 break-glass. Higher blast radius than #1 — treat as the most dangerous string in the list                                                          |
+| 3   | `RESEND_API_KEY`                         | Resend → API Keys                   | Create new, deploy, delete old       | Sending-scoped, not full access                                                                                                                                            |
+| 4   | Resend **webhook signing secret**        | Resend → Webhooks                   | Rotate at the endpoint               | Without it a forged bounce is an account-denial primitive                                                                                                                  |
+| 5   | R2 access key + secret                   | Cloudflare → R2 → Manage API tokens | Create new, deploy, delete old       | Scope to the one bucket                                                                                                                                                    |
+| 6   | Google OAuth **client secret**           | Google Cloud console → Credentials  | Rotate; existing sessions unaffected | The redirect URI must match the deployed origin exactly                                                                                                                    |
+| 7   | `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`           | **See the warning below**            | 32+ chars. Better Auth rejects placeholders in production                                                                                                                  |
+| 8   | `JOB_SHARED_SECRET`                      | `openssl rand -base64 32`           | Rotate in both places at once        | The only thing Trigger.dev holds. Set identically as a Fly secret **and** as a Trigger.dev environment variable — rotating one without the other stops every scheduled job |
 
 ```sh
 fly secrets set DATABASE_URL='…' RESEND_API_KEY='…'      # restarts the machine — a deploy-class act
@@ -88,11 +89,11 @@ spike onto a domain that has never sent anything.
 
 - [ ] Sending subdomain added in Resend, DNS records published
 - [ ] **SPF, DKIM and DMARC resolve** — verified with `dig`, not assumed:
-      ```sh
-      dig +short TXT <sending-subdomain>              # SPF
-      dig +short TXT resend._domainkey.<subdomain>    # DKIM
-      dig +short TXT _dmarc.<root-domain>             # DMARC
-      ```
+      `sh
+dig +short TXT <sending-subdomain>              # SPF
+dig +short TXT resend._domainkey.<subdomain>    # DKIM
+dig +short TXT _dmarc.<root-domain>             # DMARC
+`
 - [ ] **Warming started at the first deploy, not at the announcement.** Every ticket's test sends
       count toward the curve; there is no separate warming exercise to schedule.
 - [ ] **Fallback subdomain held and warmed in parallel**, so a reputation problem on the primary is a
@@ -141,11 +142,11 @@ directly, §7 has to be reopened before it ships.**
       Fly secret
 - [ ] Four schedules deployed, each a `POST` and nothing more:
 
-| Task | Cron | Timezone | Calls |
-| ---- | ---- | -------- | ----- |
-| `rotation-key` | `0 3 * * *` | UTC | `POST /api/jobs/rotation-key` |
-| `offer-expiry` | `0 * * * *` | UTC | `POST /api/jobs/offer-expiry` |
-| `check-ins` | `0 9 * * *` | UTC | `POST /api/jobs/check-ins` |
+| Task           | Cron        | Timezone           | Calls                         |
+| -------------- | ----------- | ------------------ | ----------------------------- |
+| `rotation-key` | `0 3 * * *` | UTC                | `POST /api/jobs/rotation-key` |
+| `offer-expiry` | `0 * * * *` | UTC                | `POST /api/jobs/offer-expiry` |
+| `check-ins`    | `0 9 * * *` | UTC                | `POST /api/jobs/check-ins`    |
 | `queue-digest` | `0 8 * * *` | **America/Bogotá** | `POST /api/jobs/queue-digest` |
 
 - [ ] **Each endpoint verified to reject an unsigned call** — `curl -X POST` with no secret returns a
@@ -244,14 +245,46 @@ restated as the last checklist a human reads:
 - [ ] `trace_id` correlation proven end to end
 - [ ] Admin backup codes offline, second Admin device working
 - [ ] _Aviso_ and _autorización_ live, naming every processor
+- [ ] §11's client-side measurement taken and recorded
+
+---
+
+## 11. The number no instrument produces (C50, NFR2)
+
+NFR2 has two numbers and only one of them is monitored. The server-side p95 is on every log line. The
+**≤ 1200 ms measured from a Colombian client** is measured **here, by a person**, because this product
+ships no analytics and no RUM — the uptime monitor probes `/api/health` and the load test runs against
+the machine, so neither of them sees what she sees.
+
+Take it once before the announcement, then **monthly**, and again **after any change to the Wall's
+payload or the photo path**.
+
+1. From a real Colombian connection — a phone on mobile data in Pereira is the honest case; a VPN exit
+   in Bogotá is the fallback and is recorded as such, because it is a better network than the one being
+   measured.
+2. Load `/` and `/profiles` cold, five times each, DevTools throttling at **4× network and 4× CPU**.
+3. Record, per route: p95 of the five loads, LCP, and the `ping` RTT to the app host — the last one
+   settles the 90–110 ms Pereira↔`iad` estimate NFR2 rests on rather than leaving it recalled.
+4. Write the three figures and the date into the table below. **A measurement not written down is a
+   measurement not taken** — this is the step whose whole value is the previous row.
+
+| Date | Vantage (device / network / city) | `/` p95 | `/profiles` p95 | LCP | RTT |
+| ---- | --------------------------------- | ------- | --------------- | --- | --- |
+|      |                                   |         |                 |     |     |
+
+**Over 1200 ms is a finding, not a failure of this step.** It becomes a `needs-triage` issue with the
+row attached ([ADR-0001](../adr/0001-findings-enter-through-triage.md)); the announcement is not
+blocked on it, because nothing here can be fixed on announcement day. **The risk this leaves is
+stated**: between two rows of that table a regression is invisible, and the people on the most
+constrained connections are the ones who pay for it.
 
 ---
 
 ## Still open, and where the decision lives
 
-| Question | Key | Why it is still open |
-| -------- | --- | -------------------- |
-| The product's written voice | `docs/policy/ux.md` → `voice-guide` | `UNSET` **by decision** (C2). A `brand-voice` session sets it, and it blocks the first ticket rendering `es-CO` copy — not Build as a whole |
-| Reduced motion | `docs/policy/ux.md` → `motion-policy` | Not raised by effort 0002 |
-| Analytics consent | `docs/policy/ux.md` → `analytics-consent` | Out of scope for 0002 — under Ley 1581 that gate precedes instrumentation |
-| Coverage floor | `docs/policy/build.md` → `coverage-floor` | Not raised by effort 0002 |
+| Question                    | Key                                       | Why it is still open                                                                                                                        |
+| --------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| The product's written voice | `docs/policy/ux.md` → `voice-guide`       | `UNSET` **by decision** (C2). A `brand-voice` session sets it, and it blocks the first ticket rendering `es-CO` copy — not Build as a whole |
+| Reduced motion              | `docs/policy/ux.md` → `motion-policy`     | Not raised by effort 0002                                                                                                                   |
+| Analytics consent           | `docs/policy/ux.md` → `analytics-consent` | Out of scope for 0002 — under Ley 1581 that gate precedes instrumentation                                                                   |
+| Coverage floor              | `docs/policy/build.md` → `coverage-floor` | Not raised by effort 0002                                                                                                                   |
