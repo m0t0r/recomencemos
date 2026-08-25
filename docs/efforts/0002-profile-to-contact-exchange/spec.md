@@ -84,9 +84,10 @@ inside its own ticket. See **UX design** for target paths and the ordering const
 
 **Must**
 
-1. As a Worker, I want to sign in with a link sent to my email and no password, so that I can reach
-   my account from a borrowed phone without remembering anything — and I want the sign-up surface to
-   tell me, before I type anything, that I need an address I can open.
+1. As a Worker, I want to sign in **either with Google in one tap or with a link sent to my email**,
+   with no password either way, so that I can reach my account from a phone without remembering
+   anything — and where I choose the email route, I want the surface to tell me before I type
+   anything that I need an address I can open.
 2. As a Worker, I want to publish a CapabilityProfile in one sitting from my phone — first name,
    last initial, city, Skills from a list, one line in my own words, my phone number, and a photo —
    so that someone can find me for work today.
@@ -230,10 +231,12 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   **The mechanism, because "a property of the session" is not free.** Better Auth records 2FA on the
   **user** (`twoFactorEnabled`), not on the session, and its 2FA flow guards only the credential
   path — so a magic-link session on an Admin account would carry full Admin authority having presented
-  no second factor at all. Two things close that, and both are required: magic-link sign-in is
-  **refused** for an account holding the Admin grant, and the session records the method that created
-  it, through `session.additionalFields` written by a `databaseHooks.session.create.before` hook.
-  `requireAdmin` reads that field, not `twoFactorEnabled`. **Binds:** 7, 20.
+  no second factor at all. Two things close that, and both are required: **every passwordless door —
+  magic link and Google alike — is refused for an account holding the Admin grant**, and the session
+  records the method that created it, through `session.additionalFields` written by a
+  `databaseHooks.session.create.before` hook. `requireAdmin` reads that field, not `twoFactorEnabled`.
+  The rule is written over the **class** of passwordless doors rather than over the two that exist
+  today, because adding a third is exactly when this gets forgotten. **Binds:** 7, 20.
 - **NFR15 — A Report freezes without waiting for a human, and the freeze is race-free.** From commit
   of a Report the reported Hirer sends **0** further Offers. `sendOffer` takes a row lock on the
   Hirer's Account inside its transaction: under READ COMMITTED an unlocked read of `offerSendingState`
@@ -287,7 +290,7 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   effort introduces appears in `turbo.json`: build-baked values in `env` on `build`, runtime-only
   values in `globalPassThroughEnv`. **No runtime credential appears in any turbo task at all** —
   `DATABASE_URL`, `DIRECT_DATABASE_URL`, `RESEND_API_KEY`, the webhook signing secret, the R2
-  credentials and Better Auth's secret are needed by no turbo task, and `.env*` files are `build`
+  credentials, the Google OAuth client id and secret, and Better Auth's secret are needed by no turbo task, and `.env*` files are `build`
   inputs. They reach the app through `fly secrets` only. `turbo build --dry` lists what remains.
   **Binds:** 1, 2, 9, 15.
 - **NFR25 — The gate runs off a developer's terminal, and a bad deploy cannot take the site.**
@@ -321,7 +324,9 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   completed sign-in within 30 minutes, rolling 7 days; a **drop of > 20 points** against the trailing
   30-day value is the actionable signal. This replaces a bounce-rate-only indicator, which goes green
   while a new sending domain lands in Colombian spam folders — accepted, not bounced, never read —
-  and magic link is the only key to an account. Hard bounces **≤ 2%** and **spam complaints ≤ 0.1%**
+  and the email door is the fragile one. It measures **that door specifically** — a Google sign-in
+  never touches email — so it is a health check on the path most likely to fail silently rather than a
+  measure of sign-in overall. Hard bounces **≤ 2%** and **spam complaints ≤ 0.1%**
   remain as secondaries — a complaint is more damaging than a bounce to a single-domain sender, and the
   draft tracked neither. Costs two id-only `info` lines, so NFR18 is untouched. **Binds:** 1, 21.
 - **NFR28 — The announcement has an operational leg.** Before anyone is told the site exists: the log
@@ -459,6 +464,7 @@ endpoint and a page-level check does not extend to it. Every one also **rate-lim
 | `GET /profiles`                   | Server Component. Fewest delivered Offers first | `PublicProfile[]`, keyset-paginated                                | Anyone. Indexable                                                                                               |
 | `GET /sign-in`                    | Server Component + one Client Component         | —                                                                  | Anyone                                                                                                          |
 | action `requestMagicLink`         | Server Action                                   | `{ email, sharedDevice, returnPath? }` → `{ ok: true }` **always** | Anyone. Rate-limited. `returnPath` must be a single-leading-slash relative path; `//host` and `/\host` rejected |
+| `GET /api/auth/sign-in/social` (Google) | Route Handler (Better Auth) | its own; PKCE automatic | Anyone **except** an Admin-granted account (NFR14). Links to an existing Account only on a **verified** email match (DD5). Provider tokens are not stored |
 | `GET /api/auth/*`                 | Route Handler (Better Auth)                     | its own                                                            | Anyone. `trustedOrigins` set explicitly. Token is a **query** parameter, single-use, TTL in DD5                 |
 | `GET /api/health`                 | Route Handler                                   | `200`, empty, after a trivial DB round trip, in **≤ 50 ms**        | The deploy health gate and the uptime monitor. `noindex`, returns no data                                       |
 | `GET /robots.txt`, `/sitemap.xml` | Route Handlers                                  | —                                                                  | Anyone. The sitemap lists `/` and `/profiles` and **no** profile                                                |
@@ -837,6 +843,47 @@ call site.
 **Not applicable, stated rather than omitted:** `advanced.backgroundTasks.handler` exists for
 serverless platforms that kill the process after a response. This runs as a long-lived Node process
 on a Fly machine, so email sends complete without it.
+
+#### Google as a second door, and the three things it changes
+
+Google sign-in ships alongside the magic link. The reason is not convenience: the magic link was the
+**only** door, and every risk attached to it — unmeasured deliverability into Colombian inboxes
+(intent Q1), a cold sending domain capped at 50–100 sends a day (C45), a hard bounce that locks a
+Worker out permanently with no password to fall back on, and Q1's openly-accepted eligibility bar
+that "a Worker with no working email cannot participate" — is removed for anyone holding a Google
+account, which on an Android phone is effectively everyone. Facebook is deferred: Meta's
+individual-developer verification path exists, so it is not blocked by having no legal entity, but it
+is an app-review cycle of unpredictable length against a closing window, and on the Worker's device
+Google already reaches the same person.
+
+**Account linking is the security decision, and its default is the dangerous one.**
+`account.accountLinking` decides what happens when someone signs in with Google using an address that
+already has an Account. Linking on an **unverified** email is an account-takeover primitive — register
+a Google account claiming her address, get handed her profile. Linking is therefore permitted **only
+on a verified email match**, and never silently on an unverified one. Not linking at all is also
+wrong here: it produces two Accounts for one person, one holding her CapabilityProfile and one not,
+and "why is my profile gone" arriving at a single unpaid operator (C43).
+
+**Provider tokens are not stored.** This design never acts on Google's API on her behalf — it wants
+an identity assertion and nothing else — so there is no access token worth keeping, and the safest
+handling of a credential is not to hold it. PKCE is automatic in Better Auth for every OAuth flow, so
+that is inherited rather than configured.
+
+**The borrowed-Android hazard is new and is not the one NFR13 already covers.** On a shared or
+borrowed phone the Google account is _already signed in_, so "Sign in with Google" completes in one
+tap with no credential prompt at all — and she may create or enter an account under the **phone
+owner's** identity without ever seeing a login screen. NFR13's shared-device checkbox governs how
+long the session lives; it does nothing about whose account it is. So the sign-in surface names the
+account it is about to use, and the Google button carries that check where a person will read it
+rather than in a settings page. The copy is Build's, under `voice-guide` (C2); the requirement is
+Design's.
+
+**One consequence to carry into C1, because it is easy to miss.** Google returns a real name at
+sign-up and the magic link returns none — so `ExchangedContact.fullName` now has a source for one
+class of Worker and no source for the other. Either the magic-link path still asks for a name
+somewhere, or a Contact Exchange delivers a full name for some Workers and not others. That is a
+product decision this spec does not settle, and it is why C1 stays open rather than being closed by
+this change.
 
 #### The shared device, and the mechanism the intent's vocabulary did not have
 
@@ -1328,7 +1375,7 @@ own schedule.
 | **Wall**             | `app/page.tsx`                | Before the first profile exists: the proposition and a route into `/publish`. Never a blank region             | Card skeletons at the card's exact height, so the notices above them do not move | Cards rendered, a photo slot still resolving → the initial, which is also the approved-photo-absent state. One shape, two causes | The Wall failed to load: what failed, that retrying helps, and the notices still render                                                                                                                                                 | n/a — public                                                                                                                                             | n/a                                                                                                                                                                                         |
 | **Browse**           | `app/profiles/page.tsx`       | No match for this Skill/city: say which filter is narrowing, offer to clear it. Distinct from the Wall's empty | Skeletons holding the grid                                                       | Some cards, more streaming                                                                                                       | Search failed; the unfiltered list is still reachable                                                                                                                                                                                   | n/a — public                                                                                                                                             | n/a                                                                                                                                                                                         |
 | **Full profile**     | `app/profile/[slug]/page.tsx` | n/a                                                                                                            | Skeleton at the profile's height                                                 | Identity rendered, work history streaming                                                                                        | Profile failed to load                                                                                                                                                                                                                  | **Signed out** → the Account gate and why it exists. **Blocked** → indistinguishable from "not found", because the alternative tells him she Blocked him | n/a                                                                                                                                                                                         |
-| **Sign in**          | `app/sign-in/page.tsx`        | n/a                                                                                                            | Button busy, form still readable                                                 | n/a                                                                                                                              | Send failed, retry available, and the address is still in the field                                                                                                                                                                     | n/a                                                                                                                                                      | "Check your email" — said **whether or not the address exists**, because the honest reply and the enumeration-safe reply are the same one. A consumed link offers an immediate resend (DD5) |
+| **Sign in** | `app/sign-in/page.tsx` | n/a | Per-door: the Google button and the email button busy independently; the form stays readable | n/a | Send failed, retry available, address still in the field. **Google failed** → the email door is still offered, never a dead end | n/a | Email → "Check your email", said **whether or not the address exists**, because the honest reply and the enumeration-safe reply are the same one; a consumed link offers an immediate resend. **Google** → the surface names the account it is about to use, because on a borrowed Android it may be the phone owner's (DD5) |
 | **Publish**          | `app/publish/page.tsx`        | Skill picker before a query                                                                                    | Per-field, never a whole-form spinner                                            | Fields accepted, photo still uploading — the profile is already live                                                             | Per-field errors **and** a focused form-level summary; the contact-detail rejection names the fragment and keeps everything typed (NFR12); a photo rejected at the size ceiling says so in her terms rather than failing opaquely (DD6) | Already has a profile → route to `/my-profile`                                                                                                           | Published, with the live profile linked and the pending photo explained without a badge                                                                                                     |
 | **Own profile**      | `app/my-profile/page.tsx`     | n/a                                                                                                            | Skeleton                                                                         | Photo pending → **her own photo shown**, dignified, described as under review, not flagged                                       | Load failed                                                                                                                                                                                                                             | Not the owner → 404                                                                                                                                      | Edit saved                                                                                                                                                                                  |
 | **Received Offers**  | `app/offers/page.tsx`         | No Offers yet: say what makes one arrive, and that a person reads each first                                   | Row skeletons                                                                    | Some rows, terms streaming                                                                                                       | Load failed                                                                                                                                                                                                                             | Not the owner → 404                                                                                                                                      | n/a                                                                                                                                                                                         |
@@ -1510,9 +1557,15 @@ answered and a concern asking "what should this be?" gets deferred.
       `CapabilityProfile`. That leaves a second question the ADR does not answer: it is then collected
       either at publish (a database of displaced people's full names from day one) or at acceptance (a
       new input on the highest-stakes action in the product).
+      **Adding Google sign-in (DD5) changed the shape of this, without settling it.** Google returns a
+      real name at sign-up; the magic link returns none. So the answer is now *different per door* —
+      `ExchangedContact.fullName` has a source for a Google Worker and no source for a magic-link one,
+      and a Contact Exchange would deliver a full name for some Workers and not others unless the
+      email path asks for one somewhere.
       **Risk if wrong:** either a permanent over-collection, or an identity crossing a Hirer sees
-      before she has chosen. **Owner:** Tech lead (arbitrating ADR-0009 against the intent's prose),
-      with Security owner.
+      before she has chosen — plus, now, an exchange whose completeness depends on which button she
+      pressed at sign-up. **Owner:** Tech lead (arbitrating ADR-0009 against the intent's prose), with
+      Security owner.
 - [ ] **C2** — **`voice-guide` is `UNSET`, and one `Must` story blocks on it.** [Intent Q6](./intent.md)
       settles that a `brand-voice` session sets it and that it stays `UNSET` through `/to-spec`. This
       spec names what every string must **say** and fixes no words. DD12's Skill-vocabulary translation
@@ -1540,7 +1593,7 @@ answered and a concern asking "what should this be?" gets deferred.
       **Risk if wrong:** the platform's terminal event is a one-way disclosure by the person with the
       least power in it. **Owner:** Tech lead, with Security owner.
 - [ ] **C5** — **Where six new credentials live and who rotates each** (PlanetScale app + direct,
-      Resend, the webhook signing secret, R2, Better Auth's secret). NFR24 keeps them out of every
+      Resend, the webhook signing secret, R2, the Google OAuth client secret, Better Auth's secret). NFR24 keeps them out of every
       turbo task; it does not say where they live. Proposal: `fly secrets` as the only store, with the
       go-live runbook naming each.
       **Risk if wrong:** a production database URL for a table of displaced people's phone numbers
@@ -1603,7 +1656,7 @@ answered and a concern asking "what should this be?" gets deferred.
       required at all, or whether forward-fix plus the isolation rules above is the policy.
       **Risk if wrong:** the one deploy that needs undoing is the one the rollback cannot undo.
       **Owner:** Data lead. **Unblocks by setting:** `docs/policy/data.md` → `migration-policy`.
-- [ ] **C15** — **Authorization for international transmission.** PlanetScale, Fly, Cloudflare, Resend and
+- [ ] **C15** — **Authorization for international transmission.** PlanetScale, Fly, Cloudflare, Google, Resend and
       Sentry are all outside Colombia, so every one is a _transmisión_ requiring disclosure in the
       _autorización_ and a transmission contract or equivalent. **RNBD registration is separately
       answered and does not apply** — DD8 verified that the threshold reaches _sociedades_ and
@@ -1837,10 +1890,15 @@ on its own — each concern below names its advisory.
       should additionally require a measured deliverability check into Colombian Gmail and Hotmail —
       which [intent Q1](./intent.md) called "a launch risk to measure, not to assume" and nothing in
       this spec yet measures — is the same decision.
-      **Risk if wrong:** the platform opens, Workers publish, Hirers arrive, and neither side can sign
-      in. It is silent: sends are accepted, not bounced, and NFR27's conversion metric is the only
-      thing that would show it — after the window has closed. **Owner:** On-call lead (with Repo owner
-      on the announcement plan).
+      **Google sign-in (DD5) materially reduces this** — a Worker on Android never touches the email
+      door — but it does not close it: Offer notifications, Contact Exchange deliveries and the
+      seven-day check-in all still send, and a Hirer abroad may well have no Google account. The
+      warm-up still has to happen; what changes is that a failure degrades the product instead of
+      closing it.
+      **Risk if wrong:** the platform opens, Workers publish, Hirers arrive, and the ones who came
+      through email cannot sign in. It is silent: sends are accepted, not bounced, and NFR27's
+      conversion metric is the only thing that would show it — after the window has closed.
+      **Owner:** On-call lead (with Repo owner on the announcement plan).
 
 ## Out of Scope
 
