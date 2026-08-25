@@ -124,8 +124,12 @@ inside its own ticket. See **UX design** for target paths and the ordering const
     record what each consented to and when, so that a habeas data request can be answered on Ley
     1581's clock.
 15. As the operating team, I want the repository's first CI to run the full gate on every PR, the
-    default branch to refuse a direct push, and a deploy to be health-gated and undoable in minutes,
-    so that continuous deployment with nobody on call has a gate and a mitigation.
+    default branch to refuse a direct push, a deploy to be health-gated and undoable in minutes, and
+    **the migration history to be mechanically protected from drift** — an append-only journal,
+    immutable shipped migrations, and destructive statements isolated and opted into — so that
+    continuous deployment with nobody on call has a gate, a mitigation, and a schema history that
+    cannot rot silently. **This story is expected to split into two PRs** (the CI/deploy half and the
+    migration-guardrail half); `docs/policy/build.md`'s `pr-size-ceiling` is 1000 reviewed lines.
 16. As the operating team, I want a ceiling on every state-changing action and on gated profile reads,
     so that one person with a script cannot exhaust the reviewer's attention or harvest every
     displaced person's self-description in an afternoon.
@@ -168,7 +172,11 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   JavaScript on first load and reach **LCP ≤ 2.5 s at p75** under 4× network and 4× CPU throttling.
   **Second half:** a page meeting the byte budget must still render the Wall's cards, both standing
   notices, and every field of the publishing form. A budget met by shipping less of the page is a
-  budget failed. **Binds:** 2, 4, 11.
+  budget failed.
+  **Images are bounded separately, because on this page they are the dominant bytes.** Every photo is
+  served at a width appropriate to its slot and in a format the browser negotiated — **0** Wall cards
+  request an image more than **2×** their rendered CSS width, and resizing happens at the edge rather
+  than on the Fly machine (DD6). **Binds:** 2, 4, 11.
 - **NFR4 — Publishing without JavaScript.** With JavaScript unavailable or still loading, a Worker
   completes **every** field except the photo and submitting produces a published profile. The photo is
   the single documented exception and the form says so where it appears. **Binds:** 2, 4.
@@ -271,7 +279,7 @@ inside its own ticket. See **UX design** for target paths and the ordering const
 - **NFR24 — Environment declaration, and credentials in neither.** Every environment variable this
   effort introduces appears in `turbo.json`: build-baked values in `env` on `build`, runtime-only
   values in `globalPassThroughEnv`. **No runtime credential appears in any turbo task at all** —
-  `DATABASE_URL`, `DIRECT_DATABASE_URL`, `RESEND_API_KEY`, the webhook signing secret, storage
+  `DATABASE_URL`, `DIRECT_DATABASE_URL`, `RESEND_API_KEY`, the webhook signing secret, the R2
   credentials and Better Auth's secret are needed by no turbo task, and `.env*` files are `build`
   inputs. They reach the app through `fly secrets` only. `turbo build --dry` lists what remains.
   **Binds:** 1, 2, 9, 15.
@@ -299,8 +307,9 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   two id-only `info` lines, so NFR18 is untouched. **Binds:** 1, 21.
 - **NFR28 — The announcement has an operational leg.** Before anyone is told the site exists: the log
   drain is collecting, the uptime monitor is firing against `/api/health`, a rollback has been
-  rehearsed once against production, and a load test shows NFR2 held at its stated concurrency.
-  **Binds:** 15, and gates every `Must`.
+  rehearsed once against production, the domain is a Cloudflare zone with **transformations enabled**
+  (DD6 — a dashboard step, and photos serve at full size until it is done), and a load test shows NFR2
+  held at its stated concurrency. **Binds:** 15, and gates every `Must`.
 
 - **NFR29 — Spanish is the interface; English is the code.** **0** Spanish-language identifiers appear
   anywhere a developer types a name: route segments, file and directory names, database tables and
@@ -312,6 +321,19 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   less Spanish to satisfy this requirement has failed it, not met it. See
   [ADR-0012](../../adr/0012-spanish-is-the-interface-english-is-the-code.md).
   **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21.
+
+- **NFR30 — Migration integrity, enforced rather than agreed.** Four counts, all machine-checked
+  (DD13): **0** entries in `drizzle/meta/_journal.json` are removed, reordered, or mutated once
+  committed — it is append-only. **0** migration `.sql` files change content after their tag reaches
+  the default branch. A migration containing a destructive statement — `DROP TABLE`, `DROP COLUMN`,
+  `DROP CONSTRAINT`, `ALTER COLUMN … TYPE`, `ALTER COLUMN … SET NOT NULL`, any `RENAME` — contains
+  **only** destructive statements and carries an explicit marker. And **0** pull requests contain both
+  a marked contract migration and a change to `@repo/domain`'s query modules, which is DD10's
+  expand/contract rule made mechanical.
+  **Second half:** a destructive change must stay **possible**. The marker is an opt-in, not a
+  prohibition, and every refusal names the statement and the file it objected to — a guardrail that
+  cannot be satisfied becomes a reason to edit production by hand, which is strictly worse than the
+  drift it was built to stop. **Binds:** 2, 3, 6, 8, 9, 10, 13, 14, 15, 16.
 
 **Availability is deliberately not an NFR here** and is concern C9 instead: the number is the On-call
 lead's, and a single Fly machine with health-gated bluegreen deploys has a materially different
@@ -573,7 +595,7 @@ Account appears in to non-identifying counts.
 **Story 14 — consent.** Both sides, before collection, naming the _responsable_ and the four
 international processors.
 
-**Story 15 — CI and deploy.** DD10. **Story 16 — ceilings.** DD7. **Story 17 — the egress fix.** DD11.
+**Story 15 — CI, deploy, and migration guardrails.** DD10 and DD13. **Story 16 — ceilings.** DD7. **Story 17 — the egress fix.** DD11.
 
 ## Deep dives
 
@@ -613,12 +635,31 @@ not bite today — and that a second machine reintroduces it with no handler to 
 
 ### DD2 — Schema, keys, and the indexes the access patterns actually need (NFR2, NFR7, NFR22)
 
-`pk-strategy` is **`uuidv7()`**, native in Postgres 18 — and PGlite 0.5.7 is 18.3, so the test seam has
-it too, with no extension divergence and no need for `uuid-ossp`. The reason is not aesthetic:
-`/offers/[id]` puts a primary key in a URL, and a `BIGINT IDENTITY` there publishes the platform's
-total Offer count to every Hirer on his first Offer, and hands an enumerator a clean `/offers/1..N`
-sweep. Authorization stops the read; it does not stop the existence oracle. Pure join tables
-(`ProfileSkill`) take a composite natural PK and no surrogate.
+`pk-strategy` is **`BIGINT GENERATED ALWAYS AS IDENTITY` by default, and `uuidv7()` only where an id
+reaches a URL or a browser.** The draft made every key a `uuidv7()`; the `planetscale:postgres`
+guidance is the other way round and it is right — a UUID is 16 bytes against 8, it widens every index
+and every foreign key that references it, and it slows joins. The exception earns itself on one
+table rather than on all of them:
+
+- **`Offer.id` is `uuidv7()`**, because `/offers/[id]` puts it in a URL. A `BIGINT IDENTITY` there
+  publishes the platform's total Offer count to every Hirer on his first Offer and hands an
+  enumerator a clean `/offers/1..N` sweep. Authorization stops the read; it does not stop the
+  existence oracle.
+- **Everything else is `BIGINT IDENTITY`.** `CapabilityProfile` in particular: its public handle is
+  the opaque `slug` (NFR9), so its primary key never crosses a boundary and has no reason to be wide.
+- **Better Auth owns the shape of its own tables** — `account`, `session`, `verification` — and this
+  spec does not override it. That is a third id convention in one schema, and naming it here is
+  cheaper than discovering it at Build.
+- **Pure join tables** (`ProfileSkill`) take a composite natural PK and no surrogate at all.
+
+`uuidv7()` is native in Postgres 18, and PGlite 0.5.7 is 18.3, so the test seam has it with no
+extension divergence and no `uuid-ossp`.
+
+Three schema rules that apply to every table and are cheaper stated once than argued per migration:
+**`NOT NULL` wherever feasible**; **`created_at TIMESTAMPTZ NOT NULL DEFAULT now()` on every table**,
+because the Admin queue, the retention graph and every incident reconstruction read it; and **every
+foreign key column carries its own index** — Postgres does not create one, and an unindexed FK turns
+the leaf-first purge in NFR17 into a sequential scan per parent row.
 
 `orm` is **Drizzle**, with **committed SQL migrations** — the same files run against PlanetScale and
 against PGlite, which is what makes seam 2 a real seam rather than a parallel schema.
@@ -759,14 +800,36 @@ The path instead:
 5. **Rejection deletes the object**, rather than merely flipping a state. Object storage is a second
    store, and NFR17's "deleted" covers rows, objects and logs.
 
-**Storage is Tigris, created with `fly storage create`.** The simplicity lens counted this as a fifth
-external account, which is worth correcting: Tigris buckets created through Fly are billed through Fly
-and need no separate vendor relationship. The free tier is 5 GB with **no egress charge**, and objects
-replicate close to the requesting user — the one part of this design that is genuinely better for a
-Colombian phone than a single US region.
-
 EXIF GPS on an indexable Wall would publish the precise location of a displaced woman to anyone who
-downloads the file. That is why step 4 is a re-encode and not a copy.
+downloads the file. That is why step 4 is a re-encode and not a copy — and why it stays server-side
+whatever the delivery layer below can do.
+
+**Storage is Cloudflare R2; public variants are served through Cloudflare Images transformations.**
+R2 is S3-compatible, so the presigned-PUT quarantine design above is unchanged: 10 GB of storage and
+**zero egress** on the free tier, which at a re-encoded ~200–400 KB per photo is 25,000–50,000
+photos — beyond any launch volume this product will see.
+
+**The delivery half is the part the first draft of this deep dive was missing, and it is what NFR3
+actually turns on.** One ~1600 px image served into a Wall _grid_ on a 4×-throttled mid-range Android
+is how LCP ≤ 2.5 s gets missed; photos are the dominant bytes on that page. So the public prefix is
+read through a transformation URL that names a width and negotiates the format
+(`/cdn-cgi/image/width=…,format=auto/…`), wired into `next/image` as a **custom loader** so that
+resizing happens at Cloudflare's edge and **never on the Fly machine** — the same CPU and memory
+that DD7 already names as a saturating resource. The Images free plan allows **5,000 unique
+transformations per month** against images stored outside Images, and a transformation is cached
+after its first request, so the budget is consumed by _new_ (image × variant) pairs rather than by
+traffic: at three variants per profile that is ~1,600 new profiles a month.
+
+**Two preconditions this creates, both cheap and both real.** The domain must be a **Cloudflare
+zone** with transformations **explicitly enabled** on it — free, conventional, and a go-live step
+rather than a code change (NFR28). And Cloudflare joins the processor list in C15.
+
+**A correction to what this deep dive first said.** It chose Tigris via `fly storage create` and
+argued that, because Fly bills it, it was not the "fifth external account" the simplicity lens
+objected to. That rebuttal conflated a billing relationship with a **processor**: Tigris Data is a
+distinct company handling personal data either way, so it never shrank the Ley 1581 disclosure list —
+it only removed a signup. Choosing storage to defeat an objection rather than to serve NFR3 is what
+produced the missing delivery half above.
 
 ### DD7 — Ceilings, and the resource that is actually scarce (NFR26, NFR7)
 
@@ -988,7 +1051,52 @@ the effort where a `Must` story has a non-code dependency.
 
 The seed ships as an **idempotent migration**, so seam 2 and production hold the same list.
 
-### DD13 — Proposed ADRs
+### DD13 — Migration integrity, and why it is a test rather than a convention (NFR30)
+
+This effort introduces the repository's first database, and with it the first artifact that is
+**append-only by nature and editable by accident**. Three failure modes, in increasing order of how
+quietly they happen:
+
+**A rewritten journal.** `drizzle/meta/_journal.json` is the ordered record of what has been applied.
+Reorder or drop an entry — trivially done by resolving a merge conflict the wrong way, since two
+branches adding migrations always conflict there — and production and the test seam apply different
+SQL in a different order. The check: diff the journal against the merge base and refuse anything but
+an append. No committed `tag`, `when`, or `idx` may change.
+
+**An edited migration.** This is the one that matters most here, and it is silent. A migration whose
+tag is already on the default branch has run against production; editing its `.sql` changes nothing
+there, because Drizzle will not re-run it. But **PGlite replays every migration from scratch on every
+test run**, so seam 2 immediately starts testing a schema production does not have — and it goes
+green. The entire argument for seam 2 being "a real seam rather than a mock in a database costume"
+rests on those files being identical, so this check is what keeps Testing Decisions honest. Content
+is hashed at the tag's first appearance and compared thereafter.
+
+**A destructive statement smuggled into an ordinary migration.** `DROP TABLE`, `DROP COLUMN`,
+`DROP CONSTRAINT`, `ALTER COLUMN … TYPE`, `ALTER COLUMN … SET NOT NULL`, any `RENAME`. Mixing one
+with additive statements means the additive half cannot be rolled back without also reversing the
+drop — and the drop is the half that has already destroyed the data. So a migration containing any of
+them contains **nothing else**, and says so in its name. That is not a ban: it is what makes
+NFR25's "≤ 5 minutes" true for the additive case, which is the overwhelming majority.
+
+**And the contract half is a separate deploy.** DD10 requires expand/contract; the check enforces the
+part a human forgets under time pressure — a marked contract migration may not share a pull request
+with a change to `@repo/domain`'s query modules. Ship the code that stops using the column, deploy,
+then drop it.
+
+**Where this lives, in this repository's idiom.** It is repo logic, so it is a **test suite, not a
+script somebody remembers to run** — the same argument `CLAUDE.md` already makes for the stage hooks.
+It joins `pnpm test:gates`, which means CI runs it on every PR under NFR25, and `gate-test.sh` gains
+its cases. `.claude/hooks/build-guard.sh` gains a matching rule refusing a `Write` or `Edit` to a
+migration file already in the journal, which is exactly the shape of its existing rule H for vendored
+skills, committed advisories and `pnpm-lock.yaml`. Both halves are needed and they are not redundant:
+the hook stops the agent mid-session, and the gate stops the human's PR.
+
+**These gates refuse false positives loudly, so each rule ships with its prose case.** A commit
+message naming `DROP COLUMN`, an ADR quoting one, and this very deep dive are all text that must not
+trip the check — `gate-lib.sh`'s existing heredoc stripping and anchoring are the precedent, and four
+false refusals were found the last time these were written.
+
+### DD14 — Proposed ADRs
 
 Two decisions here are durable and reach beyond this effort, so they belong in `docs/adr/` rather than
 in a folder nobody reopens. Both are written with `status: proposed`; **accepting one is the human's
@@ -1245,7 +1353,7 @@ answered and a concern asking "what should this be?" gets deferred.
       **Risk if wrong:** the platform's terminal event is a one-way disclosure by the person with the
       least power in it. **Owner:** Tech lead, with Security owner.
 - [ ] **C5** — **Where six new credentials live and who rotates each** (PlanetScale app + direct,
-      Resend, the webhook signing secret, Tigris, Better Auth's secret). NFR24 keeps them out of every
+      Resend, the webhook signing secret, R2, Better Auth's secret). NFR24 keeps them out of every
       turbo task; it does not say where they live. Proposal: `fly secrets` as the only store, with the
       go-live runbook naming each.
       **Risk if wrong:** a production database URL for a table of displaced people's phone numbers
@@ -1253,7 +1361,7 @@ answered and a concern asking "what should this be?" gets deferred.
       **Owner:** Security owner. **Unblocks by setting:** `docs/policy/security.md` → `secret-store`.
 - [ ] **C6** — **The CSP this app ships, or the recorded decision not to.** DD7 settles the rest of the
       header set; the CSP itself is not this spec's to pick. Proposal: `default-src 'self'`,
-      `frame-ancestors 'none'`, `img-src 'self' <tigris-host> data:`, and the Sentry hosts the go-live
+      `frame-ancestors 'none'`, `img-src 'self' <cloudflare-image-delivery-host> data:`, and the Sentry hosts the go-live
       runbook already enumerates.
       **Risk if wrong:** no `frame-ancestors` leaves `acceptOffer` clickjackable — one click releasing
       a displaced person's name, phone and email. **Owner:** Security owner. **Unblocks by setting:**
@@ -1303,10 +1411,12 @@ answered and a concern asking "what should this be?" gets deferred.
       `owners.md`; **Repo owner** to confirm the sweep happened.
 - [ ] **C14** — **`migration-policy`, and what a one-way migration does to NFR25's five minutes.**
       Drizzle generates one-way SQL by default. DD10 proposes **expand/contract, with a contracting
-      migration forbidden in the same deploy as the code change**.
+      migration forbidden in the same deploy as the code change**, and DD13 makes that mechanical
+      (NFR30) — so what remains open is narrower than it was: whether a reversible `down` migration is
+      required at all, or whether forward-fix plus the isolation rules above is the policy.
       **Risk if wrong:** the one deploy that needs undoing is the one the rollback cannot undo.
       **Owner:** Data lead. **Unblocks by setting:** `docs/policy/data.md` → `migration-policy`.
-- [ ] **C15** — **Authorization for international transmission.** PlanetScale, Fly, Tigris, Resend and
+- [ ] **C15** — **Authorization for international transmission.** PlanetScale, Fly, Cloudflare, Resend and
       Sentry are all outside Colombia, so every one is a _transmisión_ requiring disclosure in the
       _autorización_ and a transmission contract or equivalent. **RNBD registration is separately
       answered and does not apply** — DD8 verified that the threshold reaches _sociedades_ and
@@ -1322,7 +1432,7 @@ answered and a concern asking "what should this be?" gets deferred.
       `branch-protection`, and `stacked-prs` with it — 17 `Must` stories at one independent PR each is
       the volume that makes that key worth answering.
 - [ ] **C17** — **Backup RPO and RTO.** One Postgres holds displaced people's phone numbers, with
-      nobody on call and no second copy anywhere in this design; Tigris is a second store with its own
+      nobody on call and no second copy anywhere in this design; R2 is a second store with its own
       answer. Proposal: RPO **≤ 1 h**, RTO **≤ 4 h**, both verified once by an actual restore before
       the announcement.
       **Risk if wrong:** the failure that ends the platform is unrecoverable and nobody learns how much
