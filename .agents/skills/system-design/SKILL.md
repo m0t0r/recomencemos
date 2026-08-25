@@ -92,6 +92,11 @@ cardinality of each relationship.
 Use the glossary in `CONTEXT.md`. An entity the codebase already names is that entity — introducing
 a synonym is how a domain model forks, and the second name always wins somewhere you did not expect.
 
+**Where the product's UI language is not English, the glossary gives every term two names, and only
+one of them is an identifier.** Check `CONTEXT.md` for the rule before naming anything: the localized
+name belongs in rendered strings, and the English name belongs in every entity, field, table, column,
+and enum value. A translated identifier reads as harmless at Design and is unrenameable afterwards.
+
 Two questions that surface most modelling mistakes at zero cost:
 
 - **What is the lifecycle?** Created by whom, changed by what, deleted or tombstoned when — and does
@@ -108,6 +113,11 @@ get indexes for queries nobody runs.
 ## 3. API / interface contract
 
 For each surface, name: **what it is, its shape, and who may call it.** All three, every time.
+
+**Route segments, file paths, and field names are identifiers, not copy.** In a product whose UI is
+not English this is the section where that goes wrong, because a route feels like something a user
+reads. It is not: it is a URL in a runbook, an analytics key, and a directory on disk, and nobody
+renames one after launch. Name them in English and let the page be localized — see `CONTEXT.md`.
 
 ### Choosing the surface, in this stack
 

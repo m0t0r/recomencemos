@@ -6,6 +6,17 @@ pay them for work. It introduces the two sides and then steps out of the way.
 
 ## Language
 
+**Spanish is the interface; English is the code.** Every term below has an English name and a Spanish
+UI rendering, and the split is binding: the English name is what appears in route segments, file and
+directory names, database tables and columns, enum values, query parameters, API field names, log
+`event` names and test names. The Spanish rendering appears only in what a person reads. The line
+falls between an **identifier** and a **value** — `Skill.labelEs` is an English column holding a
+Spanish string, and that is the shape to copy. See
+[ADR-0012](docs/adr/0012-spanish-is-the-interface-english-is-the-code.md).
+
+So: the route is `/offers`, the table is `offer`, the entity is `Offer`, and the page says
+_Propuesta_.
+
 **Worker**:
 A person who lost their source of income in the earthquake and publishes what they are able
 and willing to do in exchange for pay. Spanish UI: _Trabajador/a_.
