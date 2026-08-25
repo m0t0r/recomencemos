@@ -1,0 +1,64 @@
+# Recomencemos
+
+The platform connects people in Pereira, Dosquebradas and Santa Rosa (Risaralda, Colombia)
+who lost their income in the 10 August 2026 earthquake with anyone, anywhere, willing to
+pay them for work. It introduces the two sides and then steps out of the way.
+
+## Language
+
+**Worker**:
+A person who lost their source of income in the earthquake and publishes what they are able
+and willing to do in exchange for pay. Spanish UI: _Trabajador/a_.
+_Avoid_: Damnificado, victim, beneficiary, affected person, candidate, applicant, job seeker
+
+**Hirer**:
+A person, family, or organization offering to pay a Worker for work. May be anywhere in the
+world, and is not required to be an employer in any formal sense. Spanish UI: _Contratante_.
+_Avoid_: Employer, donor, sponsor, benefactor, good Samaritan, client
+
+**CapabilityProfile**:
+A Worker's public page: the Skills they hold and the terms under which they will work.
+Spanish UI: _Perfil de capacidades_.
+_Avoid_: CV, résumé, listing, case file
+
+**Skill**:
+One entry from the platform's fixed vocabulary of human capabilities, chosen by a Worker for
+their CapabilityProfile. Spanish UI: _Capacidad_.
+_Avoid_: Tag, category, competency, service
+
+**Offer**:
+A concrete, immutable proposal of paid work sent by one Hirer to one named Worker, which the
+Worker either accepts or rejects. Spanish UI: _Propuesta_.
+_Avoid_: Job, vacancy, posting, gig, request, invitation
+
+**Contact Exchange**:
+The moment a Worker accepts an Offer and each side receives the other's contact details. It is
+the platform's terminal event: everything after it happens off the platform.
+_Avoid_: Match, connection, deal, hire, placement
+
+**Account**:
+One identity on the platform. It may hold a CapabilityProfile, it may send Offers, or both —
+what a person is here is a consequence of what they have done, not a choice made at sign-up.
+_Avoid_: User, member, profile, registration
+
+**Wall**:
+The public homepage list of the most recently published CapabilityProfiles. It is a teaser, not
+the catalogue; the full browsable list is ordered to favour Workers who have received the fewest
+Offers. Spanish UI: _Muro_.
+_Avoid_: Feed, directory, listings, board
+
+**Report**:
+A Worker's assertion that an Offer she received is abusive. It hides the Offer from her, freezes
+the Hirer's ability to send further Offers, and waits for an Admin. Spanish UI: _Reportar_.
+_Avoid_: Flag, complaint, abuse ticket
+
+**Block**:
+A Worker's unilateral and permanent refusal of one Hirer: her CapabilityProfile becomes invisible
+to him and he can send her nothing further. It reaches only the platform — after Contact Exchange
+it cannot undo what he already knows. Spanish UI: _Bloquear_.
+_Avoid_: Ban, mute, hide
+
+**Admin**:
+A staff Account. Holds the daily queue — photos, Offers, Reports — plus takedown, unfreeze, and
+vocabulary promotion. The only role that can read Contact Exchange data in bulk.
+_Avoid_: Moderator, staff, superuser, operator
