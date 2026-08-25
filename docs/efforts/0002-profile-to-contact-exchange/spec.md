@@ -282,7 +282,7 @@ inside its own ticket. See **UX design** for target paths and the ordering const
 - **NFR23 — Node floor.** Every dependency this effort adds declares an `engines.node` admitting every
   `24.x`, or none. Verified at Design against the versions this spec pins: `better-auth@1.7.1` and
   `drizzle-orm@0.45.2` declare none; `resend@6.22.1` declares `>=20`; `pg@8.23.0` declares
-  `>= 16.0.0`; `@electric-sql/pglite@0.5.7` declares none. **Binds:** 1, 2, 9.
+  `>= 16.0.0`; `@electric-sql/pglite@0.5.7` and `uuid@14.0.2` declare none. **Binds:** 1, 2, 9.
 - **NFR24 — Environment declaration, and credentials in neither.** Every environment variable this
   effort introduces appears in `turbo.json`: build-baked values in `env` on `build`, runtime-only
   values in `globalPassThroughEnv`. **No runtime credential appears in any turbo task at all** —
@@ -658,13 +658,13 @@ not bite today — and that a second machine reintroduces it with no handler to 
 
 ### DD2 — Schema, keys, and the indexes the access patterns actually need (NFR2, NFR7, NFR22)
 
-`pk-strategy` is **`BIGINT GENERATED ALWAYS AS IDENTITY` by default, and `uuidv7()` only where an id
-reaches a URL or a browser.** The draft made every key a `uuidv7()`; the `planetscale:postgres`
+`pk-strategy` is **`BIGINT GENERATED ALWAYS AS IDENTITY` by default, and a UUIDv7 only where an id
+reaches a URL or a browser.** The draft made every key a UUID; the `planetscale:postgres`
 guidance is the other way round and it is right — a UUID is 16 bytes against 8, it widens every index
 and every foreign key that references it, and it slows joins. The exception earns itself on one
 table rather than on all of them:
 
-- **`Offer.id` is `uuidv7()`**, because `/offers/[id]` puts it in a URL. A `BIGINT IDENTITY` there
+- **`Offer.id` is a UUIDv7**, because `/offers/[id]` puts it in a URL. A `BIGINT IDENTITY` there
   publishes the platform's total Offer count to every Hirer on his first Offer and hands an
   enumerator a clean `/offers/1..N` sweep. Authorization stops the read; it does not stop the
   existence oracle.
@@ -675,8 +675,23 @@ table rather than on all of them:
   cheaper than discovering it at Build.
 - **Pure join tables** (`ProfileSkill`) take a composite natural PK and no surrogate at all.
 
-`uuidv7()` is native in Postgres 18, and PGlite 0.5.7 is 18.3, so the test seam has it with no
-extension divergence and no `uuid-ossp`.
+**The v7 value is generated in the application by `uuid@14.0.2`'s `v7()`, not by the database and
+never by hand.** Postgres 18 ships a native `uuidv7()` and the draft reached for it; app-side
+generation is better here for three reasons. The id exists **before** the insert, which DD9's
+transactions need — an Offer is written and then referenced in the same transaction, and a column
+default would force a `RETURNING` round trip to learn the value. It removes a **version dependency**:
+`uuidv7()` is Postgres 18 only, and while PGlite 18.3 and PlanetScale 18.4 happen to agree today, that
+is an alignment being relied on rather than a guarantee. And it is what Drizzle expects —
+`.$defaultFn(() => v7())` — so the schema declares it in one place.
+
+A column `DEFAULT uuidv7()` was considered as a backstop for rows inserted outside the application and
+**dropped**: under [ADR-0010](../../adr/0010-the-domain-package-is-the-only-door-to-the-database.md)
+there is no such path, the Skill seed migration writes `BIGINT` keys, and a default that never fires
+in normal operation while silently depending on a server version is more moving parts than it earns.
+
+`uuid@14.0.2` declares **no** `engines` field, so it satisfies NFR23. Writing a v7 generator by hand
+is out of the question — the monotonicity and clock-regression rules are exactly the kind of thing
+that looks right and produces colliding or non-ordered keys under load.
 
 Three schema rules that apply to every table and are cheaper stated once than argued per migration:
 **`NOT NULL` wherever feasible**; **`created_at TIMESTAMPTZ NOT NULL DEFAULT now()` on every table**,
@@ -1410,8 +1425,9 @@ query's index behaviour, the five queue branches.
 this a real seam rather than a mock in a database costume:
 
 - **PGlite 0.5.7 is PostgreSQL 18.3; PlanetScale for Postgres runs 18.4.** Same major version, so
-  `uuidv7()` and the planner's behaviour are the ones production has. Read out of the shipped
-  `pglite.wasm`, not recalled.
+  the planner's behaviour is the one production has. Read out of the shipped `pglite.wasm`, not
+  recalled. (Primary keys do not depend on that alignment — DD2 generates UUIDv7 in the application
+  rather than in the engine, which is one fewer thing for the two to agree on.)
 - **Every extension this design needs is bundled in PGlite and supported on PlanetScale** — `citext`,
   `pg_trgm`. (`unaccent` is deliberately unused: DD4 normalizes in the application instead, which
   removes a divergence risk rather than testing around one.)
