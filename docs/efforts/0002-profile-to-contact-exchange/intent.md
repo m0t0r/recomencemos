@@ -1,6 +1,6 @@
 ---
 stage: intent
-status: draft
+status: approved
 issue: 2
 ---
 
