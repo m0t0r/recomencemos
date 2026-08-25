@@ -1,7 +1,7 @@
 ---
 stage: spec
 status: draft
-reviewed:
+reviewed: 2026-08-25 fidelity
 issue: 3
 intent: ./intent.md
 ---
@@ -1187,10 +1187,14 @@ on the DOM environment itself.
 
 ## Flagged concerns
 
-Twenty concerns. Six are contradictions between binding documents or between two advisories; the rest
-are policy keys this spec needs and may not set. Every proposal below carries the value its author
-would defend, because a concern with a number gets answered and a concern asking "what should this be?"
-gets deferred.
+**Forty-two concerns, in two blocks.** C1–C20 were raised at authoring time: six are contradictions
+between binding documents or between two advisories, and the rest are policy keys this spec needs and
+may not set. C21–C42 were appended by `/spec-review` — eighteen advisory recommendations the synthesis
+dropped or diluted, plus four from the mechanical shape checks and the intent's own obligations on
+Design.
+
+Every proposal carries the value its author would defend, because a concern with a number gets
+answered and a concern asking "what should this be?" gets deferred.
 
 - [ ] **C1** — **Where the Worker's full name crosses.** [ADR-0009](../../adr/0009-a-workers-full-identity-is-gated-and-never-indexed.md)
       says "full name is released at Contact Exchange… the only moment identity crosses", and the
@@ -1333,6 +1337,154 @@ gets deferred.
       [ADR-0002](../../adr/0002-reporting-vendor-seam.md)'s "a seam, not an abstraction layer". (b) if
       NFR2 is missed, caching returns with a proof obligation attached. **Owner:** Tech lead
       (arbitrating simplicity vs data).
+
+### Appended by `/spec-review` (2026-08-25, fidelity)
+
+C21–C38 are advisory recommendations the synthesis dropped or diluted, found by the fidelity check
+against the four committed advisories. C39–C42 come from the three mechanical shape checks and from
+one obligation the intent placed on Design. **Note on cross-references:** `security.md` and
+`simplicity.md` independently numbered their concerns `C-S1`–`C-S8`, so an advisory ID is ambiguous
+on its own — each concern below names its advisory.
+
+- [ ] **C21** — **No trust boundary is named and no STRIDE walk exists.** The security advisory
+      listed seven boundaries this change crosses and noted the three outbound ones — object storage,
+      Resend, Sentry — are "where personal data leaves the system, which is why they are not optional
+      rows". The spec keeps only `[trust]` / `[network]` markers, which the advisory called "the right
+      instinct" while noting no boundary carries a threat walk.
+      **Risk if wrong:** the advisory's own summary — the spec is strong on disclosure and thin on the
+      other five STRIDE letters. **Owner:** Security owner.
+- [ ] **C22** — **A freeze stops sending and nothing else.** A reported Hirer keeps full gated read
+      access to every Worker's `about` and work history, and any already-`delivered` Offer stays live
+      and acceptable, until a human acts — with `on-call-rotation` = nobody and a 24 h queue. The
+      security advisory asked that `reportOffer` also suspend his gated reads of _her_ profile and
+      mark his undelivered Offers non-deliverable. NFR15 bounds further Offers only.
+      **Risk if wrong:** the protective response to an accusation covers one of three channels.
+      **Owner:** Security owner.
+- [ ] **C23** — **Whether a purge reaches backups.** Distinct from C17, which asks the recovery
+      question. The security advisory's point is a compliance one: "a 12-month purge with an unstated
+      backup retention horizon is not a _supresión_; it is a delay." NFR17 defines "deleted" as rows,
+      objects and logs — backups are not in that list.
+      **Risk if wrong:** story 13 tells a Worker deletion "removes everything from the platform" while
+      the row survives in backups — a false statement to a _titular_, made on the deletion screen.
+      **Owner:** Data lead (with Security owner).
+- [ ] **C24** — **The publish-rate queue signal has no number.** The security advisory asked for "an
+      Admin queue signal when publish volume exceeds a **stated per-hour figure**"; DD7 says "a queue
+      signal above a stated publish rate" and states none. The other two halves of that answer landed
+      with numbers (≤ 3/day, one profile per Account). NFR7's ≤ 20/hour is Offers, not publishes.
+      **Risk if wrong:** the mechanism designed to spread attention to displaced people is the one
+      that hands a flooder the top of the list, undetected. **Owner:** Security owner.
+- [ ] **C25** — **`AdminAction` is `Could` while two sections assert it unconditionally.** The API
+      contract ("each writing an `AdminAction`") and DD7 ("every action writes an `AdminAction`") both
+      make it mandatory; story 23 is `Could`, outside the announcement gate. The security advisory
+      called repudiation "the one STRIDE letter with no entity behind it".
+      **Risk if wrong:** the audit table need not exist when the site opens, so an abuse incident or a
+      Ley 1581 _reclamo_ is reconstructed from mutable rows — and the spec contradicts itself about
+      whether it is optional. **Owner:** Security owner (with Tech lead on the tier).
+- [ ] **C26** — **Email templates: escaping is observed, not required.** DD7 identifies them as the
+      one path where React's escaping does not apply and stops there. The advisory asked for explicit
+      escaping at the template seam and no raw `<a href>` built from user text.
+      **Risk if wrong:** stored HTML injection into an inbox, on the one rendering path with no
+      framework protection, reaching both sides of an unverified market. **Owner:** Security owner.
+- [ ] **C27** — **A failed webhook verification is not logged.** The contract carries three of the
+      advisory's four asks — signature, replay window, idempotency, bodyless 401 — and drops "logged
+      with the event id and nothing else". DD11's twelve-event list has no webhook-failure event.
+      **Risk if wrong:** a forged bounce is an account-lockout primitive, and there is no record that
+      forgeries were attempted. **Owner:** Security owner.
+- [ ] **C28** — **Session and Verification carry no classification and no retention.** The data
+      advisory flagged that these hold `secret`-class tokens and appear in neither NFR17's retention
+      graph nor NFR18's egress bound. Both omissions are still true.
+      **Risk if wrong:** the two tables holding the only credential in the system sit outside the
+      retention graph and outside the egress bound. **Owner:** Data lead (with Security owner).
+- [ ] **C29** — **Every Better Auth upgrade is now a schema-diff review, and the spec does not say
+      so.** The mechanism half landed exactly (`additionalFields`, never a hand-added column); the
+      standing cost the "one schema owner" decision buys was not written down.
+      **Risk if wrong:** a regeneration drops the shared-device column silently — sessions revert to
+      30 days and a borrowed phone keeps her account, with no failing test. **Owner:** Data lead.
+- [ ] **C30** — **The duplicate-phone moderation signal was lost.** `phone (E.164)` landed; the
+      non-unique index on the normalized value did not, and DD2's index table has no phone row. The
+      data advisory noted this is "a moderation signal, not a verification gate, so it stays inside
+      ADR-0008".
+      **Risk if wrong:** the one Sybil signal available without breaching ADR-0008 is unavailable to
+      the Admin. **Owner:** Data lead.
+- [ ] **C31** — **Whether Better Auth stores session tokens hashed at rest** (data advisory D9). This
+      reached the spec only as a bullet in _What was not verified_ — the risk sentence survived, the
+      **owner did not**, so it is not among the boxes a human checks to approve.
+      **Risk if wrong:** unhashed, one database read is session hijack of every Worker, and NFR13's
+      revocation surfaces do not help. **Owner:** Security owner.
+- [ ] **C32** — **The spread mechanism sits on the surface that does not get the traffic.** Ordering
+      lives on `/perfiles`; the Wall is newest-first and is the indexable, most-linked, most-shared
+      surface, so most Hirer traffic bypasses the mechanism entirely. The realized-distribution SLI
+      the operability advisory asked for **did** land in NFR22 — but its reporting surface is story
+      20, which is `Should`.
+      **Risk if wrong:** the fairness property this product is partly built on is asserted, bypassed,
+      and observed only if a `Should` story ships. **Owner:** Tech lead (with On-call lead).
+- [ ] **C33** — **The uptime monitor has no interval and no alert threshold.** The advisory proposed a
+      1-minute interval alerting after 2 consecutive failures — "detection in ~2 minutes versus 'when
+      a Worker mentions it to someone' is the entire difference this product can afford". NFR28 asks
+      only that the monitor be "firing".
+      **Risk if wrong:** with nobody on call, detection latency is the entire mitigation, and it is
+      unspecified. **Owner:** On-call lead.
+- [ ] **C34** — **No machine memory floor.** The advisory proposed **1 GB** as one of three saturation
+      answers; the other two (photo cap, browser-side downscale) landed in DD6 in full. DD6 argues
+      in-process multipart buffering "is the memory-saturation shape that kills a single Fly machine"
+      and then states no bound.
+      **Risk if wrong:** the deep dive names the failure mode and omits the number that answers it.
+      **Owner:** On-call lead.
+- [ ] **C35** — **The Postgres connection pool is never capped, and a forward reference points at a
+      commitment that does not exist.** _What was not verified_ says PlanetScale's limit "is what
+      turns **DD2's pool cap** into a number" — DD2 makes no pool cap.
+      **Risk if wrong:** saturation stays a word rather than a number, on a single machine whose
+      every cold start reopens the pool. **Owner:** On-call lead (with Data lead).
+- [ ] **C36** — **Deferring the retention purge was overridden silently.** The simplicity advisory
+      argued the purge is twelve months of carrying cost for a job whose first run is twelve months
+      away, and that adding it in August 2027 costs about the same. DD10 keeps it and argues only that
+      a silently-stopped purge is an undetected exposure — a case for monitoring it, not for building
+      it now. **Further Notes** records five overrides and this is not among them.
+      **Risk if wrong:** a `Must`-path day spent against a closing announcement window, and the
+      override list stops being trustworthy as a complete record. **Owner:** Tech lead.
+- [ ] **C37** — **Why the photo earns a `Must` slot is never stated.** The spec designs the path
+      thoroughly (DD6) and corrects the fifth-account claim, but does not say why it is `Must`. The
+      advisory's framing: "it may well be right — a face is plausibly what makes a Hirer choose a
+      person over a fund — but an unstated reason is one nobody can weigh against a closing window."
+      **Risk if wrong:** cutting it removes what may be the thing that makes a Hirer choose a person;
+      keeping it costs an object store, a queue source, and NFR4's one exception — and neither side of
+      that trade is written down. **Owner:** Tech lead (with Design lead).
+- [ ] **C38** — **Twenty-five-odd Server Actions, each hand-verified by one person.** Testing
+      Decisions makes the obligation stricter than the draft did — every action's authorization
+      verified by requesting the endpoint unauthenticated — while the action count is unchanged and
+      the cost is acknowledged nowhere.
+      **Risk if wrong:** the definition-of-done burden scales with the action count and is paid by the
+      one unpaid person the whole effort is racing. **Owner:** Tech lead.
+- [ ] **C39** — **NFR26's second half protects the adversary, not the user.** It says a refusal
+      returns rather than throws, so a crawler cannot spend the Sentry quota — and never says what a
+      **legitimate** person gets when she hits a ceiling. No surface in the UX state table has a
+      rate-limited state.
+      **Risk if wrong:** a Worker who trips `publishProfile ≤ 3/day` after two failed attempts is
+      stopped with no message, no retry-after and no path, by a requirement that passes green — the
+      exact shape the second-half rule exists to catch. **Owner:** Design lead (with Tech lead).
+- [ ] **C40** — **DD11's event list does not state what membership means.** "Every safety-relevant
+      transition emits one `info` line…" followed by twelve events reads either as _exactly these_ or
+      as _these plus any other safety-relevant transition_.
+      **Risk if wrong:** Build picks one reading without asking, which is the failure effort 0001 paid
+      a wrong implementation and a mid-Build amendment for. **Owner:** Tech lead.
+- [ ] **C41** — **An obligation the intent placed on Design was not discharged.** [Intent
+      Q3](./intent.md): "Design states what the queue does when one person is away for three days:
+      Offers accumulate undelivered, and whether that is silent or visible to a waiting Hirer is a
+      decision, not an implementation detail." NFR7 sets the bound and admits best-effort; the
+      decision is made nowhere, and the Sent Offers row in the state table has no state for an Offer
+      still unreviewed past 24 h.
+      **Risk if wrong:** the Hirer — the scarce side, whose attention is the resource the whole effort
+      is racing — waits with no signal and no expectation set. **Owner:** Design lead (with On-call
+      lead).
+- [ ] **C42** — **Story 18, the seven-day check-in, is bound by no NFR and cannot run until after
+      launch.** [ADR-0007](../../adr/0007-the-platform-never-handles-money.md) calls it "the only
+      evidence available" of whether any of this produced income, and no requirement measures whether
+      it works — no response-rate number, no send-success number. The simplicity advisory separately
+      noted it "cannot be needed until seven days after the first Contact Exchange… worth saying so it
+      is not built before" — which is also its scheduling answer.
+      **Risk if wrong:** the platform's only impact evidence ships unmeasured, and any figure published
+      from it carries an unknown response rate on top of ADR-0007's self-reporting qualification.
+      **Owner:** Tech lead (with On-call lead on the number).
 
 ## Out of Scope
 
