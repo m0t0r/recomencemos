@@ -321,13 +321,18 @@ inside its own ticket. See **UX design** for target paths and the ordering const
   completed sign-in within 30 minutes, rolling 7 days; a **drop of > 20 points** against the trailing
   30-day value is the actionable signal. This replaces a bounce-rate-only indicator, which goes green
   while a new sending domain lands in Colombian spam folders — accepted, not bounced, never read —
-  and magic link is the only key to an account. Hard bounces **≤ 2%** remains as a secondary. Costs
-  two id-only `info` lines, so NFR18 is untouched. **Binds:** 1, 21.
+  and magic link is the only key to an account. Hard bounces **≤ 2%** and **spam complaints ≤ 0.1%**
+  remain as secondaries — a complaint is more damaging than a bounce to a single-domain sender, and the
+  draft tracked neither. Costs two id-only `info` lines, so NFR18 is untouched. **Binds:** 1, 21.
 - **NFR28 — The announcement has an operational leg.** Before anyone is told the site exists: the log
   drain is collecting, the uptime monitor is firing against `/api/health`, a rollback has been
   rehearsed once against production, the domain is a Cloudflare zone with **transformations enabled**
   (DD6 — a dashboard step, and photos serve at full size until it is done), and a load test shows NFR2
-  held at its stated concurrency. **Binds:** 15, and gates every `Must`.
+  held at its stated concurrency.
+  **Two email preconditions, because the announcement is the spike and the magic link is the only door
+  (DD14):** SPF, DKIM and DMARC resolve for the sending subdomain — verified with `dig`, not assumed —
+  and the domain has been **warmed** to a daily volume that covers the announcement's expected sign-ups.
+  A cold domain caps at 50–100 sends a day in its first week. **Binds:** 15, and gates every `Must`.
 
 - **NFR29 — Spanish is the interface; English is the code.** **0** Spanish-language identifiers appear
   anywhere a developer types a name: route segments, file and directory names, database tables and
@@ -523,13 +528,13 @@ four packages. Better Auth moves inside `@repo/domain` because Accounts are a do
 Better Auth owns their tables — which also removes the draft's contradiction of a server-only package
 carrying a browser-reachable subpath.
 
-| Workspace                                    | Public subpaths                                                                                                                                                                      | Why here                                                                                                                                                                                                                                                                                                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`@repo/domain`** (new, server-only)        | `./accounts`, `./profiles`, `./skills`, `./offers`, `./exchange`, `./moderation`, `./rate-limit`, `./projections`, `./policy`, `./guards`, `./auth-handler`, `./migrate`, `./export` | The models. Every query, transaction and business rule sits behind one of these. **Not exported, therefore unreachable from `apps/web`: the Drizzle schema, the connection, and the Better Auth instance.** `./policy` and `./projections` are pure. `./export` is NFR16's subject-access export. Depends on `@repo/errors`, `@repo/observability` |
-| **`@repo/notifications`** (new, server-only) | `./send`, `./templates/*`                                                                                                                                                            | The seam. One implementation today (Resend). A channel is added by implementing the seam, never by editing a call site ([intent Q1](./intent.md)). Carries a **kill switch**, because a send is the one irreversible act in this system. Depends on `@repo/errors`                                                                                 |
-| `@repo/errors`                               | existing                                                                                                                                                                             | Gains `["request","url"]` handling for NFR19                                                                                                                                                                                                                                                                                                       |
-| `@repo/design-system`                        | existing                                                                                                                                                                             | Only genuinely reusable primitives. `PerfilCard`, the Skill picker and the two standing notices are **product** and live in `apps/web`                                                                                                                                                                                                             |
-| `apps/web`                                   | —                                                                                                                                                                                    | Routes, Server Actions, rendering, product components. **Gains a Vitest config for the first time.** Imports `better-auth/react` directly for the client half, so no server-only package carries a browser subpath                                                                                                                                 |
+| Workspace                                         | Public subpaths                                                                                                                                                                      | Why here                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`@repo/domain`** (new, server-only)             | `./accounts`, `./profiles`, `./skills`, `./offers`, `./exchange`, `./moderation`, `./rate-limit`, `./projections`, `./policy`, `./guards`, `./auth-handler`, `./migrate`, `./export` | The models. Every query, transaction and business rule sits behind one of these. **Not exported, therefore unreachable from `apps/web`: the Drizzle schema, the connection, and the Better Auth instance.** `./policy` and `./projections` are pure. `./export` is NFR16's subject-access export. Depends on `@repo/errors`, `@repo/observability`                                                                              |
+| **`@repo/notifications`** (new, server-only, JSX) | `./send`, `./templates/*`                                                                                                                                                            | The seam. One implementation today (Resend). A channel is added by implementing the seam, never by editing a call site ([intent Q1](./intent.md)). Carries a **kill switch**, because a send is the one irreversible act in this system. Templates are **React Email** components (DD14), so it takes `react` and `@react-email/components` and extends `@repo/typescript-config/react-library.json`. Depends on `@repo/errors` |
+| `@repo/errors`                                    | existing                                                                                                                                                                             | Gains `["request","url"]` handling for NFR19                                                                                                                                                                                                                                                                                                                                                                                    |
+| `@repo/design-system`                             | existing                                                                                                                                                                             | Only genuinely reusable primitives. `PerfilCard`, the Skill picker and the two standing notices are **product** and live in `apps/web`                                                                                                                                                                                                                                                                                          |
+| `apps/web`                                        | —                                                                                                                                                                                    | Routes, Server Actions, rendering, product components. **Gains a Vitest config for the first time.** Imports `better-auth/react` directly for the client half, so no server-only package carries a browser subpath                                                                                                                                                                                                              |
 
 ```
 apps/web  →  @repo/domain        →  @repo/errors, @repo/observability
@@ -947,9 +952,10 @@ clickjacking target in the system and the second reason acceptance is two-step �
 concern C6.
 
 **No user-supplied text is ever rendered as HTML or Markdown, anywhere.** React escapes by
-construction; the **email templates are the exception**, because they interpolate an Offer body and a
-headline into HTML landing in an inbox, on a path where React's escaping does not apply, reaching both
-sides of an unverified market.
+construction — and since DD14 makes the email templates React Email components, that now holds on the
+email path too, which is where the draft said it did not. The rule that replaces the exception is
+narrower and mechanical: **no `dangerouslySetInnerHTML` and no `<Markdown>` over user text**, in the
+app or in a template.
 
 ### DD8 — Retention, deletion, and habeas data (NFR16, NFR17)
 
@@ -1169,7 +1175,87 @@ message naming `DROP COLUMN`, an ADR quoting one, and this very deep dive are al
 trip the check — `gate-lib.sh`'s existing heredoc stripping and anchoring are the precedent, and four
 false refusals were found the last time these were written.
 
-### DD14 — Proposed ADRs
+### DD14 — The notification seam, React Email, and the domain nobody has warmed (NFR27, NFR28, NFR20)
+
+**Templates are React Email components, and that changes a security argument rather than only a
+rendering one.** DD7 called the email templates "the one rendering path where React's escaping does
+not apply", and the security advisory asked for explicit escaping at that seam (concern C26). With
+React Email the templates **are** React components rendered through `render()`, so interpolating an
+Offer body or a headline escapes by construction, exactly as it does in the app. The exception
+dissolves; what remains is narrower and easier to hold: **no `dangerouslySetInnerHTML`, and no
+`<Markdown>` component over user-supplied text**, ever. That is a mechanism rather than a discipline,
+which is the difference C26 was actually asking for.
+
+**Sends are idempotent, because the one irreversible act in this system is a send.** Every call
+carries an idempotency key in Resend's `<event-type>/<entity-id>` form — `contact-exchange/<id>`,
+`offer-delivered/<offer-id>`, `check-in/<exchange-id>` — so a retry after a timeout returns the
+original response instead of delivering a stranger's phone number twice. Keys last 24 hours; the same
+key with a **different** payload is a 409, which is the correct failure for a bug that changed the
+body under a retry. DD9 already commits the exchange transaction before enqueuing the send; the
+idempotency key is what makes that enqueue safely retryable.
+
+**The SDK does not throw.** `resend.emails.send()` returns `{ data, error }`, so a `try`/`catch`
+around it catches nothing and every send silently "succeeds". This is the vendor's own most-cited
+mistake, and it is exactly the shape that would make DD9's "the send failed, the exchange still
+commits" fail _silently_ instead of loudly. The seam checks `error` explicitly and emits DD11's
+`notification.sent` line off the returned id.
+
+**The webhook contract, concretely.** Verification is `resend.webhooks.verify()` over the `svix-id`,
+`svix-timestamp` and `svix-signature` headers — svix carries the replay window the API contract asks
+for. The body **must** be read with `req.text()`, not `req.json()`: parsing first destroys the exact
+bytes the signature covers. Beyond `email.bounced`, two events matter here and neither is in the
+draft: **`email.complained`**, which is a spam report and is far more damaging to a single-domain
+sender than a bounce, and **`email.suppressed`**, which fires when Resend refuses to send to an
+address it has already suppressed.
+
+**Suppression is a second source of truth, and story 21 has to know that.** Resend suppresses
+hard-bounced and complained addresses automatically. So a Worker whose address bounced is suppressed
+**at the vendor**, not only flagged in our database — and changing her address in our `account` row
+does not un-suppress the old one, nor does it help if the new address is also suppressed. Story 21's
+recovery path therefore has a second leg the draft did not have: the Admin queue item names the
+suppression, and un-suppressing is a dashboard act that belongs in the runbook.
+
+**The launch constraint nobody has costed: a new sending domain is rate-limited by reputation, not by
+plan.** Warm-up guidance is **50–100 sends/day in week 1**, 200–500 in week 2, 1,000–2,000 in week 3.
+The magic link is the **only** way into an account, and NFR28's announcement is a deliberate traffic
+spike aimed at exactly one domain that has never sent anything. An announcement that produces 400
+sign-ups on day one either fails to deliver most of them or burns the domain's reputation on the day
+the product's whole thesis depends on it — and the intent's scarce resource is that attention window.
+This is concern C45, and it is the one finding here that can lose the launch rather than degrade it.
+
+**Sender identity is a product decision, not a config line.** The `from` address is a real,
+monitored address on a sending **subdomain**, and it is **not** `noreply@`. A displaced woman who
+receives an Offer notification and replies to it must reach a person, not a bounce — and with one
+operator (C43) a monitored `Reply-To` is a real commitment, which is why it is named here rather than
+assumed.
+
+**Two things this adds to the workspace.** `@repo/notifications` now contains JSX, so it takes
+`react` and `@react-email/components` as dependencies and a tsconfig extending
+`@repo/typescript-config/react-library.json`. And it gains a preview server — `email dev --dir
+src/templates` — which is how a template is reviewed without sending, and which belongs in the
+package's scripts rather than being reinvented per ticket.
+
+**Email cannot use this product's design tokens, and that is worth stating before someone tries.**
+`DESIGN.md`'s palette is `oklch()` in CSS custom properties; email clients support neither. So the
+templates carry a **hex** palette derived from those tokens, with `pixelBasedPreset` because `rem` is
+unsupported, no flexbox or grid, no media queries, and no `dark:` variants. Drift between the two
+palettes is a real maintenance cost and the honest answer is that the email palette is a copy —
+reviewed when `DESIGN.md` changes, not generated from it.
+
+**Accessibility (NFR20) reaches the emails too, and one default is wrong for this product.** React
+Email's `<Html>` defaults to `lang="en"`; every template here sets **`lang="es"`**. Each template also
+ships a plain-text alternative — `render(..., { plainText: true })`, which the Resend SDK produces
+automatically from the `react` prop — a single `<Heading as="h1">`, descriptive link text rather than
+"click here", explicit `alt` on any meaningful image, and 4.5:1 contrast. Bodies stay under **102 KB**
+or Gmail clips them, which on the Contact Exchange email would clip the contact details.
+
+**Testing uses the vendor's own addresses, never invented ones.** `delivered@resend.dev`,
+`bounced@resend.dev` and `complained@resend.dev` simulate each outcome; sending to a made-up address
+at a real provider bounces and damages the reputation NFR27 measures. Rendering is testable without
+sending at all: `render()` a template in Node and assert on the string, which is seam 1 work and is
+where the "no `dangerouslySetInnerHTML`" rule above becomes a test.
+
+### DD15 — Proposed ADRs
 
 Two decisions here are durable and reach beyond this effort, so they belong in `docs/adr/` rather than
 in a folder nobody reopens. Both are written with `status: proposed`; **accepting one is the human's
@@ -1370,6 +1456,18 @@ reason a Server Action calls a domain module instead of the database.
   failure [ADR-0009](../../adr/0009-a-workers-full-identity-is-gated-and-never-indexed.md) calls
   "load-bearing and easy to lose".
 
+### `@repo/notifications`
+
+Node-environment Vitest, same shape as `@repo/errors`. Templates are React Email components, so they
+are tested **without sending**: `render()` a template and assert on the returned string — that every
+prop it was given appears, that no `dangerouslySetInnerHTML` or `<Markdown>` sits on a user-text path
+(DD14), that `lang="es"` is set, and that the body stays under Gmail's 102 KB clip.
+
+Where a test does send, it sends to the vendor's own simulators — **`delivered@resend.dev`**,
+**`bounced@resend.dev`**, **`complained@resend.dev`** — never to an invented address at a real
+provider, which bounces and damages the very reputation NFR27 measures. `bounced@resend.dev` is what
+makes story 21's recovery path testable end to end.
+
 ### `packages/errors` and `packages/design-system`
 
 Both existing seams, unchanged in shape. `@repo/errors` gains NFR18/NFR19's sentinel test, which drives
@@ -1379,11 +1477,11 @@ on the DOM environment itself.
 
 ## Flagged concerns
 
-**Forty-four concerns, in three blocks.** C1–C20 were raised at authoring time: six are contradictions
+**Forty-five concerns, in four blocks.** C1–C20 were raised at authoring time: six are contradictions
 between binding documents or between two advisories, and the rest are policy keys this spec needs and
 may not set. C21–C42 were appended by `/spec-review` — eighteen advisory recommendations the synthesis
 dropped or diluted, plus four from the mechanical shape checks and the intent's own obligations on
-Design. C43–C44 came from reviewing the auth design against `better-auth@1.7.1`'s own guidance.
+Design. C43–C44 came from reviewing the auth design against `better-auth@1.7.1`'s own guidance, and C45 from reviewing the email design against Resend's and React Email's.
 
 Every proposal carries the value its author would defend, because a concern with a number gets
 answered and a concern asking "what should this be?" gets deferred.
@@ -1574,11 +1672,15 @@ on its own — each concern below names its advisory.
       **Risk if wrong:** the audit table need not exist when the site opens, so an abuse incident or a
       Ley 1581 _reclamo_ is reconstructed from mutable rows — and the spec contradicts itself about
       whether it is optional. **Owner:** Security owner (with Tech lead on the tier).
-- [ ] **C26** — **Email templates: escaping is observed, not required.** DD7 identifies them as the
-      one path where React's escaping does not apply and stops there. The advisory asked for explicit
-      escaping at the template seam and no raw `<a href>` built from user text.
-      **Risk if wrong:** stored HTML injection into an inbox, on the one rendering path with no
-      framework protection, reaching both sides of an unverified market. **Owner:** Security owner.
+- [ ] **C26** — **Email template escaping — the mechanism changed after this was raised, and the
+      owner should confirm rather than re-decide.** The advisory asked for explicit escaping at the
+      template seam because DD7 called email "the one path where React's escaping does not apply".
+      Adopting React Email (DD14) makes the templates React components, so escaping is by construction
+      again and the residual rule is mechanical: no `dangerouslySetInnerHTML`, no `<Markdown>` over user
+      text, both testable at seam 1. What remains for the owner is whether that is accepted as
+      satisfying the advisory.
+      **Risk if wrong:** stored HTML injection into an inbox, reaching both sides of an unverified
+      market. **Owner:** Security owner.
 - [ ] **C27** — **A failed webhook verification is not logged.** The contract carries three of the
       advisory's four asks — signature, replay window, idempotency, bodyless 401 — and drops "logged
       with the event id and nothing else". DD11's twelve-event list has no webhook-failure event.
@@ -1702,6 +1804,27 @@ on its own — each concern below names its advisory.
       **Risk if wrong:** NFR14 is satisfied on paper — the session did complete 2FA once — while the
       practical factor count drops to one for thirty days at a time.
       **Owner:** Security owner.
+
+### Appended after the Resend / React Email review (2026-08-25)
+
+- [ ] **C45** — **The announcement is a spike onto a sending domain that has never sent anything, and
+      the magic link is the only door.** Warm-up guidance for a new domain is **50–100 sends/day in
+      week 1**, 200–500 in week 2. Every sign-up needs one magic link, plus Offer notifications and
+      Contact Exchange deliveries on top. An announcement producing a few hundred sign-ups on day one
+      either fails to deliver most of them or burns the domain's reputation on the exact day the
+      product's thesis depends on it — and [intent Q8](./intent.md) makes attention the scarce
+      resource, so there is no second attempt at this.
+      Proposal, all three: **begin warming the domain from the first deploy** rather than at
+      announcement — every ticket's test sends count; **stage the announcement** rather than making it
+      one event, so volume tracks the warm-up curve; and **hold a pre-warmed fallback subdomain** so a
+      reputation problem on the primary is a DNS change rather than a rebuild. Whether the `Must` gate
+      should additionally require a measured deliverability check into Colombian Gmail and Hotmail —
+      which [intent Q1](./intent.md) called "a launch risk to measure, not to assume" and nothing in
+      this spec yet measures — is the same decision.
+      **Risk if wrong:** the platform opens, Workers publish, Hirers arrive, and neither side can sign
+      in. It is silent: sends are accepted, not bounced, and NFR27's conversion metric is the only
+      thing that would show it — after the window has closed. **Owner:** On-call lead (with Repo owner
+      on the announcement plan).
 
 ## Out of Scope
 
