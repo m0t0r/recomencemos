@@ -4,18 +4,19 @@ Owner: **Design lead** ([owners.md](owners.md)). Read by `ux-design`.
 
 An `UNSET` value is raised as a flagged concern naming this file and the key. It is never guessed.
 
-**One key here is already set**, which is what a filled-in row looks like:
+**Four keys here are set.** `wcag-level` is committed in `PRODUCT.md`; the three below it come from
+the effort 0002 design interview:
 
-| Key                 | Value           | What it settles                                                                                                                                                                                                 |
-| ------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wcag-level`        | **WCAG 2.2 AA** | The accessibility bar every surface clears. Committed in `PRODUCT.md`, so it binds the token layer: any preset applied to `packages/design-system/src/styles/globals.css` must clear AA contrast in both themes |
-| `browser-support`   | `UNSET`         | The floor. Decides whether a CSS feature is available or needs a fallback                                                                                                                                       |
-| `locales`           | `UNSET`         | Which languages ship, and whether text can grow 40% without breaking a layout                                                                                                                                   |
-| `rtl-support`       | `UNSET`         | Whether layouts must mirror                                                                                                                                                                                     |
-| `theme-parity`      | `UNSET`         | Whether every surface must be correct in both light and dark. `PRODUCT.md` records this as an open call, not a rule                                                                                             |
-| `voice-guide`       | `UNSET`         | Where the product's voice is written down. Until set, microcopy has no authority and inventing one is worse than naming the gap                                                                                 |
-| `motion-policy`     | `UNSET`         | Whether `prefers-reduced-motion` is honoured as a hard requirement, and what "reduced" means here                                                                                                               |
-| `analytics-consent` | `UNSET`         | Whether a consent gate precedes instrumentation, which changes what the first paint may do                                                                                                                      |
+| Key                 | Value            | What it settles                                                                                                                                                                                                 |
+| ------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wcag-level`        | **WCAG 2.2 AA**  | The accessibility bar every surface clears. Committed in `PRODUCT.md`, so it binds the token layer: any preset applied to `packages/design-system/src/styles/globals.css` must clear AA contrast in both themes |
+| `browser-support`   | `UNSET`          | The floor. Decides whether a CSS feature is available or needs a fallback                                                                                                                                       |
+| `locales`           | **`es-CO` only** | Which languages ship, and whether text can grow 40% without breaking a layout                                                                                                                                   |
+| `rtl-support`       | **no**           | Whether layouts must mirror                                                                                                                                                                                     |
+| `theme-parity`      | **light only**   | Whether every surface must be correct in both light and dark. `PRODUCT.md` records this as an open call, not a rule                                                                                             |
+| `voice-guide`       | `UNSET`          | Where the product's voice is written down. Until set, microcopy has no authority and inventing one is worse than naming the gap                                                                                 |
+| `motion-policy`     | `UNSET`          | Whether `prefers-reduced-motion` is honoured as a hard requirement, and what "reduced" means here                                                                                                               |
+| `analytics-consent` | `UNSET`          | Whether a consent gate precedes instrumentation, which changes what the first paint may do                                                                                                                      |
 
 ## Fixed by this repo
 

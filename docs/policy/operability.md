@@ -4,16 +4,18 @@ Owner: **On-call lead** ([owners.md](owners.md)). Read by `operability-design`.
 
 An `UNSET` value is raised as a flagged concern naming this file and the key. It is never guessed.
 
-**This template has no deployment.** There is no CI, no hosting target, and no rotation. Two of the
-keys below are answered, because effort `0001-observability` shipped the code that implements them;
-the rest are what the first deploy settles.
+**Two keys are answered by shipped code, two by effort 0002.** `observability-vendor` and
+`log-level-production` come from effort `0001-observability`, which shipped the code implementing
+them. `hosting-target` and `on-call-rotation` come from the effort 0002 design interview - and the
+second is **nobody**, which the row itself calls a real answer. It is the constraint every SLO below
+has to be set against. There is still no CI.
 
 | Key                    | Value                                                            | What it settles                                                                                                 |
 | ---------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `hosting-target`       | `UNSET`                                                          | Where this runs. Decides cold-start behaviour, regions, and what "instance" means in a cache discussion         |
+| `hosting-target`       | **Fly.io**, one machine                                          | Where this runs. Decides cold-start behaviour, regions, and what "instance" means in a cache discussion         |
 | `observability-vendor` | **Sentry** for errors and traces; **stdout** for logs, undrained | Where metrics, traces, and logs go. Until set, no spec can say a metric is "already measured"                   |
 | `alert-destination`    | `UNSET`                                                          | Where a breach lands — a channel, a pager, an issue. Not a person                                               |
-| `on-call-rotation`     | `UNSET`                                                          | Who answers, and inside what hours. "Nobody, business hours only" is a real answer that changes every SLO below |
+| `on-call-rotation`     | **Nobody**, best effort                                          | Who answers, and inside what hours. "Nobody, business hours only" is a real answer that changes every SLO below |
 | `default-availability` | `UNSET`                                                          | The availability target a spec inherits when it names no other                                                  |
 | `default-latency`      | `UNSET`                                                          | Same, for p95 on a user-visible read path                                                                       |
 | `error-budget-policy`  | `UNSET`                                                          | What happens when the budget is spent. A budget with no consequence is a dashboard                              |
@@ -26,7 +28,7 @@ the rest are what the first deploy settles.
 Both were settled by effort [`0001-observability`](../efforts/0001-observability/spec.md), and both
 are answered rather than `UNSET` for the same reason: **the template ships running code that already
 implements them**, so leaving the key blank would describe the repo inaccurately rather than leave a
-decision open. Every other key above stays `UNSET` by decision — see the spec's DD9, which records
+decision open. The keys still `UNSET` above stay open by decision — see the spec's DD9, which records
 each one with the deliverable that replaces it.
 
 **`observability-vendor` is two answers, and the split is the point.** Errors and traces go to Sentry
