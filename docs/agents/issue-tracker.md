@@ -118,6 +118,15 @@ its tickets hanging off it, so it reports its own state and cannot fall out of d
   what makes `/clear` between tickets safe.
 - **Changing the plan**: splitting a ticket adds a sub-issue and rewires the edges around it, and
   the parent's progress follows on its own — there is no plan document to bring back in line.
+- **A spec's `## Runbook obligations` section is a ticket, and `/to-tickets` cuts it like any other.**
+  The skill drafts *tracer-bullet vertical slices*, which is a shape a runbook step does not have —
+  provisioning a bucket, printing backup codes and filing a DPA are nobody's user-visible behaviour,
+  so left to the default reading they are read as prose and dropped. Where a spec carries that
+  section, its rows are the ticket's acceptance criteria and the runbook file is what the ticket
+  works through. The coupling lives here, in an artifact this repo owns, exactly as the ticket claim
+  and the frontier query do — **`/to-tickets` is not forked for it**.
+  The section earns its place the same way an NFR's `Binds:` line does: a spec that names a step only
+  a human can take, and produces no ticket, has moved that work nowhere.
 - **Summaries lag their edges.** `sub_issues_summary` and `issue_dependencies_summary` are computed
   a second or two behind the writes that change them, so a frontier query run immediately after
   wiring edges can read a ticket as unblocked when it isn't. When the answer has to be right straight
