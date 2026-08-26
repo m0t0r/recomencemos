@@ -52,5 +52,6 @@ correct behaviour for a decision nobody has earned the right to make yet.
 | [data.md](data.md)               | Data lead      | Store, primary keys, retention, migration policy                                   |
 | [operability.md](operability.md) | On-call lead   | Observability vendor, alerting, on-call, default SLOs                              |
 | [ux.md](ux.md)                   | Design lead    | Accessibility level, browser support, locales, voice                               |
+| [voice.md](voice.md)             | Design lead    | Archetype, register, gendered forms, do/don't rules, the tone matrix               |
 | [build.md](build.md)             | Repo owner     | Branching, merge rules, protected paths, done, stacked PRs                         |
 | [owners.md](owners.md)           | Repo owner     | Which role settles what, and the format a concern takes                            |
