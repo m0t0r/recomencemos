@@ -3,6 +3,14 @@ description: >-
   Node, pnpm, dependencies and the Turborepo cache for one gate job. Written once
   here rather than five times in the workflow, since every job needs all four.
 
+inputs:
+  turbo-cache:
+    description: >-
+      Whether this job runs a Turborepo task. `lint` and `audit` call oxlint and
+      node directly, so for them the cache would be written once per run and read
+      by nothing.
+    default: "true"
+
 runs:
   using: composite
   steps:
@@ -32,6 +40,7 @@ runs:
     # key that did not move would be written once and then never refreshed.
     # `restore-keys` is what makes the next run warm.
     - name: Cache Turborepo
+      if: inputs.turbo-cache == 'true'
       uses: actions/cache@v6
       with:
         path: .turbo/cache
