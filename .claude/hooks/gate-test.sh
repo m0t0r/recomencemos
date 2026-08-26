@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Drive the stage gates with fixture PreToolUse payloads.
-# Both hooks run on every call, as Claude Code runs them; deny wins.
+# Drive the repo's own gates with fixtures.
+#
+# Most of them are stage hooks, driven with PreToolUse payloads: all four run on
+# every call, as Claude Code runs them, and deny wins. The last section drives a
+# gate that is not a hook at all -- the dependency audit CI runs on every PR --
+# because it is the same kind of thing: repo logic deciding whether work may
+# proceed, and so a test suite rather than a script somebody remembers to run.
 set -uo pipefail
 
 # Quiet on success, like every other test runner here. 58 ok-lines scrolled the
@@ -20,6 +25,9 @@ done
 set -- "${args[@]+"${args[@]}"}"
 
 HOOKS="$1"
+# The audit gate lives outside .claude/, so reach the repo root from the hooks
+# directory rather than from $PWD -- pnpm and turbo do not agree on the latter.
+REPO=$(cd "$HOOKS/../.." && pwd)
 PLAN="$HOOKS/plan-to-design-gate.sh"
 BUILD="$HOOKS/design-to-build-gate.sh"
 GUARD="$HOOKS/build-guard.sh"
@@ -286,6 +294,48 @@ run "an AWS access key id"                                 deny  "$(wj Write "$R
 run "a private key block"                                  deny  "$(wj Write "$ROOT/apps/web/b.ts" "-----BEGIN RSA PRIV""ATE KEY-----")"
 run "a GitHub token"                                       deny  "$(wj Write "$ROOT/apps/web/c.ts" "const t = \"gh""p_0123456789abcdefghijklmnopqrstuvwxyz\";")"
 run "prose about passwords"                                allow "$(wj Write "$ROOT/apps/web/d.ts" 'export const passwordFieldLabel = "Password";')"
+
+AUDIT="$REPO/scripts/audit-direct.mjs"
+AR="$ROOT/auditrepo"
+mkdir -p "$AR/packages/thing" "$AR/apps/app"
+cat > "$AR/pnpm-workspace.yaml" <<'EOF'
+packages:
+  - "apps/*"
+  - "packages/*"
+EOF
+printf '%s\n' '{"name":"root","devDependencies":{"turbo":"^2.10.11"}}' > "$AR/package.json"
+printf '%s\n' '{"name":"thing","dependencies":{"next":"16.3.2"}}' > "$AR/packages/thing/package.json"
+printf '%s\n' '{"name":"app","devDependencies":{"vitest":"^4"}}' > "$AR/apps/app/package.json"
+
+# One advisory, parameterised by the two fields the gate actually reads.
+adv() { jq -nc --arg m "$1" --arg s "$2" \
+  '{advisories:{"1":{module_name:$m,severity:$s,title:"fixture",vulnerable_versions:"<1",patched_versions:">=1",url:"https://example.test"}}}'; }
+
+run_audit() { # name expect-exit json
+  local name="$1" expect="$2" json="$3" out code
+  printf '%s' "$json" > "$ROOT/audit-input.json"
+  out=$(node "$AUDIT" --root "$AR" --input "$ROOT/audit-input.json" 2>&1)
+  code=$?
+  if [ "$code" = "$expect" ]; then
+    pass=$((pass+1)); sec_pass=$((sec_pass+1))
+    [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit %s\n' "$name" "$code"
+  else
+    fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+    printf '  FAIL %-51s -> exit %s (want %s)\n' "$name" "$code" "$expect"
+    printf '       %s\n' "${out:-<empty>}"
+  fi
+  return 0
+}
+
+section "Dependency audit: high or above, direct only"
+run_audit "high in a dependency of a workspace"           1 "$(adv next high)"
+run_audit "critical in a dependency of a workspace"       1 "$(adv next critical)"
+run_audit "high in a root devDependency"                  1 "$(adv turbo high)"
+run_audit "high in a workspace devDependency"             1 "$(adv vitest high)"
+run_audit "high with no direct path at all"               0 "$(adv postcss high)"
+run_audit "moderate in a direct dependency"               0 "$(adv next moderate)"
+run_audit "low in a direct dependency"                    0 "$(adv next low)"
+run_audit "nothing found"                                 0 '{"advisories":{}}'
 
 section "unrelated paths"
 run "ordinary source file saying status: approved"        allow "$(wj Write "$ROOT/apps/web/app/page.tsx" 'status: approved')"

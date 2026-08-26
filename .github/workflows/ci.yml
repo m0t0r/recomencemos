@@ -1,0 +1,67 @@
+# The gate from `docs/policy/build.md` -> `required-checks`, run on the pull
+# request instead of on a developer's terminal.
+#
+# Five jobs rather than one job with five steps, because
+# `docs/runbooks/recomencemos-go-live.md` §8 asks a human to set required status
+# checks named `lint`, `check-types`, `test`, `build` and the dependency audit --
+# and a required status check is a job name. One job would leave that step with
+# one check to require and four names that do not exist.
+#
+# Each job runs the same root script a developer runs, so the two cannot drift;
+# `turbo run` lives in package.json, not here.
+name: CI
+
+on:
+  pull_request:
+
+# The production gate, as a permission rather than as a convention: a read-only
+# GITHUB_TOKEN cannot push to the default branch and cannot merge a pull request,
+# whatever any step goes on to run.
+permissions:
+  contents: read
+
+# A superseded run tells you about a commit nobody is looking at any more.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
+
+  check-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm check-types
+
+  # `pnpm test` is `turbo run test test:gates`, so the stage-hook suite is inside
+  # this job rather than beside it -- which is what `required-checks` means by
+  # "test (including test:gates)".
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+
+  # High or above in a *direct* dependency only. The script says why, and
+  # `gate-test.sh` holds its cases.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm audit:direct

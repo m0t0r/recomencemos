@@ -1,0 +1,40 @@
+name: Set up the toolchain
+description: >-
+  Node, pnpm, dependencies and the Turborepo cache for one gate job. Written once
+  here rather than five times in the workflow, since every job needs all four.
+
+runs:
+  using: composite
+  steps:
+    # No `version:` on purpose. Given none, this action reads `packageManager`
+    # from package.json, which is where pnpm 11 is already pinned -- so the
+    # version in CI cannot drift from the version a developer runs.
+    # Third-party actions are pinned to a commit SHA; `actions/*` to a tag.
+    - name: Install pnpm
+      uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+    # `.nvmrc` says `24`, so this resolves to the latest 24.x rather than
+    # restating a patch version that would go stale. `engineStrict` in
+    # pnpm-workspace.yaml is the backstop: an older runtime fails the install
+    # outright instead of warning.
+    - name: Install Node
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      shell: bash
+
+    # Turborepo's local cache. Keyed per job because each job runs one task, and
+    # per commit because `actions/cache` never overwrites an existing key -- a
+    # key that did not move would be written once and then never refreshed.
+    # `restore-keys` is what makes the next run warm.
+    - name: Cache Turborepo
+      uses: actions/cache@v6
+      with:
+        path: .turbo/cache
+        key: turbo-${{ github.job }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ github.job }}-

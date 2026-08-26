@@ -28,7 +28,7 @@
       "persistent": true
     },
     "//#test:gates": {
-      "inputs": [".claude/hooks/**"],
+      "inputs": [".claude/hooks/**", "scripts/**"],
       "outputs": []
     },
     "//#lint": {
