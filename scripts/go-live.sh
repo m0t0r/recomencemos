@@ -183,7 +183,7 @@ finish() {
 # STAGES: author this section. One stage() per step the human takes.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=22
+TOTAL_STAGES=23
 
 # Runbook §§1–5 of docs/runbooks/recomencemos-go-live.md, for ticket #7.
 #
@@ -213,6 +213,7 @@ ENV_FILE="${ENV_FILE:-.go-live-facts}"
 EVIDENCE="${EVIDENCE:-.go-live-evidence.md}"
 
 RUN_STATUS=0
+RUN_OUTPUT=""
 FLY_SET=()
 DEFERRED=()
 
@@ -235,8 +236,12 @@ section() { printf '\n## %s\n' "$1" >> "$EVIDENCE"; }
 # The shown string and the executed argv are separate so that a connection
 # string passed as an argument never reaches the transcript. That is the whole
 # reason this takes two forms of the same command rather than one.
-# Always returns 0; the exit status lands in $RUN_STATUS so `set -e` cannot end
-# the wizard halfway through a section.
+# Always returns 0; the exit status lands in $RUN_STATUS and the output in
+# $RUN_OUTPUT, so `set -e` cannot end the wizard halfway through a section.
+#
+# $RUN_OUTPUT is what makes a check honest rather than merely printed: a stage
+# branches on the bytes that went into the transcript, not on a second run of
+# the same command and not on a value re-typed by the person being checked.
 run() {
   local shown="$1"; shift
   [[ "${1:-}" == "--" ]] && shift
@@ -253,14 +258,46 @@ run() {
     (( status == 0 )) || printf '\n_exit status %s_\n' "$status"
   } >> "$EVIDENCE"
   RUN_STATUS=$status
+  RUN_OUTPUT="$out"
   return 0
 }
 
+# run_value is $RUN_OUTPUT with surrounding whitespace stripped, for the checks
+# whose whole answer is one token: a status code, a count.
+run_value() { printf '%s' "$RUN_OUTPUT" | tr -d '[:space:]'; }
+
 # record "Fact" "value" appends an attested fact — for the things a command
-# cannot produce, such as an elapsed restore time read off a clock.
+# cannot produce, such as an elapsed restore time read off a clock. The
+# transcript labels these `(attested)` so a reader can tell a measurement from
+# a statement at a glance; a section that claims commands should not be able to
+# smuggle an assertion in looking like one.
 record() {
-  printf -- '\n- **%s:** %s\n' "$1" "${2:-—}" >> "$EVIDENCE"
+  printf -- '\n- **%s** (attested): %s\n' "$1" "${2:-—}" >> "$EVIDENCE"
   printf '  %s✓ recorded%s %s: %s\n' "$GREEN" "$RESET" "$1" "${2:-—}"
+}
+
+# show_once NAME VALUE prints a generated secret to the screen, once, so it can
+# be copied into the password manager.
+#
+# This exists because nothing else can produce the value again. `fly secrets`
+# prints names and digests and never a value, and these two are generated here
+# rather than issued by a dashboard you could return to. A generated secret
+# staged and never shown is a secret nobody holds -- and for the auth secret
+# that is not a lost string but every Admin second factor, since it encrypts
+# the TOTP secrets and backup codes at rest.
+#
+# It is deliberately NOT written to disk. `$EVIDENCE` is pasted onto a public
+# ticket and `$ENV_FILE` is a repo path; the screen is the one channel here
+# that ends when the terminal does.
+show_once() {
+  local name="$1" value="$2"
+  [[ -z "$value" ]] && return 0
+  printf '\n  %s%s╔══ %s — shown once, and nowhere else ══%s\n' "$BOLD" "$YELLOW" "$name" "$RESET"
+  printf '  %s%s║%s  %s\n' "$BOLD" "$YELLOW" "$RESET" "$value"
+  printf '  %s%s╚═══════════════════════════════════════%s\n\n' "$BOLD" "$YELLOW" "$RESET"
+  step "Copy it into the password manager NOW, before this screen clears."
+  note "It is not written to any file, and no command can print it back."
+  pause "Copied? Press Enter."
 }
 
 # attest "question" is a confirm whose question AND answer both land in the
@@ -442,7 +479,7 @@ JOB_SHARED_SECRET=""
 if command -v openssl >/dev/null 2>&1; then
   if confirm "Generate the auth secret now (openssl rand -base64 32)?"; then
     BETTER_AUTH_SECRET=$(openssl rand -base64 32)
-    say "Generated. Copy it into your password manager at stage 7."
+    show_once "BETTER_AUTH_SECRET" "$BETTER_AUTH_SECRET"
   fi
 else
   ask_secret BETTER_AUTH_SECRET "Auth secret (32+ chars):"
@@ -457,6 +494,7 @@ note "so #19 is not left holding a credential nobody set — skip it if you pref
 if confirm "Set the shared job secret now as well?"; then
   if command -v openssl >/dev/null 2>&1; then
     JOB_SHARED_SECRET=$(openssl rand -base64 32)
+    show_once "JOB_SHARED_SECRET" "$JOB_SHARED_SECRET"
   else
     ask_secret JOB_SHARED_SECRET "Shared job secret (32+ chars):"
   fi
@@ -486,11 +524,22 @@ printf '\n'
 say "Now the other half of the criterion: no .env in this repo holds any of them."
 note "turbo.json declares .env* a build input, so such a file is hashed into the"
 note "cache key and travels with the artifact under remote caching."
-run "find . -name '.env*' -not -path '*/node_modules/*' | wc -l" -- \
-  sh -c "find . -name '.env*' -not -path '*/node_modules/*' -not -path './.git/*' -print | sed 's|^|found: |'; printf 'total: '; find . -name '.env*' -not -path '*/node_modules/*' -not -path './.git/*' | wc -l | tr -d ' '"
-say "That total must be 0 — a gitignored .env still hashes into the cache key."
-run "git grep -nE '(RESEND|DATABASE_URL|BETTER_AUTH|JOB_SHARED)'" -- \
-  sh -c "git grep -nE '(RESEND|DATABASE_URL|BETTER_AUTH|JOB_SHARED)' || printf '(no matches)\n'"
+run "find . -name '.env*' -not -path '*/node_modules/*' -not -path './.git/*'" -- \
+  find . -name '.env*' -not -path '*/node_modules/*' -not -path './.git/*'
+if [[ -n "$(run_value)" ]]; then
+  warn "A .env file exists in this checkout."
+  note "Gitignored is not enough. turbo.json declares .env* a build input, so the"
+  note "file is hashed into the cache key whether git tracks it or not."
+  SKIPPED+=("section 1 — remove the .env file(s) listed above")
+else
+  say "No output at all. That is the pass: this checkout has no .env file."
+fi
+
+# Every one of the nine key names, because the criterion says "each key name"
+# and a pattern covering four of them proves nothing about the other five.
+SECRET_NAMES='DATABASE_URL|DIRECT_DATABASE_URL|RESEND_API_KEY|RESEND_WEBHOOK_SECRET|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|GOOGLE_CLIENT_SECRET|BETTER_AUTH_SECRET|JOB_SHARED_SECRET'
+run "git grep -nE '($SECRET_NAMES)' || printf '(no matches)\n'" -- \
+  sh -c "git grep -nE '($SECRET_NAMES)' || printf '(no matches)\n'"
 say "Every line above must be a DECLARATION: a name in turbo.json, a doc mention."
 attest "Every grep hit above is a declaration, never a value" ||
   SKIPPED+=("section 1 — a grep hit was a value. Rotate it before anything else")
@@ -574,15 +623,31 @@ step "Note the wall-clock time from starting to a database you could serve from.
 note "Start your timer now; this stage waits."
 pause "Rehearsed? Press Enter."
 RESTORE_MINUTES=""
-ask RESTORE_MINUTES "Elapsed time, in minutes:"
+ask RESTORE_MINUTES "Elapsed time, in minutes (this is the RTO):"
 record "Restore rehearsal elapsed (minutes)" "$RESTORE_MINUTES"
 record "RTO target" "4 h (240 minutes)"
-attest "Both stores were restored together, not the database alone" ||
-  SKIPPED+=("section 2 — the rehearsal covered the database only. R2 is the other half")
 if [[ "$RESTORE_MINUTES" =~ ^[0-9]+$ ]] && (( RESTORE_MINUTES > 240 )); then
   warn "$RESTORE_MINUTES minutes is over the 4 h RTO."
   SKIPPED+=("section 2 — measured restore of ${RESTORE_MINUTES}m exceeds the 4 h RTO")
 fi
+
+# Section 2 names both numbers, and both are unproven until this runs once.
+# RTO is how long the recovery took; RPO is how much data it lost. Recording
+# only the first leaves half the sentence unproven while looking complete.
+printf '\n'
+say "The other number: how much data the recovered copy was missing."
+note "That is the gap between the backup and the moment you restored it."
+RESTORE_RPO=""
+ask RESTORE_RPO "Data lost, in minutes (this is the RPO):"
+record "Observed recovery point (minutes of data lost)" "$RESTORE_RPO"
+record "RPO target" "1 h (60 minutes)"
+if [[ "$RESTORE_RPO" =~ ^[0-9]+$ ]] && (( RESTORE_RPO > 60 )); then
+  warn "$RESTORE_RPO minutes is over the 1 h RPO."
+  SKIPPED+=("section 2 — measured recovery point of ${RESTORE_RPO}m exceeds the 1 h RPO")
+fi
+
+attest "Both stores were restored together, not the database alone" ||
+  SKIPPED+=("section 2 — the rehearsal covered the database only. R2 is the other half")
 
 # ══════════════════════════════════════════════════════════════════════════
 # 3 — Object storage
@@ -603,16 +668,36 @@ ask R2_BUCKET "Bucket name:"
 ask R2_QUARANTINE_URL "A full URL to an object under the quarantine prefix:"
 if [[ -n "$R2_QUARANTINE_URL" ]] && command -v curl >/dev/null 2>&1; then
   write_env R2_QUARANTINE_URL "$R2_QUARANTINE_URL"
-  say "Requesting it with no credentials at all. Anything but 200 is the pass."
+  say "Requesting it with no credentials at all."
+  note "The pass is a real DENIAL — 401, 403 or 404. Not merely 'anything but 200':"
+  note "a timeout or an unbound domain also fails to return 200, and proves nothing."
   run "curl -s -o /dev/null -w '%{http_code}' <quarantine-url>" -- \
     curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 "$R2_QUARANTINE_URL"
-  QCODE=""
-  ask QCODE "The status code printed above:"
-  record "Quarantine prefix, unauthenticated status" "$QCODE"
-  if [[ "$QCODE" == "200" ]]; then
+  # Branch on the bytes that went into the transcript. Asking the human to
+  # re-type the code they just saw turns the measurement back into the
+  # assertion this ticket's last criterion exists to exclude.
+  QCODE=$(run_value)
+  printf -- '\n- Quarantine prefix, unauthenticated status: **%s** (measured)\n' \
+    "${QCODE:-none}" >> "$EVIDENCE"
+  case "$QCODE" in
+  401 | 403 | 404)
+    say "$QCODE — not served to an unauthenticated request. That is the pass."
+    ;;
+  200)
     warn "200 means the quarantine prefix IS publicly readable."
+    note "NFR6 bounds the stored object. This is the failure it describes."
     SKIPPED+=("section 3 — quarantine prefix returned 200. NFR6 is not satisfied")
-  fi
+    ;;
+  000 | "")
+    warn "No HTTP response at all — a timeout, DNS failure, or no bound domain."
+    note "This proves nothing either way. It is not a pass."
+    SKIPPED+=("section 3 — quarantine check reached nothing ($QCODE). Re-run against a bound URL")
+    ;;
+  *)
+    warn "$QCODE is neither a denial nor a success."
+    SKIPPED+=("section 3 — quarantine check was inconclusive ($QCODE). A pass is 401, 403 or 404")
+    ;;
+  esac
 else
   defer "section 3 quarantine non-readability" "no quarantine URL given, so nothing was proven"
 fi
@@ -653,18 +738,28 @@ pause "Records published in Cloudflare? Press Enter."
 # ── Stage 15: dig, three times, and no assuming ───────────────────────────
 stage "DNS: SPF, DKIM and DMARC each verified with dig"
 say "Verified, not assumed. Section 4 is explicit about that."
+# dig_txt LABEL NAME digs once, and judges the answer that went into the
+# transcript. Digging a second time to test what the first one printed would
+# let the recorded evidence and the verdict come from different lookups.
+dig_txt() {
+  local label="$1" name="$2"
+  run "dig +short TXT $name" -- dig +short TXT "$name"
+  if [[ -z "$(run_value)" ]]; then
+    warn "$label did not resolve at $name."
+    SKIPPED+=("section 4 — $label did not resolve at $name")
+    return 1
+  fi
+  say "$label resolves."
+  return 0
+}
+
 if command -v dig >/dev/null 2>&1 && [[ -n "${SENDING_SUBDOMAIN:-}" ]]; then
-  run "dig +short TXT $SENDING_SUBDOMAIN" -- dig +short TXT "$SENDING_SUBDOMAIN"
-  [[ -n "$(dig +short TXT "$SENDING_SUBDOMAIN" 2>/dev/null)" ]] ||
-    SKIPPED+=("section 4 — SPF did not resolve at $SENDING_SUBDOMAIN")
-  run "dig +short TXT resend._domainkey.$SENDING_SUBDOMAIN" -- \
-    dig +short TXT "resend._domainkey.$SENDING_SUBDOMAIN"
-  [[ -n "$(dig +short TXT "resend._domainkey.$SENDING_SUBDOMAIN" 2>/dev/null)" ]] ||
-    SKIPPED+=("section 4 — DKIM did not resolve at resend._domainkey.$SENDING_SUBDOMAIN")
+  dig_txt SPF "$SENDING_SUBDOMAIN" || true
+  dig_txt DKIM "resend._domainkey.$SENDING_SUBDOMAIN" || true
   if [[ -n "${ROOT_DOMAIN:-}" ]]; then
-    run "dig +short TXT _dmarc.$ROOT_DOMAIN" -- dig +short TXT "_dmarc.$ROOT_DOMAIN"
-    [[ -n "$(dig +short TXT "_dmarc.$ROOT_DOMAIN" 2>/dev/null)" ]] ||
-      SKIPPED+=("section 4 — DMARC did not resolve at _dmarc.$ROOT_DOMAIN")
+    dig_txt DMARC "_dmarc.$ROOT_DOMAIN" || true
+  else
+    SKIPPED+=("section 4 — no root domain given, so DMARC was never checked")
   fi
   say "All three must print a record. An empty answer is a failure, not a delay."
   note "If one is empty, give DNS a few minutes and re-run this wizard — it resumes."
@@ -679,8 +774,14 @@ note "Held and WARMED in parallel — an unwarmed fallback is not a fallback."
 ask FALLBACK_SUBDOMAIN "Fallback sending subdomain:"
 if [[ -n "$FALLBACK_SUBDOMAIN" ]]; then
   write_env FALLBACK_SUBDOMAIN "$FALLBACK_SUBDOMAIN"
-  command -v dig >/dev/null 2>&1 &&
-    run "dig +short TXT $FALLBACK_SUBDOMAIN" -- dig +short TXT "$FALLBACK_SUBDOMAIN"
+  if command -v dig >/dev/null 2>&1; then
+    dig_txt "fallback SPF" "$FALLBACK_SUBDOMAIN" || true
+  fi
+  # "Held AND warmed in parallel" is one requirement, not two, and holding is
+  # the half that leaves a record. An unwarmed fallback fails at the moment it
+  # is switched to, which is the moment the primary is already in trouble.
+  attest "The fallback is being warmed in parallel, not merely held" ||
+    SKIPPED+=("section 4 — the fallback is held but unwarmed, so it is not yet a fallback")
 else
   SKIPPED+=("section 4 — no fallback held. A reputation problem becomes a rebuild")
 fi
@@ -725,10 +826,17 @@ record "hotmail.com placement" "$HOTMAIL_RESULT"
 # ══════════════════════════════════════════════════════════════════════════
 # 5 — Application configuration
 #
-# Three of these four rows presuppose a DEPLOYED application, and #7 blocks the
-# ticket chain that deploys it (#7 to #8 to #9). They are not skipped quietly:
-# each detects its own precondition and defers with the reason recorded. Re-run
-# this wizard after #9 to close them.
+# FIVE rows, not four. The ticket's fifth acceptance criterion abbreviates this
+# section to "a 1 GB Fly machine, an enforced CSP, an uptime probe ... and
+# machine bands", inheriting the spec obligations table's one-line summary; the
+# runbook itself carries a fifth checkbox, the daily digest (C10). It gets a
+# stage of its own below. A section header naming C10 over four stages that
+# never touch it would be a transcript claiming coverage it does not have.
+#
+# Four of the five presuppose a DEPLOYED application, and #7 blocks the ticket
+# chain that deploys it (#7 to #8 to #9). None is skipped quietly: each detects
+# its own precondition and defers with the reason recorded. Re-run this wizard
+# after #9 to close them.
 # ══════════════════════════════════════════════════════════════════════════
 
 section "5 — Application configuration (C34, C6, C33, C10)"
@@ -786,7 +894,24 @@ else
     "the health route does not exist yet — that route is #8, deployed by #9"
 fi
 
-# ── Stage 22: machine bands reach a human, through triage ─────────────────
+# ── Stage 22: the digest, which is the human half of alert-destination ────
+stage "Daily digest at 08:00 America/Bogota"
+say "NFR7's queue depths, and the age of the oldest item, once a day (C10)."
+note "alert-destination has two halves: human-queue bands reach a person through"
+note "this digest, and machine bands reach one through the next stage's issue."
+note "Without it, NFR7's 24-hour band is a number nobody is told about."
+if [[ -d packages/notifications ]]; then
+  run "ls packages/notifications" -- ls packages/notifications
+  step "Confirm one digest arrived at 08:00 America/Bogota."
+  step "Confirm it carries the queue depths AND the age of the oldest item."
+  attest "A digest arrived at 08:00 America/Bogota carrying both numbers" ||
+    SKIPPED+=("section 5 — the daily digest is not arriving, or is missing a number (C10)")
+else
+  defer "section 5 daily digest at 08:00 America/Bogota" \
+    "it runs through the notification seam, which is #11, on the queue-digest schedule from #19 (5b)"
+fi
+
+# ── Stage 23: machine bands reach a human, through triage ─────────────────
 stage "Machine bands open a needs-triage issue from CI"
 say "ADR-0001 fixes the destination: findings reach Plan only through triage."
 note "A breach that arrives as a chat message is a breach nobody owns."

@@ -74,7 +74,11 @@ jobs:
           [ -n "${SURFACE:-}" ]     || missing+=("surface")
           [ -n "${FIRST_CHECK:-}" ] || missing+=("first_check")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::incomplete breach payload, missing: ${missing[*]}" >&2
+            # On stdout, not stderr: GitHub parses workflow commands from a
+            # step's stdout only, so `::error::` sent to stderr renders as
+            # plain text and never becomes an annotation -- which is the one
+            # place a person looking at a failed run would actually see it.
+            echo "::error::incomplete breach payload, missing: ${missing[*]}"
             echo "A finding needs all four fields. See observability-go-live.md §6." >&2
             exit 1
           fi
@@ -90,6 +94,18 @@ jobs:
             printf -- '---\n\nOpened by `.github/workflows/needs-triage.yml` from a `%s` event.\n' \
               "${GITHUB_EVENT_NAME}"
           )
+
+          # `gh issue create --label` fails hard on a label the repo does not
+          # have, and this workflow ships with the template into clones that
+          # have never run /triage. Losing a real breach to a missing label
+          # would be the worst possible reason not to hear about one, so
+          # create it if absent. `|| true` because a parallel dispatch may
+          # have just created it. Definition: docs/agents/triage-labels.md.
+          gh label create needs-triage \
+            --repo "$REPO" \
+            --color fbca04 \
+            --description "Maintainer needs to evaluate this issue" \
+            2>/dev/null || true
 
           gh issue create \
             --repo "$REPO" \
