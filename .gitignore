@@ -40,6 +40,15 @@ yarn-error.log*
 # Claude Code worktrees
 .claude/worktrees/
 
+# scripts/go-live.sh writes both of these. Neither is repo content:
+# `.go-live-facts` is one operator's app and bucket names, and
+# `.go-live-evidence.md` is the transcript of one run, which belongs in a
+# comment on the runbook ticket rather than in the history. Note that neither
+# name matches `.env*`, which turbo.json declares a `build` input -- that is
+# deliberate, and §1 of the go-live runbook is why.
+.go-live-facts
+.go-live-evidence.md
+
 # Impeccable: machine-local config and generated review artifacts.
 # .impeccable/config.json and .impeccable/briefs/ are committed.
 .impeccable/config.local.json

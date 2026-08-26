@@ -20,6 +20,15 @@ the instruction.
 > **Nothing here is done yet.** Every checkbox in this document is unticked on purpose. The ticket
 > that executes it is the runbook ticket named in the spec's **Runbook obligations** section.
 
+**§§1–5 have a wizard: [`scripts/go-live.sh`](../../scripts/go-live.sh).** It opens each dashboard,
+captures each value, stages the secrets on Fly over stdin, and **runs the verification commands
+itself** — the `dig`s, the unauthenticated `curl` at the quarantine prefix, `SHOW max_connections`,
+`fly secrets list` — appending each command and its output to a gitignored transcript. That
+transcript is what a human pastes onto the ticket, because the ticket's last criterion asks for a
+command and its output rather than an assertion that it was done. It is idempotent: stop with Ctrl-C
+and re-run, and it resumes from the non-secret facts it wrote. §§5b–11 have no wizard yet and are
+walked by hand.
+
 ---
 
 ## 1. Credentials — eight, and where each lives (C5, C43, DD10)
