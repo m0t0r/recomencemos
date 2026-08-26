@@ -3,7 +3,12 @@
 Owner: **Design lead** ([owners.md](owners.md)). Read by `ux-writing`, `copywriting`, `impeccable`,
 and by every ticket that renders an `es-CO` string.
 
-This file is the value of `voice-guide` in [ux.md](ux.md). It was held `UNSET` **by decision** through
+**This file is the _value_ of a policy key, not a table of keys**, which is why it carries prose where
+its siblings carry a grid and why it has no `UNSET` header line. `ux.md` → `voice-guide` is the key;
+everything below is what that key resolves to. `grep -rn UNSET docs/policy/` will therefore never name
+this file, and should not.
+
+It was held `UNSET` **by decision** through
 Plan and Design — [intent Q6](../efforts/0002-profile-to-contact-exchange/intent.md) — and set here by
 a `brand-voice` session, because inventing a voice for a product where the difference between
 _trabajadora_ and _damnificada_ **is** the product would have been worse than naming the gap.
@@ -34,8 +39,9 @@ The conventional objection to Caregiver here is real: it is the archetype that t
 the helper and the person reading into the helped. It was chosen anyway because this platform actually
 does caregiving work, and a great deal of it — a human reads **every** Offer before it is delivered,
 every photo is moderated, her contact details are held until she accepts, free-text fields refuse
-phone numbers so the consent step cannot be routed around, and standing safety guidance sits on every
-profile and every Offer. Refusing the archetype would have meant a voice that under-describes what the
+phone numbers so the consent step cannot be routed around, and — in
+[ADR-0008](../adr/0008-open-enrolment-with-published-non-verification.md)'s own words — "standing safety
+guidance sits on every profile and every Offer". Refusing the archetype would have meant a voice that under-describes what the
 product genuinely does for her.
 
 **Voice in one sentence:** a calm, warm neighbour who has already done the protective thing, tells you
@@ -168,8 +174,12 @@ _candidato_, _hoja de vida_ and _vacante_. The guide is specific to this product
 
 1. **Don't make the platform the subject of a sentence about her feelings.** _Queremos que te sientas
    segura_ ✗ → _Tu teléfono no sale de aquí hasta que tú aceptes_ ✓.
-2. **Don't use a word from a `CONTEXT.md` _Avoid_ list.** Anywhere — body copy, a button, an email
-   subject, an `alt` attribute, a `<title>`.
+2. **Don't use a word from a `CONTEXT.md` _Avoid_ list _where you mean that list's term_.** Anywhere —
+   body copy, a button, an email subject, an `alt` attribute, a `<title>`. **The scoping is not a
+   loophole and the rule is wrong without it:** those lists are per-term, and Account's reads _"Avoid:
+   User, member, profile, registration"_ — which bans _perfil_ as a word for **an Account**, not the
+   word _perfil_, prescribed two lines below for a CapabilityProfile. Read the ban against the concept
+   you are naming.
 3. **Don't attach the earthquake to a person.** A fact about the platform, yes. A property of someone,
    never.
 4. **Don't soften a refusal into ambiguity.** _En este momento no es posible_ ✗ → what happened, and
@@ -186,7 +196,14 @@ tu teléfono · decides tú · quien envía la propuesta · antes de que te lleg
 (where the object is a person's situation) · donación · donar · apoyar (in the charity sense) · causa ·
 tu historia · candidato/a · aspirante · hoja de vida · CV · vacante · empleo · oferta laboral ·
 empleador · usuario/a · match · verificado (in any construction implying that we verify) · seguro/a (as
-a promise, since we cannot make one)
+a promise, since we cannot make one) · directorio · tablero · listado · categoría · servicio · etiqueta ·
+queja · denuncia · reporte de abuso · vacante · trabajito · moderador · administrador (of a person —
+_Admin_ is a role, and the site does not need to name it to her) · silenciar · ocultar
+
+**And one that is a sentence rather than a word.** `CONTEXT.md`'s Block entry bans not just _ban_,
+_mute_ and _hide_ but the **description**: _"avoid describing it as making her invisible, which it never
+was."_ A Block stops him sending and reaches nothing else — her card stays public, his reading stays
+open. Copy that says _ya no te verá_ is false, and it is the kind of false that a person relies on.
 
 _Ayudar_ has one narrow survival: a concrete task with a concrete object — _Te ayudamos a llenar el
 formulario_ — is fine. _Ayuda a una familia de Pereira_ is the register this product exists to refuse.
@@ -316,6 +333,10 @@ ticket.
 
 **The test:** read the label aloud after _"Sé…"_ or _"Puedo…"_. If it does not finish the sentence the
 way a person would actually say it, it is still CUOC.
+
+The four rows below **demonstrate the test; they are not the seed.** #15 owns the vocabulary, and a
+label that ships is the one in its migration — not the one quoted here. Copying these four into the
+seed would give the list two sources of truth, which is the failure this note exists to prevent.
 
 | CUOC's register                         | The label she reads                |
 | --------------------------------------- | ---------------------------------- |
