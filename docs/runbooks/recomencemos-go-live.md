@@ -209,11 +209,27 @@ registration does not apply** to a _persona natural_. International transmission
       the `audit` job, running `pnpm audit:direct` — `scripts/audit-direct.mjs`, not
       `pnpm audit --audit-level=high`, which is red on arrival against a transitive advisory this
       repository already carries
+- [x] **Dependabot on** — three switches, not one: on a private repository the dependency graph is
+      not enabled by default, and alerts and security updates each depend on the one before it. The
+      commands are below this list. Version updates need no switch: they are the committed
+      `.github/dependabot.yml`, and security-update PRs are exempt from its
+      `open-pull-requests-limit`, which is the point of them
 - [ ] `gh extension install github/gh-stack` — `stacked-prs` is on for genuine chains, and
       `pr-merge-method` is **rebase**, because squashing a lower PR rewrites the base every branch
       above it was cut from
 - [ ] **Rollback rehearsed once against production**: bluegreen, health-gated, ≤ 5 minutes by one
       documented command (NFR25)
+
+The three Dependabot switches, and how to read that they took:
+
+```sh
+gh api -X PUT repos/<owner>/<repo>/vulnerability-alerts      # 204 No Content
+gh api -X PUT repos/<owner>/<repo>/automated-security-fixes  # 204 No Content
+gh api repos/<owner>/<repo>/automated-security-fixes         # {"enabled":true,"paused":false}
+```
+
+`vulnerability-alerts` answers `404` while alerts are off and `204` once they are on, so the same
+`GET` is both the check and the evidence.
 
 ---
 
