@@ -171,10 +171,15 @@ function baseCommit(root, base) {
   if (!merged) {
     throw new GateError(
       `no merge base between ${ref} and HEAD — a shallow clone compares nothing, ` +
-        "so set `fetch-depth: 0` on the checkout or pass --base <ref>",
+        "so set `fetch-depth: 0` on the checkout, or pass --base <ref> if that is not the branch " +
+        "this change should be measured against",
     );
   }
-  return merged.trim();
+  // The ref travels with the commit so that every line this gate prints names the
+  // frame it judged against. A gate whose base is invisible is a gate nobody can
+  // second-guess -- and its base can come from a flag, the environment, or the
+  // remote, which is three places to be wrong.
+  return { ref, commit: merged.trim() };
 }
 
 function parseJournal(text, where) {
@@ -465,7 +470,7 @@ function main() {
     return;
   }
 
-  const base = baseCommit(root, baseRef);
+  const { ref, commit: base } = baseCommit(root, baseRef);
   const changed = changedFiles(root, base);
   const refusals = [];
   const refuse = (rule, detail, remedy) => refusals.push({ rule, detail, remedy });
@@ -503,7 +508,10 @@ function main() {
   if (refusals.length > 0) {
     for (const path of missing) out(`         (${path} is named by the journal and is not there)`);
     out();
-    out(`Migration integrity failed: ${count(refusals.length, "refusal", "refusals")}.`);
+    out(
+      `Migration integrity failed: ${count(refusals.length, "refusal", "refusals")}, ` +
+        `measured against ${ref} (${base.slice(0, 7)}).`,
+    );
     process.exit(1);
   }
   if (missing.length > 0) {
@@ -511,7 +519,8 @@ function main() {
   }
   out(
     `Migration integrity passed: ${count(migrations, "migration", "migrations")} across ` +
-      `${count(journalPaths.length, "journal", "journals")}, ${addedTags.length} added since ${base.slice(0, 7)}.`,
+      `${count(journalPaths.length, "journal", "journals")}, ${addedTags.length} added since ` +
+      `${ref} (${base.slice(0, 7)}).`,
   );
 }
 
