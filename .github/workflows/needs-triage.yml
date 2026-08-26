@@ -1,0 +1,98 @@
+# A control-band breach lands as a `needs-triage` issue in this repository.
+#
+# That destination is not a choice this workflow makes. `alert-destination` in
+# `docs/policy/operability.md` sets it -- "machine bands -> a `needs-triage`
+# issue from CI" -- and that key in turn follows from
+# `docs/adr/0001-findings-enter-through-triage.md`, which fixes that findings
+# reach Plan only through `/triage`. A breach that arrives as a chat message is
+# a breach nobody owns.
+#
+# This is the CI half of `docs/runbooks/recomencemos-go-live.md` §5's last row,
+# and it consumes the webhook drawn in `observability-go-live.md` §6.
+#
+# **What this workflow does not do: reach the vendor.** It listens; something
+# has to POST to it. `POST /repos/{owner}/{repo}/dispatches` requires an
+# `Authorization` header, and an alerting vendor that cannot attach one needs a
+# minimal relay in front of it. That relay -- or the token -- is the human's
+# step, which is why `observability-go-live.md` §6 draws the box as "your
+# endpoint / GitHub Action" and why `alert-destination` names the shape and not
+# a URL. `scripts/go-live.sh` stage 22 is where a human wires and tests it.
+name: needs-triage
+
+on:
+  repository_dispatch:
+    types: [control-band-breach]
+  # So the receiver can be proved without a token, and so a human who spots a
+  # breach by eye has the same one-click route as the machine.
+  workflow_dispatch:
+    inputs:
+      band:
+        description: "Which band, and its threshold"
+        required: true
+      observed:
+        description: "The observed value, with its window"
+        required: true
+      surface:
+        description: "The affected surface -- the route pattern, so it joins with log lines"
+        required: true
+      first_check:
+        description: "First thing to check"
+        required: true
+
+# `issues: write` and nothing else. This job opens an issue; it has no business
+# reading code or touching a branch.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  open-finding:
+    runs-on: ubuntu-latest
+    steps:
+      # Every payload field arrives through `env`, never interpolated into the
+      # script body. A `client_payload` is written by whatever holds the
+      # dispatch token, so `${{ }}` inside `run:` would be a shell injection
+      # with an alert rule as its trigger.
+      - name: Open the finding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BAND: ${{ github.event.client_payload.band || inputs.band }}
+          OBSERVED: ${{ github.event.client_payload.observed || inputs.observed }}
+          SURFACE: ${{ github.event.client_payload.surface || inputs.surface }}
+          FIRST_CHECK: ${{ github.event.client_payload.first_check || inputs.first_check }}
+        run: |
+          set -euo pipefail
+
+          # The issue carries four fields, and it is not a finding without them
+          # (observability-go-live.md §6). A breach that reaches a human without
+          # its observed value or its surface costs a triage session to work out
+          # what it was even about, which is the cost this check avoids.
+          missing=()
+          [ -n "${BAND:-}" ]        || missing+=("band")
+          [ -n "${OBSERVED:-}" ]    || missing+=("observed")
+          [ -n "${SURFACE:-}" ]     || missing+=("surface")
+          [ -n "${FIRST_CHECK:-}" ] || missing+=("first_check")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::incomplete breach payload, missing: ${missing[*]}" >&2
+            echo "A finding needs all four fields. See observability-go-live.md §6." >&2
+            exit 1
+          fi
+
+          # `--label needs-triage` and nothing else. /triage assigns the rest;
+          # see docs/agents/triage-labels.md. Guessing a role here would skip
+          # the human call that ADR-0001 exists to preserve.
+          body=$(
+            printf '## Band\n\n%s\n\n' "$BAND"
+            printf '## Observed\n\n%s\n\n' "$OBSERVED"
+            printf '## Affected surface\n\n`%s`\n\n' "$SURFACE"
+            printf '## First thing to check\n\n%s\n\n' "$FIRST_CHECK"
+            printf -- '---\n\nOpened by `.github/workflows/needs-triage.yml` from a `%s` event.\n' \
+              "${GITHUB_EVENT_NAME}"
+          )
+
+          gh issue create \
+            --repo "$REPO" \
+            --label needs-triage \
+            --title "Control-band breach: ${BAND}" \
+            --body "$body"
