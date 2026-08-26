@@ -108,11 +108,14 @@ function git(root, args, { optional = false } = {}) {
       cwd: root,
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {
     if (optional) return null;
-    throw new GateError(`\`git ${args.join(" ")}\` failed: ${error.message}`);
+    // git's own stderr, not Node's summary of it: "fatal: bad revision" is the
+    // sentence that tells you what to fix.
+    const reason = `${error.stderr ?? ""}`.trim() || error.message;
+    throw new GateError(`\`git ${args.join(" ")}\` failed: ${reason}`);
   }
 }
 
@@ -135,12 +138,24 @@ function changedFiles(root, base) {
   ];
 }
 
-// The default branch as the remote has it, resolved rather than named, so a
-// clone whose default branch is not `main` is not a special case. A missing
-// merge base is a hard failure and never a pass: a shallow checkout compared
-// nothing, which is not the same answer as "nothing changed".
+// What this change is measured against, in three steps.
+//
+// `--base` wins. Then `GITHUB_BASE_REF`, which is **the pull request's own base
+// branch** — and that is not a nicety, because `docs/policy/build.md` sets
+// `stacked-prs` to yes. On a stack, PR N+1 sits on PR N's branch, so measuring
+// against the default branch would pull PR N's contract migration into PR N+1's
+// diff and refuse the correct expand/contract split for being exactly what it
+// is. Only failing that, the default branch as the remote has it — resolved
+// rather than named, so a clone whose default branch is not `main` is not a
+// special case.
+//
+// A missing merge base is a hard failure and never a pass: a shallow checkout
+// compared nothing, which is not the same answer as "nothing changed".
 function baseCommit(root, base) {
   let ref = base;
+  if (!ref && process.env.GITHUB_BASE_REF) {
+    ref = `origin/${process.env.GITHUB_BASE_REF}`;
+  }
   if (!ref) {
     const head = git(root, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], {
       optional: true,
@@ -213,8 +228,22 @@ function stripQuotedAndCommented(sql) {
     }
     if (sql[i] === "'" || sql[i] === '"') {
       const quote = sql[i];
+      // Postgres ships `standard_conforming_strings = on`, so a backslash is an
+      // ordinary character inside `'...'` and `''` is the only escape — except in
+      // an `E'...'` string, where `\'` does escape. Reading a plain string as if
+      // backslashes escaped (or an E-string as if they did not) leaves the quote
+      // count odd, and the scan then swallows the rest of the file: every rule
+      // downstream of it goes blind, which is a gate failing open in silence.
+      const before = sql[i - 1];
+      const beforeThat = sql[i - 2];
+      const escapes =
+        (before === "E" || before === "e") && (i < 2 || !/[A-Za-z0-9_]/.test(beforeThat ?? ""));
       i += 1;
       while (i < sql.length) {
+        if (escapes && sql[i] === "\\") {
+          i += 2;
+          continue;
+        }
         if (sql[i] === quote && sql[i + 1] === quote) {
           i += 2;
           continue;
@@ -253,6 +282,32 @@ function statements(sql) {
     .filter(Boolean);
 }
 
+// One `ALTER TABLE` carries as many comma-separated actions as you like, so the
+// statement is not the unit rule 3 cares about: `ADD COLUMN a, DROP COLUMN b` is
+// precisely the mixture it exists to refuse, wearing a single semicolon.
+//
+// Only `ALTER TABLE` is split. `DROP TABLE a, b` is one action over a list, and
+// splitting it would leave `b` looking additive and refuse a migration that is
+// wholly destructive — a false refusal, which NFR30's second half rules out as
+// firmly as a miss.
+function actions(statement) {
+  if (!/^ALTER\s+TABLE\b/.test(statement)) return [statement];
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < statement.length; i += 1) {
+    const character = statement[i];
+    if (character === "(") depth += 1;
+    else if (character === ")") depth -= 1;
+    else if (character === "," && depth === 0) {
+      parts.push(statement.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(statement.slice(start));
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
 const destructiveIn = (statement) => DESTRUCTIVE.find(([pattern]) => pattern.test(statement))?.[1];
 
 // `@repo/domain` is found by manifest name rather than by a path, because the
@@ -267,7 +322,11 @@ function domainSource(root, files) {
     } catch {
       continue;
     }
-    if (name === DOMAIN_PACKAGE) return `${dirname(file)}/src/`;
+    if (name !== DOMAIN_PACKAGE) continue;
+    const dir = dirname(file);
+    // `dirname("package.json")` is ".", and "./src/" would match no path git
+    // ever prints -- a silent no-op where an answer belongs.
+    return dir === "." ? "src/" : `${dir}/src/`;
   }
   return null;
 }
@@ -304,7 +363,6 @@ function checkJournal(refuse, journalPath, baseEntries, headEntries) {
 }
 
 function checkImmutable(root, base, refuse, dir, baseEntries) {
-  const edited = new Set();
   for (const entry of baseEntries) {
     const path = `${dir}/${entry.tag}.sql`;
     const shipped = git(root, ["show", `${base}:${path}`], { optional: true });
@@ -313,7 +371,6 @@ function checkImmutable(root, base, refuse, dir, baseEntries) {
     try {
       current = readFileSync(join(root, path), "utf8");
     } catch {
-      edited.add(entry.tag);
       refuse(
         "a shipped migration is immutable",
         `${path} is on the default branch but missing from this branch`,
@@ -322,7 +379,6 @@ function checkImmutable(root, base, refuse, dir, baseEntries) {
       continue;
     }
     if (current === shipped) continue;
-    edited.add(entry.tag);
     const blob = git(root, ["rev-parse", "--short", `${base}:${path}`], { optional: true });
     refuse(
       "a shipped migration is immutable",
@@ -330,12 +386,19 @@ function checkImmutable(root, base, refuse, dir, baseEntries) {
       "Production will not re-run it; PGlite replays it from scratch on every test run, so seam 2 would start testing a schema production does not have — and go green. Write a new migration.",
     );
   }
-  return edited;
 }
 
-function checkDestructive(root, refuse, dir, headEntries, skip, missing) {
+// Scoped to the tags this branch adds, exactly as immutability is. Checking
+// every entry instead would deadlock the repository the first time a mixed or
+// unmarked migration reached the default branch: rule 3 would refuse every
+// subsequent pull request, and rule 2 forbids editing the file that would fix
+// it. NFR30's second half rules that out — "a guardrail that cannot be satisfied
+// becomes a reason to edit production by hand, which is strictly worse than the
+// drift it was built to stop". Nothing is lost by scoping: a migration is
+// checked at the pull request that introduces it, and is immutable thereafter.
+function checkDestructive(root, refuse, dir, headEntries, added, missing) {
   for (const entry of headEntries) {
-    if (skip.has(entry.tag)) continue;
+    if (!added.has(entry.tag)) continue;
     const path = `${dir}/${entry.tag}.sql`;
     let sql;
     try {
@@ -348,10 +411,9 @@ function checkDestructive(root, refuse, dir, headEntries, skip, missing) {
       missing.push(path);
       continue;
     }
-    const parsed = statements(sql).map((statement) => ({
-      statement,
-      destructive: destructiveIn(statement),
-    }));
+    const parsed = statements(sql)
+      .flatMap(actions)
+      .map((statement) => ({ statement, destructive: destructiveIn(statement) }));
     const destructive = parsed.filter((s) => s.destructive);
     if (destructive.length === 0) continue;
 
@@ -373,10 +435,10 @@ function checkDestructive(root, refuse, dir, headEntries, skip, missing) {
   }
 }
 
-function checkContractIsAlone(root, refuse, changed, addedTags) {
+function checkContractShipsSeparately(root, files, refuse, changed, addedTags) {
   const marked = addedTags.filter((tag) => MARKER.test(tag));
   if (marked.length === 0) return;
-  const source = domainSource(root, repoFiles(root));
+  const source = domainSource(root, files);
   if (!source) return; // no `@repo/domain` in this repository yet
   const offenders = changed
     .filter((file) => file.startsWith(source))
@@ -409,7 +471,7 @@ function main() {
   const refuse = (rule, detail, remedy) => refusals.push({ rule, detail, remedy });
 
   let migrations = 0;
-  const added = [];
+  const addedTags = [];
   const missing = [];
 
   for (const journalPath of journalPaths) {
@@ -420,14 +482,17 @@ function main() {
 
     migrations += headEntries.length;
     const baseTags = new Set(baseEntries.map((entry) => entry.tag));
-    added.push(...headEntries.map((entry) => entry.tag).filter((tag) => !baseTags.has(tag)));
+    const added = new Set(
+      headEntries.map((entry) => entry.tag).filter((tag) => !baseTags.has(tag)),
+    );
+    addedTags.push(...added);
 
     checkJournal(refuse, journalPath, baseEntries, headEntries);
-    const edited = checkImmutable(root, base, refuse, dir, baseEntries);
-    checkDestructive(root, refuse, dir, headEntries, edited, missing);
+    checkImmutable(root, base, refuse, dir, baseEntries);
+    checkDestructive(root, refuse, dir, headEntries, added, missing);
   }
 
-  checkContractIsAlone(root, refuse, changed, added);
+  checkContractShipsSeparately(root, files, refuse, changed, addedTags);
 
   for (const { rule, detail, remedy } of refusals) {
     out(`REFUSED  ${rule}`);
@@ -446,7 +511,7 @@ function main() {
   }
   out(
     `Migration integrity passed: ${count(migrations, "migration", "migrations")} across ` +
-      `${count(journalPaths.length, "journal", "journals")}, ${added.length} added since ${base.slice(0, 7)}.`,
+      `${count(journalPaths.length, "journal", "journals")}, ${addedTags.length} added since ${base.slice(0, 7)}.`,
   );
 }
 
