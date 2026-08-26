@@ -123,6 +123,8 @@ EOF
 mkdir -p "$ROOT/drizzle/meta"
 printf '%s\n' '{"version":"7","dialect":"postgresql","entries":[{"idx":0,"version":"7","when":1750000000000,"tag":"0000_init","breakpoints":true}]}' > "$ROOT/drizzle/meta/_journal.json"
 printf '%s\n' 'CREATE TABLE "offer" ("id" uuid PRIMARY KEY);' > "$ROOT/drizzle/0000_init.sql"
+mkdir -p "$ROOT/broken/meta"
+printf '%s\n' 'entries: not json' > "$ROOT/broken/meta/_journal.json"
 
 # Rule G reads the default branch from the remote. A real repo with a known one
 # beats mocking git.
@@ -308,6 +310,7 @@ run "Write to a migration the journal names"               deny  "$(wj Write "$R
 run "Edit to a migration the journal names"                deny  "$(wj Edit "$ROOT/drizzle/0000_init.sql" 'ALTER TABLE "offer" DROP COLUMN "note";')"
 run "Write to a .sql no journal names"                     allow "$(wj Write "$ROOT/drizzle/0001_draft.sql" 'CREATE TABLE "x" ("id" uuid);')"
 run "Write to a .sql outside any migration directory"      allow "$(wj Write "$ROOT/scripts/report.sql" 'SELECT 1;')"
+run "Write to a .sql beside an unreadable journal"         deny  "$(wj Write "$ROOT/broken/0000_init.sql" 'SELECT 1;')"
 run "an ADR quoting the destructive list"                  allow "$(wj Write "$ROOT/docs/adr/0013-x.md" 'DROP TABLE, DROP COLUMN, DROP CONSTRAINT and any RENAME.')"
 
 section "unrelated paths"
@@ -611,6 +614,91 @@ mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
 mkdir -p "$D/docs/adr"
 printf '%s\n' '# ADR-0013' 'DROP TABLE, DROP COLUMN, DROP CONSTRAINT, ALTER COLUMN ... TYPE and any RENAME.' > "$D/docs/adr/0013-x.md"
 run_mig "a contract migration beside an ADR quoting it"   0 "^Migration integrity passed" "$D"
+
+# Every case below is a hole /code-review found in the first draft of this gate.
+# Four of them passed green while checking nothing, which is the one way a
+# guardrail is worse than no guardrail at all.
+section "Migration integrity: the holes review found"
+
+# A backslash-escaped quote inside an E-string left the quote count odd, and the
+# scan then swallowed the rest of the file -- so every statement after it went
+# unread. Postgres ships standard_conforming_strings on, so `\` escapes in
+# `E'...'` and nowhere else; both halves need their case.
+D=$(mig_start estring)
+mig_add "$D" 0001_tidy "ALTER TABLE \"o\" ADD COLUMN \"c\" text DEFAULT E'it\\'s';" 'DROP TABLE "z";'
+run_mig "a DROP after an escaped quote in an E-string"    1 "travels alone"               "$D"
+
+D=$(mig_start plainquote)
+mig_add "$D" 0001_seed "INSERT INTO \"skill\" VALUES ('a backslash \\\\ is literal here');" 'DROP TABLE "z";'
+run_mig "a DROP after a backslash in a plain string"      1 "travels alone"               "$D"
+
+# One ALTER TABLE carries as many comma-separated actions as it likes, so the
+# statement was the wrong unit: this is exactly the mixture rule 3 exists to
+# refuse, and it passed because `additive.length` was 0.
+D=$(mig_start commaactions)
+mig_add "$D" 0001_contract_tidy 'ALTER TABLE "offer" ADD COLUMN "a" text, DROP COLUMN "b";'
+run_mig "ADD and DROP as two actions of one ALTER"        1 "travels alone"               "$D"
+
+# ...but splitting a list is not the same as splitting actions. `DROP TABLE a, b`
+# is one action over two names, and reading `b` as additive would refuse a
+# migration that is wholly destructive.
+D=$(mig_start droplist)
+mig_add "$D" 0001_contract_drop_both 'DROP TABLE "draft", "memo";'
+run_mig "DROP TABLE over a list of two names"             0 "^Migration integrity passed" "$D"
+
+D=$(mig_start altercols)
+mig_add "$D" 0001_contract_drop_two 'ALTER TABLE "offer" DROP COLUMN "a", DROP COLUMN "b";'
+run_mig "two DROP COLUMN actions in one ALTER"            0 "^Migration integrity passed" "$D"
+
+D=$(mig_start parencomma)
+mig_add "$D" 0001_widen 'ALTER TABLE "offer" ADD COLUMN "amount" numeric(12, 2);'
+run_mig "a comma inside a type's parentheses"             0 "^Migration integrity passed" "$D"
+
+# Rule 3 used to check every journal entry rather than only the new ones, which
+# deadlocks the repository: a mixed migration that reached the default branch
+# would refuse every later pull request, while rule 2 forbids editing the file
+# that would fix it. NFR30's second half rules that out.
+D=$(mig_repo shipped_mixed)
+printf '%s\n' 'ALTER TABLE "offer" ADD COLUMN "note" text;' 'ALTER TABLE "offer" DROP COLUMN "memo";' > "$D/drizzle/0000_tidy.sql"
+journal 0000_tidy > "$D/drizzle/meta/_journal.json"
+mig_ship "$D"
+printf '%s\n' 'export const unrelated = 1;' > "$D/unrelated.ts"
+run_mig "a mixed migration already on the default branch" 0 "^Migration integrity passed" "$D"
+
+# A stack is the correct expand/contract split, not a violation of it: the
+# contract migration is PR N and the query-module change is PR N+1. Measured
+# against the default branch both land in one diff, so the gate reads the PR's
+# own base branch where CI names it.
+D=$(mig_start stacked)
+mig_domain "$D"
+mig_ship "$D"
+mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
+git -C "$D" add -A >/dev/null 2>&1
+git -C "$D" -c user.email=t@t -c user.name=t commit -q -m "contract" >/dev/null 2>&1
+git -C "$D" update-ref refs/remotes/origin/ticket-1 HEAD
+git -C "$D" checkout -q -b ticket/2-stop-using-it
+printf '%s\n' 'export const listOffers = () => [1];' > "$D/packages/domain/src/offers.ts"
+run_mig "the query change stacked above the contract PR"  1 "ship separately"             "$D"
+out=$(GITHUB_BASE_REF=ticket-1 node "$MIG" --root "$D" 2>&1)
+if [ "$?" = 0 ] && printf '%s' "$out" | grep -qE "^Migration integrity passed"; then
+  pass=$((pass+1)); sec_pass=$((sec_pass+1))
+  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit 0\n' "the same stack, measured against its own base"
+else
+  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+  printf '  FAIL %-51s -> want exit 0 and a pass\n' "the same stack, measured against its own base"
+  printf '       %s\n' "${out:-<empty>}"
+fi
+
+# A manifest at the repository root made the prefix "./src/", which matches no
+# path git ever prints -- rule 4 became a silent no-op rather than an answer.
+D=$(mig_start rootdomain)
+mkdir -p "$D/src"
+printf '%s\n' '{"name":"@repo/domain","version":"0.0.0"}' > "$D/package.json"
+printf '%s\n' 'export const listOffers = () => [];' > "$D/src/offers.ts"
+mig_ship "$D"
+mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
+printf '%s\n' 'export const listOffers = () => [1];' > "$D/src/offers.ts"
+run_mig "@repo/domain declared at the repository root"    1 "ship separately"             "$D"
 
 section "Migration integrity: the ways it must not fail open"
 
