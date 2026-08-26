@@ -62,6 +62,31 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
 
+    # **`@types/node` is pinned to the Node LTS major, and this is the one
+    # dependency `engineStrict` cannot police.** The repo requires the active
+    # LTS — `.nvmrc` says `24`, `engines.node` says `>=24`, and
+    # `engineStrict: true` makes `pnpm install` *fail* on anything older. That
+    # enforcement works by reading a package's own `engines` field, and
+    # `@types/node` has none: it is types, not code, so nothing about it fails
+    # to install. A `@types/node@26` therefore lands green while describing the
+    # API surface of a runtime nobody here runs, and `check-types` starts
+    # accepting calls that do not exist on 24. Green CI is exactly the symptom.
+    #
+    # Majors are ignored rather than the version range being spelled out,
+    # because moving Node major is never a standalone pull request: `.nvmrc`,
+    # `engines.node` and this dependency move together in one deliberate edit,
+    # and that edit is the moment to raise the types package by hand. A
+    # `versions:` range would need editing at the very same moment while also
+    # being able to drift wrong in silence.
+    #
+    # The price, stated because `ignore` is blunt: this suppresses *security*
+    # updates for `@types/node` too. It ships no runtime code, so the class of
+    # advisory this could hide is close to empty — but it is not a rule to copy
+    # onto a package that does.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
     # The default. Restated because the constraint behind it is a one-person
     # review queue, not a tooling limit. Security PRs are exempt from this cap.
     open-pull-requests-limit: 5
