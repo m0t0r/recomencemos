@@ -86,6 +86,16 @@ that matters is the relationship between the two files. The `github-actions` ent
 `/.github/actions/*` as well as `/`, without which the SHA pin in the composite setup action would
 never be updated. Its commit messages are prefixed to stay inside Conventional Commits.
 
+**It also ignores `@types/node` majors, and that is the one hole `engineStrict` cannot cover.** The
+repo requires the active LTS and enforces it by reading each package's `engines` field —
+`@types/node` has none, because it is types rather than code, so a `@types/node@26` installs clean on
+Node 24 and then teaches `check-types` an API surface the runtime does not have. Green CI is the
+symptom, not the reassurance. Majors are ignored rather than a `versions:` range spelled out because
+`.nvmrc`, `engines.node` and this dependency move together in one deliberate edit; that edit is where
+the types package is raised by hand. `ignore` is blunt enough to suppress security advisories too,
+which is tolerable only because the package ships no runtime code — do not copy the rule onto one
+that does.
+
 `pnpm lint` is stricter than it looks. The root `.oxlintrc.json` puts oxlint's `correctness` category at `error` but `suspicious` and `perf` at `warn`; the `--max-warnings 0` flag in the root `lint` script is the only thing that turns those warnings into a failing exit code. Never relax that flag to make lint pass, and don't silence a rule repo-wide when a scoped `overrides` entry or an `// oxlint-disable-next-line` with a reason would do.
 
 ## Architecture
