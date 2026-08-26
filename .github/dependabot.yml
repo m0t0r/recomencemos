@@ -5,7 +5,7 @@
 # Neither is much use alone — a gate with nothing behind it is a gate somebody
 # eventually bypasses, which is the failure mode C7 was answered to avoid.
 #
-# Two ecosystems, and no `target-branch`: the default branch is `dev`, which is
+# Three ecosystems, and no `target-branch`: the default branch is `dev`, which is
 # where Dependabot opens against unless told otherwise.
 version: 2
 
@@ -126,6 +126,42 @@ updates:
       default-days: 3
     groups:
       actions:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  # -------------------------------------------------------- docker-compose
+  #
+  # `docker-compose.yaml` is the local development database
+  # (`docs/policy/data.md` -> `local-database`), and both of its images are
+  # pinned by tag **and** digest. A digest is the right pin and the wrong thing
+  # to leave alone: it is exact, and it therefore freezes at whatever was
+  # current the day somebody typed it. This entry is what makes moving it a
+  # deliberate act somebody performs rather than one nobody ever performs.
+  #
+  # `docker-compose` is its own ecosystem, separate from `docker`, and it
+  # supports **version updates only** — no security updates. So a CVE in
+  # Postgres or PgBouncer arrives here as an ordinary version bump on a weekly
+  # cadence, or not at all. That is acceptable for exactly one reason: these
+  # containers listen on loopback on a developer's machine, hold
+  # development-tier data, and are in no deployment path. Nothing production
+  # depends on this entry.
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    commit-message:
+      prefix: chore
+      include: scope
+    # `semver-*-days` is npm-only; this ecosystem takes `default-days` alone.
+    cooldown:
+      default-days: 3
+    groups:
+      images:
         applies-to: version-updates
         patterns: ["*"]
         update-types: [minor, patch]

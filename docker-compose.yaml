@@ -1,0 +1,128 @@
+# The local development database: `docs/policy/data.md` -> `local-database`.
+#
+# Two services rather than one, and the second one is the whole point.
+# PlanetScale's pooler runs in **transaction-pooling** mode (spec 0002, DD2),
+# which removes LISTEN/NOTIFY, session advisory locks, temp tables and
+# cross-transaction prepared statements. Develop against a plain unpooled
+# Postgres and it is possible to write code that passes locally and fails in
+# production in exactly that class of way -- so PgBouncer runs here too, in the
+# same mode, and refuses locally what production refuses.
+#
+# Both of DD2's connection strings therefore exist and are distinguishable:
+#
+#   pooled  postgres://recomencemos:recomencemos@localhost:6432/recomencemos
+#   direct  postgres://recomencemos:recomencemos@localhost:5432/recomencemos
+#
+# The app uses the pooled one; migrations, which are DDL in long transactions,
+# use the direct one. `apps/web/.env.example` carries both.
+#
+# **This file is for `pnpm dev` and nothing else.** `pnpm test` runs against
+# PGlite in-memory (spec 0002, Testing Decisions seam 2) and CI runs no database
+# service at all. Docker is a requirement of the dev loop, not of the repository.
+#
+# **The credentials below are in git on purpose.** They are development-tier
+# values that reach a container listening on loopback, and they are the same
+# non-secret in `apps/web/.env.example` and `docker/pgbouncer/userlist.txt`. A
+# production URL in any of the three is the incident C13 names -- `.env*` is a
+# Turborepo `build` input, so it would be one `git add` away.
+#
+# **Images are pinned by tag and digest, stamped at a date**, the way
+# `docs/runbooks/observability-go-live.md` pins a vendor figure. Checked
+# **2026-08-26**: `postgres:18-alpine` is PostgreSQL **18.6**, `edoburu/pgbouncer`
+# `v1.25.2-p0` is PgBouncer **1.25.2**. Read from the images, not recalled.
+# `.github/dependabot.yml` carries a `docker-compose` entry so the digests move
+# on their own rather than freezing at whatever was current today.
+#
+# The engine version drifts three ways and it is worth knowing by how much:
+# PlanetScale runs 18.4, PGlite 0.5.7 is 18.3, this is 18.6. One major version,
+# which is what seam 2's argument rests on.
+
+name: recomencemos
+
+services:
+  # The direct connection. DDL, long transactions and anything session-scoped.
+  postgres:
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    environment:
+      POSTGRES_USER: recomencemos
+      POSTGRES_PASSWORD: recomencemos
+      POSTGRES_DB: recomencemos
+      # **Two settings, because they govern different lines of `pg_hba.conf`,
+      # and only one of them is on PgBouncer's path.** Read out of the image's
+      # `docker-entrypoint.sh` rather than assumed:
+      #
+      #   POSTGRES_HOST_AUTH_METHOD appends `host all all all <method>` -- the
+      #   catch-all line, and the one a connection from the compose network
+      #   matches. This is the load-bearing one. Left unset it defaults to the
+      #   server's `password_encryption`, which is already scram-sha-256 on 18;
+      #   it is set anyway so that `auth_type` in `pgbouncer.ini` is agreeing
+      #   with something stated rather than with an upstream default.
+      #
+      #   POSTGRES_INITDB_ARGS --auth-host governs the initdb-generated
+      #   127.0.0.1/::1 lines, which only in-container loopback ever uses.
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      # **Bound to loopback, not to `0.0.0.0`.** A bare "5432:5432" publishes the
+      # development database to every host on whatever network the laptop is
+      # joined to — a café, a co-working space, a conference — with a password
+      # that is committed to a public repository. The host-IP prefix is the
+      # whole mitigation, and it is why the credentials below can honestly be
+      # called non-secret.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # `/var/lib/postgresql`, not `/var/lib/postgresql/data`. The 18 images
+      # store the cluster in a major-version-specific subdirectory so that
+      # `pg_upgrade --link` can cross versions without a mount-point boundary,
+      # and they **refuse to start** against the old path. Verified by hitting
+      # it: `docker-library/postgres` PR #1259.
+      - postgres-data:/var/lib/postgresql
+      # Runs once, on an empty data directory. `citext` and `pg_trgm` are what
+      # seam 2 depends on (spec 0002, Testing Decisions) and what a human
+      # enables by hand on PlanetScale at go-live runbook §2 -- they are enabled
+      # out of band on both, so they are enabled out of band here rather than in
+      # a migration that could not run against PlanetScale anyway.
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # `-U`/`-d` so this reads the application database rather than the
+      # bootstrap one, and `-q` so a passing check is silent.
+      test: ["CMD-SHELL", "pg_isready -q -U recomencemos -d recomencemos"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  # The pooled connection. What the app uses, and what makes local as
+  # constrained as production.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0@sha256:7d7a27d9e90985cab5cf42256f5c13a3120baa4b055b69df37beb272b89b2340
+    # Run the binary against a mounted config instead of the image's
+    # entrypoint, which synthesises `pgbouncer.ini` from environment variables.
+    # The setting that gives this file its reason to exist is `pool_mode`, and
+    # it should be readable in a file rather than inferred from an env default.
+    # Overriding `entrypoint` clears the image's `command`, so nothing is
+    # appended after the config path.
+    entrypoint: ["/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
+    volumes:
+      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./docker/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      # Loopback, for the reason written on the postgres service above.
+      - "127.0.0.1:6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # PgBouncer answers a startup packet before any pool exists, so this
+      # proves the listener, not the route to Postgres. `depends_on:
+      # service_healthy` above is what proves the route.
+      test: ["CMD-SHELL", "pg_isready -q -h 127.0.0.1 -p 6432 -U recomencemos"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  # Named, so `pnpm db:down` keeps the data and `pnpm db:reset` is the deliberate
+  # act that discards it.
+  postgres-data:

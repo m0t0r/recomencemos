@@ -37,6 +37,23 @@ The repo requires the **active Node LTS** (24.x) and **pnpm 11**, and it enforce
 - `pnpm-workspace.yaml` is in oxfmt's `ignorePatterns` because pnpm writes those generated entries single-quoted and oxfmt rewrites them double-quoted, so the two tools would flip the file back and forth on every install. pnpm owns that file; do not remove the ignore.
 - `docs/efforts/*/advisories/` is ignored for the same shape of reason: a committed advisory is **verbatim** and `.claude/hooks/build-guard.sh` refuses to edit one, so a formatter rewriting it would make `pnpm format` and the Build gate contradict each other. `/spec-review` diffs the spec against those files; reformatting them is editing them.
 
+**Docker is required for `pnpm dev`, and for nothing else.** `docs/policy/data.md` → `local-database`
+puts the development database in `docker-compose.yaml` at the repo root: `postgres:18-alpine` on
+**5432**, and **PgBouncer in transaction-pooling mode** on **6432** in front of it, because that is
+the mode PlanetScale's pooler runs in (spec 0002, DD2) and a plain unpooled Postgres would accept
+code that fails after deploy. `pnpm db:up` starts it, `pnpm db:down` stops it, `pnpm db:reset`
+discards the volume. `cp apps/web/.env.example apps/web/.env.local` is the only other step — that
+file lives in `apps/web` because that is the directory `next dev` loads `.env.local` from.
+
+**The floor is Docker Engine 20.10+ with Compose v2.20+**, which is what `depends_on: condition:
+service_healthy` and `docker compose up --wait` need. Verified 2026-08-26 on Engine 29.7.2 and
+Compose v5.3.1; the floor is read from the features the file uses rather than bisected.
+
+**It is opt-in, and the boundary is exact.** `pnpm test` runs against PGlite in-memory (spec 0002,
+Testing Decisions seam 2) and CI starts no database service, so `install`, `lint`, `check-types`,
+`test` and `build` all pass on a machine with no Docker at all. Do not add a database service to a
+test or to CI — the moment either needs one, seam 2's argument has been lost.
+
 **The test runner is Vitest.** `pnpm test` runs `turbo run test test:gates migrations:check`, which is four suites plus one live gate:
 
 - `@repo/design-system:test` — `vitest run`, **happy-dom**, React Testing Library. Config in `vitest.config.mts`, cleanup between tests in `vitest.setup.ts`.

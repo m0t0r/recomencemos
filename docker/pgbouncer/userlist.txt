@@ -1,0 +1,8 @@
+; A development-tier credential, in git on purpose: it is the same non-secret
+; that `docker-compose.yaml` and `apps/web/.env.example` already carry, reaching a
+; container that listens on loopback. Nothing here is a production value, and
+; `docs/policy/security.md` -> `secret-store` is where a real one lives.
+;
+; Plain text rather than a SCRAM verifier because `auth_type = scram-sha-256`
+; needs the password itself to authenticate onward to Postgres.
+"recomencemos" "recomencemos"
