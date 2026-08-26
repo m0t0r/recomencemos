@@ -70,6 +70,16 @@ Before reporting a change complete, run `pnpm lint && pnpm check-types && pnpm t
 
 **CI runs exactly these commands, on every pull request.** `.github/workflows/ci.yml` is five jobs — `lint`, `check-types`, `test`, `build`, `audit` — one per entry in `docs/policy/build.md`'s `required-checks`, named so that a human can require each by name as a status check (`docs/runbooks/recomencemos-go-live.md` §8). Each job runs the **root script**, never a `turbo run` restated in YAML, so the two cannot drift; the Node and pnpm versions are read from `.nvmrc` and `packageManager` for the same reason. The fifth job is `pnpm audit:direct`, which is `scripts/audit-direct.mjs`: `high` or above in a **direct** dependency fails the run, and a transitive advisory is printed but never blocking (`docs/policy/security.md` → `dependency-policy`). Do not reach for `pnpm audit --audit-level=high` instead — this repo already carries a `high` transitive advisory, so that gate is red on arrival.
 
+**Dependabot is the other half of the audit job, and it has one coupling worth knowing.**
+`.github/dependabot.yml` covers npm (one entry — Dependabot expands `pnpm-workspace.yaml`'s globs
+itself) and `github-actions`. Its `cooldown` is set against **`minimumReleaseAge` in
+`pnpm-workspace.yaml`**, which is 1440 minutes: a package published inside that window does not
+resolve locally at all, so a PR raised sooner is one nobody could install. Dependabot's own default
+is already stricter, so the two cannot currently disagree — it is pinned anyway because the number
+that matters is the relationship between the two files. The `github-actions` entry names
+`/.github/actions/*` as well as `/`, without which the SHA pin in the composite setup action would
+never be updated. Its commit messages are prefixed to stay inside Conventional Commits.
+
 `pnpm lint` is stricter than it looks. The root `.oxlintrc.json` puts oxlint's `correctness` category at `error` but `suspicious` and `perf` at `warn`; the `--max-warnings 0` flag in the root `lint` script is the only thing that turns those warnings into a failing exit code. Never relax that flag to make lint pass, and don't silence a rule repo-wide when a scoped `overrides` entry or an `// oxlint-disable-next-line` with a reason would do.
 
 ## Architecture
