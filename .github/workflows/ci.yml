@@ -48,13 +48,20 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm check-types
 
-  # `pnpm test` is `turbo run test test:gates`, so the stage-hook suite is inside
-  # this job rather than beside it -- which is what `required-checks` means by
-  # "test (including test:gates)".
+  # `pnpm test` is `turbo run test test:gates migrations:check`, so the stage-hook
+  # suite is inside this job rather than beside it -- which is what
+  # `required-checks` means by "test (including test:gates)".
+  #
+  # `fetch-depth: 0` because `migrations:check` frames every one of its answers on
+  # `git merge-base <default branch> HEAD` (NFR30, DD13). The default shallow
+  # checkout has no merge base, and that gate refuses to call "I could not
+  # compare" a pass -- it would exit 2 the day the first migration lands.
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup
       - run: pnpm test
 

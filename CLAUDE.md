@@ -37,12 +37,18 @@ The repo requires the **active Node LTS** (24.x) and **pnpm 11**, and it enforce
 - `pnpm-workspace.yaml` is in oxfmt's `ignorePatterns` because pnpm writes those generated entries single-quoted and oxfmt rewrites them double-quoted, so the two tools would flip the file back and forth on every install. pnpm owns that file; do not remove the ignore.
 - `docs/efforts/*/advisories/` is ignored for the same shape of reason: a committed advisory is **verbatim** and `.claude/hooks/build-guard.sh` refuses to edit one, so a formatter rewriting it would make `pnpm format` and the Build gate contradict each other. `/spec-review` diffs the spec against those files; reformatting them is editing them.
 
-**The test runner is Vitest.** `pnpm test` runs `turbo run test test:gates`, which is four suites:
+**The test runner is Vitest.** `pnpm test` runs `turbo run test test:gates migrations:check`, which is four suites plus one live gate:
 
 - `@repo/design-system:test` — `vitest run`, **happy-dom**, React Testing Library. Config in `vitest.config.mts`, cleanup between tests in `vitest.setup.ts`.
 - `@repo/errors:test` — `vitest run`, **Node default environment**, no plugin and no setup file. The prior art for a Node package here: a `vitest.config.mts` carrying `resolve.tsconfigPaths`, `globals`, and an `include` glob, and nothing else.
 - `@repo/observability:test` — `vitest run`, Node environment, the same minimal config as `@repo/errors`. It is the **stdout seam**: a test that asserts on a _line_ builds a `pino` instance from `createLoggerOptions` over an in-memory `Writable`, and pino's own test utility is deliberately unused because it asserts on `pid`/`hostname` before stripping them, which these options replace. The two modules that emit no line — the report seam and the trace-context reader — are tested against the real SDK with no client initialised, which is a real state the template ships in rather than a mock.
-- `//#test:gates` — `gate-test.sh`, the 71 cases that drive the repo's own gates. Fifty-eight are the stage hooks; the last two sections are the **dependency audit** CI runs on every PR (`scripts/audit-direct.mjs`), which is the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Five of those thirteen exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0. It exits `2` rather than `0` or `1` when it cannot reach an answer, so a broken gate cannot be read as a clean one. Its `inputs` cover `.claude/hooks/**` and `scripts/audit-direct.mjs`.
+- `//#test:gates` — `gate-test.sh`, the 107 cases that drive the repo's own gates. Sixty-three are the stage hooks; the rest drive the two gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and both scripts.
+  - The **dependency audit** (`scripts/audit-direct.mjs`), thirteen cases. Five exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0.
+  - **Migration integrity** (`scripts/migration-integrity.mjs`), thirty-one cases across NFR30's four counts — an append-only journal, immutable shipped migrations, destructive statements travelling alone under a `contract` marker, and a marked migration never sharing a pull request with `@repo/domain`'s query modules. Its fixtures are real git repositories, because the gate's whole frame is `git merge-base <default branch> HEAD` and there is nothing left to mock that would still be the thing under test.
+
+  Both exit `2` rather than `0` or `1` when they cannot reach an answer, so a broken gate cannot be read as a clean one.
+
+- `//#migrations:check` — the same migration gate, run against **this** repository rather than a fixture. It is `cache: false` on purpose and it is not a case inside `gate-test.sh`: that suite is cached on `.claude/hooks/**` plus the two scripts, and this answer also depends on git history and on migration files none of those inputs cover, so a cached replay would report a pass nothing had checked. CI's `test` job therefore checks out with `fetch-depth: 0` — a shallow clone has no merge base, and the gate refuses to call "I could not compare" a pass.
 
 All three package suites follow the same three rules. Tests sit **beside their source** — `src/**/*.test.{ts,tsx}` in the design system, `src/**/*.test.ts` in a package with no JSX — so `check-types` covers them (the tsconfig `include` is `src`). Every workspace with tests sets `"types": ["vitest/globals"]` in its tsconfig. And:
 
@@ -367,7 +373,7 @@ DAG, so the decomposition rule (maximal chains become stacks; a ticket with two 
 serialized) is in `issue-tracker.md`. Never stack unrelated tickets for tidiness — a stack asserts an
 ordering, and a false one makes review worse.
 
-**The Build gate.** Two hooks, five rules, all covered by `gate-test.sh`:
+**The Build gate.** Two hooks, six rules, all covered by `gate-test.sh`:
 
 | Hook                      | Rule                                                                                                                                    |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -375,6 +381,7 @@ ordering, and a false one makes review worse.
 | `build-to-deploy-gate.sh` | **G.** never push to the default branch. Without it F is theatre                                                                        |
 | `build-guard.sh`          | **H.** never hand-edit a vendored skill, a committed advisory, or `pnpm-lock.yaml`                                                      |
 | `build-guard.sh`          | **I.** never write a credential into the repo                                                                                           |
+| `build-guard.sh`          | **J.** never hand-edit a migration already named by a `meta/_journal.json` beside it                                                    |
 | `verify-before-stop.sh`   | a `Stop` hook: the session may not report done while lint, `check-types`, `test`, or `test:gates` is red                                |
 
 Rule F is load-bearing exactly as rule A is for Plan and C for Design — the act must be one the agent

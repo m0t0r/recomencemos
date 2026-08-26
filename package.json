@@ -5,10 +5,11 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "check-types": "turbo run check-types",
-    "test": "turbo run test test:gates",
+    "test": "turbo run test test:gates migrations:check",
     "test:gates": "bash .claude/hooks/gate-test.sh \"$PWD/.claude/hooks\"",
     "lint": "oxlint . --max-warnings 0",
     "audit:direct": "node scripts/audit-direct.mjs",
+    "migrations:check": "node scripts/migration-integrity.mjs",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --check",
     "format:fix": "oxfmt"

@@ -28,8 +28,11 @@
       "persistent": true
     },
     "//#test:gates": {
-      "inputs": [".claude/hooks/**", "scripts/audit-direct.mjs"],
+      "inputs": [".claude/hooks/**", "scripts/audit-direct.mjs", "scripts/migration-integrity.mjs"],
       "outputs": []
+    },
+    "//#migrations:check": {
+      "cache": false
     },
     "//#lint": {
       "inputs": ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}", ".oxlintrc.json", "**/.oxlintrc.json"]
