@@ -4,14 +4,15 @@ Every file in this directory has an **owner role**. A concern raised while writi
 `spec.md` names the role, never a person, so a spec written by one developer still routes correctly
 once a team forms around it. Growing the team is an edit to the right-hand column and nothing else.
 
-| Policy                           | Owner role     | Settles                                                                   | Who holds it |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------- | ------------ |
-| [security.md](security.md)       | Security owner | Auth, sessions, threat-model scope, compliance, secrets                   | _unassigned_ |
-| [data.md](data.md)               | Data lead      | Store, keys, classification, retention, migrations, cache ownership       | _unassigned_ |
-| [operability.md](operability.md) | On-call lead   | Observability, alerting, SLOs, control bands, rollback                    | _unassigned_ |
-| [ux.md](ux.md)                   | Design lead    | Accessibility, locales, voice, motion, the state set                      | _unassigned_ |
-| [build.md](build.md)             | Repo owner     | Branching, merge rules, protected paths, what "done" means, stacked PRs   | _unassigned_ |
-| —                                | Tech lead      | Architecture, module boundaries, ADR conflicts, arbitration between edges | _unassigned_ |
+| Policy                           | Owner role     | Settles                                                                    | Who holds it |
+| -------------------------------- | -------------- | -------------------------------------------------------------------------- | ------------ |
+| [security.md](security.md)       | Security owner | Auth, sessions, threat-model scope, compliance, secrets                    | _unassigned_ |
+| [data.md](data.md)               | Data lead      | Store, keys, classification, retention, migrations, cache ownership        | _unassigned_ |
+| [operability.md](operability.md) | On-call lead   | Observability, alerting, SLOs, control bands, rollback                     | _unassigned_ |
+| [ux.md](ux.md)                   | Design lead    | Accessibility, locales, voice, motion, the state set                       | _unassigned_ |
+| [voice.md](voice.md)             | Design lead    | Archetype, register, word choice, the tone matrix, what copy may never say | _unassigned_ |
+| [build.md](build.md)             | Repo owner     | Branching, merge rules, protected paths, what "done" means, stacked PRs    | _unassigned_ |
+| —                                | Tech lead      | Architecture, module boundaries, ADR conflicts, arbitration between edges  | _unassigned_ |
 
 **Build policy belongs to the Repo owner, not the Tech lead.** Who may merge, what the remote
 protects, and which paths an agent may not touch are properties of the repository rather than of the
