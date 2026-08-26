@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Build-phase write guard. Two rules, enforced before the write lands.
+# Build-phase write guard. Three rules, enforced before the write lands.
 #
 #   H. A vendored skill is never hand-edited.
 #   I. A credential is never written into the repo.
+#   J. A migration already in the journal is never hand-edited.
 #
 # Rule H's test is mechanical rather than a hand-kept list: skills-lock.json is
 # the install manifest, so a skill named in it belongs to its upstream and
@@ -19,6 +20,17 @@
 # Rule I is deliberately narrow: only credential formats that are unambiguous on
 # sight. A blocking hook that cries wolf is a blocking hook someone turns off, so
 # there is no "looks like a secret" heuristic here.
+#
+# Rule J is rule H's shape again, and its test is mechanical for the same reason:
+# a migration named by a `meta/_journal.json` beside it is one Drizzle considers
+# applied, so editing it changes nothing in production and silently changes what
+# PGlite replays into every test run (NFR30, DD13). The journal is read from
+# beside the file rather than from a fixed `drizzle/` path, because `@repo/domain`
+# does not own one yet. Write and Edit only, so `drizzle-kit` keeps working
+# through Bash exactly as the skill installers do.
+#
+# This is the in-session half. `scripts/migration-integrity.mjs` is the other,
+# and they are not redundant: the hook stops the agent, the gate stops the PR.
 #
 # See README "The Build stage".
 set -uo pipefail
@@ -58,6 +70,18 @@ case "$path" in
   ;;
 */pnpm-lock.yaml)
   deny "pnpm owns pnpm-lock.yaml. Change dependencies with \`pnpm add\`/\`pnpm remove\`/\`pnpm update\` and let it write the lock; a hand-edited lockfile passes review and fails install."
+  ;;
+esac
+
+# Rule J.
+case "$path" in
+*.sql)
+  tag=$(basename "$path" .sql)
+  journal="$(dirname "$path")/meta/_journal.json"
+  if [ -f "$journal" ] &&
+    jq -e --arg t "$tag" 'any(.entries[]?; .tag == $t)' "$journal" >/dev/null 2>&1; then
+    deny "'$tag' is already in $journal, so Drizzle considers it applied: production will not re-run it, and PGlite replays it from scratch into every test run. Editing it here makes the test seam test a schema production does not have — and go green doing it (NFR30, DD13). Write a new migration instead: \`pnpm exec drizzle-kit generate\`, which writes through Bash and is not what this rule refuses. A destructive one takes \`--name contract_<what_it_drops>\`."
+  fi
   ;;
 esac
 

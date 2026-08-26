@@ -2,14 +2,14 @@
 # Drive the repo's own gates with fixtures.
 #
 # Most of them are stage hooks, driven with PreToolUse payloads: all four run on
-# every call, as Claude Code runs them, and deny wins. The last two sections
-# drive a gate that is not a hook at all -- the dependency audit CI runs on every
-# PR -- because it is the same kind of thing: repo logic deciding whether work
-# may proceed, and so a test suite rather than a script somebody remembers to
-# run.
+# every call, as Claude Code runs them, and deny wins. The later sections drive
+# the two gates that are not hooks at all -- the dependency audit and migration
+# integrity, both of which CI runs on every PR -- because they are the same kind
+# of thing: repo logic deciding whether work may proceed, and so a test suite
+# rather than a script somebody remembers to run.
 set -uo pipefail
 
-# Quiet on success, like every other test runner here. 58 ok-lines scrolled the
+# Quiet on success, like every other test runner here. A hundred ok-lines scroll the
 # rest of `pnpm test` off the screen, and Turborepo replays a cache hit's stdout
 # verbatim, so the volume was paid on every run rather than only on a real one.
 # Failures always print in full, with their section header. `-v` restores the
@@ -116,6 +116,13 @@ EOF
 cat > "$ROOT/skills-lock.json" <<'EOF'
 {"version":1,"skills":{"to-tickets":{"source":"mattpocock/skills"},"tdd":{"source":"mattpocock/skills"}}}
 EOF
+
+# Rule J reads the journal sitting beside the file being written, so the fixture
+# is a migration directory rather than a path pattern: `0000_init` is shipped and
+# `0001_draft` is a .sql no journal names.
+mkdir -p "$ROOT/drizzle/meta"
+printf '%s\n' '{"version":"7","dialect":"postgresql","entries":[{"idx":0,"version":"7","when":1750000000000,"tag":"0000_init","breakpoints":true}]}' > "$ROOT/drizzle/meta/_journal.json"
+printf '%s\n' 'CREATE TABLE "offer" ("id" uuid PRIMARY KEY);' > "$ROOT/drizzle/0000_init.sql"
 
 # Rule G reads the default branch from the remote. A real repo with a known one
 # beats mocking git.
@@ -296,6 +303,13 @@ run "a private key block"                                  deny  "$(wj Write "$R
 run "a GitHub token"                                       deny  "$(wj Write "$ROOT/apps/web/c.ts" "const t = \"gh""p_0123456789abcdefghijklmnopqrstuvwxyz\";")"
 run "prose about passwords"                                allow "$(wj Write "$ROOT/apps/web/d.ts" 'export const passwordFieldLabel = "Password";')"
 
+section "Rule J: a journaled migration is never hand-edited"
+run "Write to a migration the journal names"               deny  "$(wj Write "$ROOT/drizzle/0000_init.sql" 'DROP TABLE "offer";')"
+run "Edit to a migration the journal names"                deny  "$(wj Edit "$ROOT/drizzle/0000_init.sql" 'ALTER TABLE "offer" DROP COLUMN "note";')"
+run "Write to a .sql no journal names"                     allow "$(wj Write "$ROOT/drizzle/0001_draft.sql" 'CREATE TABLE "x" ("id" uuid);')"
+run "Write to a .sql outside any migration directory"      allow "$(wj Write "$ROOT/scripts/report.sql" 'SELECT 1;')"
+run "an ADR quoting the destructive list"                  allow "$(wj Write "$ROOT/docs/adr/0013-x.md" 'DROP TABLE, DROP COLUMN, DROP CONSTRAINT and any RENAME.')"
+
 section "unrelated paths"
 run "ordinary source file saying status: approved"        allow "$(wj Write "$ROOT/apps/web/app/page.tsx" 'status: approved')"
 
@@ -377,6 +391,260 @@ run_audit "comments and blank lines inside the block"      1 "^BLOCKING .*next" 
 run_audit "a workspace file with no packages: key"         2 "could not run"       "$AR_BROKEN" "$(adv next high)"
 run_audit "an audit payload that is not an audit"          2 "could not run"       "$AR"        '{"error":"registry unreachable"}'
 run_audit "an audit payload that is not JSON"              2 "not JSON"            "$AR"        'upstream said no'
+
+
+# The migration-integrity gate is the second non-hook here, and for the same
+# reason as the audit above: repo logic deciding whether work may proceed.
+#
+# Its fixtures are real git repositories rather than mocks, because the gate's
+# entire frame is `git merge-base <default branch> HEAD` -- there is nothing left
+# to mock that would still be the thing under test. Each fixture commits a base
+# state, points refs/remotes/origin/main at it, branches, and leaves the change
+# in the working tree, which is also how a developer meets this gate before
+# committing anything.
+MIG="$REPO/scripts/migration-integrity.mjs"
+
+# A Drizzle journal naming the given tags in order. `when` is derived from the
+# index rather than read from a clock, so a fixture reads the same on every run.
+journal() {
+  local idx=0 sep="" out='{"version":"7","dialect":"postgresql","entries":['
+  for tag in "$@"; do
+    out="$out$sep{\"idx\":$idx,\"version\":\"7\",\"when\":$((1750000000000 + idx)),\"tag\":\"$tag\",\"breakpoints\":true}"
+    idx=$((idx + 1)); sep=","
+  done
+  printf '%s]}' "$out"
+}
+
+mig_repo() { # name -> path
+  local dir="$ROOT/mig-$1"
+  mkdir -p "$dir/drizzle/meta"
+  git -C "$dir" init -q -b main
+  git -C "$dir" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  printf '%s' "$dir"
+}
+
+mig_ship() { # dir -- freeze the current state as what the default branch holds
+  git -C "$1" add -A >/dev/null 2>&1
+  git -C "$1" -c user.email=t@t -c user.name=t commit -q -m base >/dev/null 2>&1
+  git -C "$1" update-ref refs/remotes/origin/main HEAD
+  git -C "$1" checkout -q -B ticket/1-work
+}
+
+mig_start() { # name -> a repo with 0000_init already on the default branch
+  local d
+  d=$(mig_repo "$1")
+  printf '%s\n' 'CREATE TABLE "offer" ("id" uuid PRIMARY KEY);' > "$d/drizzle/0000_init.sql"
+  journal 0000_init > "$d/drizzle/meta/_journal.json"
+  mig_ship "$d"
+  printf '%s' "$d"
+}
+
+mig_add() { # dir tag sql-line... -- add a migration on the branch
+  local dir="$1" tag="$2"
+  shift 2
+  printf '%s\n' "$@" > "$dir/drizzle/$tag.sql"
+  journal 0000_init "$tag" > "$dir/drizzle/meta/_journal.json"
+}
+
+# `@repo/domain` does not exist yet, so the gate finds it by manifest name rather
+# than by a path that would go stale silently. The fixture is the same shape.
+mig_domain() { # dir
+  mkdir -p "$1/packages/domain/src"
+  printf '%s\n' '{"name":"@repo/domain","version":"0.0.0"}' > "$1/packages/domain/package.json"
+  printf '%s\n' 'export const listOffers = () => [];' > "$1/packages/domain/src/offers.ts"
+  printf '%s\n' 'export const schema = {};' > "$1/packages/domain/src/schema.ts"
+  printf '%s\n' 'export const canAccept = () => true;' > "$1/packages/domain/src/policy.ts"
+}
+
+# Exit code *and* a line of output, for the reason run_audit gives: a script that
+# crashed on every input would exit non-zero and pass every refusing case on the
+# code alone.
+run_mig() { # name expect-exit expect-grep root
+  local name="$1" expect="$2" want="$3" dir="$4" out code
+  out=$(node "$MIG" --root "$dir" 2>&1)
+  code=$?
+  if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE "$want"; then
+    pass=$((pass+1)); sec_pass=$((sec_pass+1))
+    [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit %s\n' "$name" "$code"
+  else
+    fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+    printf '  FAIL %-51s -> exit %s (want %s matching /%s/)\n' "$name" "$code" "$expect" "$want"
+    printf '       %s\n' "${out:-<empty>}"
+  fi
+  return 0
+}
+
+section "Migration integrity: the journal is append-only"
+
+D=$(mig_start append)
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+run_mig "an appended entry"                               0 "^Migration integrity passed" "$D"
+
+D=$(mig_start removed)
+journal > "$D/drizzle/meta/_journal.json"
+run_mig "a committed entry removed"                       1 "append-only"                 "$D"
+
+D=$(mig_start reordered)
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+journal 0001_add_note 0000_init > "$D/drizzle/meta/_journal.json"
+run_mig "two entries swapped"                             1 "append-only"                 "$D"
+
+D=$(mig_start retagged)
+journal 0000_renamed > "$D/drizzle/meta/_journal.json"
+run_mig "a committed tag rewritten"                       1 "append-only"                 "$D"
+
+D=$(mig_start rewhen)
+printf '%s\n' '{"version":"7","dialect":"postgresql","entries":[{"idx":0,"version":"7","when":1,"tag":"0000_init","breakpoints":true}]}' > "$D/drizzle/meta/_journal.json"
+run_mig "a committed \`when\` rewritten"                   1 "append-only"                 "$D"
+
+section "Migration integrity: a shipped migration is immutable"
+
+D=$(mig_start edited)
+printf '%s\n' 'CREATE TABLE "offer" ("id" uuid PRIMARY KEY, "note" text);' > "$D/drizzle/0000_init.sql"
+run_mig "a shipped migration edited"                      1 "immutable"                   "$D"
+
+D=$(mig_start deleted)
+rm "$D/drizzle/0000_init.sql"
+run_mig "a shipped migration deleted"                     1 "immutable"                   "$D"
+
+# Immutability begins at the merge base. A migration this branch added is still
+# the branch's to rewrite -- refusing that would make the gate unsatisfiable
+# during the very session that generates the file.
+D=$(mig_start reworked)
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" varchar(500);'
+run_mig "a migration this branch added, reworked"         0 "^Migration integrity passed" "$D"
+
+section "Migration integrity: a destructive statement travels alone"
+
+D=$(mig_start mixed)
+mig_add "$D" 0001_tidy 'ALTER TABLE "offer" ADD COLUMN "note" text;' 'ALTER TABLE "offer" DROP COLUMN "memo";'
+run_mig "a drop sharing a migration with an add"          1 "travels alone"               "$D"
+
+D=$(mig_start unmarked)
+mig_add "$D" 0001_tidy 'ALTER TABLE "offer" DROP COLUMN "memo";'
+run_mig "a drop alone, but the name does not say so"      1 "marker"                      "$D"
+
+D=$(mig_start marked)
+mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
+run_mig "a drop alone, in a migration named for it"       0 "^Migration integrity passed" "$D"
+
+D=$(mig_start droptable)
+mig_add "$D" 0001_contract_drop_draft 'DROP TABLE "draft";' 'ALTER TABLE "offer" DROP CONSTRAINT "offer_draft_fk";'
+run_mig "two destructive statements together"             0 "^Migration integrity passed" "$D"
+
+D=$(mig_start notnull)
+mig_add "$D" 0001_tighten 'CREATE INDEX "offer_idx" ON "offer" ("id");' 'ALTER TABLE "offer" ALTER COLUMN "note" SET NOT NULL;'
+run_mig "SET NOT NULL sharing a migration with an index"  1 "travels alone"               "$D"
+
+D=$(mig_start coltype)
+mig_add "$D" 0001_widen 'ALTER TABLE "offer" ALTER COLUMN "note" SET DATA TYPE varchar(500);' 'CREATE INDEX "offer_idx" ON "offer" ("id");'
+run_mig "a column retype sharing a migration"             1 "travels alone"               "$D"
+
+D=$(mig_start renamed)
+mig_add "$D" 0001_contract_rename_note 'ALTER TABLE "offer" RENAME COLUMN "note" TO "terms";'
+run_mig "a rename alone, marked"                          0 "^Migration integrity passed" "$D"
+
+# The prose cases. Every one of these is text that names a destructive statement
+# without being one, and four false refusals were found the last time these rules
+# were written.
+D=$(mig_start prose_comment)
+mig_add "$D" 0001_add_note '-- supersedes the DROP COLUMN "memo" this replaces' 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+run_mig "DROP COLUMN inside a SQL line comment"           0 "^Migration integrity passed" "$D"
+
+D=$(mig_start prose_block)
+mig_add "$D" 0001_add_note '/* DROP TABLE "draft" is the contract half, next release */' 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+run_mig "DROP TABLE inside a SQL block comment"           0 "^Migration integrity passed" "$D"
+
+D=$(mig_start prose_literal)
+mig_add "$D" 0001_seed_skill "INSERT INTO \"skill\" (\"label_es\") VALUES ('DROP TABLE y RENAME');"
+run_mig "a destructive phrase inside a string literal"    0 "^Migration integrity passed" "$D"
+
+D=$(mig_start addconstraint)
+mig_add "$D" 0001_add_fk 'ALTER TABLE "offer" ADD CONSTRAINT "offer_hirer_fk" FOREIGN KEY ("hirer_id") REFERENCES "account"("id");'
+run_mig "ADD CONSTRAINT is not DROP CONSTRAINT"           0 "^Migration integrity passed" "$D"
+
+D=$(mig_start addnotnull)
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text NOT NULL DEFAULT '"''"';'
+run_mig "ADD COLUMN ... NOT NULL is not SET NOT NULL"     0 "^Migration integrity passed" "$D"
+
+D=$(mig_start createtype)
+mig_add "$D" 0001_add_status 'CREATE TYPE "offer_status" AS ENUM('"'draft'"', '"'sent'"');' 'ALTER TABLE "offer" ADD COLUMN "status" "offer_status";'
+run_mig "CREATE TYPE is not ALTER COLUMN ... TYPE"        0 "^Migration integrity passed" "$D"
+
+section "Migration integrity: contract and code ship separately"
+
+D=$(mig_start contract_code)
+mig_domain "$D"
+mig_ship "$D"
+mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
+printf '%s\n' 'export const listOffers = () => [1];' > "$D/packages/domain/src/offers.ts"
+run_mig "a contract migration beside a query module"      1 "ship separately"             "$D"
+
+# The schema is what a contract migration is generated *from*, so it has to be
+# allowed to move with it or the rule refuses the only way to satisfy itself.
+D=$(mig_start contract_schema)
+mig_domain "$D"
+mig_ship "$D"
+mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
+printf '%s\n' 'export const schema = { offer: {} };' > "$D/packages/domain/src/schema.ts"
+run_mig "a contract migration beside the schema"          0 "^Migration integrity passed" "$D"
+
+D=$(mig_start contract_pure)
+mig_domain "$D"
+mig_ship "$D"
+mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
+printf '%s\n' 'export const canAccept = () => false;' > "$D/packages/domain/src/policy.ts"
+run_mig "a contract migration beside a pure module"       0 "^Migration integrity passed" "$D"
+
+D=$(mig_start additive_code)
+mig_domain "$D"
+mig_ship "$D"
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+printf '%s\n' 'export const listOffers = () => [1];' > "$D/packages/domain/src/offers.ts"
+run_mig "an additive migration beside a query module"     0 "^Migration integrity passed" "$D"
+
+D=$(mig_start contract_adr)
+mig_domain "$D"
+mig_ship "$D"
+mig_add "$D" 0001_contract_drop_memo 'ALTER TABLE "offer" DROP COLUMN "memo";'
+mkdir -p "$D/docs/adr"
+printf '%s\n' '# ADR-0013' 'DROP TABLE, DROP COLUMN, DROP CONSTRAINT, ALTER COLUMN ... TYPE and any RENAME.' > "$D/docs/adr/0013-x.md"
+run_mig "a contract migration beside an ADR quoting it"   0 "^Migration integrity passed" "$D"
+
+section "Migration integrity: the ways it must not fail open"
+
+D=$(mig_repo none)
+rm -rf "$D/drizzle"
+printf '%s\n' '{"name":"root"}' > "$D/package.json"
+mig_ship "$D"
+run_mig "a repository with no migrations at all"          0 "no migrations"               "$D"
+
+D=$(mig_start notjson)
+printf '%s\n' 'entries: []' > "$D/drizzle/meta/_journal.json"
+run_mig "a journal that is not JSON"                      2 "could not run"               "$D"
+
+D=$(mig_start noentries)
+printf '%s\n' '{"version":"7","dialect":"postgresql"}' > "$D/drizzle/meta/_journal.json"
+run_mig "a journal with no entries array"                 2 "could not run"               "$D"
+
+D=$(mig_start nofile)
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+rm "$D/drizzle/0001_add_note.sql"
+run_mig "a journal entry with no .sql beside it"          2 "could not run"               "$D"
+
+# A shallow clone has no merge base, and that is the failure this gate must not
+# report as a pass: nothing was compared, so nothing was checked.
+D=$(mig_start nobase)
+git -C "$D" checkout -q --orphan unrelated
+git -C "$D" -c user.email=t@t -c user.name=t commit -q -m unrelated >/dev/null 2>&1
+run_mig "no merge base with the default branch"           2 "could not run"               "$D"
+
+# The run against *this* repository is deliberately not here. This suite is
+# cached on `.claude/hooks/**` plus the two scripts, and the gate's answer also
+# depends on git history and on migrations none of those inputs cover -- so a
+# cached replay would report a pass nothing had checked. It runs uncached as the
+# `//#migrations:check` task instead, inside the same `pnpm test`.
 
 
 flush_section
