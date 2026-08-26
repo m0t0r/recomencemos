@@ -462,9 +462,15 @@ mig_domain() { # dir
 # Exit code *and* a line of output, for the reason run_audit gives: a script that
 # crashed on every input would exit non-zero and pass every refusing case on the
 # code alone.
+# GITHUB_BASE_REF is unset for every case. CI sets it on a pull_request event, and
+# the gate reads it ahead of origin/HEAD -- correctly, for the repository CI
+# checked out, and disastrously for a fixture, which is a different repository
+# with no such ref. Thirty-five cases went red on the first CI run for exactly
+# this: ambient environment reaching a fixture that is supposed to be sealed.
+# The one case that wants it sets it explicitly.
 run_mig() { # name expect-exit expect-grep root
   local name="$1" expect="$2" want="$3" dir="$4" out code
-  out=$(node "$MIG" --root "$dir" 2>&1)
+  out=$(env -u GITHUB_BASE_REF node "$MIG" --root "$dir" 2>&1)
   code=$?
   if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE "$want"; then
     pass=$((pass+1)); sec_pass=$((sec_pass+1))
@@ -720,6 +726,22 @@ D=$(mig_start nofile)
 mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
 rm "$D/drizzle/0001_add_note.sql"
 run_mig "a journal entry with no .sql beside it"          2 "could not run"               "$D"
+
+# GITHUB_BASE_REF naming a ref this repository does not have is the shape of the
+# bug that turned 35 of these cases red on the first CI run. It must read as
+# "could not run" and never as a pass -- an unresolvable base compared nothing.
+D=$(mig_start badbaseref)
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+out=$(GITHUB_BASE_REF=no-such-branch node "$MIG" --root "$D" 2>&1)
+code=$?
+if [ "$code" = 2 ] && printf '%s' "$out" | grep -qE "could not run"; then
+  pass=$((pass+1)); sec_pass=$((sec_pass+1))
+  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit 2\n' "GITHUB_BASE_REF naming a ref that is not there"
+else
+  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+  printf '  FAIL %-51s -> exit %s (want 2 matching /could not run/)\n' "GITHUB_BASE_REF naming a ref that is not there" "$code"
+  printf '       %s\n' "${out:-<empty>}"
+fi
 
 # A shallow clone has no merge base, and that is the failure this gate must not
 # report as a pass: nothing was compared, so nothing was checked.
