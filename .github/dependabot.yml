@@ -1,0 +1,107 @@
+# Dependabot: the other half of `docs/policy/security.md` -> `dependency-policy`.
+#
+# That key says CI fails on `high` or above in a **direct** dependency. The
+# `audit` job is what refuses; this is what proposes the upgrade that clears it.
+# Neither is much use alone — a gate with nothing behind it is a gate somebody
+# eventually bypasses, which is the failure mode C7 was answered to avoid.
+#
+# Two ecosystems, and no `target-branch`: the default branch is `dev`, which is
+# where Dependabot opens against unless told otherwise.
+version: 2
+
+updates:
+  # ---------------------------------------------------------------- npm (pnpm)
+  #
+  # One entry covers the whole monorepo. Dependabot reads `pnpm-workspace.yaml`
+  # and expands its `packages:` globs itself, so a per-workspace entry would be
+  # both redundant and rejected — overlapping directories for one ecosystem are
+  # not allowed.
+  #
+  # **pnpm 11 is beta here.** The published support matrix lists pnpm 7–10;
+  # dependabot-core added pnpm 11 in July 2026 and labels it beta. The lockfile
+  # is the reassuring part: pnpm 11 still writes `lockfileVersion: '9.0'`, the
+  # same format pnpm 10 writes, so the format is not the risk surface. If
+  # Dependabot ever fails to resolve this repo, that beta label is the first
+  # place to look.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+
+    # Conventional Commits are fixed by `docs/policy/build.md`, and Dependabot's
+    # own default (`Bump x from a to b`) is outside the convention. This yields
+    # `chore(deps): bump …` and `chore(deps-dev): bump …`.
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
+
+    # `minimumReleaseAge` in `pnpm-workspace.yaml` is 1440 minutes — pnpm 11's
+    # default, which the repo takes rather than sets. A package published inside
+    # that window does not resolve locally at all, so a Dependabot PR raised
+    # sooner would be one nobody could install.
+    #
+    # Dependabot's own default is already 3 days, and stricter than pnpm's 1, so
+    # the two cannot currently disagree. It is set explicitly anyway: the number
+    # that matters is the *relationship* between these two files, and a default
+    # that changes upstream would break it silently. A major gets a week — the
+    # bump most likely to be yanked is the one worth soaking longest.
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+
+    # Minor and patch arrive as one pull request rather than a dozen. A major
+    # still comes on its own, because a major is a decision and a batch of them
+    # is a decision nobody makes carefully.
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+    # The default. Restated because the constraint behind it is a one-person
+    # review queue, not a tooling limit. Security PRs are exempt from this cap.
+    open-pull-requests-limit: 5
+
+  # -------------------------------------------------------- github-actions
+  #
+  # **Both directory entries are load-bearing, and the second one is the reason
+  # this is not a one-liner.** With `/` alone Dependabot scans
+  # `.github/workflows/` and a root `action.yml`, and nothing else — so the one
+  # SHA-pinned action this repo has, `pnpm/action-setup` in
+  # `.github/actions/setup/action.yml`, would never be updated. A pinned action
+  # nobody updates is the worst of both worlds: the pin's whole purpose is that
+  # moving it is a deliberate act, and an act nobody performs is a version
+  # frozen at whatever was current the day it was written.
+  #
+  # The glob form is verified from `github_actions/file_fetcher.rb`, which
+  # scans any non-root directory for `*.yml`, rather than from the documentation
+  # — which describes only the root behaviour. If it stops working, the symptom
+  # is silence, so the SHA pin is worth an eye at review time regardless.
+  #
+  # Dependabot rewrites the trailing `# v6.0.10` comment along with the SHA when
+  # the comment sits on the same line, which is why it is written that way.
+  - package-ecosystem: github-actions
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    commit-message:
+      prefix: chore
+      include: scope
+    # `semver-*-days` is npm-only; this ecosystem takes `default-days` alone.
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
