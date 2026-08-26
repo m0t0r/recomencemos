@@ -11,8 +11,14 @@
 # `turbo run` lives in package.json, not here.
 name: CI
 
+# `pull_request` is the gate. `push` on the default branch is what makes the
+# Turborepo cache worth having: GitHub scopes a cache to the branch that wrote it
+# plus that branch's descendants, so without a run on `dev` there is nothing for
+# a new pull request to restore from and every one of them starts cold.
 on:
   pull_request:
+  push:
+    branches: [dev]
 
 # The production gate, as a permission rather than as a convention: a read-only
 # GITHUB_TOKEN cannot push to the default branch and cannot merge a pull request,
@@ -31,6 +37,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+        with:
+          turbo-cache: "false"
       - run: pnpm lint
 
   check-types:
@@ -64,4 +72,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+        with:
+          turbo-cache: "false"
       - run: pnpm audit:direct

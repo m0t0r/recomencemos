@@ -2,10 +2,11 @@
 # Drive the repo's own gates with fixtures.
 #
 # Most of them are stage hooks, driven with PreToolUse payloads: all four run on
-# every call, as Claude Code runs them, and deny wins. The last section drives a
-# gate that is not a hook at all -- the dependency audit CI runs on every PR --
-# because it is the same kind of thing: repo logic deciding whether work may
-# proceed, and so a test suite rather than a script somebody remembers to run.
+# every call, as Claude Code runs them, and deny wins. The last two sections
+# drive a gate that is not a hook at all -- the dependency audit CI runs on every
+# PR -- because it is the same kind of thing: repo logic deciding whether work
+# may proceed, and so a test suite rather than a script somebody remembers to
+# run.
 set -uo pipefail
 
 # Quiet on success, like every other test runner here. 58 ok-lines scrolled the
@@ -295,50 +296,88 @@ run "a private key block"                                  deny  "$(wj Write "$R
 run "a GitHub token"                                       deny  "$(wj Write "$ROOT/apps/web/c.ts" "const t = \"gh""p_0123456789abcdefghijklmnopqrstuvwxyz\";")"
 run "prose about passwords"                                allow "$(wj Write "$ROOT/apps/web/d.ts" 'export const passwordFieldLabel = "Password";')"
 
+section "unrelated paths"
+run "ordinary source file saying status: approved"        allow "$(wj Write "$ROOT/apps/web/app/page.tsx" 'status: approved')"
+
+# The dependency audit is not a hook, but it is the same kind of thing: repo
+# logic deciding whether work may proceed. Its fixture repository is built here
+# in four shapes, because the way this gate fails open is by failing to read a
+# workspace file and then counting only the root manifest as direct.
 AUDIT="$REPO/scripts/audit-direct.mjs"
-AR="$ROOT/auditrepo"
-mkdir -p "$AR/packages/thing" "$AR/apps/app"
-cat > "$AR/pnpm-workspace.yaml" <<'EOF'
-packages:
+
+mkaudit() { # dir packages-block
+  local dir="$1"
+  mkdir -p "$dir/packages/thing" "$dir/apps/app"
+  printf '%s' "$2" > "$dir/pnpm-workspace.yaml"
+  printf '%s\n' '{"name":"root","devDependencies":{"turbo":"^2.10.11"}}' > "$dir/package.json"
+  printf '%s\n' '{"name":"thing","dependencies":{"next":"16.3.2"}}' > "$dir/packages/thing/package.json"
+  printf '%s\n' '{"name":"app","devDependencies":{"vitest":"^4"}}' > "$dir/apps/app/package.json"
+}
+
+AR="$ROOT/audit-block"
+mkaudit "$AR" 'packages:
   - "apps/*"
   - "packages/*"
-EOF
-printf '%s\n' '{"name":"root","devDependencies":{"turbo":"^2.10.11"}}' > "$AR/package.json"
-printf '%s\n' '{"name":"thing","dependencies":{"next":"16.3.2"}}' > "$AR/packages/thing/package.json"
-printf '%s\n' '{"name":"app","devDependencies":{"vitest":"^4"}}' > "$AR/apps/app/package.json"
+'
+# Flow style, and a block interrupted by a blank line and a comment: both are
+# valid YAML this gate used to read as "no workspaces", which made a workspace
+# dependency look transitive and exit 0.
+AR_FLOW="$ROOT/audit-flow"
+mkaudit "$AR_FLOW" 'packages: ["apps/*", "packages/*"]
+'
+AR_GAPS="$ROOT/audit-gaps"
+mkaudit "$AR_GAPS" 'packages:
+  # the app
+  - "apps/*"
+
+  - "packages/*"
+
+publicHoistPattern:
+  - "next"
+'
+AR_BROKEN="$ROOT/audit-broken"
+mkaudit "$AR_BROKEN" 'engineStrict: true
+'
 
 # One advisory, parameterised by the two fields the gate actually reads.
 adv() { jq -nc --arg m "$1" --arg s "$2" \
   '{advisories:{"1":{module_name:$m,severity:$s,title:"fixture",vulnerable_versions:"<1",patched_versions:">=1",url:"https://example.test"}}}'; }
 
-run_audit() { # name expect-exit json
-  local name="$1" expect="$2" json="$3" out code
+# Exit code *and* a line of output, because a script that crashed on every input
+# would exit 1 and pass every blocking case on the code alone.
+run_audit() { # name expect-exit expect-grep root json
+  local name="$1" expect="$2" want="$3" dir="$4" json="$5" out code
   printf '%s' "$json" > "$ROOT/audit-input.json"
-  out=$(node "$AUDIT" --root "$AR" --input "$ROOT/audit-input.json" 2>&1)
+  out=$(node "$AUDIT" --root "$dir" --input "$ROOT/audit-input.json" 2>&1)
   code=$?
-  if [ "$code" = "$expect" ]; then
+  if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE "$want"; then
     pass=$((pass+1)); sec_pass=$((sec_pass+1))
     [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit %s\n' "$name" "$code"
   else
     fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
-    printf '  FAIL %-51s -> exit %s (want %s)\n' "$name" "$code" "$expect"
+    printf '  FAIL %-51s -> exit %s (want %s matching /%s/)\n' "$name" "$code" "$expect" "$want"
     printf '       %s\n' "${out:-<empty>}"
   fi
   return 0
 }
 
 section "Dependency audit: high or above, direct only"
-run_audit "high in a dependency of a workspace"           1 "$(adv next high)"
-run_audit "critical in a dependency of a workspace"       1 "$(adv next critical)"
-run_audit "high in a root devDependency"                  1 "$(adv turbo high)"
-run_audit "high in a workspace devDependency"             1 "$(adv vitest high)"
-run_audit "high with no direct path at all"               0 "$(adv postcss high)"
-run_audit "moderate in a direct dependency"               0 "$(adv next moderate)"
-run_audit "low in a direct dependency"                    0 "$(adv next low)"
-run_audit "nothing found"                                 0 '{"advisories":{}}'
+run_audit "high in a dependency of a workspace"           1 "^BLOCKING .*next"     "$AR"        "$(adv next high)"
+run_audit "critical in a dependency of a workspace"       1 "^BLOCKING .*critical" "$AR"        "$(adv next critical)"
+run_audit "high in a root devDependency"                  1 "^BLOCKING .*turbo"    "$AR"        "$(adv turbo high)"
+run_audit "high in a workspace devDependency"             1 "^BLOCKING .*vitest"   "$AR"        "$(adv vitest high)"
+run_audit "high with no direct path at all"               0 "^transitive .*postcss" "$AR"       "$(adv postcss high)"
+run_audit "moderate in a direct dependency"               0 "passed: 0 blocking"   "$AR"        "$(adv next moderate)"
+run_audit "low in a direct dependency"                    0 "passed: 0 blocking"   "$AR"        "$(adv next low)"
+run_audit "nothing found"                                 0 "passed: 0 blocking"   "$AR"        '{"advisories":{}}'
 
-section "unrelated paths"
-run "ordinary source file saying status: approved"        allow "$(wj Write "$ROOT/apps/web/app/page.tsx" 'status: approved')"
+section "Dependency audit: the ways it must not fail open"
+run_audit "flow-style packages: still finds the workspace" 1 "^BLOCKING .*next"    "$AR_FLOW"   "$(adv next high)"
+run_audit "comments and blank lines inside the block"      1 "^BLOCKING .*next"    "$AR_GAPS"   "$(adv next high)"
+run_audit "a workspace file with no packages: key"         2 "could not run"       "$AR_BROKEN" "$(adv next high)"
+run_audit "an audit payload that is not an audit"          2 "could not run"       "$AR"        '{"error":"registry unreachable"}'
+run_audit "an audit payload that is not JSON"              2 "not JSON"            "$AR"        'upstream said no'
+
 
 flush_section
 echo

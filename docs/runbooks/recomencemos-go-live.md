@@ -199,10 +199,16 @@ registration does not apply** to a _persona natural_. International transmission
 
 ## 8. Repository and release (C7, C16)
 
-- [ ] **Required status checks** on the default branch: `lint`, `check-types`, `test` (including
-      `test:gates`), `build`, and the dependency audit. **No required reviews** — on a one-person
-      repository they lock the operator out or normalize admin bypass
-- [ ] Dependency audit fails the build on **`high` or above in a direct dependency** (C7)
+- [ ] **Required status checks** on the default branch, by the job names
+      `.github/workflows/ci.yml` publishes: **`lint`**, **`check-types`**, **`test`** (which is
+      `turbo run test test:gates`, so `test:gates` is inside this one), **`build`**, and **`audit`**.
+      The workflow is five jobs rather than five steps precisely so each is requirable by name.
+      **No required reviews** — on a one-person repository they lock the operator out or normalize
+      admin bypass
+- [ ] Dependency audit fails the build on **`high` or above in a direct dependency** (C7). This is
+      the `audit` job, running `pnpm audit:direct` — `scripts/audit-direct.mjs`, not
+      `pnpm audit --audit-level=high`, which is red on arrival against a transitive advisory this
+      repository already carries
 - [ ] `gh extension install github/gh-stack` — `stacked-prs` is on for genuine chains, and
       `pr-merge-method` is **rebase**, because squashing a lower PR rewrites the base every branch
       above it was cut from
