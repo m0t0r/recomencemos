@@ -1325,13 +1325,30 @@ describe("what a truncated line keeps of the line's own context", () => {
     const { logger, raw, lines } = harness();
 
     // Deep enough that an unbounded recursion overflows the call stack, padded
-    // wide enough that the line breaches the bound and the cap actually walks
-    // it. The logger is the one place that must not throw.
+    // wide enough that a line carrying it whole would breach the bound. The
+    // logger is the one place that must not throw.
     let nested: Record<string, unknown> = { leaf: "x".repeat(9_000) };
     for (let level = 0; level < 5_000; level += 1) nested = { down: nested };
 
     expect(() => logger.error({ code: "abyss", context: nested }, "failed")).not.toThrow();
-    expect(lines()[0]).toMatchObject({ truncated: true, code: "abyss" });
+    expect(lines()[0]).toMatchObject({ code: "abyss" });
     expect(Buffer.byteLength((raw()[0] ?? "").trimEnd())).toBeLessThanOrEqual(MAX_LINE_BYTES);
+
+    // `truncated: true` is deliberately **not** asserted, and the reason is the
+    // finding in #41. Which of two serialisation paths this input takes is a
+    // property of the available stack, not of the logger:
+    //
+    //   - a large stack serialises the whole 5,000-deep object, the line lands
+    //     far over the bound, and `capLine` rebuilds it — `truncated: true`;
+    //   - a small one raises `RangeError` inside `JSON.stringify`, pino falls
+    //     back to its depth-limited serializer, and the ~189-byte line it emits
+    //     was never over budget, so the cap correctly does not fire and
+    //     correctly does not claim it did.
+    //
+    // Both hold what this test is named for. Asserting the marker made the case
+    // pass on a macOS dev machine and fail on a Linux CI runner, which is how
+    // the repository's first CI run found it. What #41 still owes an answer is
+    // the gap underneath: a field pino's fallback stubs leaves no marker on the
+    // line at all.
   });
 });
