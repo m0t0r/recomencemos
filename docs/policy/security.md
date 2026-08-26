@@ -17,6 +17,23 @@ An `UNSET` value is raised as a flagged concern naming this file and the key. It
 | `pentest-cadence`      | **None external.** Internally: `security-review` per PR touching auth, the exchange path or an egress; a full `/security-audit` run before the announcement and after major auth or exchange work                               | How often an external party looks, if ever                                                                                                                                                                                                                                  |
 | `secrets-in-url-paths` | **no**                                                                                                                                                                                                                          | Whether any route carries a credential in a path segment — password reset, signed invite, unsubscribe. If yes, the completion line logs it verbatim ([ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)) and the path must be bounded before go-live |
 
+### The one exception to "no secret in a repo `.env`"
+
+`apps/web/.env.example` and `docker/pgbouncer/userlist.txt` carry a username, a password and a
+database name in git. Under the classification vocabulary in [data.md](data.md) those are `secret`,
+so the exception is written here — beside the rule it bends — rather than argued past somewhere else.
+
+It is narrow, and every clause is load-bearing. The values reach **only** the containers
+`docker-compose.yaml` starts; those publish to `127.0.0.1` and to nothing else, so the credential
+authorizes a principal who is already on the machine and can read the file anyway. They are created
+by the compose file itself, so there is nothing to rotate and no other system where they are also
+valid. `.env.local` — the file that carries a real one — stays gitignored.
+
+**What would end the exception:** a port published on `0.0.0.0`, a value reused anywhere outside
+`docker-compose.yaml`, or a second environment reachable with it. Any of the three and these stop
+being non-secret, whatever this file says. `local-database` in [data.md](data.md) is the key that
+settles the stack itself.
+
 ## Already settled by the stack
 
 These are not `UNSET` and not open. They come from the framework, so a spec contradicting one is a

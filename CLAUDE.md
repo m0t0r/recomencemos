@@ -45,9 +45,11 @@ code that fails after deploy. `pnpm db:up` starts it, `pnpm db:down` stops it, `
 discards the volume. `cp apps/web/.env.example apps/web/.env.local` is the only other step — that
 file lives in `apps/web` because that is the directory `next dev` loads `.env.local` from.
 
-**The floor is Docker Engine 20.10+ with Compose v2.20+**, which is what `depends_on: condition:
-service_healthy` and `docker compose up --wait` need. Verified 2026-08-26 on Engine 29.7.2 and
-Compose v5.3.1; the floor is read from the features the file uses rather than bisected.
+**The floor is Docker Engine 20.10+ and Docker Compose v2**, the two things `depends_on: condition:
+service_healthy` and `docker compose up --wait` between them require. Verified 2026-08-26 on Engine
+29.7.2 and Compose v5.3.1. **The exact v2 minor was not bisected**, so the floor is stated at the
+major rather than at a number nobody measured — if `pnpm db:up` fails on an old Compose, that is
+where to look.
 
 **It is opt-in, and the boundary is exact.** `pnpm test` runs against PGlite in-memory (spec 0002,
 Testing Decisions seam 2) and CI starts no database service, so `install`, `lint`, `check-types`,
@@ -95,7 +97,10 @@ Before reporting a change complete, run `pnpm lint && pnpm check-types && pnpm t
 
 **Dependabot is the other half of the audit job, and it has one coupling worth knowing.**
 `.github/dependabot.yml` covers npm (one entry — Dependabot expands `pnpm-workspace.yaml`'s globs
-itself) and `github-actions`. Its `cooldown` is set against **`minimumReleaseAge` in
+itself), `github-actions`, and `docker-compose` — the last for the two image digests in
+`docker-compose.yaml`, whose whole failure mode is that an exact pin never moves. That ecosystem is
+**version updates only**, with no security-update channel, which is acceptable only because those
+containers are loopback-bound development ones in no deployment path. Its `cooldown` is set against **`minimumReleaseAge` in
 `pnpm-workspace.yaml`**, which is 1440 minutes: a package published inside that window does not
 resolve locally at all, so a PR raised sooner is one nobody could install. Dependabot's own default
 is already stricter, so the two cannot currently disagree — it is pinned anyway because the number

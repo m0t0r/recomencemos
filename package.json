@@ -11,7 +11,7 @@
     "audit:direct": "node scripts/audit-direct.mjs",
     "db:up": "docker compose up --detach --wait",
     "db:down": "docker compose down",
-    "db:reset": "docker compose down --volumes && docker compose up --detach --wait",
+    "db:reset": "docker compose down --volumes && pnpm db:up",
     "migrations:check": "node scripts/migration-integrity.mjs",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --check",

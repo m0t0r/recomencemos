@@ -1,11 +1,11 @@
-# The local development database: `docs/policy/data.md` -> `local-database`.
+# The local development database: `docs/policy/data.md` → `local-database`.
 #
 # Two services rather than one, and the second one is the whole point.
 # PlanetScale's pooler runs in **transaction-pooling** mode (spec 0002, DD2),
 # which removes LISTEN/NOTIFY, session advisory locks, temp tables and
 # cross-transaction prepared statements. Develop against a plain unpooled
 # Postgres and it is possible to write code that passes locally and fails in
-# production in exactly that class of way -- so PgBouncer runs here too, in the
+# production in exactly that class of way — so PgBouncer runs here too, in the
 # same mode, and refuses locally what production refuses.
 #
 # Both of DD2's connection strings therefore exist and are distinguishable:
@@ -23,7 +23,7 @@
 # **The credentials below are in git on purpose.** They are development-tier
 # values that reach a container listening on loopback, and they are the same
 # non-secret in `apps/web/.env.example` and `docker/pgbouncer/userlist.txt`. A
-# production URL in any of the three is the incident C13 names -- `.env*` is a
+# production URL in any of the three is the incident C13 names — `.env*` is a
 # Turborepo `build` input, so it would be one `git add` away.
 #
 # **Images are pinned by tag and digest, stamped at a date**, the way
@@ -51,7 +51,7 @@ services:
       # and only one of them is on PgBouncer's path.** Read out of the image's
       # `docker-entrypoint.sh` rather than assumed:
       #
-      #   POSTGRES_HOST_AUTH_METHOD appends `host all all all <method>` -- the
+      #   POSTGRES_HOST_AUTH_METHOD appends `host all all all <method>` — the
       #   catch-all line, and the one a connection from the compose network
       #   matches. This is the load-bearing one. Left unset it defaults to the
       #   server's `password_encryption`, which is already scram-sha-256 on 18;
@@ -79,7 +79,7 @@ services:
       - postgres-data:/var/lib/postgresql
       # Runs once, on an empty data directory. `citext` and `pg_trgm` are what
       # seam 2 depends on (spec 0002, Testing Decisions) and what a human
-      # enables by hand on PlanetScale at go-live runbook §2 -- they are enabled
+      # enables by hand on PlanetScale at go-live runbook §2 — they are enabled
       # out of band on both, so they are enabled out of band here rather than in
       # a migration that could not run against PlanetScale anyway.
       - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro

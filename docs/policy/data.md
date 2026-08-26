@@ -31,8 +31,9 @@ database without ever deciding one. #49 is where that was noticed and answered.
 ## The local database, and why it is not a plain Postgres
 
 `pnpm dev` connects to a **Docker Compose** stack: `postgres:18-alpine` on **5432**, and
-**PgBouncer in `pool_mode = transaction`** in front of it on **6432**. One command starts it —
-`pnpm db:up` — and `apps/web/.env.example` copied to `apps/web/.env.local` is the only other step.
+**PgBouncer in `pool_mode = transaction`** in front of it on **6432**. The commands that start it are
+in the README, and the file that defines it is `docker-compose.yaml`; what belongs here is why it has
+two containers rather than one.
 
 **The pooler is the whole reason this is not one container.** DD2 fixes PlanetScale's pooler in
 transaction-pooling mode, which removes `LISTEN`/`NOTIFY`, session advisory locks, temp tables and
@@ -80,10 +81,14 @@ installed. `CLAUDE.md`'s Toolchain section carries the version floor.
 `.github/dependabot.yml` carries a `docker-compose` entry so a pin is a deliberate act somebody
 performs rather than a version frozen at whatever was current the day it was written.
 
-**Nothing checks that `docker-compose.yaml` and `apps/web/.env.example` still agree.** They carry the
-same ports and credentials in two files, and drift between them is real — but it is not silent: the
-next `pnpm dev` fails to connect, immediately, for the person who caused it. A script and a turbo
-task to compare three ports would be more machinery than that failure earns.
+**Nothing checks that `docker-compose.yaml` and `apps/web/.env.example` still agree**, and the
+honest version of why is worth stating, because the obvious one is wrong. Drift does fail loudly —
+but **not for the person who caused it**. They already hold a working `.env.local`, which is a copy
+rather than the file they edited, so the failure lands on the next clone instead. This is a real gap
+in a repository that built `scripts/migration-integrity.mjs` and `scripts/audit-direct.mjs` for
+exactly this class of thing. It is left open because the drifting surface is three ports and a
+username across two files, and the fix is a new script and a new turbo task; if the surface grows,
+this is the first thing to revisit.
 
 ## Classification vocabulary
 
