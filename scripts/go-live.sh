@@ -917,7 +917,28 @@ say "ADR-0001 fixes the destination: findings reach Plan only through triage."
 note "A breach that arrives as a chat message is a breach nobody owns."
 if [[ -f .github/workflows/needs-triage.yml ]]; then
   run "ls -l .github/workflows/needs-triage.yml" -- ls -l .github/workflows/needs-triage.yml
-  say "The receiver ships in this repo. What is left is pointing the vendor at it."
+  # The file existing in this checkout is NOT the receiver being live. GitHub
+  # registers `repository_dispatch` and `workflow_dispatch` triggers from the
+  # DEFAULT BRANCH only, so a dispatch against a workflow that exists on a
+  # ticket branch alone is accepted and then runs nothing at all. That failure
+  # is silent, which is the one kind this section cannot afford.
+  if command -v gh >/dev/null 2>&1; then
+    run "gh api repos/{owner}/{repo}/actions/workflows --jq '.workflows[].path'" -- \
+      gh api "repos/{owner}/{repo}/actions/workflows" --jq '.workflows[].path'
+    case "$RUN_OUTPUT" in
+    *".github/workflows/needs-triage.yml"*)
+      say "Registered on the default branch. Dispatches will reach it."
+      ;;
+    *)
+      warn "The file is here but GitHub has not registered it."
+      note "A repository_dispatch is registered from the default branch only, so"
+      note "until the PR that adds this workflow merges, a dispatch is accepted"
+      note "and runs nothing. Merge first, then come back to this stage."
+      SKIPPED+=("section 5 — needs-triage.yml is not on the default branch yet, so no dispatch reaches it")
+      ;;
+    esac
+  fi
+  say "What is left is pointing the vendor at it."
   step "In Sentry: Settings, Integrations, Webhooks (or an Internal Integration)."
   step "Point the alert rule at a repository_dispatch of type control-band-breach."
   note "alert-destination in docs/policy/operability.md is already set to this shape."
