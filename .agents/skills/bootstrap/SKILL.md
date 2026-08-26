@@ -42,6 +42,11 @@ reason to exist — each entry is a miss that survives the gate:
   renamed, which moves the tsconfig `include` for `next.config.ts`. The regenerated block in
   `apps/web/AGENTS.md` is `next dev`'s to write — edit around its markers, and put nothing inside
   them.
+- **The project name** (`recomencemos`) reaches: the root `package.json` name, and the local
+  development database — the compose project `name`, `POSTGRES_USER`/`POSTGRES_PASSWORD`/
+  `POSTGRES_DB` in `docker-compose.yaml`, the entry and the user in `docker/pgbouncer/*`, and both
+  URLs in `apps/web/.env.example`. A miss there breaks nothing and is never noticed: the dev
+  database simply keeps the template's name forever.
 - **The scope** (`@repo`) reaches: every `packages/*/package.json` name, every `workspace:*`
   dependency, the design system's own import paths, and `components.json` aliases.
 - **Package names changed means `pnpm install`**: the lockfile follows the manifests, the installer

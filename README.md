@@ -18,6 +18,8 @@ A [Turborepo](https://turborepo.dev) monorepo on pnpm, TypeScript throughout:
 
 Requires the **active Node LTS** (24.x — see `.nvmrc`) and **pnpm 11** (pinned via `packageManager`). The Node requirement is enforced, not suggested: `engineStrict` in `pnpm-workspace.yaml` makes `pnpm install` fail outright on an older runtime. Run `fnm use` or `nvm use` first.
 
+**`pnpm dev` also needs Docker** (Engine 20.10+, Compose v2.20+) — `docker-compose.yaml` is the local development database, Postgres 18 behind PgBouncer in transaction-pooling mode. Nothing else needs it: `pnpm test` runs against PGlite in-memory and CI starts no database, so the whole gate is green on a machine without Docker. See `docs/policy/data.md` → `local-database`.
+
 ```sh
 pnpm install
 pnpm dev          # web on http://localhost:3000
@@ -29,6 +31,17 @@ pnpm format       # oxfmt --check
 pnpm lint:fix     # oxlint --fix
 pnpm format:fix   # oxfmt, writes changes
 ```
+
+The development database is separate, because it is the one thing here that needs Docker:
+
+```sh
+cp apps/web/.env.example apps/web/.env.local   # once
+pnpm db:up        # postgres on :5432, pgbouncer on :6432, waits for both to be healthy
+pnpm db:down      # stop; the data volume survives
+pnpm db:reset     # stop and discard the volume
+```
+
+The app connects through **6432** and migrations through **5432**, and that split is the point: PgBouncer runs in transaction-pooling mode, the mode PlanetScale's pooler runs in, so session advisory locks, `LISTEN`/`NOTIFY`, temp tables and cross-transaction prepared statements fail here exactly as they would in production.
 
 ### Design system
 
@@ -159,6 +172,7 @@ Everything below is scaffolding from `create-turbo` / `create-next-app`. Work do
 | Placeholder                                                                | Where                                                                                                                                             | Change it to                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `recomencemos`                                                             | `package.json` → `name`                                                                                                                           | Your project's name                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Development database name, user and password (`recomencemos`)              | `docker-compose.yaml`, `docker/pgbouncer/userlist.txt`, `docker/pgbouncer/pgbouncer.ini`, `apps/web/.env.example`                                 | Your project's name, in all four. They are development-tier values on loopback, which is why they are in git at all — a real credential belongs in `docs/policy/security.md` → `secret-store`, never here. Nothing checks that the four agree; the symptom of a miss is `pnpm dev` failing to connect                                                                                                                           |
 | `web`                                                                      | `apps/web/package.json` → `name`, and every `--filter=web`                                                                                        | Your app's name (e.g. `dashboard`, `api`)                                                                                                                                                                                                                                                                                                                                                                                       |
 | `@repo` scope                                                              | `packages/*/package.json`, all `workspace:*` imports, `packages/design-system` import paths and `components.json` aliases                         | Your org scope (e.g. `@acme`) — rename consistently or keep `@repo` deliberately                                                                                                                                                                                                                                                                                                                                                |
 | `title: "Create Next App"` / `description: "Generated by create next app"` | `apps/web/app/layout.tsx`                                                                                                                         | Real product metadata                                                                                                                                                                                                                                                                                                                                                                                                           |

@@ -28,6 +28,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# The one opt-in. `.env.example` is the template a clone copies to `.env.local`
+# (`pnpm db:up` starts what it points at), so it has to be in git -- and it
+# carries development-tier values only, for the reason written at the top of it.
+!.env.example
+
 # vercel
 .vercel
 
