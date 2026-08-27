@@ -123,8 +123,14 @@ export interface AuthDependencies {
    */
   readonly sendMagicLink: (request: MagicLinkRequest) => Promise<void>;
   readonly logger: AuthLogger;
-  /** The database handle, first parameter discipline as everywhere else here. */
-  readonly db: DomainDatabase;
+  /**
+   * The database handle. **Optional here and required everywhere else in this
+   * package**, because ADR-0010 withholds `#connection` and `apps/web` therefore
+   * has no handle to pass. Absent, `createAuthHandler` resolves the pooled one
+   * itself; present, nothing touches the pooled path — which is what lets a test
+   * build these options without a database.
+   */
+  readonly db?: DomainDatabase | undefined;
   readonly env?: AuthEnv;
 }
 
@@ -224,7 +230,7 @@ export function authOptions({
   logger,
   db,
   env = process.env,
-}: AuthDependencies): AuthOptions {
+}: AuthDependencies & { db: DomainDatabase }): AuthOptions {
   const google = googleCredentials(env);
 
   return {
