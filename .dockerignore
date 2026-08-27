@@ -1,0 +1,31 @@
+# What must not reach the build context.
+#
+# `.env*` is first because it is the one with consequences: `turbo.json`
+# declares those files a `build` input, and a development database URL copied
+# into an image is a production secret's worth of surprise waiting in a layer.
+# Real credentials reach the app through `fly secrets` (NFR24, runbook §1).
+.env
+.env.*
+!.env.example
+
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+.git
+.github
+coverage
+**/coverage
+
+# Agent surfaces and generated review artifacts. None of it is built, and
+# `.agents/` alone is tens of megabytes of vendored skills.
+.claude
+.agents
+.impeccable
+.codex
+
+# The go-live wizard's gitignored transcript, which is one operator's run.
+.go-live-facts
+.go-live-evidence.md

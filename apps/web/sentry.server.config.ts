@@ -50,6 +50,30 @@ Sentry.init({
   // request correlates while someone is looking at it.
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1,
 
+  /**
+   * **The log drain (#9, DD11).** Logs currently go to stdout and nowhere else,
+   * which under continuous deployment means real retention is not NFR17's 30
+   * days — it is *until the next deploy*, minutes. That makes the log number
+   * false and every incident undiagnosable, which is why the drain lands with
+   * the first deploy rather than after it.
+   *
+   * This is the route that adds no vendor (observability go-live runbook §9b):
+   * pino's own lines are forwarded to the reporting platform already carrying
+   * this deploy's `release` and each request's `trace_id`.
+   *
+   * **It does not break report-once**, and that is checked rather than assumed:
+   * `pinoIntegration`'s `error.levels` defaults to `[]` in 10.70.0, so lines are
+   * forwarded as *logs* and do not additionally become *error events*. Setting
+   * `error.levels` would opt into one event from `onRequestError` and another
+   * from the line it emitted — the exact double-report NFR3 exists to prevent.
+   *
+   * **Server only.** There is no `enableLogs` on `instrumentation-client.ts`:
+   * the drain's job is the server's stdout, and forwarding browser logs would
+   * spend a metered allowance (5 GB/month, §3) on lines no drain query reads.
+   */
+  enableLogs: true,
+  integrations: [Sentry.pinoIntegration()],
+
   // All three hooks, one function — DD3's parity. `beforeSend` alone would
   // leave the other two egresses unscrubbed: transactions ship at the rate
   // above and carry URLs with query strings and span attributes, and
