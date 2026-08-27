@@ -199,7 +199,7 @@ The kill switch and the transport variable fail in opposite directions, and that
 
 ```sh
 pnpm --filter @repo/notifications email   # React Email preview server, no sending
-pnpm --filter @repo/notifications test    # 95 tests, none touching the network
+pnpm --filter @repo/notifications test    # 96 tests, none touching the network
 ```
 
 Tests substitute the transport rather than mocking it into something claiming to be an integration. `src/transport/resend.test.tsx` is named for what it is: a unit test of the `{ data, error }` contract, proving nothing about delivery. The only claim that Resend delivers mail is a message in a real inbox, and that is a runbook act.
