@@ -215,8 +215,13 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
                 // The server's verdict and the client's are the same rule, so
                 // either one marks the field. Hers arrives instantly; the
                 // server's is the one that counts.
-                const invalid =
-                  machine.state.status === "field_error" || field.state.meta.errors.length > 0;
+                // The validator's message, or the server's. Rendering what the
+                // validator actually returned is what stops it being computed
+                // and thrown away — and it is what would let a second rule on
+                // this field say something different from the first.
+                const clientError = field.state.meta.errors[0];
+                const invalid = machine.state.status === "field_error" || Boolean(clientError);
+                const message = typeof clientError === "string" ? clientError : EMAIL_LOOKS_WRONG;
 
                 return (
                   <>
@@ -237,7 +242,7 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
                     />
                     {invalid ? (
                       <p id={emailErrorId} className="text-destructive text-sm leading-5">
-                        {EMAIL_LOOKS_WRONG}
+                        {message}
                       </p>
                     ) : null}
                   </>
@@ -313,6 +318,20 @@ function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) 
           {feedback.hint ? (
             <p className="text-muted-foreground mt-2 text-sm leading-5">{feedback.hint}</p>
           ) : null}
+          {/*
+            C39 asks the surface to render the `userMessage` **and** the
+            `retryAfter`. The sentence already says "en 12 minutos" for a person;
+            this carries the same fact as a number a machine can read, which is
+            what a `<time>` element is for. Not visible text — she has the
+            sentence — so it says nothing twice.
+          */}
+          {feedback.retryAfter === undefined ? null : (
+            <time
+              dateTime={`PT${feedback.retryAfter}S`}
+              data-retry-after={feedback.retryAfter}
+              className="sr-only"
+            />
+          )}
         </div>
       ) : null}
     </div>

@@ -14,7 +14,13 @@
 import { createAuthClient } from "better-auth/react";
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { requestMagicLink, type RequestMagicLinkState } from "./actions";
-import { CHECK_YOUR_EMAIL_HINT, GOOGLE_FAILED, LINK_ALREADY_USED } from "./messages";
+import { SHARED_DEVICE_HEADER } from "./shared-device-header";
+import {
+  CHECK_YOUR_EMAIL_HINT,
+  GOOGLE_FAILED,
+  LINK_ALREADY_USED,
+  SEND_FAILED_HINT,
+} from "./messages";
 
 /**
  * Same-origin by default, so no base URL and no `NEXT_PUBLIC_*` variable —
@@ -22,24 +28,18 @@ import { CHECK_YOUR_EMAIL_HINT, GOOGLE_FAILED, LINK_ALREADY_USED } from "./messa
  */
 const authClient = createAuthClient();
 
-/**
- * The header the Google door declares the shared-device answer on.
- *
- * `/sign-in/social`'s request body is a closed schema that strips unknown keys,
- * so there is no field to put it in. A header survives that and cannot be set
- * cross-origin without a preflight. It is **not** a security boundary and does
- * not need to be: the only thing a forged value changes is how long her own
- * session lasts, which she can already change by not ticking the box. The
- * server-side half is `SHARED_DEVICE_HEADER` in `@repo/domain`.
- */
-const SHARED_DEVICE_HEADER = "x-recomencemos-shared-device";
-
 const INITIAL: RequestMagicLinkState = { status: "idle" };
 
 export interface Feedback {
   readonly tone: "success" | "problem";
   readonly message: string;
   readonly hint?: string | undefined;
+  /**
+   * Seconds until a ceiling's window resets, when this feedback is a ceiling's.
+   * Rendered as a machine-readable `retryAfter` beside the sentence, so the
+   * number is available to the surface rather than only spelled out inside it.
+   */
+  readonly retryAfter?: number | undefined;
 }
 
 export interface SignInMachine {
@@ -142,13 +142,22 @@ function describe(
     case "sent":
       return { tone: "success", message: state.message, hint: CHECK_YOUR_EMAIL_HINT };
     case "rate_limited":
-      // The `userMessage` already names her count, when the window resets, and
-      // that the Google door is still there (NFR26's third half, C39).
-      return { tone: "problem", message: state.message };
+      // The `userMessage` names her count, when the window resets, and that the
+      // Google door is still there. `retryAfter` rides alongside it so the
+      // surface has the number as a *number* — C39 asks the surface to render
+      // both, and a field nothing reads is a field that quietly stops being
+      // maintained.
+      return {
+        tone: "problem",
+        message: state.message,
+        retryAfter: state.retryAfter,
+      };
     case "field_error":
       return { tone: "problem", message: state.message };
     case "failed":
-      return { tone: "problem", message: state.error.message };
+      // The hint is the half that tells her what to do: her address is still in
+      // the field and trying again is worth doing.
+      return { tone: "problem", message: state.error.message, hint: SEND_FAILED_HINT };
     case "idle":
       break;
   }

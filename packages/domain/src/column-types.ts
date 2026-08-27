@@ -16,10 +16,16 @@ import { customType } from "drizzle-orm/pg-core";
  * the other one. The type is the mechanism; the discipline is the thing being
  * replaced.
  *
- * **Both engines this repository runs against carry it**: PGlite bundles the
- * extension (`src/testing/database.ts` passes it on create *and* on restore) and
- * PlanetScale for Postgres supports it (spec 0002, `## Testing Decisions`). The
- * migration that first uses it is what installs it.
+ * **The extension is enabled out of band on all three engines, and a
+ * `CREATE EXTENSION` never appears in a migration.** That is this repository's
+ * existing decision, not a gap: `docker/postgres/initdb/10-extensions.sql` does
+ * it for the Compose stack, `src/testing/global-setup.ts` does it for PGlite,
+ * and go-live runbook §2 does it by hand on PlanetScale — because a
+ * `CREATE EXTENSION` in a committed migration is a statement that cannot run
+ * against a managed provider gating extensions behind a dashboard toggle.
+ *
+ * So a migration using this type depends on a step outside itself, and the
+ * runbook is where that step lives.
  */
 export const citext = customType<{ data: string; driverData: string }>({
   dataType: () => "citext",

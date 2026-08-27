@@ -237,13 +237,23 @@ export async function chargeCeiling(
         `The ${action} ceiling refused a request: ${count} charges against a ${principal.scope} ` +
         `principal in a ${ceiling.windowSeconds}s window, over the ceiling of ${ceiling.max}.`,
       userMessage: ceilingUserMessage(ceiling, retryAfter),
-      // Ids, counts and enum values only. The principal is here as its **hash**,
-      // never as the address: `context` reaches the log line, and NFR18 counts
-      // an address on a line as a leak whatever key it arrived under.
+      /**
+       * **Counts and enum values only — and deliberately no principal at all.**
+       *
+       * An earlier version put the hashed principal here, on the argument that a
+       * hash is not an address. That argument covers the row at rest and does
+       * *not* cover this field: `context` reaches the log line, NFR18 allows
+       * **0** lines carrying an email address, and an unsalted digest of one is
+       * a stable identifier an attacker holding the log can confirm a guess
+       * against. It also bought an operator nothing they could act on, since
+       * they cannot reverse it either.
+       *
+       * What is left is what a refusal is actually about: which ceiling, how far
+       * over, and when it resets.
+       */
       context: {
         action,
         scope: principal.scope,
-        principal: principalKey(principal),
         count,
         max: ceiling.max,
         retryAfter,
@@ -261,6 +271,13 @@ export async function chargeCeiling(
  * This is the shape `./offers`, `./exchange`, `./moderation` and `./export`
  * copy.
  *
+ * **Named `ceilings` rather than `rateLimit`**, because `@repo/domain` already
+ * exports a `rateLimit` — Better Auth's own limiter table, re-exported through
+ * `#schema` for its adapter. Two unrelated things under one name in one package
+ * is a collision waiting for the first reader who greps. These ceilings are
+ * NFR26's and they count in `rate_counter`; that table is Better Auth's and it
+ * counts `/api/auth/*`.
+ *
  * **The import is dynamic, and that is not style.** `#connection` carries
  * `import "server-only"`, which resolves to an empty module under the
  * `react-server` condition and to a bare `throw` under every other — and plain
@@ -274,11 +291,8 @@ export async function chargeCeiling(
  *
  * Every later query module's binding takes this shape for the same reason.
  */
-export const rateLimit = {
-  async chargeCeiling(
-    principal: CeilingPrincipal,
-    action: CeilingedAction,
-  ): Promise<CeilingOutcome> {
+export const ceilings = {
+  async charge(principal: CeilingPrincipal, action: CeilingedAction): Promise<CeilingOutcome> {
     const { db } = await import("#connection");
     return chargeCeiling(db(), principal, action);
   },

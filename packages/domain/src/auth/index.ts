@@ -28,6 +28,13 @@ import {
 import { safeReturnPath } from "#auth/return-path";
 import { SIGN_IN_FAILED } from "#user-messages";
 
+/**
+ * Where a failed verification lands. Owned here rather than by `apps/web`,
+ * because it is Better Auth that performs the redirect and the value has to
+ * travel in the emailed URL.
+ */
+export const SIGN_IN_PATH = "/sign-in";
+
 export interface RequestMagicLinkInput {
   readonly email: string;
   /** Her answer to _"este no es mi teléfono"_. */
@@ -164,6 +171,21 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
           body: {
             email,
             callbackURL: safeReturnPath(returnPath),
+            /**
+             * **Without this the consumed-link state is unreachable.** Better
+             * Auth's verify endpoint redirects failures to `errorCallbackURL`
+             * and falls back to `callbackURL` — which is where she was *going*,
+             * normally `/`. So an expired or already-consumed link would land on
+             * the Wall carrying `?error=INVALID_TOKEN`, a parameter only
+             * `/sign-in` reads, and the copy offering her an immediate resend
+             * would be rendered by code nothing reaches.
+             *
+             * DD5 is explicit that this case is ordinary rather than exotic: a
+             * `GET` verify URL is fetched by corporate link scanners, WhatsApp
+             * previews and Outlook Safe Links, and a single-use token consumed by
+             * a scanner locks a Worker out with no password to fall back on.
+             */
+            errorCallbackURL: SIGN_IN_PATH,
             // Read by the `before` middleware and written onto the verification
             // row. `/sign-in/magic-link` is the one endpoint whose body keeps a
             // field open for this.
@@ -207,3 +229,10 @@ export function resetAuthHandler(): void {
 export { googleSignInAvailable, MAGIC_LINK_TTL_MINUTES };
 export type { AuthDependencies, MagicLinkRequest, AuthLogger, AuthEnv } from "#auth/config";
 export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
+/**
+ * Published so the browser half has something to be pinned against. It is not
+ * *imported* by the Client Component — that would pull `#connection` onto the
+ * client graph, which happened once on this surface already — so
+ * `shared-device-header.test.ts` asserts the two spellings match instead.
+ */
+export { SHARED_DEVICE_HEADER } from "#auth/sign-in-attempt";

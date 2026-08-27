@@ -23,7 +23,6 @@ import { createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
 import {
-  NO_SIGN_IN_ATTEMPT,
   readSignInAttempt,
   sessionExpiryFor,
   SHARED_DEVICE_COOKIE,
@@ -239,6 +238,20 @@ export function authOptions({
     secret: authSecret(env),
 
     database: drizzleAdapter(db, { provider: "pg", schema }),
+
+    /**
+     * **Set explicitly**, which the API contract asks for in those words even
+     * though `baseURL`'s own origin is trusted automatically. The difference is
+     * that an implicit list changes silently when `baseURL` does; this one is a
+     * line somebody has to edit.
+     *
+     * It guards a different hop from `safeReturnPath`: this validates
+     * `callbackURL`, `redirectTo`, `errorCallbackURL` and `newUserCallbackURL`
+     * against the origins we named and answers 403, while `safeReturnPath`
+     * guards *our* post-sign-in redirect. DD5 says both are needed and names the
+     * confusion between them.
+     */
+    trustedOrigins: [new URL(required(env, BASE_URL_VARIABLE)).origin],
 
     /**
      * **`session.expiresIn` is one number and NFR13 needs two**, so this is the
@@ -573,7 +586,7 @@ async function afterSignIn(ctx: any, logger: AuthLogger): Promise<void> {
   const completesSignIn = path === "/magic-link/verify" || path.startsWith("/callback/");
   if (!completesSignIn) return;
 
-  const attempt = readSignInAttempt(ctx) ?? NO_SIGN_IN_ATTEMPT;
+  const attempt = readSignInAttempt(ctx);
 
   /**
    * **The cookie half of the shared-device promise.** `setSessionCookie` takes
