@@ -320,10 +320,11 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
 - `resolving-merge-conflicts` — the tax on stacked PRs: a review fix low in a stack rebases everything above it.
 - `diagnosing-bugs` — the Maintain-stage loop that produces what `/triage` promotes.
 - `wizard` — generates a bash wizard that walks a human through steps only they can perform:
-  provisioning, credentials, a third-party dashboard, a one-off cutover. It has no committed
-  product here since `scripts/setup.sh` was deleted with the template framing; the go-live runbook
-  is what carries the human-only steps now, and a wizard is worth generating when one of its
-  sections is walked more than once.
+  provisioning, credentials, a third-party dashboard, a one-off cutover. `scripts/go-live.sh` is
+  its committed product here, and it is the shape to copy: the library above the `STAGES` marker is
+  generated and never hand-edited, and the stages below it are authored through `/wizard`. The
+  other one, `scripts/setup.sh`, was deleted with the template framing — it walked a human through
+  claiming a fresh clone, which is not a procedure this repository has any more.
 - `impeccable` — interface design at depth: `shape` (brief before code), `critique`/`audit`, `polish`/`harden`, `live`. It owns `PRODUCT.md`, `DESIGN.md`, and the surface briefs under `.impeccable/briefs/`. The Design stage's `ux-design` routes into it rather than restating it.
 
 **`impeccable` is vendored by its own installer, not the `skills` CLI**, which is why `skills-lock.json` does not track it. It is installed twice on purpose — `.agents/skills/impeccable/` (Codex flavor, with `agents/*.toml`) and `.claude/skills/impeccable/` (Claude flavor, with `user-invocable`, `argument-hint`, and `allowed-tools`). They differ in more than paths, so the usual vendor-and-symlink convention does not apply; do not "fix" the duplication. Its design detector runs as a `PostToolUse` and `Stop` hook in both `.claude/settings.json` and `.codex/hooks.json`.

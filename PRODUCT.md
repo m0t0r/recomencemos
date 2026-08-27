@@ -95,9 +95,12 @@ than that would be the kind of false a person relies on.
   ([ADR-0012](docs/adr/0012-spanish-is-the-interface-english-is-the-code.md)): route
   segments, file names, tables, columns, enum values, log `event` names, test names. The
   route is `/offers`, the table is `offer`, the page says _Propuesta_.
-- **Monorepo:** Turborepo on pnpm 11, TypeScript 7 throughout. `apps/web`,
-  `@repo/design-system`, `@repo/errors`, `@repo/observability`, `@repo/domain`,
-  `@repo/typescript-config`. Node 24.x and pnpm 11, both enforced rather than suggested.
+- **Monorepo:** Turborepo on pnpm 11, TypeScript 7 throughout. `apps/web` is the only
+  app; the packages that exist are `@repo/design-system`, `@repo/errors`,
+  `@repo/observability` and `@repo/typescript-config`, with `@repo/domain` — the only
+  door to the database — landing with
+  [#8](https://github.com/m0t0r/recomencemos/issues/8). Node 24.x and pnpm 11, both
+  enforced rather than suggested.
 - **Data:** PlanetScale Postgres through Drizzle, reached only through `@repo/domain`
   ([ADR-0010](docs/adr/0010-the-domain-package-is-the-only-door-to-the-database.md)). Two
   connections: pooled for every request path, direct for migrations. Local development runs
@@ -198,7 +201,7 @@ exercise, which is why `README.md` still lists them as open.
   — the approved design: 23 user stories, 34 numbered non-functional requirements, sixteen
   deep dives, and the resolved concern log. This is the authority on what the product does.
 - [`docs/efforts/0002-profile-to-contact-exchange/intent.md`](docs/efforts/0002-profile-to-contact-exchange/intent.md)
-  — the problem, and the six open questions a human answered.
+  — the problem, and the eight open questions a human answered.
 - [`docs/efforts/0002-profile-to-contact-exchange/advisories/`](docs/efforts/0002-profile-to-contact-exchange/advisories/)
   — four advisories, committed verbatim, never edited after the fact.
 - [`CONTEXT.md`](CONTEXT.md) — the binding vocabulary, both languages.

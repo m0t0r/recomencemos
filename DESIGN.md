@@ -86,8 +86,9 @@ components:
 > **The frontmatter above is a placeholder. Everything below it is not.**
 >
 > Those token values come from shadcn preset `b1Z6BvKBU` (`vega` style, `zinc` base, `blue` theme,
-> `lucide` icons, Inter + Geist Mono, `0.45rem` radius). A new project replaces them by applying its
-> own preset and regenerating this block — see `README.md` → "Placeholders to change".
+> `lucide` icons, Inter + Geist Mono, `0.45rem` radius). They were inherited with the preset rather
+> than chosen for Recomencemos, which is why they are still an open row — see `README.md` → "Still to
+> replace". Replacing them means applying a preset and regenerating this block.
 >
 > The prose below records how the system _works_, not what colour it is. It survives a re-theme, and
 > a downstream project inherits it rather than rewriting it.
