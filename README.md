@@ -14,13 +14,14 @@ It is built with an **AI-native SDLC** — the working model described in [The A
 
 A [Turborepo](https://turborepo.dev) monorepo on pnpm, TypeScript throughout:
 
-| Workspace                    | Package name              | Purpose                                                                                                              |
-| ---------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`                   | `web`                     | Next.js 16 App Router app (React 19) — the product surface, and the only one                                         |
-| `packages/design-system`     | `@repo/design-system`     | shadcn/ui on Base UI + Tailwind v4, consumed as source (no build step)                                               |
-| `packages/errors`            | `@repo/errors`            | The owned error shape and the shared redaction list — isomorphic, **zero runtime dependencies**, consumed as source  |
-| `packages/observability`     | `@repo/observability`     | The pino logger, the single report site, and the trace-context reader — **server-only**, the other half of the split |
-| `packages/typescript-config` | `@repo/typescript-config` | Shared tsconfigs: `base`, `nextjs`, `react-library`                                                                  |
+| Workspace                    | Package name              | Purpose                                                                                                                                                                     |
+| ---------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`                   | `web`                     | Next.js 16 App Router app (React 19) — the product surface, and the only one                                                                                                |
+| `packages/design-system`     | `@repo/design-system`     | shadcn/ui on Base UI + Tailwind v4, consumed as source (no build step)                                                                                                      |
+| `packages/domain`            | `@repo/domain`            | The only door to the database — schema, both connections, and the per-aggregate models ([ADR-0010](./docs/adr/0010-the-domain-package-is-the-only-door-to-the-database.md)) |
+| `packages/errors`            | `@repo/errors`            | The owned error shape and the shared redaction list — isomorphic, **zero runtime dependencies**, consumed as source                                                         |
+| `packages/observability`     | `@repo/observability`     | The pino logger, the single report site, and the trace-context reader — **server-only**, the other half of the split                                                        |
+| `packages/typescript-config` | `@repo/typescript-config` | Shared tsconfigs: `base`, `nextjs`, `react-library`                                                                                                                         |
 
 Requires the **active Node LTS** (24.x — see `.nvmrc`) and **pnpm 11** (pinned via `packageManager`). The Node requirement is enforced, not suggested: `engineStrict` in `pnpm-workspace.yaml` makes `pnpm install` fail outright on an older runtime. Run `fnm use` or `nvm use` first.
 
