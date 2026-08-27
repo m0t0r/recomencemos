@@ -15,6 +15,23 @@ import { sql } from "drizzle-orm";
 import { bigint, check, integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 /**
+ * Better Auth's tables, re-exported so `drizzle(client, { schema })` sees one
+ * object holding every table this package owns — which is what its adapter looks
+ * models up in. They live in their own file because they are pinned to a vendor's
+ * definition rather than designed here; `auth-schema.ts` says how that pin works.
+ */
+export {
+  account,
+  PASSWORDLESS_SIGN_IN_METHODS,
+  rateLimit,
+  session,
+  SIGN_IN_METHODS,
+  type SignInMethod,
+  user,
+  verification,
+} from "#auth-schema";
+
+/**
  * **`RateCounter`** — per principal, per action, per window. The spec's own
  * description is "boring, and NFR26 rests on it", and boring is why it is the
  * first table: it is the only entity in this effort that is plumbing rather than
@@ -31,11 +48,14 @@ import { bigint, check, integer, pgTable, text, timestamp, unique } from "drizzl
  * throws on a `BigInt`, so a key that was never meant to cross a boundary cannot
  * be serialised into one by accident.
  *
- * **`action` carries no `CHECK` yet, and that is not an oversight.** DD2 makes
+ * **`action` now carries the `CHECK` this comment used to promise.** DD2 makes
  * enum-shaped columns `TEXT` with a `CHECK (col IN (...))` precisely so that
- * widening the set is a constraint change rather than a type alteration — and
- * the set of ceilinged actions is empty until the slice that adds the first one.
- * A `CHECK` enumerating nothing would refuse every row.
+ * widening the set is a constraint change rather than a type alteration, and the
+ * set was empty until the slice that added the first ceiling. #12 is that slice:
+ * `requestMagicLink` is the one member, and the other seven NFR26 names arrive
+ * as one-line constraint changes beside the ceiling they belong to. The
+ * authority on the set is `CEILINGS` in `./rate-limit`; this constraint is the
+ * database refusing what that registry does not know.
  */
 export const rateCounter = pgTable(
   "rate_counter",
@@ -80,5 +100,8 @@ export const rateCounter = pgTable(
      * `CHECK` firing is a 500, not a field error.
      */
     check("rate_counter_count_non_negative", sql`${table.count} >= 0`),
+
+    /** DD2's rule for an enum-shaped column. See the class comment above. */
+    check("rate_counter_action_known", sql`${table.action} IN ('requestMagicLink')`),
   ],
 );

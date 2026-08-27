@@ -9,6 +9,9 @@
  * constraints the migration — not the schema file — actually created.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { rateCounter } from "#schema";
 import { restoreDatabase, type TestDatabase } from "#testing/database";
 
@@ -63,10 +66,20 @@ describe("the engine seam 2 runs against", () => {
 
 describe("the committed migrations", () => {
   it("applied, and recorded themselves as applied", async () => {
+    // Counted from the journal rather than hardcoded: the assertion is "every
+    // committed migration ran", and a literal turns that into a number that
+    // goes stale the next time `pnpm db:generate` writes one.
+    const journal = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../drizzle/meta/_journal.json", import.meta.url)),
+        "utf8",
+      ),
+    ) as { entries: unknown[] };
+
     const { rows } = await database.client.query<{ count: string }>(
       "SELECT count(*)::text AS count FROM drizzle.__drizzle_migrations",
     );
-    expect(Number(rows[0]?.count)).toBe(1);
+    expect(Number(rows[0]?.count)).toBe(journal.entries.length);
   });
 
   it("created `rate_counter` with the columns the schema declares", async () => {
