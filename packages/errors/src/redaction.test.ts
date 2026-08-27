@@ -50,6 +50,8 @@ const SHIPPED_KEY_NAMES = [
   // span and an `http` breadcrumb carry -- Sentry splits the query off the URL
   // into its own field, so reducing the URL alone would leave the half it moved.
   "query_string",
+  "url.query",
+  "url.fragment",
   "http.query",
   "http.fragment",
 ];
@@ -250,9 +252,12 @@ describe("what @repo/observability derives from the list without receiving it", 
   it("emits a dotted spelling as one bracketed segment rather than as nesting", () => {
     const paths = redactionPaths(["err"]);
 
-    expect(paths).toContain('err["http.query"]');
+    expect(paths).toContain('err["url.query"]');
     expect(paths).toContain('err.*.*.*["http.fragment"]');
-    expect(paths).not.toContain("err.http.query");
+    expect(paths).not.toContain("err.url.query");
+    // The ordinary form is unchanged by the segment split, at every level.
+    expect(paths).toContain("err.authorization");
+    expect(paths).toContain("err.*.*.*.authorization");
   });
 
   // Stated rather than claimed away: a caller can recover the spellings from a
@@ -365,15 +370,99 @@ describe("a URL reaching a processor carries no query string", () => {
   it("returns anything that is not wholly a URL byte-identical", () => {
     const prose = `fetch failed for https://recomencemos.test/verificar?token=${SECRET}`;
     const scrubbed = scrubEvent({
-      extra: { note: prose, relative: "/verificar?token=abc", empty: "", question: "really?" },
-      transaction: "GET /verificar",
+      extra: {
+        note: prose,
+        empty: "",
+        // All three would be truncated by a relative-URL rule with no anchor.
+        question: "really?",
+        sentence: "what? no.",
+        method: "GET /verificar?page=2",
+      },
     });
 
     expect(scrubbed.extra.note).toBe(prose);
-    expect(scrubbed.extra.relative).toBe("/verificar?token=abc");
     expect(scrubbed.extra.empty).toBe("");
     expect(scrubbed.extra.question).toBe("really?");
-    expect(scrubbed.transaction).toBe("GET /verificar");
+    expect(scrubbed.extra.sentence).toBe("what? no.");
+    expect(scrubbed.extra.method).toBe("GET /verificar?page=2");
+  });
+
+  /**
+   * A fetch breadcrumb records the URL the caller passed rather than the one the
+   * SDK resolved (`fetch.js:197`), so a relative reference reaches a processor
+   * with its query attached. `new URL` throws on one, so an absolute-only branch
+   * left criterion 1 unsatisfied for exactly the shape a browser produces.
+   */
+  it("reduces a path-absolute reference, which is what a fetch breadcrumb records", () => {
+    const scrubbed = scrubEvent({
+      breadcrumbs: [{ category: "fetch", data: { url: `/api/verificar?token=${SECRET}` } }],
+      extra: { fragment: `/perfil#access_token=${SECRET}`, clean: "/perfil/42" },
+    });
+
+    expect(scrubbed.breadcrumbs[0]?.data.url).toBe("/api/verificar");
+    expect(scrubbed.extra.fragment).toBe("/perfil");
+    expect(scrubbed.extra.clean).toBe("/perfil/42");
+  });
+
+  /**
+   * `new URL` accepts any scheme, and some of the ones it accepts are how a
+   * processor resolves a stack frame to source. Rewriting those breaks
+   * symbolication and shifts grouping while looking like a redaction win, so the
+   * class is bounded to the schemes a request actually travels over.
+   */
+  it("leaves a scheme nobody fetches a credential over alone", () => {
+    const scrubbed = scrubEvent({
+      extra: {
+        bundler: "webpack-internal:///(app-pages-browser)/./components/x.tsx?ba1e",
+        turbopack: "turbopack:///[project]/app/page.tsx?ff00",
+        windows: String.raw`C:\Users\v\x?a=1`,
+        mail: "mailto:hola@recomencemos.test?subject=hola",
+        websocket: `wss://recomencemos.test/socket?token=${SECRET}`,
+      },
+    });
+
+    expect(scrubbed.extra.bundler).toBe(
+      "webpack-internal:///(app-pages-browser)/./components/x.tsx?ba1e",
+    );
+    expect(scrubbed.extra.turbopack).toBe("turbopack:///[project]/app/page.tsx?ff00");
+    expect(scrubbed.extra.windows).toBe(String.raw`C:\Users\v\x?a=1`);
+    expect(scrubbed.extra.mail).toBe("mailto:hola@recomencemos.test?subject=hola");
+    // ...and a websocket URL is one a credential does travel over.
+    expect(scrubbed.extra.websocket).toBe("wss://recomencemos.test/socket");
+  });
+
+  /**
+   * The reduction rides the carrier walk rather than taking one of its own, so
+   * it answers for the region of the event where *data* lives. A stack frame's
+   * `abs_path` is not data — it is what Sentry symbolicates by, and its query is
+   * a bundler's cache key. `vars` on the same frame **is** data, and is a carrier.
+   */
+  it("does not touch the frame fields a processor resolves source with", () => {
+    const scrubbed = scrubEvent({
+      exception: {
+        values: [
+          {
+            stacktrace: {
+              frames: [
+                {
+                  abs_path: "http://localhost:3000/_next/static/chunks/app/page.js?v=173",
+                  filename: "webpack-internal:///./app/page.tsx?ba1e",
+                  vars: { href: `https://recomencemos.test/v?token=${SECRET}` },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      culprit: "app/page.tsx?ba1e",
+    });
+
+    const frame = scrubbed.exception.values[0]?.stacktrace.frames[0];
+
+    expect(frame?.abs_path).toBe("http://localhost:3000/_next/static/chunks/app/page.js?v=173");
+    expect(frame?.filename).toBe("webpack-internal:///./app/page.tsx?ba1e");
+    expect(scrubbed.culprit).toBe("app/page.tsx?ba1e");
+    expect(frame?.vars.href).toBe("https://recomencemos.test/v");
   });
 
   // `new URL(...).toString()` normalises -- it appends the root path to a bare
@@ -408,14 +497,29 @@ describe("a query string travelling beside a URL rather than inside one", () => 
     expect(asPairs.request.query_string).toBe(REDACTED);
   });
 
-  it("redacts http.query and http.fragment on a span and on a breadcrumb", () => {
+  // `url.query` is the spelling the installed code *emits*
+  // (`getHttpSpanDetailsFromUrlObject`, `utils/url.js:68`); `http.query` is
+  // `SanitizedRequestData`'s. Covering only the second was the miss review found.
+  it("redacts both spellings, on a span and on a breadcrumb", () => {
     const scrubbed = scrubEvent({
-      spans: [{ op: "http.client", data: { "http.query": `?token=${SECRET}` } }],
-      breadcrumbs: [{ category: "fetch", data: { "http.fragment": `#access_token=${SECRET}` } }],
+      spans: [
+        { op: "http.client", data: { "url.query": `?token=${SECRET}`, "url.path": "/verificar" } },
+      ],
+      breadcrumbs: [
+        {
+          category: "fetch",
+          data: { "http.query": `?token=${SECRET}`, "url.fragment": `#t=${SECRET}` },
+        },
+      ],
+      contexts: { trace: { data: { "url.query": `?token=${SECRET}` } } },
     });
 
-    expect(scrubbed.spans[0]?.data["http.query"]).toBe(REDACTED);
-    expect(scrubbed.breadcrumbs[0]?.data["http.fragment"]).toBe(REDACTED);
+    expect(scrubbed.spans[0]?.data["url.query"]).toBe(REDACTED);
+    expect(scrubbed.breadcrumbs[0]?.data["http.query"]).toBe(REDACTED);
+    expect(scrubbed.breadcrumbs[0]?.data["url.fragment"]).toBe(REDACTED);
+    expect(scrubbed.contexts.trace.data["url.query"]).toBe(REDACTED);
+    // Where the request went is the half NFR19 keeps.
+    expect(scrubbed.spans[0]?.data["url.path"]).toBe("/verificar");
   });
 
   // `request` was reachable only at `headers` and `cookies`, so a name sitting
@@ -428,5 +532,23 @@ describe("a query string travelling beside a URL rather than inside one", () => 
     expect(scrubbed.request.auth).toBe(REDACTED);
     expect(scrubbed.request.data.password).toBe(REDACTED);
     expect(scrubbed.request.url).toBe("https://recomencemos.test/a");
+  });
+
+  /**
+   * `MAX_DEPTH` is counted from the carrier root, so naming `request` did not
+   * subsume `request.headers` — it moved every header one level down and quietly
+   * stopped redacting the deepest of them. Review caught it as a narrowing of
+   * NFR18. Both roots are listed for this, and this case is what says so.
+   */
+  it("keeps the full depth budget under headers and cookies, which the broad root shortens", () => {
+    const scrubbed = scrubEvent({
+      request: {
+        headers: { a: { b: { c: { token: SECRET } } } },
+        cookies: { a: { b: { c: { session: SECRET } } } },
+      },
+    });
+
+    expect(scrubbed.request.headers.a.b.c.token).toBe(REDACTED);
+    expect(scrubbed.request.cookies.a.b.c.session).toBe(REDACTED);
   });
 });

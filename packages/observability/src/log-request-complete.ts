@@ -144,8 +144,10 @@ function matchedPattern(request: CompletedRequest): string | undefined {
 /**
  * The fallback, and a redaction site in its own right: a query string is exactly
  * where a password-reset token or an API key ends up, so it is dropped here
- * rather than trusted to the redaction list, which addresses **key names** and
- * cannot see inside a URL.
+ * rather than trusted to the redaction list, whose key-name half cannot see
+ * inside a URL. `@repo/errors` grew a second half for NFR19 that can — the same
+ * cut, by the same rule — but it scrubs a **processor payload**, not a log line,
+ * so this call site is still the one that answers for `context.path`.
  *
  * **The strip stops at the query, and the path itself is returned whole — so a
  * credential carried in a *segment* survives it.** `/reset-password/<token>`,
