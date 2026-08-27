@@ -25,7 +25,8 @@
  * later edit cannot quietly break them.
  */
 
-import { MAGIC_LINK_TTL_MINUTES } from "@repo/domain/auth-handler";
+/** The page's one `<h1>`. A verb and the product, and nothing about her. */
+export const SIGN_IN_TITLE = "Entrar a Recomencemos";
 
 /**
  * What she is told before she types anything — the ticket's own acceptance
@@ -69,8 +70,19 @@ export const SHARED_DEVICE_HELP =
  * opens it, so the mail goes either way. There is nothing to hedge, and hedging
  * — _"si esa dirección existe…"_ — would be the enumeration hint the honest
  * sentence avoids.
+ *
+ * **A function, and the minutes are a parameter, because this module is reached
+ * from a Client Component.** The authority on the number is
+ * `MAGIC_LINK_TTL_MINUTES` in `@repo/domain` — but importing it here put
+ * `@repo/domain/auth-handler` on the client graph, and with it `#connection` and
+ * `pg`. `server-only` refused that at the door, which is mechanism 2 doing its
+ * job; the fix is not to reach for the constant from a module a browser can
+ * load. `actions.ts` runs on the server, imports the real number, and calls
+ * this. Caught by seam 3 against a running `next dev`, not by `check-types`.
  */
-export const CHECK_YOUR_EMAIL = `Revisa tu correo. Te enviamos un enlace para entrar y dura ${MAGIC_LINK_TTL_MINUTES} minutos.`;
+export function checkYourEmail(expiresInMinutes: number): string {
+  return `Revisa tu correo. Te enviamos un enlace para entrar y dura ${expiresInMinutes} minutos.`;
+}
 
 /** Ábrelo aquí, not on the laptop she does not have. */
 export const CHECK_YOUR_EMAIL_HINT =
@@ -110,6 +122,7 @@ export const RESEND_LINK_BUTTON = "Enviar otro enlace";
 
 /** Every string above, for the copy test. Adding one here is what puts it under the rules. */
 export const SIGN_IN_COPY = {
+  SIGN_IN_TITLE,
   EMAIL_DOOR_PRECONDITION,
   EMAIL_LABEL,
   SEND_LINK_BUTTON,
@@ -117,7 +130,6 @@ export const SIGN_IN_COPY = {
   GOOGLE_ACCOUNT_NOTICE,
   SHARED_DEVICE_LABEL,
   SHARED_DEVICE_HELP,
-  CHECK_YOUR_EMAIL,
   CHECK_YOUR_EMAIL_HINT,
   EMAIL_LOOKS_WRONG,
   SEND_FAILED_HINT,

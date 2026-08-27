@@ -20,11 +20,12 @@
  */
 
 import type { ClientError } from "@repo/errors/app-error";
+import { MAGIC_LINK_TTL_MINUTES } from "@repo/domain/auth-handler";
 import { rateLimit } from "@repo/domain/rate-limit";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { headers } from "next/headers";
 import { auth } from "../../lib/auth";
-import { CHECK_YOUR_EMAIL, EMAIL_LOOKS_WRONG } from "./messages";
+import { checkYourEmail, EMAIL_LOOKS_WRONG } from "./messages";
 
 /**
  * What the form gets back.
@@ -127,5 +128,5 @@ export async function requestMagicLink(
     return { status: "failed", error: outcome.error.toClientError() };
   }
 
-  return { status: "sent", message: CHECK_YOUR_EMAIL };
+  return { status: "sent", message: checkYourEmail(MAGIC_LINK_TTL_MINUTES) };
 }

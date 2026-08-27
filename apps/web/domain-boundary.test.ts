@@ -24,21 +24,38 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 /**
- * Everything the domain must never publish. The Better Auth instance joins this
- * list with #12, and `./schema` grows tables rather than losing them — the list
- * only ever gets longer.
+ * Everything the domain must never publish. The list only ever gets longer.
+ *
+ * **#12 added the Better Auth entries**, and they are the reason
+ * `## Modules and workspaces` says the Better Auth instance is unreachable from
+ * `apps/web`: the app holds the three-method `AuthHandler` that
+ * `@repo/domain/auth-handler` returns, and nothing else. `auth-schema` is
+ * withheld for the same reason `schema` is — those are Better Auth's tables, and
+ * a table is still a table.
  */
 const WITHHELD = [
   // The package root itself: there is no `"."` entry in the map, so `import
   // "@repo/domain"` is not a shortcut past the subpaths either.
   "@repo/domain",
   "@repo/domain/schema",
+  "@repo/domain/auth-schema",
   "@repo/domain/connection",
   "@repo/domain/config",
+  "@repo/domain/database",
+  // The configuration that *builds* the instance, which would hand a caller the
+  // options object and with it every hook and credential in it.
+  "@repo/domain/auth/config",
+  "@repo/domain/auth/sign-in-attempt",
 ];
 
 /** What the app is allowed to reach, and therefore what it must actually reach. */
-const PUBLISHED = ["@repo/domain/health", "@repo/domain/migrate"];
+const PUBLISHED = [
+  "@repo/domain/health",
+  "@repo/domain/migrate",
+  // #12's two.
+  "@repo/domain/auth-handler",
+  "@repo/domain/rate-limit",
+];
 
 describe("the domain package's export map", () => {
   it.each(WITHHELD)("refuses %s to apps/web", (specifier) => {

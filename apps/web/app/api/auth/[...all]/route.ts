@@ -15,13 +15,15 @@
 import { auth } from "../../../../lib/auth";
 
 /**
- * Every response here depends on the request's cookies and none of it may be
- * cached: `GET /api/auth/get-session` answers per session, and
- * `GET /api/auth/magic-link/verify` consumes a single-use token. Cache
- * Components would otherwise want this route's reads inside a `use cache`
- * scope, which is the one thing they must never be.
+ * **No `export const dynamic`, and its absence is the correct configuration.**
+ * Cache Components makes data dynamic by default and you opt *into* caching with
+ * `use cache` — so a Route Handler is already dynamic, and the Next 15 segment
+ * knob is not merely redundant here but refused: _"Route segment config
+ * 'dynamic' is not compatible with `nextConfig.cacheComponents`."_ Nothing in
+ * this route may ever be cached — `get-session` answers per session and
+ * `magic-link/verify` consumes a single-use token — and nothing has to be said
+ * for that to hold.
  */
-export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
   return auth().handler(request);
