@@ -32,6 +32,8 @@ const read = (relativePath: string): string =>
 
 const turboJson = read("turbo.json");
 const flyToml = read("fly.toml");
+const deployWorkflow = read(".github/workflows/deploy.yml");
+const deployScript = read("scripts/deploy.sh");
 
 /**
  * `fly.toml` with its comments removed.
@@ -174,5 +176,51 @@ describe("NFR24 — every variable is declared, and no runtime credential is", (
     );
 
     expect(undeclared).toEqual([]);
+  });
+});
+
+/**
+ * `release-branch` in `docs/policy/build.md`, and NFR25 as amended at #9.
+ *
+ * The requirement is one sentence — **`main` is deployed and `dev` is not** — and
+ * it is enforced in two places that have to agree: the workflow's trigger and
+ * the script's own guard. Either one alone is a hole. A trigger widened to `dev`
+ * would make every merged ticket a production release, which is exactly the
+ * thing the amendment moved away from, and it is a one-word edit that reviews
+ * cleanly.
+ */
+describe("the deploy runs from the release branch and nowhere else", () => {
+  it("deploy.yml triggers on a push to main only", () => {
+    const pushTrigger = deployWorkflow.match(
+      /on:\n(?:.*\n)*?\s+push:\n\s+branches:\s*\[([^\]]*)\]/,
+    );
+
+    expect(pushTrigger?.[1]?.split(",").map((branch) => branch.trim())).toEqual(["main"]);
+  });
+
+  it("deploy.sh names main as the release branch", () => {
+    expect(deployScript).toMatch(/^RELEASE_BRANCH="main"$/m);
+  });
+
+  /**
+   * The escape hatch has to stay an escape hatch. A guard that reads
+   * `DEPLOY_ALLOW_BRANCH` from anywhere other than the environment — a default,
+   * a file, a flag the workflow could pass — is a guard the deploy path can
+   * satisfy on its own.
+   */
+  it("the branch guard's only override is an environment variable", () => {
+    expect(deployScript).toMatch(/\$\{DEPLOY_ALLOW_BRANCH:-\}" != "1"/);
+    expect(deployWorkflow).not.toMatch(/DEPLOY_ALLOW_BRANCH/);
+  });
+
+  /**
+   * The Fly token is write-scoped to the app, so it is a credential in the sense
+   * NFR24 means: it belongs in `secrets`, never inline and never in a `vars`
+   * entry, which GitHub renders in plain text on the settings page and in logs.
+   */
+  it("FLY_API_TOKEN is read from secrets and appears nowhere else", () => {
+    expect(deployWorkflow).toMatch(/FLY_API_TOKEN:\s*\$\{\{\s*secrets\.FLY_API_TOKEN\s*\}\}/);
+    expect(deployWorkflow).not.toMatch(/vars\.FLY_API_TOKEN/);
+    expect(deployWorkflow).not.toMatch(/FlyV1/);
   });
 });

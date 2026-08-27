@@ -14,11 +14,31 @@ rollback that runs without anyone watching.
 
 ## 1. Deploy
 
+**Normally you do not run a command at all.** `main` is the release branch and `dev` is the default
+one: a ticket's PR merges into `dev`, and deploying means **promoting `dev` to `main`**.
+
 ```sh
-NEXT_PUBLIC_SENTRY_DSN=… SENTRY_ORG=… SENTRY_PROJECT=… SENTRY_AUTH_TOKEN=… ./scripts/deploy.sh
+gh pr create --base main --head dev --title "release: promote dev"
 ```
 
-`scripts/deploy.sh` refuses a dirty tree and a `HEAD` that is on no remote branch, sets
+Merging that PR runs `.github/workflows/deploy.yml`, which calls `ci.yml` as a reusable workflow —
+the same five jobs a pull request had to pass, re-run on the commit actually being deployed — and
+only then deploys. `docs/policy/build.md` → `release-branch` is the key; the spec's NFR25 carries the
+reasoning and the amendment that put it there.
+
+**The terminal path still exists and is the same script**, which is the point: CI invokes
+`scripts/deploy.sh` rather than restating what a deploy is, so the two cannot diverge. Running it by
+hand needs a reason, and it refuses any branch but `main` unless you say so:
+
+```sh
+# From `main`, when CI itself is what is broken:
+NEXT_PUBLIC_SENTRY_DSN=… SENTRY_ORG=… SENTRY_PROJECT=… SENTRY_AUTH_TOKEN=… ./scripts/deploy.sh
+
+# A deliberate rehearsal from a branch — proving the health gate aborts a bad build, say:
+DEPLOY_ALLOW_BRANCH=1 ./scripts/deploy.sh
+```
+
+`scripts/deploy.sh` refuses a dirty tree, a branch that is not `main`, and a `HEAD` that is on no remote branch, sets
 `NEXT_PUBLIC_RELEASE` from the commit SHA, and passes the Sentry token as a **build secret** rather
 than a build argument — a build argument is recorded in the image's history and readable by anyone who
 can pull it.
@@ -74,8 +94,17 @@ fly deploy --image <ref> --strategy immediate
 traffic and already passed its checks, so waiting for a second opinion spends minutes buying nothing.
 This is the one place a strategy is passed on the command line.
 
-**Measured, not asserted:** see the PR on [#9](https://github.com/m0t0r/recomencemos/issues/9) for the
-rehearsal and its wall-clock time.
+**Measured, not asserted.** Rehearsed against production on 2026-08-27, `flyctl` v0.4.94:
+
+|                                              |                                        |
+| -------------------------------------------- | -------------------------------------- |
+| Wall clock, command to complete              | **33 s**                               |
+| NFR25's bound                                | ≤ 5 minutes                            |
+| Public `GET /api/health` during the rollback | **22 consecutive 200s**, polled at 1 s |
+
+No failed probe was observed, which is not the same as proving zero downtime at that granularity —
+a sub-second gap would not appear in a 1 s poll. What is proven is that the code-only class sits an
+order of magnitude inside its bound.
 
 **After any rollback**, open a `needs-triage` issue naming the release that was rolled back and what
 was observed. [ADR-0001](../adr/0001-findings-enter-through-triage.md) is why the finding enters
@@ -128,7 +157,26 @@ monitor, not from the app.
 
 ---
 
-## 6. What is not here yet
+## 6. Two numbers from the first deploy, worth keeping
+
+- **`max_connections` is 25.** Read out of the running cluster, and it is the number
+  [`recomencemos-go-live.md`](recomencemos-go-live.md) §2 calls _"the one number effort 0002 could not
+  verify at Design"_. DD2's pool cap is **10 per machine**, and those ten are client connections to
+  **PgBouncer** on 6432 rather than backends on Postgres, so one machine sits comfortably inside it.
+  What to watch: the **direct** connection consumes a real backend, and PlanetScale's own processes
+  (Patroni's heartbeat and REST API, the metrics exporter) hold several more. Adding machines is the
+  thing that makes this number bite.
+- **The cluster's memory sits at ~26% at rest, and that is `shared_buffers`.** Measured:
+  `shared_buffers` is 159 MB against an `effective_cache_size` implying ~640 MB of cluster RAM.
+  Postgres allocates that pool in full at startup and holds it, which is why the utilisation graph is
+  a step at cluster creation and flat afterwards rather than a curve that tracks traffic. It is **not**
+  the health check: that is `select 1`, 4–6 ms, about **0.08 queries per second** across Fly's 15 s
+  probe and the uptime monitor's 60 s one. Anyone reading that graph as load — as we did first — will
+  reach for the round trip, which is the one thing holding the deploy gate up.
+
+---
+
+## 7. What is not here yet
 
 - **The uptime monitor** itself — probing `/api/health` every 60 s and alerting after 2 consecutive
   failures — is [`recomencemos-go-live.md`](recomencemos-go-live.md) §5. With nobody on call,

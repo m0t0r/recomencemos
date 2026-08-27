@@ -1,0 +1,88 @@
+# The deploy, on a merge to the release branch and on nothing else (#9, DD10).
+#
+# **`main` is the release branch and `dev` is the default branch**, and the split
+# is the point: a ticket merging into `dev` integrates, and reaching `main` is a
+# deliberate promotion that a human performs. Deploying from `dev` would make
+# every merged ticket a production release, which is the shape NFR25 was amended
+# away from — see the spec's NFR25 and `docs/policy/build.md` -> `release-branch`.
+#
+# The checks are not restated here. `ci.yml` is called as a reusable workflow, so
+# the five jobs that gate a pull request are the same five, run on the commit
+# being deployed, and there is one definition of green in this repository.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+  # A deploy a human asked for: the same jobs, the same commit, no merge needed.
+  # It is how a rollback-by-redeploy is re-run without inventing a commit, and
+  # how the first deploy after a broken token is retried.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# **Never `cancel-in-progress`.** A cancelled deploy is a deploy in an unknown
+# state — bluegreen halfway through, with green machines up and traffic not yet
+# moved. Queue instead, so a second merge waits for the first to finish.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  # The gate, unchanged and unrestated.
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+
+    # Names the deploy in GitHub's own UI and gives a human one place to require
+    # an approval later without touching this file.
+    environment:
+      name: production
+      url: https://recomencemos.fly.dev
+
+    steps:
+      # `fetch-depth: 0` because `scripts/deploy.sh` refuses a commit that is on
+      # no remote branch — a release whose name nobody can fetch is worse than
+      # none — and a shallow checkout cannot answer that question.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1 (1.6)
+
+      # The same script a developer runs, for the same reason every job in
+      # `ci.yml` runs a root script: two deploy paths would be two answers to
+      # what a deploy is.
+      #
+      # `SENTRY_AUTH_TOKEN` may be unset — `next.config.ts` gates source-map
+      # upload on the full triple, so an absent token is a quiet build rather
+      # than a failing one, and the deploy still ships.
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: ./scripts/deploy.sh
+
+      # Proves the deploy from the outside rather than trusting `fly deploy`'s
+      # own exit code. Bluegreen will not move traffic to a machine whose checks
+      # fail, so this is belt and braces — but the belt is what catches a machine
+      # that passed its check and is answering 500 to everything else.
+      - name: Prove the deployed app answers
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://recomencemos.fly.dev/api/health || true)
+            [ "$code" = "200" ] && echo "healthy after ${attempt} attempt(s)" && exit 0
+            echo "attempt ${attempt}: HTTP ${code}"
+            sleep 10
+          done
+          echo "The deploy completed but /api/health never answered 200." >&2
+          exit 1

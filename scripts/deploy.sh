@@ -11,8 +11,10 @@
 #   2. SENTRY_AUTH_TOKEN, as a **build secret** rather than a build argument. A
 #      build argument is recorded in the image's own history and readable by
 #      anyone who can pull it; this token is write-scoped to a Sentry project.
-#   3. The refusal to deploy a dirty or unpushed tree, because a release name
-#      that does not name a commit anyone else can fetch is worse than none.
+#   3. The refusals: a dirty tree, an unpushed commit, or a branch that is not
+#      the release branch. A release name that does not name a commit anyone
+#      else can fetch is worse than none, and a deploy from a feature branch puts
+#      code in production that never passed the gate on `dev`.
 #
 # Rollback is not here. It is two commands in
 # `docs/runbooks/deploy-and-rollback.md`, deliberately typed by a human who has
@@ -33,6 +35,23 @@ fly auth whoami >/dev/null 2>&1 || die "flyctl is not logged in. Run: fly auth l
 # --- What is being deployed -------------------------------------------------
 
 RELEASE="$(git rev-parse HEAD)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+
+# **`main` is the release branch, and `dev` is not.** `dev` is where tickets
+# integrate and where CI's five checks run on every pull request; `main` is what
+# is deployed, and reaching it is a deliberate promotion rather than the side
+# effect of merging a ticket. `.github/workflows/deploy.yml` is the path that
+# normally takes it.
+#
+# The escape hatch is loud and env-shaped rather than a flag, because it should
+# read like something you meant: a rehearsal against production — proving the
+# health gate aborts a bad build, say — is a real reason to deploy a branch, and
+# pretending otherwise just gets the check commented out.
+RELEASE_BRANCH="main"
+
+if [ "$BRANCH" != "$RELEASE_BRANCH" ] && [ "${DEPLOY_ALLOW_BRANCH:-}" != "1" ]; then
+  die "On branch '${BRANCH}', and the release branch is '${RELEASE_BRANCH}'. Promote to ${RELEASE_BRANCH}, or set DEPLOY_ALLOW_BRANCH=1 for a deliberate rehearsal."
+fi
 
 if [ -n "$(git status --porcelain)" ]; then
   die "The working tree is dirty. NEXT_PUBLIC_RELEASE would be ${RELEASE:0:7}, which is not what would be running."
