@@ -179,6 +179,34 @@ dig @1.1.1.1 +short TXT _dmarc.recomencemos.online   # ticks this box when it an
 
 ---
 
+## 5a. The Google OAuth client (DD5, #12)
+
+**Nobody owned this step, and the announcement gate depends on it.** §1 row 6 says how to _rotate_
+the Google client secret; nothing said how the client comes to exist. Without it
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are unset, and the sign-in surface renders the email
+door alone — correctly and deliberately, but with the one-tap door missing on the device most
+Workers hold.
+
+- [ ] **Create an OAuth 2.0 Client ID** — Google Cloud console → APIs & Services → Credentials →
+      Create credentials → OAuth client ID → **Web application**.
+- [ ] **Configure the consent screen** as **External**, published. The app name a Worker reads on
+      Google's own screen is `Recomencemos`; the support email is the operator's.
+- [ ] **Authorised redirect URIs**, both, exactly: - `https://<production-origin>/api/auth/callback/google` - `http://localhost:3000/api/auth/callback/google`
+      The second is not a convenience: Google permits `http://localhost` here precisely so the local
+      flow is the _same_ flow, and without it the Google door cannot be exercised before a deploy.
+      A mismatch is Google's `redirect_uri_mismatch`, which surfaces on Google's page rather than
+      ours, so it will not appear in our logs.
+- [ ] **Scopes: the three defaults only** — `openid`, `email`, `profile`. This design wants an
+      identity assertion and nothing else, and it stores no provider token (DD5), so any additional
+      scope is a permission we asked for and cannot justify on a consent screen a Worker reads.
+- [ ] **`fly secrets set GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=…`**. Neither appears in any turbo
+      task (NFR24) and neither belongs in `apps/web/.env.example`.
+- [ ] **Verify the round trip on the deployed origin before the announcement**: sign in with Google,
+      then confirm the session row carries `sign_in_method = 'google'`. That column is NFR14's
+      mechanism, and a door that mints a session without setting it is the hole NFR14 exists to close.
+
+---
+
 ## 5b. The scheduler (DD10)
 
 Trigger.dev free tier, verified 2026-08-25: **$5/month of credits, 20 concurrent runs, 10 schedules**,
