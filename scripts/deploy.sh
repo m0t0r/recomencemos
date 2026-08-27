@@ -29,8 +29,17 @@ die() {
   exit 1
 }
 
-command -v fly >/dev/null || die "flyctl is not installed. https://fly.io/docs/flyctl/install/"
-fly auth whoami >/dev/null 2>&1 || die "flyctl is not logged in. Run: fly auth login"
+# **The binary is `flyctl`; `fly` is a symlink the installer makes.** The release
+# tarball contains one file called `flyctl` and nothing else, and fly.io's
+# install script is what adds the shorter alias — so `fly` exists on a developer
+# machine and does not exist under `superfly/flyctl-actions/setup-flyctl`, which
+# untars the release and puts that directory on `PATH`. Checking for `fly` alone
+# is why the first deploy from CI died before `fly deploy` was reached. Prefer
+# the alias when it is there, because that is what the runbooks tell a human to
+# type, and fall back to the name the tarball actually ships.
+FLY="$(command -v fly || command -v flyctl || true)"
+[ -n "$FLY" ] || die "flyctl is not installed. https://fly.io/docs/flyctl/install/"
+"$FLY" auth whoami >/dev/null 2>&1 || die "flyctl is not logged in. Run: fly auth login"
 
 # --- What is being deployed -------------------------------------------------
 
@@ -95,7 +104,7 @@ printf '  deploying %s\n\n' "$RELEASE"
 # `--strategy` is deliberately absent: `fly.toml` says `bluegreen`, and a flag
 # here would be a second place for that answer to live. Passing one is how a
 # deploy silently becomes a rolling one — a stop and a start on a single machine.
-exec fly deploy \
+exec "$FLY" deploy \
   "${BUILD_ARGS[@]}" \
   ${BUILD_SECRETS+"${BUILD_SECRETS[@]}"} \
   "$@"
