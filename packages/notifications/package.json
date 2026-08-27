@@ -13,8 +13,14 @@
     "#user-messages": "./src/user-messages.ts"
   },
   "exports": {
-    "./send": "./src/send.ts",
-    "./templates/*": "./src/templates/*.tsx"
+    "./send": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/send.ts"
+    },
+    "./templates/*": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/templates/*.tsx"
+    }
   },
   "scripts": {
     "check-types": "tsc --noEmit",
