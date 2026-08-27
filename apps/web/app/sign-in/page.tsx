@@ -47,10 +47,23 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
     <SignInForm
       googleAvailable={googleSignInAvailable()}
       /*
-        Passed through as she sent it and validated **server-side** in the
-        action, never here: this renders into a hidden field, and a check
-        performed at render is a check an attacker posts straight past.
-        `safeReturnPath` in `@repo/domain` is the one that counts.
+        Passed through as she sent it and validated **server-side**, never here:
+        this renders into a hidden field, and a check performed at render is a
+        check an attacker posts straight past.
+
+        **The two doors are guarded by two different things**, which is worth
+        knowing before trusting either. The magic link goes through the Server
+        Action to `safeReturnPath` in `@repo/domain`, which *coerces* anything
+        unsafe to `/` and signs her in. The Google door hands `returnPath`
+        straight to `authClient.signIn.social({ callbackURL })`, so what rejects
+        `//evil.co` there is Better Auth's own relative-path check on
+        `callbackURL` — `/^\/(?!\/|\\|%2f|%5c)[\w\-.\+\/@]*…$/`, read out of
+        `matchesOriginPattern` at 1.7.1 — and it *refuses* with 403
+        INVALID_CALLBACK_URL rather than coercing.
+
+        Both are closed. They are not the same guard and they do not accept the
+        same set: a path `safeReturnPath` allows through can still 403 on the
+        Google door, because its character class is narrower than ours.
       */
       returnPath={typeof returnPathParam === "string" ? returnPathParam : "/"}
       error={typeof errorParam === "string" ? errorParam : undefined}

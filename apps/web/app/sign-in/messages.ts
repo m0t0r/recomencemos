@@ -121,6 +121,17 @@ export const LINK_ALREADY_USED =
 /** The resend button. Three words, and the verb of its action. */
 export const RESEND_LINK_BUTTON = "Enviar otro enlace";
 
+/**
+ * The word between the two doors.
+ *
+ * Here because this file is where a Spanish string lives, and **not** in
+ * `SIGN_IN_COPY` because that object is the voice guide's jurisdiction: its
+ * rules are written for sentences and labels — sentence length, no shouting, no
+ * exclamation marks — and a divider glyph is neither. It renders inside an
+ * `aria-hidden` rule, so it is seen and never announced.
+ */
+export const DOOR_DIVIDER = "o";
+
 /** Every string above, for the copy test. Adding one here is what puts it under the rules. */
 export const SIGN_IN_COPY = {
   SIGN_IN_TITLE,

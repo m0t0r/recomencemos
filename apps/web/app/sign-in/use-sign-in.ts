@@ -118,7 +118,7 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
     sharedDevice,
     setSharedDevice,
     signInWithGoogle,
-    feedback: describe(state, {
+    feedback: feedbackFor(state, {
       consumedLink,
       googleFailed: googleFailed || arrivedWithGoogleError,
     }),
@@ -134,7 +134,7 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
  * what a redirect brought her here with: if she has retried since arriving on a
  * consumed link, the retry's outcome is the current truth.
  */
-function describe(
+function feedbackFor(
   state: RequestMagicLinkState,
   arrival: { consumedLink: boolean; googleFailed: boolean },
 ): Feedback | undefined {
