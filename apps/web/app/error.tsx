@@ -21,9 +21,10 @@
  * a project whose `main` lived in the replaced page renders one in its own
  * copy of this file.
  *
- * **The copy is settled at Design and ships as written.** It is a placeholder —
- * see the "Placeholders to change" table in the repo README — and a downstream
- * project rewrites it in its own voice.
+ * **The copy here is still English, and that is an open row.** It was settled at
+ * Design before `docs/policy/voice.md` existed; rewriting it in `es-CO` under the
+ * voice guide is listed in the repo README under "Still to replace". Keep the
+ * shape when it is rewritten — the reference line is what support asks for.
  */
 
 import { Button } from "@repo/design-system/components/button";

@@ -12,8 +12,9 @@
  *
  * `LOG_FORMAT=json pnpm dev` makes those lines countable with `grep`.
  *
- * This is scaffolding a downstream project deletes — it has a row in the
- * README's placeholder table. Delete the folder; nothing else refers to it.
+ * This is scaffolding, and it is deleted before public traffic — the go-live
+ * runbook's §7 carries that as a checkbox and the repo README lists it under
+ * "Still to replace". Delete the folder; nothing else refers to it.
  */
 
 import { AppError } from "@repo/errors/app-error";

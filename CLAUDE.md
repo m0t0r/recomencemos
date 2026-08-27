@@ -4,12 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A **project template**, not a product. It is a Turborepo/pnpm monorepo (Next.js 16 + React 19) whose purpose is to be cloned as the starting point for new products that run the AI-native SDLC described in <https://claude.com/blog/the-ai-native-sdlc-playbook>.
+**Recomencemos**, a product. It connects people in Pereira, Dosquebradas and Santa Rosa de Cabal (Risaralda, Colombia) who lost their income in the 10 August 2026 earthquake with anyone, anywhere, willing to pay them for work — and it introduces the two sides and then steps out of the way. It is a Turborepo/pnpm monorepo (Next.js 16 + React 19), built with the AI-native SDLC described in <https://claude.com/blog/the-ai-native-sdlc-playbook>.
 
-Two consequences for how you work here:
+This repository was a project template before it was this product, and it stopped being one deliberately. Nothing here is judged by what it does for a downstream clone any more.
 
-- Changes are judged by whether they make the _template_ better for a downstream project, not by whether they make the demo app better. Product-specific code does not belong on `main`.
-- Anything a new project must rename or replace is a **placeholder** and must stay listed in `README.md` under "Placeholders to change". If you add, rename, or remove one, update that table in the same change.
+Four consequences for how you work here:
+
+- **A change is judged by what it does for a Worker publishing from a phone and a Hirer sending a concrete Offer.** Not by what it does for a demo, and not by what it would do for someone else's project.
+- **[`docs/efforts/0002-profile-to-contact-exchange/spec.md`](docs/efforts/0002-profile-to-contact-exchange/spec.md) is the authority on what gets built**, [`CONTEXT.md`](CONTEXT.md) is the binding vocabulary in both languages, [`PRODUCT.md`](PRODUCT.md) is why the product is shaped this way, and [`docs/policy/voice.md`](docs/policy/voice.md) is the binding register for every string a person reads. A ticket that contradicts one of them is a spec amendment, not a ticket.
+- **Three refusals hold the design together, and each is load-bearing rather than a limitation to route around**: the platform never handles money ([ADR-0007](docs/adr/0007-the-platform-never-handles-money.md)), verifies nobody and publishes that absence ([ADR-0008](docs/adr/0008-open-enrolment-with-published-non-verification.md)), and adjudicates nothing — no ratings, no reviews, no reputation, no arbitration. A feature that quietly reintroduces one is the failure mode to watch for.
+- **What is genuinely still unbuilt is listed in `README.md` under "Still to replace"**, and each row names who owns it. Add a row when something lands half-done rather than leaving it implied; delete a row when it is done.
 
 ## Commands
 
@@ -60,7 +64,7 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
 
 - `@repo/design-system:test` — `vitest run`, **happy-dom**, React Testing Library. Config in `vitest.config.mts`, cleanup between tests in `vitest.setup.ts`.
 - `@repo/errors:test` — `vitest run`, **Node default environment**, no plugin and no setup file. The prior art for a Node package here: a `vitest.config.mts` carrying `resolve.tsconfigPaths`, `globals`, and an `include` glob, and nothing else.
-- `@repo/observability:test` — `vitest run`, Node environment, the same minimal config as `@repo/errors`. It is the **stdout seam**: a test that asserts on a _line_ builds a `pino` instance from `createLoggerOptions` over an in-memory `Writable`, and pino's own test utility is deliberately unused because it asserts on `pid`/`hostname` before stripping them, which these options replace. The two modules that emit no line — the report seam and the trace-context reader — are tested against the real SDK with no client initialised, which is a real state the template ships in rather than a mock.
+- `@repo/observability:test` — `vitest run`, Node environment, the same minimal config as `@repo/errors`. It is the **stdout seam**: a test that asserts on a _line_ builds a `pino` instance from `createLoggerOptions` over an in-memory `Writable`, and pino's own test utility is deliberately unused because it asserts on `pid`/`hostname` before stripping them, which these options replace. The two modules that emit no line — the report seam and the trace-context reader — are tested against the real SDK with no client initialised, which is a real state this repo runs in rather than a mock.
 - `@repo/domain:test` — `vitest run`, Node environment, and **two seams in one config** (spec 0002, `## Testing Decisions`). Seam 1 is pure — the connection-string resolvers, the server-only backstop — in the same minimal shape `@repo/errors` set. Seam 2 runs against **PGlite in-process**, replaying the **committed migrations** rather than a `CREATE TABLE` written for tests, which is the whole reason it is a seam and not a mock. Its `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows. PGlite 0.5.7 reports **PostgreSQL 18.3** against PlanetScale's 18.4 — read out of the running engine by the suite itself, so the claim cannot go stale silently.
 - `web:test` — `vitest run`, **happy-dom**, the design system's config copied per the paragraph below. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`.
 - `//#test:gates` — `gate-test.sh`, the 120 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the two gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and both scripts.
@@ -83,11 +87,11 @@ All three package suites follow the same three rules. Tests sit **beside their s
 | transitive packages       | 39                                     | 10                    |
 | vitest `environment` cost | ~330 ms per test file                  | ~135 ms per test file |
 
-The engines line is the one that forced the decision: with `engineStrict` on, jsdom raises this repo's floor from any 24.x to 24.15+, and a template should not narrow the runtime its users may run over a test dependency. The environment cost is paid **per test file**, so it scales with the suite rather than being a one-off.
+The engines line is the one that forced the decision: with `engineStrict` on, jsdom raises this repo's floor from any 24.x to 24.15+, which is a narrower runtime than anyone working here should have to hold for a test dependency. The environment cost is paid **per test file**, so it scales with the suite rather than being a one-off.
 
 **The correctness axis went the other way from the folklore.** A probe of eighteen DOM APIs found nine differences and every one favoured happy-dom: `matchMedia`, `ResizeObserver`, `IntersectionObserver`, `scrollIntoView`, `dialog.showModal`, `inert`, `checkVisibility`, `elementFromPoint`, and `Range.getClientRects` are all missing or throwing under jsdom and present under happy-dom. Nothing was present under jsdom and missing under happy-dom. That matters concretely here: `next-themes` reads `matchMedia` and Base UI reaches for `ResizeObserver`, so the jsdom route needs a setup file full of mocks before the first component test runs.
 
-Be honest about what that probe shows, though: it tested **presence, not fidelity**. jsdom's stated philosophy is to omit what it cannot implement correctly, so a happy-dom API that exists but never fires would be worse than an absent one you knowingly mocked. `src/components/dialog.test.tsx` is the guard against that — a portal plus a real `user-event` click is where a DOM environment actually breaks, and it is the case downstream hits long before it hits Button. If it ever fails, reconsider the environment rather than the test.
+Be honest about what that probe shows, though: it tested **presence, not fidelity**. jsdom's stated philosophy is to omit what it cannot implement correctly, so a happy-dom API that exists but never fires would be worse than an absent one you knowingly mocked. `src/components/dialog.test.tsx` is the guard against that — a portal plus a real `user-event` click is where a DOM environment actually breaks, and it is the case a real surface hits long before it hits Button. If it ever fails, reconsider the environment rather than the test.
 
 `apps/web` **gained its `test` script with the change that first put real code in the app**, which is exactly the condition this file used to name while the app was still `create-next-app` scaffolding: a suite there before then would have been vacuously green (`--passWithNoTests` tells `/implement` a lie) or test code destined for deletion. The config is `packages/design-system/vitest.config.mts` copied, happy-dom and all.
 
@@ -215,14 +219,14 @@ the rule redaction **cannot** enforce, which is why it is written here rather th
 `redaction.ts`: that list matches key _names_, so it catches a secret at `password` and misses the
 same secret at `value`.
 
-**The template is its own exception to that rule, and it is the only one.** `context.path` on the
+**The request-completion line is the one exception to that rule, and it is the only one.** `context.path` on the
 request-completion line carries the concrete request path on every request, so a credential in a URL
 **path segment** is logged verbatim by code no caller wrote.
 [ADR-0006](docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md) is why nothing ships to
 guess at it — no mechanism can tell a reset token from an order id, and any bound also lands on
 `/orders/42`. `secrets-in-url-paths` in [`docs/policy/security.md`](docs/policy/security.md) is the
-question a project answers, and the go-live runbook's §10 is how it bounds the path when the answer is
-yes. Do not read the exception as licence: it exists because the template cannot know the
+question this product still has to answer, and the go-live runbook's §10 is how it bounds the path when
+the answer is yes. Do not read the exception as licence: it exists because the logger cannot know the
 classification of a value it writes on the caller's behalf, which is never true of a `context` a caller
 builds.
 
@@ -266,8 +270,8 @@ every clone's drain queries bind to them, and no clone can be migrated by us.
 ## Things to get right
 
 - **Spanish is the interface; English is the code** ([ADR-0012](docs/adr/0012-spanish-is-the-interface-english-is-the-code.md)). `es-CO` is the product's only language and it governs **only what a person reads**. Every identifier you type is English: route segments, file and directory names, database tables and columns, enum values, query parameters, API field names, log `event` names, test names, branch names. The line is **identifier versus value** — `Skill.labelEs` is an English column holding a Spanish string. So the route is `/offers`, the table is `offer`, the entity is `Offer`, and the page says _Propuesta_. This is written down because effort 0002's spec routed the entire product in Spanish — `/perfiles`, `/publicar`, `app/mi-perfil/page.tsx` — through the API contract and the deep dives before a human caught it. `CONTEXT.md`'s glossary gives every term both names; use the English one everywhere except the rendered string.
-- `apps/web/app/layout.tsx` still carries `create-next-app` metadata (`title: "Create Next App"`). That is a placeholder, not an oversight to fix silently — see the README table.
-- `apps/web/app/page.tsx` and `apps/web/app/showcase.tsx` are a design-system showcase, not product code. Treat them as scaffolding a downstream project replaces.
+- `apps/web/app/layout.tsx` carries the product's metadata and `lang="es-CO"`. The `lang` attribute is not decoration: every string below it is Spanish, and a wrong `lang` has a screen reader announce Spanish with English phonemes.
+- `apps/web/app/page.tsx` is a **holding page**, not the Wall. Story 4 ([#21](https://github.com/m0t0r/recomencemos/issues/21)) replaces it. It deliberately makes no claim about verification or money — those are story 11's two standing notices ([#22](https://github.com/m0t0r/recomencemos/issues/22)), and a half-version anywhere else gives them a second source.
 - The React version is 19 and Next is 16 (App Router). Server Components are the default; the registry marks the components that need `"use client"` (anything with state, effects, or handlers). New interactive components need the same directive.
 - `apps/web/next.config.ts` is TypeScript, and it is listed in `apps/web/tsconfig.json`'s `include`. If you rename it, update that entry too.
 - oxfmt runs on the tool's defaults except for `ignorePatterns` (`.agents/`, `.claude/`, `docs/efforts/*/advisories/`, `pnpm-workspace.yaml`, `packages/domain/drizzle/`) — note `printWidth` is **100**, not Prettier's 80. Run `pnpm format:fix` rather than hand-formatting. It reads `.gitignore`, so ignored files are skipped automatically.
@@ -276,13 +280,13 @@ every clone's drain queries bind to them, and no clone can be migrated by us.
 
 ## AI-native SDLC conventions
 
-The playbook's artifact chain is the intended workflow for projects built from this template: `intent.md` (Plan) → `spec.md` (Design) → tickets + code (Build) → PR review (Deploy) → monitoring findings back through `/triage` (Maintain). Intents and specs are committed under `docs/efforts/<NNNN>-<slug>/`, so git carries the decision record; tickets are sub-issues of the spec's issue, so the plan reports its own state instead of being restated in a document.
+The playbook's artifact chain is how work reaches this repo: `intent.md` (Plan) → `spec.md` (Design) → tickets + code (Build) → PR review (Deploy) → monitoring findings back through `/triage` (Maintain). Intents and specs are committed under `docs/efforts/<NNNN>-<slug>/`, so git carries the decision record; tickets are sub-issues of the spec's issue, so the plan reports its own state instead of being restated in a document.
 
-Repo-level surfaces that support it — create them as the project needs them, and keep them in git:
+Repo-level surfaces that support it — create them as the work needs them, and keep them in git:
 
 - `CLAUDE.md` (this file) — commands, conventions, architecture, recurring mistakes, verification steps. Update it whenever a correction had to be repeated.
-- `.claude/skills/<name>/SKILL.md` — **method**: how the work is done. Craft, not policy. A downstream project inherits these rather than rewriting them.
-- `docs/policy/*.md` — **policy**: the answers only an organization can give. Every value is set or literally `UNSET`, and a skill needing an `UNSET` value raises a flagged concern naming the file and the key rather than guessing. This is the placeholder; the skills are not.
+- `.claude/skills/<name>/SKILL.md` — **method**: how the work is done. Craft, not policy, and the same in any project.
+- `docs/policy/*.md` — **policy**: the answers only this organization can give. Every value is set or literally `UNSET`, and a skill needing an `UNSET` value raises a flagged concern naming the file and the key rather than guessing. Effort 0002's design interview set most of them; `grep -rn UNSET docs/policy/` is what is left.
 - `docs/runbooks/*.md` — **procedure**: what a human does to take something live or recover it, as numbers and commands rather than advice. A runbook step that ends in a decision names the `docs/policy/` key rather than making it. [`observability-go-live.md`](docs/runbooks/observability-go-live.md) is the one that ships: it carries the environment-variable phase split, the vendor's free-tier caps **pinned at a date**, the two control-band numbers and their arithmetic, the go-live check that proves `trace_id` correlation end to end, the breach path from webhook to `needs-triage` issue, and what was verified against the installed SDK rather than recalled.
 - `.claude/agents/<name>.md` — scoped subagents for recurring work such as verification, research, or simplification.
 - `.claude/settings.json` — hooks as deterministic gates (protected paths, formatters, credential scanning, deploy authorization).
@@ -292,9 +296,9 @@ Repo-level surfaces that support it — create them as the project needs them, a
 
 **A runbook is a third thing, and it is what the split produces rather than an exception to it.** Method is how the work is done and is the same everywhere; policy is the answer only an organization gives. A runbook is the _procedure_ that carries a reader from one to the other — ordered steps, real numbers, real commands — and it is neither craft nor an answer. The test that keeps it honest is that **a runbook step ending in a decision names the `docs/policy/` key instead of making it**: that is why `observability-go-live.md` could state the two band numbers as arithmetic while still leaving `alert-destination` `UNSET` for the effort that had grounds to set it (0002 since has). A runbook that quietly answers a policy key has stopped being a runbook and become the form nobody filled in.
 
-`CLAUDE.md`, `AGENTS.md`, `.agents/skills/`, `.claude/agents/`, `.claude/hooks/`, `.claude/settings.json`, `docs/policy/`, `docs/runbooks/`, `DESIGN.md`, and `.mcp.json` all ship with the template. `REVIEW.md` does not — it is an extension point a new project fills in, along with every `UNSET` value under `docs/policy/`. `.github/workflows/` was the other one, and effort 0002's story 15 filled it — see the CI paragraph under **Verifying your work** above.
+`CLAUDE.md`, `AGENTS.md`, `.agents/skills/`, `.claude/agents/`, `.claude/hooks/`, `.claude/settings.json`, `docs/policy/`, `docs/runbooks/`, `DESIGN.md`, and `.mcp.json` all exist. **`REVIEW.md` does not**, and it is the one surface in that list still genuinely missing — along with every remaining `UNSET` value under `docs/policy/`. `.github/workflows/` was the other one, and effort 0002's story 15 filled it — see the CI paragraph under **Verifying your work** above.
 
-The `code-review` skill ships and `REVIEW.md` does not, and that is the method/policy split again: the two-axis review is craft, while which extra passes run, what severity blocks a merge, and which paths are excluded are answers only an organization gives.
+The `code-review` skill exists and `REVIEW.md` does not, and that is the method/policy split again: the two-axis review is craft, while which extra passes run, what severity blocks a merge, and which paths are excluded are answers only this project gives.
 
 ### Agent surfaces that already exist here
 
@@ -315,14 +319,11 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
 - `codebase-design` — the deep-module vocabulary `tdd` cites when the shape of an interface is itself the question. A reference, not a session.
 - `resolving-merge-conflicts` — the tax on stacked PRs: a review fix low in a stack rebases everything above it.
 - `diagnosing-bugs` — the Maintain-stage loop that produces what `/triage` promotes.
-- `wizard` — generates a bash wizard that walks a human through steps only they can perform.
-  `scripts/setup.sh` is its committed product here: the template-adoption steps that are the
-  human's. Extend that script through `/wizard`; the library above its `STAGES` marker is the
-  template's, never hand-edited.
-- `bootstrap` — this repo's own, absent from the lock: the once-per-clone sweep that makes a fresh
-  clone yours. It reads the README's placeholder table as its work list, carries the rename
-  coupling map, verifies with the full gate plus a dev-server boot, and hands the human rows to
-  `scripts/setup.sh`. It stops before the SDLC; `/grill-with-docs` → `/to-intent` is what follows.
+- `wizard` — generates a bash wizard that walks a human through steps only they can perform:
+  provisioning, credentials, a third-party dashboard, a one-off cutover. It has no committed
+  product here since `scripts/setup.sh` was deleted with the template framing; the go-live runbook
+  is what carries the human-only steps now, and a wizard is worth generating when one of its
+  sections is walked more than once.
 - `impeccable` — interface design at depth: `shape` (brief before code), `critique`/`audit`, `polish`/`harden`, `live`. It owns `PRODUCT.md`, `DESIGN.md`, and the surface briefs under `.impeccable/briefs/`. The Design stage's `ux-design` routes into it rather than restating it.
 
 **`impeccable` is vendored by its own installer, not the `skills` CLI**, which is why `skills-lock.json` does not track it. It is installed twice on purpose — `.agents/skills/impeccable/` (Codex flavor, with `agents/*.toml`) and `.claude/skills/impeccable/` (Claude flavor, with `user-invocable`, `argument-hint`, and `allowed-tools`). They differ in more than paths, so the usual vendor-and-symlink convention does not apply; do not "fix" the duplication. Its design detector runs as a `PostToolUse` and `Stop` hook in both `.claude/settings.json` and `.codex/hooks.json`.
