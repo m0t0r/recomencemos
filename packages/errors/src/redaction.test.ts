@@ -44,7 +44,21 @@ const SHIPPED_KEY_NAMES = [
   "card_number",
   "cvv",
   "ssn",
+  // The three the sweep for NFR19 found, read out of `@sentry/core@10.70.0`
+  // rather than recalled. `query_string` is `RequestEventData`; `http.query` and
+  // `http.fragment` are `SanitizedRequestData`, which is what an `http.client`
+  // span and an `http` breadcrumb carry -- Sentry splits the query off the URL
+  // into its own field, so reducing the URL alone would leave the half it moved.
+  "query_string",
+  "http.query",
+  "http.fragment",
 ];
+
+// A generated path ends either in a bare name or in a bracketed one; the
+// bracketed form is why `split(".").at(-1)` is not enough any more.
+function leafOf(path: string): string {
+  return /\["(?<name>[^"]+)"\]$/.exec(path)?.groups?.name ?? path.split(".").at(-1) ?? "";
+}
 
 function everyShippedKey(): Record<string, string> {
   return Object.fromEntries(SHIPPED_KEY_NAMES.map((name) => [name, SECRET]));
@@ -208,20 +222,37 @@ describe("what @repo/observability derives from the list without receiving it", 
     expect(paths).toContain("context.api_key");
     // Depth 4 is the last level, so a fourth wildcard would be out of range.
     expect(paths).not.toContain("err.*.*.*.*.authorization");
-    expect(paths.every((path) => path.startsWith("err.") || path.startsWith("context."))).toBe(
-      true,
-    );
+    // Rooted at a name the caller gave, and separated from it by either form:
+    // `.` for an ordinary segment, `[` for a bracketed one.
+    expect(
+      paths.every((path) =>
+        ["err", "context"].some(
+          (root) => path.startsWith(`${root}.`) || path.startsWith(`${root}[`),
+        ),
+      ),
+    ).toBe(true);
   });
 
   // This is NFR10's actual property: not "the two consumers hold the same array"
   // — they never see an array — but "the two matchers agree about one input".
   it("agrees with the walker on every name it generates a path for", () => {
     for (const path of redactionPaths(["err"])) {
-      const leaf = path.split(".").at(-1) ?? "";
+      const leaf = leafOf(path);
 
       expect(isRedactedKey(leaf)).toBe(true);
       expect(scrubEvent({ extra: { [leaf]: "SENTINEL" } }).extra[leaf]).toBe(REDACTED);
     }
+  });
+
+  // A spelling carrying a dot is one key, not two, so its path is
+  // `err["http.query"]` and not `err.http.query` -- the second means something
+  // else to `fast-redact`, and it is the shape the naive template produces.
+  it("emits a dotted spelling as one bracketed segment rather than as nesting", () => {
+    const paths = redactionPaths(["err"]);
+
+    expect(paths).toContain('err["http.query"]');
+    expect(paths).toContain('err.*.*.*["http.fragment"]');
+    expect(paths).not.toContain("err.http.query");
   });
 
   // Stated rather than claimed away: a caller can recover the spellings from a
@@ -256,5 +287,146 @@ describe("scrubOrDrop", () => {
 
   it("drops rather than throwing, because a hook that throws is an unhandled rejection", () => {
     expect(() => scrubOrDrop(null)).not.toThrow();
+  });
+});
+
+/**
+ * NFR19. The magic-link token is the **only** key to a Worker's account and it
+ * travels as a query parameter, so at `tracesSampleRate: 0.1` roughly one in ten
+ * verify requests shipped its whole URL to a processor, and every error on that
+ * route shipped it at 100%.
+ *
+ * These cases are written against the *class* rather than against `request.url`,
+ * because the ticket's own criterion 1 — "`["request","url"]` as a carrier path"
+ * — is a no-op: `CARRIER_PATHS` names roots to walk and the walk replaces values
+ * held under a secret-named key, while here the key is innocuous and the secret
+ * is inside the value. A case pinned to `request.url` would pass over an
+ * implementation that still leaked every other URL-valued field.
+ */
+describe("a URL reaching a processor carries no query string", () => {
+  const MAGIC_LINK = `https://recomencemos.test/verificar?token=${SECRET}&next=%2Fperfil`;
+
+  it("keeps where the URL points and drops what it carries", () => {
+    const scrubbed = scrubEvent({ request: { url: MAGIC_LINK } });
+
+    expect(scrubbed.request.url).toBe("https://recomencemos.test/verificar");
+  });
+
+  it("drops the fragment too, which is where an OAuth token arrives", () => {
+    const scrubbed = scrubEvent({
+      request: { url: `https://recomencemos.test/callback#access_token=${SECRET}` },
+    });
+
+    expect(scrubbed.request.url).toBe("https://recomencemos.test/callback");
+  });
+
+  it("drops userinfo, which is a credential in a URL wearing neither a query nor a key", () => {
+    const scrubbed = scrubEvent({
+      request: { url: `https://admin:${SECRET}@recomencemos.test/health` },
+    });
+
+    expect(scrubbed.request.url).toBe("https://recomencemos.test/health");
+  });
+
+  // The class property, stated as a test: no case here names `request.url`, and
+  // the implementation may not either.
+  it("reduces a URL under any key, at any depth, in any of the hook shapes", () => {
+    const scrubbed = scrubEvent({
+      breadcrumbs: [{ category: "fetch", data: { href: MAGIC_LINK } }],
+      spans: [{ op: "http.client", data: { "sentry.origin": MAGIC_LINK } }],
+      exception: {
+        values: [{ stacktrace: { frames: [{ vars: { deep: { nested: { at: MAGIC_LINK } } } }] } }],
+      },
+      contexts: { response: { location: MAGIC_LINK } },
+    });
+
+    const serialised = JSON.stringify(scrubbed);
+
+    expect(serialised).not.toContain(SECRET);
+    expect(scrubbed.breadcrumbs[0]?.data.href).toBe("https://recomencemos.test/verificar");
+    expect(scrubbed.spans[0]?.data["sentry.origin"]).toBe("https://recomencemos.test/verificar");
+    expect(scrubbed.exception.values[0]?.stacktrace.frames[0]?.vars.deep.nested.at).toBe(
+      "https://recomencemos.test/verificar",
+    );
+    expect(scrubbed.contexts.response.location).toBe("https://recomencemos.test/verificar");
+  });
+
+  /**
+   * The false-positive bound, and the reason it is drawn here.
+   *
+   * Only a string that parses **whole** as an absolute URL is reduced. Prose
+   * that happens to contain a link is left alone, which leaves a residue: a URL
+   * embedded in a message still carries its query. That residue is **named
+   * rather than guessed at**, per
+   * [ADR-0006](../../../docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)
+   * — no scanner can tell a link in an error message from a link in a
+   * credential, and any bound that caught the second would mangle the first.
+   */
+  it("returns anything that is not wholly a URL byte-identical", () => {
+    const prose = `fetch failed for https://recomencemos.test/verificar?token=${SECRET}`;
+    const scrubbed = scrubEvent({
+      extra: { note: prose, relative: "/verificar?token=abc", empty: "", question: "really?" },
+      transaction: "GET /verificar",
+    });
+
+    expect(scrubbed.extra.note).toBe(prose);
+    expect(scrubbed.extra.relative).toBe("/verificar?token=abc");
+    expect(scrubbed.extra.empty).toBe("");
+    expect(scrubbed.extra.question).toBe("really?");
+    expect(scrubbed.transaction).toBe("GET /verificar");
+  });
+
+  // `new URL(...).toString()` normalises -- it appends the root path to a bare
+  // origin, among other things. A URL with nothing to remove must come back the
+  // same bytes rather than the same meaning, or every clean URL in every event
+  // acquires a diff nobody asked for.
+  it("does not normalise a URL that carries nothing to drop", () => {
+    const scrubbed = scrubEvent({
+      extra: { origin: "https://recomencemos.test", padded: "https://recomencemos.test/a/b" },
+    });
+
+    expect(scrubbed.extra.origin).toBe("https://recomencemos.test");
+    expect(scrubbed.extra.padded).toBe("https://recomencemos.test/a/b");
+  });
+});
+
+/**
+ * The other two shapes the sweep found. Sentry does not only put a query inside
+ * a URL: `RequestEventData.query_string` holds one on its own, and
+ * `SanitizedRequestData` — what an `http.client` span and an `http` breadcrumb
+ * carry — splits `http.query` and `http.fragment` off the URL into their own
+ * fields. Reducing URLs alone would have moved the leak rather than closed it.
+ */
+describe("a query string travelling beside a URL rather than inside one", () => {
+  it("redacts request.query_string in each of the three shapes its type allows", () => {
+    const asString = scrubEvent({ request: { query_string: `token=${SECRET}` } });
+    const asRecord = scrubEvent({ request: { query_string: { token: SECRET } } });
+    const asPairs = scrubEvent({ request: { query_string: [["token", SECRET]] } });
+
+    expect(asString.request.query_string).toBe(REDACTED);
+    expect(asRecord.request.query_string).toBe(REDACTED);
+    expect(asPairs.request.query_string).toBe(REDACTED);
+  });
+
+  it("redacts http.query and http.fragment on a span and on a breadcrumb", () => {
+    const scrubbed = scrubEvent({
+      spans: [{ op: "http.client", data: { "http.query": `?token=${SECRET}` } }],
+      breadcrumbs: [{ category: "fetch", data: { "http.fragment": `#access_token=${SECRET}` } }],
+    });
+
+    expect(scrubbed.spans[0]?.data["http.query"]).toBe(REDACTED);
+    expect(scrubbed.breadcrumbs[0]?.data["http.fragment"]).toBe(REDACTED);
+  });
+
+  // `request` was reachable only at `headers` and `cookies`, so a name sitting
+  // directly on it was in the list and out of the walk's reach at the same time.
+  it("reaches a secret sitting directly on request, not only under its two subtrees", () => {
+    const scrubbed = scrubEvent({
+      request: { url: "https://recomencemos.test/a", data: { password: SECRET }, auth: SECRET },
+    });
+
+    expect(scrubbed.request.auth).toBe(REDACTED);
+    expect(scrubbed.request.data.password).toBe(REDACTED);
+    expect(scrubbed.request.url).toBe("https://recomencemos.test/a");
   });
 });
