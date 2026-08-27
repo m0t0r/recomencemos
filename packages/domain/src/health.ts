@@ -16,6 +16,12 @@
  * quota lever this design has and the wrong way to pull it.
  */
 
+/**
+ * The build-time half of the guard — see the note in `connection.ts`. Verified
+ * that a Route Handler is inside Next's `react-server` layer: `pnpm build`
+ * compiles and `GET /api/health` answers 200 with this import in place.
+ */
+import "server-only";
 import { AppError, isAppError } from "@repo/errors/app-error";
 import { sql } from "drizzle-orm";
 import { db } from "#connection";
