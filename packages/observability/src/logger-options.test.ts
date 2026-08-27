@@ -1138,24 +1138,70 @@ describe("what a truncated line keeps of a structured err field", () => {
     expect(contextOf(lines()[0])).toEqual({ one: "1", two: "2", three: "3", four: "4" });
   });
 
+  /** How many identifiers sit ahead of `cause`: a fan-out job's `context`, not a contrived one. */
+  const FANOUT_IDENTIFIERS = 320;
+
+  /**
+   * A parent stack small enough that the shortenable `err.stack` cannot claim
+   * the budget, so `cause` is genuinely offered room.
+   */
+  const SHALLOW_PARENT_FRAMES = 2;
+
+  /**
+   * A parent stack past anything the stack budget admits whole, so `err.stack`
+   * is shortened into whatever the identifiers leave.
+   */
+  const DEEP_PARENT_FRAMES = 200;
+
   /**
    * `cause` is offered last, so squeezing it means giving the fields ahead of it
-   * something real to spend the budget on: three hundred identifiers, which is a
-   * fan-out job's `context` rather than a contrived one.
+   * something real to spend the budget on.
+   *
+   * **The parent's stack is a parameter, and that is the fix for #58.** This
+   * fixture used to be shared by the two cases below with the `cause`'s stack
+   * pinned through {@link withStack} and the parent's left as the real stack V8
+   * captured here — every frame of it an absolute path into the checkout, so
+   * the line's size was a function of where the repository was cloned.
+   * `err.stack` is admitted *before* `cause` and is shortenable, so a parent
+   * stack that does not fit whole is shortened into every remaining byte and
+   * `cause` is offered nothing.
+   *
+   * **And the outcome was not even monotonic in the path length**, which is why
+   * "our runner's path is short enough" was never a defence: measured on the
+   * commit before this one, the case passed at 39 and 60 characters, failed at
+   * 121, and passed again at 199 — because past a point the parent's stack is
+   * itself trimmed by the stack budget and stops growing. Sweeping the parent's
+   * depth rather than the clone path reproduces the same cliff and shows how
+   * narrow the shipped corridor was: at 300 identifiers the `cause` keeps its
+   * identity at 30 parent frames and has lost it by 50.
+   *
+   * So the two cases no longer read off one row. Each passes the depth that
+   * drives the condition it is named for, and neither input contains a real
+   * stack, which is what makes both independent of a rename, a longer CI runner
+   * path, or a worktree under `.claude/worktrees/`.
    */
-  function squeezedCause() {
-    const { logger, raw, lines } = harness();
+  function squeezedCause(
+    parentFrames: number,
+    env: Parameters<typeof createLoggerOptions>[0] = {},
+  ) {
+    const { logger, raw, lines } = harness(env);
 
     logger.error(
       {
-        err: new AppError({
-          code: "squeezed",
-          message: "operator detail",
-          context: Object.fromEntries(
-            Array.from({ length: 300 }, (_, index) => [`id_${index}`, `value_${index}`]),
-          ),
-          cause: withStack(new Error("upstream refused the charge"), 200),
-        }),
+        err: withStack(
+          new AppError({
+            code: "squeezed",
+            message: "operator detail",
+            context: Object.fromEntries(
+              Array.from({ length: FANOUT_IDENTIFIERS }, (_, index) => [
+                `id_${index}`,
+                `value_${index}`,
+              ]),
+            ),
+            cause: withStack(new Error("upstream refused the charge"), 200),
+          }),
+          parentFrames,
+        ),
       },
       "failed",
     );
@@ -1163,20 +1209,51 @@ describe("what a truncated line keeps of a structured err field", () => {
     return { line: raw()[0] ?? "", parsed: lines()[0] ?? {} };
   }
 
-  it("contributes the identity of a cause too large to admit whole", () => {
-    const admittedCause = (errorField(squeezedCause().parsed).cause ?? {}) as Record<
-      string,
-      unknown
-    >;
+  function admittedCauseOf(parsed: Record<string, unknown>): Record<string, unknown> {
+    return (errorField(parsed).cause ?? {}) as Record<string, unknown>;
+  }
 
-    expect(admittedCause).toMatchObject({ message: "upstream refused the charge" });
-    expect(admittedCause.stack).toBeUndefined();
+  /**
+   * Under the shallow parent the budgeted `cause` serialises to 2,142 bytes and
+   * 1,124 are free, so this sits about a kilobyte clear of both ways it could
+   * stop meaning anything: the cause fitting whole, and its 56-byte identity
+   * not fitting at all.
+   */
+  it("contributes the identity of a cause too large to admit whole", () => {
+    const admitted = admittedCauseOf(squeezedCause(SHALLOW_PARENT_FRAMES).parsed);
+
+    expect(admitted).toMatchObject({ message: "upstream refused the charge" });
+    expect(admitted.stack).toBeUndefined();
   });
 
-  it("spends the budget on the keys rather than abandoning it", () => {
-    const { line, parsed } = squeezedCause();
+  /**
+   * The other half of the case above, and the reason it cannot go quietly
+   * vacuous. "Too large to admit whole" is a claim about the **bound**, so the
+   * same input at a bound nothing breaches has to produce the stack the default
+   * bound refused. A fixture that drifted until the `cause` had no stack to lose
+   * would pass the case above while asserting nothing, and fail here.
+   */
+  it("drops that stack because of the bound, not because the cause had none", () => {
+    const roomy = admittedCauseOf(
+      squeezedCause(SHALLOW_PARENT_FRAMES, { LOG_MAX_LINE_BYTES: "1000000" }).parsed,
+    );
 
-    expect(Object.keys(contextOf(parsed))).toHaveLength(300);
+    expect(roomy).toMatchObject({ message: "upstream refused the charge" });
+    expect(roomy.stack).toEqual(expect.any(String));
+  });
+
+  /**
+   * The deep parent is what makes the near-bound line a property of the
+   * mechanism rather than of an accident. `err.stack` is shortened into
+   * whatever the identifiers leave, so the budget is filled by a field the cap
+   * chose to fill it with — at any identifier count — instead of by whatever a
+   * real stack happened to weigh. Measured: 8,177 of 8,192 bytes, against the
+   * 7,372.8 this asserts.
+   */
+  it("spends the budget on the keys rather than abandoning it", () => {
+    const { line, parsed } = squeezedCause(DEEP_PARENT_FRAMES);
+
+    expect(Object.keys(contextOf(parsed))).toHaveLength(FANOUT_IDENTIFIERS);
     expect(Buffer.byteLength(line.trimEnd())).toBeGreaterThan(MAX_LINE_BYTES * 0.9);
     expect(Buffer.byteLength(line.trimEnd())).toBeLessThanOrEqual(MAX_LINE_BYTES);
   });
