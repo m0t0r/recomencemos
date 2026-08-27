@@ -132,6 +132,11 @@ environment value. Were it passed with `--env` at deploy time, this command — 
 configuration from `fly.toml` and its flags — would drop it, and the rolled-back machine would log
 `release: "unknown"` during the incident that made you roll back.
 
+Verified on 2026-08-27: `fly deploy --image <ref> --strategy immediate`, with no `--env` of any kind,
+produced a machine whose log lines carry **that image's own build commit**. One caveat with a shelf
+life — images built _before_ this change carry no such `ENV`, so rolling back past it reports
+`release: "unknown"`. That is a property of those images, not of the command, and it ages out.
+
 **After any rollback**, open a `needs-triage` issue naming the release that was rolled back and what
 was observed. [ADR-0001](../adr/0001-findings-enter-through-triage.md) is why the finding enters
 through triage rather than becoming a ticket directly.
