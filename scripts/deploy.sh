@@ -46,6 +46,17 @@ fi
 
 BUILD_ARGS=(--build-arg "NEXT_PUBLIC_RELEASE=${RELEASE}")
 
+# **And again at runtime, which is not redundant.** `NEXT_PUBLIC_*` is inlined
+# into the *client* bundle at build time, but `@repo/observability`'s logger is
+# externalised out of the server bundle and reads `process.env` when the process
+# starts. Pass it only as a build argument and the browser reports the release
+# correctly while every server log line reads `release: "unknown"` — which is
+# exactly the disagreement NFR25 names, observed on this app's first real deploy.
+#
+# `--env` and not `fly secrets set`: a secret change restarts the machine, and
+# this value is a property of the deploy that is being made anyway.
+RUNTIME_ENV=(--env "NEXT_PUBLIC_RELEASE=${RELEASE}")
+
 for var in NEXT_PUBLIC_SENTRY_DSN SENTRY_ORG SENTRY_PROJECT; do
   value="${!var:-}"
   [ -n "$value" ] && BUILD_ARGS+=(--build-arg "${var}=${value}")
@@ -69,5 +80,6 @@ printf '  deploying %s\n\n' "$RELEASE"
 # deploy silently becomes a rolling one — a stop and a start on a single machine.
 exec fly deploy \
   "${BUILD_ARGS[@]}" \
+  "${RUNTIME_ENV[@]}" \
   ${BUILD_SECRETS+"${BUILD_SECRETS[@]}"} \
   "$@"
