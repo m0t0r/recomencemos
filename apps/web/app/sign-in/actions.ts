@@ -26,6 +26,7 @@ import { logRequestError } from "@repo/observability/log-request-error";
 import { headers } from "next/headers";
 import { auth } from "../../lib/auth";
 import { checkYourEmail, EMAIL_LOOKS_WRONG } from "./messages";
+import { parseRequestMagicLink } from "./schema";
 
 /**
  * What the form gets back.
@@ -44,20 +45,6 @@ export type RequestMagicLinkState =
   | { readonly status: "failed"; readonly error: ClientError };
 
 /**
- * The shallowest possible check, on purpose.
- *
- * The authority on whether an address exists is the mail that either arrives or
- * does not — this only catches the typo she can still fix while looking at the
- * field, so it refuses what cannot possibly be an address and nothing more. A
- * stricter pattern here would reject real addresses (a `+` tag, a long TLD, an
- * accented local part) and tell her they are wrong, which is the failure worth
- * avoiding on the only door she has.
- */
-function looksLikeAnAddress(value: string): boolean {
-  return /^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(value);
-}
-
-/**
  * The client IP, for NFR26's per-IP half.
  *
  * `x-forwarded-for` is a list and the **first** entry is the client; Fly's proxy
@@ -74,13 +61,17 @@ export async function requestMagicLink(
   _previous: RequestMagicLinkState,
   formData: FormData,
 ): Promise<RequestMagicLinkState> {
-  const email = String(formData.get("email") ?? "").trim();
-  const sharedDevice = formData.get("sharedDevice") === "on";
-  const returnPath = formData.get("returnPath");
+  // **The boundary parse** (spec `## Solution`, DD2). One schema, shared with the
+  // browser so the two cannot disagree — and re-run here because a Server Action
+  // is a directly reachable POST endpoint, so the client's copy is a courtesy and
+  // this one is the rule.
+  const parsed = parseRequestMagicLink(formData);
 
-  if (!looksLikeAnAddress(email)) {
+  if (!parsed.ok) {
     return { status: "field_error", message: EMAIL_LOOKS_WRONG };
   }
+
+  const { email, sharedDevice, returnPath } = parsed.value;
 
   const requestHeaders = await headers();
 
@@ -116,7 +107,7 @@ export async function requestMagicLink(
   const outcome = await auth().requestMagicLink({
     email,
     sharedDevice,
-    returnPath: typeof returnPath === "string" ? returnPath : undefined,
+    returnPath,
     headers: requestHeaders,
   });
 
