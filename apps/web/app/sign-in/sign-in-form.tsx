@@ -33,6 +33,7 @@
  * hydration posts and re-renders.
  */
 
+import { useForm } from "@tanstack/react-form";
 import { Button } from "@repo/design-system/components/button";
 import { Card } from "@repo/design-system/components/card";
 import { Checkbox } from "@repo/design-system/components/checkbox";
@@ -43,6 +44,7 @@ import { useId } from "react";
 import { GoogleMark } from "./google-mark";
 import {
   EMAIL_DOOR_PRECONDITION,
+  EMAIL_LOOKS_WRONG,
   EMAIL_LABEL,
   GOOGLE_ACCOUNT_NOTICE,
   GOOGLE_BUTTON,
@@ -52,6 +54,7 @@ import {
   SHARED_DEVICE_LABEL,
   SIGN_IN_TITLE,
 } from "./messages";
+import { isAcceptableAddress } from "./schema";
 import { useSignIn } from "./use-sign-in";
 
 export interface SignInFormProps {
@@ -72,6 +75,30 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
   const emailId = useId();
   const sharedDeviceId = useId();
   const helpId = useId();
+  const emailErrorId = useId();
+
+  /**
+   * **TanStack Form owns field state and client-side validation; it does not own
+   * submission.** The `<form>` below keeps its native `action`, so the two are
+   * layered rather than merged, and each keeps what it is good at.
+   *
+   * Two reasons it is arranged this way rather than through
+   * `@tanstack/react-form-nextjs`'s `mergeForm`/`useTransform`:
+   *
+   * - **The no-JavaScript path has to survive.** `action={machine.formAction}`
+   *   with named inputs means a submit before hydration posts natively and the
+   *   Server Action answers. NFR4 requires that of `/publish`; this surface is
+   *   not bound by it, but the pattern set here is the one story 2 copies, and a
+   *   form abstraction that only works hydrated would make NFR4 unreachable.
+   * - **The outcomes are not form state.** `rate_limited` carries a `retryAfter`,
+   *   `sent` is a success that keeps the form, and `failed` is a transport
+   *   problem — none is a field error, and folding them into a form state would
+   *   flatten distinctions NFR26 and the surface table depend on.
+   *
+   * The schema is the same one the Server Action parses, so the check she gets
+   * instantly and the check that actually decides cannot drift apart.
+   */
+  const form = useForm({ defaultValues: { email: "" } });
 
   return (
     <main className="bg-muted flex min-h-svh flex-col items-center justify-center px-4 py-12">
@@ -102,7 +129,6 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
             <Button
               type="button"
               variant="outline"
-              size="lg"
               className="w-full"
               onClick={machine.signInWithGoogle}
               disabled={machine.googlePending}
@@ -124,7 +150,25 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
           </div>
         ) : null}
 
-        <form action={machine.formAction} className="flex flex-col gap-4">
+        <form
+          action={machine.formAction}
+          /*
+            Runs before the action. `form.handleSubmit()` marks fields touched
+            and surfaces the message without a round trip; `preventDefault` stops
+            the post only when the client already knows the answer, so a valid
+            submit still goes to the server and an invalid one costs her nothing.
+          */
+          onSubmit={(event) => {
+            if (isAcceptableAddress(form.state.values.email)) return;
+
+            // Only when the browser already knows the answer. A valid submit is
+            // never intercepted, so the server still performs the parse that
+            // actually decides.
+            event.preventDefault();
+            void form.handleSubmit();
+          }}
+          className="flex flex-col gap-4"
+        >
           <input type="hidden" name="returnPath" value={returnPath} />
           {/*
             The checkbox sits outside this form's block but its value has to
@@ -142,22 +186,68 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
               committing to this door.
             */}
             <FieldDescription>{EMAIL_DOOR_PRECONDITION}</FieldDescription>
-            <Input
-              id={emailId}
+            <form.Field
               name="email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              autoCapitalize="none"
-              spellCheck={false}
-              required
-              aria-invalid={machine.state.status === "field_error"}
-            />
+              /*
+                **The validator is on the field, not on the form**, so the error
+                lands where it is rendered instead of relying on the library
+                mapping a schema's paths down to fields.
+
+                The *rule* is still the shared one — `isAcceptableAddress` comes
+                from `./schema`, which the Server Action parses with. What lives
+                here is only the sentence, because the sentence is
+                `docs/policy/voice.md`'s and a schema is the wrong place for
+                Spanish.
+
+                `onBlur` lets an empty field alone: she has not finished, and
+                telling her an empty box is wrong while she is still filling it in
+                is the form nagging rather than helping. `onSubmit` has no such
+                exemption.
+              */
+              validators={{
+                onBlur: ({ value }: { value: string }) =>
+                  value === "" || isAcceptableAddress(value) ? undefined : EMAIL_LOOKS_WRONG,
+                onSubmit: ({ value }: { value: string }) =>
+                  isAcceptableAddress(value) ? undefined : EMAIL_LOOKS_WRONG,
+              }}
+            >
+              {(field) => {
+                // The server's verdict and the client's are the same rule, so
+                // either one marks the field. Hers arrives instantly; the
+                // server's is the one that counts.
+                const invalid =
+                  machine.state.status === "field_error" || field.state.meta.errors.length > 0;
+
+                return (
+                  <>
+                    <Input
+                      id={emailId}
+                      name="email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      required
+                      value={field.state.value}
+                      onChange={(event) => field.handleChange(event.target.value)}
+                      onBlur={field.handleBlur}
+                      aria-invalid={invalid}
+                      aria-describedby={invalid ? emailErrorId : undefined}
+                    />
+                    {invalid ? (
+                      <p id={emailErrorId} className="text-destructive text-sm leading-5">
+                        {EMAIL_LOOKS_WRONG}
+                      </p>
+                    ) : null}
+                  </>
+                );
+              }}
+            </form.Field>
           </Field>
 
           <Button
             type="submit"
-            size="lg"
             className="w-full"
             disabled={machine.emailPending}
             aria-busy={machine.emailPending}
