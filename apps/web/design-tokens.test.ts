@@ -1,0 +1,304 @@
+// @vitest-environment node
+
+/**
+ * The palette exists in four files, and this is what stops them disagreeing.
+ *
+ * `packages/design-system/src/styles/globals.css` is the **source**: `oklch()`
+ * custom properties over a private `--brand-*` ramp. Three files copy it, and
+ * every copy is necessary rather than sloppy:
+ *
+ * - `DESIGN.md`'s frontmatter, in `oklch()`, because that is what the impeccable
+ *   design hook reads — it does not parse a stylesheet.
+ * - `packages/notifications/src/palette.ts`, in **hex**, because an inbox never
+ *   sees `globals.css` and email clients support neither `oklch()` nor custom
+ *   properties. There is no build step that could derive it at render time.
+ * - `apps/web/app/global-error.tsx`, in **hex**, because that boundary replaces
+ *   the root layout and no stylesheet is mounted when it renders.
+ *
+ * So the copies cannot be removed. What was missing is that nothing checked
+ * them: `palette.ts` carried the drift as *"a real maintenance cost with a
+ * manual mitigation — when `DESIGN.md`'s colours change, this file is
+ * reviewed"*, which is a discipline rather than a mechanism, and the kind that
+ * holds until the one time it matters.
+ *
+ * **It lives in `apps/web` for the reason `domain-boundary.test.ts` and
+ * `notifications-boundary.test.ts` do**: it is a claim *between* packages, and
+ * `apps/web` is the workspace that depends on both. `@repo/notifications` could
+ * not host it — it may not depend on the design system, and its own palette is
+ * behind a `#` specifier that `notifications-boundary.test.ts` separately proves
+ * is unreachable from outside.
+ *
+ * **The files are read as text rather than imported**, which is not a shortcut.
+ * `globals.css` is a stylesheet, `DESIGN.md` is frontmatter, and `palette.ts` is
+ * withheld by its package's `exports` map. Reading the bytes is the only access
+ * all three share, and it is also what lets the assertions cover the **doc
+ * comments** — the `oklch()` value written above each hex is a claim a reader
+ * trusts, and a stale one misleads exactly as badly as a stale hex.
+ */
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const REPO_ROOT = join(import.meta.dirname, "..", "..");
+
+const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
+
+/**
+ * oklch → OKLab → linear sRGB → gamma-encoded sRGB, rounded to 8 bits.
+ *
+ * Written out rather than taken from a colour library on purpose: the whole
+ * value of this file is that it is an *independent* derivation of the numbers in
+ * `palette.ts`. A dependency shared with whatever produced them would assert
+ * that two copies of one implementation agree.
+ *
+ * The matrices are Björn Ottosson's published OKLab constants. The check that
+ * they are transcribed correctly is the suite itself — seven committed hex
+ * values reproduce exactly, and a typo in any coefficient would break them.
+ */
+function oklchToHex(l: number, c: number, hDegrees: number): string {
+  const h = (hDegrees * Math.PI) / 180;
+  const a = c * Math.cos(h);
+  const b = c * Math.sin(h);
+
+  const lRoot = l + 0.3963377774 * a + 0.2158037573 * b;
+  const mRoot = l - 0.1055613458 * a - 0.0638541728 * b;
+  const sRoot = l - 0.0894841775 * a - 1.291485548 * b;
+
+  const long = lRoot ** 3;
+  const medium = mRoot ** 3;
+  const short = sRoot ** 3;
+
+  const linear = [
+    4.0767416621 * long - 3.3077115913 * medium + 0.2309699292 * short,
+    -1.2684380046 * long + 2.6097574011 * medium - 0.3413193965 * short,
+    -0.0041960863 * long - 0.7034186147 * medium + 1.707614701 * short,
+  ];
+
+  return `#${linear
+    .map((channel) => {
+      const encoded = channel <= 0.0031308 ? 12.92 * channel : 1.055 * channel ** (1 / 2.4) - 0.055;
+      return Math.round(Math.min(1, Math.max(0, encoded)) * 255)
+        .toString(16)
+        .padStart(2, "0");
+    })
+    .join("")}`;
+}
+
+/** WCAG 2.2 relative luminance. Its own sRGB linearization, which is not the one above. */
+function relativeLuminance(hex: string): number {
+  const channels = [1, 3, 5].map(
+    (offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255,
+  );
+  const [r, g, b] = channels.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  ) as [number, number, number];
+
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].toSorted(
+    (a, b) => b - a,
+  ) as [number, number];
+
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * The `:root` block of `globals.css`, with `var(--brand-N)` resolved.
+ *
+ * One level of indirection is enough because the stylesheet's own rule is that
+ * the ramp is private and the semantic layer is the seam — `--primary` is
+ * `var(--brand-700)` and nothing points at a semantic token in turn. A second
+ * level appearing would surface here as an unresolved value rather than silently.
+ */
+function semanticTokens(): ReadonlyMap<string, string> {
+  const css = read("packages/design-system/src/styles/globals.css");
+  const root = css.slice(css.indexOf(":root {"), css.indexOf("\n}", css.indexOf(":root {")));
+
+  const declared = new Map<string, string>();
+  for (const [, name, value] of root.matchAll(/^\s*--([\w-]+):\s*([^;]+);/gm)) {
+    declared.set(name as string, (value as string).trim());
+  }
+
+  const resolved = new Map<string, string>();
+  for (const [name, value] of declared) {
+    const reference = /^var\(--([\w-]+)\)$/.exec(value);
+    resolved.set(name, reference ? (declared.get(reference[1] as string) ?? value) : value);
+  }
+
+  return resolved;
+}
+
+/** `oklch(L C H)` → its three numbers. Returns `undefined` for anything else. */
+function parseOklch(value: string): readonly [number, number, number] | undefined {
+  const match = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/.exec(value.trim());
+  if (!match) return undefined;
+
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+describe("DESIGN.md's frontmatter against the stylesheet", () => {
+  const tokens = semanticTokens();
+  const frontmatter = read("DESIGN.md").split("---")[1] ?? "";
+
+  const declared = [...frontmatter.matchAll(/^\s{2}([\w-]+):\s*"(oklch\([^"]+\))"$/gm)].map(
+    ([, name, value]) => [name as string, value as string] as const,
+  );
+
+  // The list is read rather than hardcoded, so a colour added to DESIGN.md is
+  // covered without editing this file — and a colour that exists there and
+  // nowhere in the stylesheet fails the next case rather than being skipped.
+  it("declares colours at all, so an empty parse cannot pass vacuously", () => {
+    expect(declared.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it.each(declared)("%s matches globals.css", (name, value) => {
+    expect(tokens.get(name), `--${name} is not declared in globals.css`).toBe(value);
+  });
+});
+
+/** `mutedForeground` in the palette is `--muted-foreground` in the stylesheet. */
+const kebab = (name: string) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+
+describe("the email palette against the stylesheet", () => {
+  const tokens = semanticTokens();
+  const source = read("packages/notifications/src/palette.ts");
+
+  /**
+   * Each entry is a doc comment claiming an `oklch()` source, then a hex value.
+   * Both halves are captured because both are claims, and they fail differently:
+   * a wrong hex renders wrong in an inbox, a wrong comment misleads whoever next
+   * updates the palette by hand.
+   */
+  const entries = [
+    ...source.matchAll(/\/\*\* `(oklch\([^)]+\))` \*\/\s*\n\s*(\w+): "(#[0-9a-f]{6})",/g),
+  ].map(([, claimed, name, hex]) => ({
+    name: name as string,
+    claimed: claimed as string,
+    hex: hex as string,
+  }));
+
+  it("parses every entry, so a reformat cannot silently empty this suite", () => {
+    // `palette.ts` copies only the tokens the templates use; eight is that set.
+    // If it grows, this number is raised deliberately rather than drifting.
+    expect(entries).toHaveLength(8);
+  });
+
+  it.each(entries)("$name's comment names the token's real value", ({ name, claimed }) => {
+    expect(tokens.get(kebab(name)), `--${kebab(name)} is not declared in globals.css`).toBe(
+      claimed,
+    );
+  });
+
+  it.each(entries)("$name's hex is that value converted", ({ claimed, hex }) => {
+    const oklch = parseOklch(claimed);
+    expect(oklch, `${claimed} is not a plain oklch() triple`).toBeDefined();
+
+    const [l, c, h] = oklch as readonly [number, number, number];
+    expect(oklchToHex(l, c, h)).toBe(hex);
+  });
+});
+
+/**
+ * The root error boundary, which is the **fourth** copy and the easiest to
+ * forget.
+ *
+ * `app/global-error.tsx` replaces the root layout, so no stylesheet is mounted
+ * and it cannot reach the token layer at all — the same predicament as email,
+ * reached from the other direction. It therefore carries six literal hex values,
+ * and until this case existed they were Tailwind's zinc defaults: a palette this
+ * product does not ship, on the one screen a visitor sees when everything else
+ * has already failed.
+ *
+ * Each declaration names the token it came from in a trailing comment, and this
+ * reads that comment rather than a hardcoded list here — so the assertion is
+ * against the file's own claim about itself.
+ */
+describe("the root error boundary against the stylesheet", () => {
+  const tokens = semanticTokens();
+  const source = read("apps/web/app/global-error.tsx");
+
+  const declared = [
+    ...source.matchAll(/--[\w-]+:\s*(#[0-9a-f]{6});\s*\/\* --([\w-]+)\s+(oklch\([^)]+\))\s*\*\//g),
+  ].map(([, hex, token, claimed]) => ({
+    hex: hex as string,
+    token: token as string,
+    claimed: claimed as string,
+  }));
+
+  it("parses all six, so a reformat cannot silently empty this suite", () => {
+    expect(declared).toHaveLength(6);
+  });
+
+  it.each(declared)(
+    "--$token is $hex, converted from the stylesheet",
+    ({ hex, token, claimed }) => {
+      expect(tokens.get(token), `--${token} is not declared in globals.css`).toBe(claimed);
+
+      const oklch = parseOklch(claimed);
+      expect(oklch, `${claimed} is not a plain oklch() triple`).toBeDefined();
+
+      const [l, c, h] = oklch as readonly [number, number, number];
+      expect(oklchToHex(l, c, h)).toBe(hex);
+    },
+  );
+
+  /**
+   * The product is light-only and `globals.css` binds Tailwind's `dark` variant
+   * to a class nothing sets, precisely so the OS cannot decide it. This boundary
+   * had one anyway, which made the failure screen the only dark surface in the
+   * product.
+   *
+   * **Scoped to the `styles` template literal, not the whole file**, and that is
+   * not fussiness: the first draft asserted over the source and went red on the
+   * doc comment above this module explaining why the block was removed. A
+   * prose-versus-code false positive is the same failure the repo's own gates
+   * are written to avoid.
+   */
+  it("declares no dark scheme, because the product has none", () => {
+    const start = source.indexOf("const styles = `");
+    const stylesheet = source.slice(start, source.indexOf("`;", start));
+
+    expect(start, "the styles template literal moved or was renamed").toBeGreaterThan(-1);
+    expect(stylesheet).not.toContain("prefers-color-scheme");
+    expect(stylesheet).toContain("color-scheme: light;");
+  });
+});
+
+/**
+ * The six pairs `palette.ts` tabulates, re-measured.
+ *
+ * The table in that file is the reason a template author does not re-measure,
+ * so a stale number there is worse than no number. `mutedForeground` on `muted`
+ * is the tight one — the footer, at 4.62 — and it is the row that would go red
+ * first if the ramp moved.
+ */
+describe("the contrast table in palette.ts", () => {
+  const hexes = new Map(
+    [...read("packages/notifications/src/palette.ts").matchAll(/(\w+): "(#[0-9a-f]{6})",/g)].map(
+      ([, name, hex]) => [name as string, hex as string],
+    ),
+  );
+
+  const documented = [
+    ["foreground", "background", 18.04],
+    ["foreground", "muted", 16.52],
+    ["primary", "background", 6.51],
+    ["primaryForeground", "primary", 6.51],
+    ["mutedForeground", "background", 5.04],
+    ["mutedForeground", "muted", 4.62],
+  ] as const;
+
+  it.each(documented)("%s on %s is the documented %s", (fg, bg, expected) => {
+    const foreground = hexes.get(fg);
+    const background = hexes.get(bg);
+    expect(foreground, `${fg} missing from the palette`).toBeDefined();
+    expect(background, `${bg} missing from the palette`).toBeDefined();
+
+    const measured = contrastRatio(foreground as string, background as string);
+
+    expect(measured).toBeCloseTo(expected, 1);
+    expect(measured, "every documented pair must clear WCAG 2.2 AA").toBeGreaterThanOrEqual(4.5);
+  });
+});

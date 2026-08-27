@@ -179,7 +179,7 @@ flowchart TB
 
 The third clause is not a restatement of the first two (C48). Escaping constrains element _content_ and leaves an _attribute_ alone, so a URL-valued attribute is the one injection this seam still admits — into an inbox, past a control everyone believes is closed. `safeUrl()` is the mechanism: a whitelist of `http:`/`https:`, refused at render. A blocklist would mean the next scheme somebody invents passes by default.
 
-**The palette is a hex copy** of [`DESIGN.md`](../../DESIGN.md)'s `oklch()` tokens, because email clients support neither `oklch()` nor custom properties. There is no build step that could derive it, so drift is a real cost with a manual mitigation: when `DESIGN.md`'s colours change, `src/palette.ts` is reviewed. Every contrast pair clears WCAG AA; the numbers are in that module.
+**The palette is a hex copy** of [`DESIGN.md`](../../DESIGN.md)'s `oklch()` tokens, because email clients support neither `oklch()` nor custom properties. There is no build step that could derive it — but the drift is checked rather than watched for: [`apps/web/design-tokens.test.ts`](../../apps/web/design-tokens.test.ts) re-derives every hex from the design system's `globals.css`, asserts the `oklch()` each doc comment claims, and re-measures the six contrast pairs. A colour that moves in one file and not the other goes red. Every pair clears WCAG AA; the numbers are in that module.
 
 ## Configuration
 
