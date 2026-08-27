@@ -1,7 +1,14 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
-  "globalPassThroughEnv": ["LOG_LEVEL", "LOG_FORMAT", "LOG_MAX_LINE_BYTES"],
+  "globalPassThroughEnv": [
+    "LOG_LEVEL",
+    "LOG_FORMAT",
+    "LOG_MAX_LINE_BYTES",
+    "NOTIFICATIONS_KILL_SWITCH",
+    "NOTIFICATIONS_FROM",
+    "NOTIFICATIONS_REPLY_TO"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
