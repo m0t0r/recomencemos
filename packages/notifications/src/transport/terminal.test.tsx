@@ -23,7 +23,6 @@ const message: OutboundMessage = {
   body: createElement(MagicLinkEmail, {
     url: LINK,
     expiresInMinutes: 15,
-    replyTo: "hola@recomencemos.co",
   }),
   idempotencyKey: "magic-link/mlr_01J4K",
 };

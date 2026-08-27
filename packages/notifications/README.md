@@ -118,8 +118,7 @@ flowchart LR
 
     T2 --> N1["RESEND_API_KEY"]
     T2 --> N2["NOTIFICATIONS_FROM"]
-    T2 --> N3["NOTIFICATIONS_REPLY_TO"]
-    N1 & N2 & N3 --> OK2["Resend API"]
+    N1 & N2 --> OK2["Resend API"]
 
     classDef bad fill:#fff,stroke:#a03030,color:#a03030,stroke-width:2px
     classDef good fill:#ecf1f5,stroke:#10619e,color:#12171b
@@ -168,7 +167,7 @@ flowchart TB
     BASE["BaseEmail — the frame"]
     BASE --> A["lang='es'"]
     BASE --> B["one h1, a title"]
-    BASE --> C["monitored reply-to<br/><i>never noreply@</i>"]
+    BASE --> C["one footer line<br/><i>no reply invited</i>"]
     BASE --> D["hex palette<br/><i>pixelBasedPreset</i>"]
 
     classDef bad fill:#fff,stroke:#a03030,color:#a03030,stroke-width:2px
@@ -183,13 +182,16 @@ The third clause is not a restatement of the first two (C48). Escaping constrain
 
 ## Configuration
 
-| Variable                    | Required      | What it does                                                                                       |
-| --------------------------- | ------------- | -------------------------------------------------------------------------------------------------- |
-| `NOTIFICATIONS_TRANSPORT`   | always        | `terminal` or `resend`. No default — an unset or unrecognised value throws                         |
-| `NOTIFICATIONS_KILL_SWITCH` | no            | Empty, `off`, `false`, `0`, `no` leave sending on. **Everything else engages it**, a typo included |
-| `RESEND_API_KEY`            | `resend` only | Never in a `.env` file in git — `turbo.json` declares `.env*` a `build` input                      |
-| `NOTIFICATIONS_FROM`        | `resend` only | A real, monitored address on the sending subdomain                                                 |
-| `NOTIFICATIONS_REPLY_TO`    | `resend` only | Where a reply reaches a person. **Never `noreply@`**                                               |
+| Variable                    | Required      | What it does                                                                                                                    |
+| --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `NOTIFICATIONS_TRANSPORT`   | always        | `terminal` or `resend`. No default — an unset or unrecognised value throws                                                      |
+| `NOTIFICATIONS_KILL_SWITCH` | no            | Empty, `off`, `false`, `0`, `no` leave sending on. **Everything else engages it**, a typo included                              |
+| `RESEND_API_KEY`            | `resend` only | Never in a `.env` file in git — `turbo.json` declares `.env*` a `build` input                                                   |
+| `NOTIFICATIONS_FROM`        | `resend` only | A real address on the sending subdomain. Still **never `noreply@`**. There is no `NOTIFICATIONS_REPLY_TO` beside it — see below |
+
+**There is no `NOTIFICATIONS_REPLY_TO`, and its absence is a decision rather than an omission.** DD14 asked for a monitored `Reply-To` — a woman who replies to an Offer notification must reach a person — and this package resolved one until `mail.recomencemos.online` was configured in Resend as **send-only**. A send-only subdomain publishes no MX record, so nothing receives, and a `Reply-To` naming a mailbox that does not exist is a dead end asserted instead of merely present. Without the header, a reply goes to `NOTIFICATIONS_FROM`, finds no MX, and the sender's own provider bounces it within seconds: she is told, rather than left waiting for an answer nobody will write.
+
+The frame's footer lost its invitation for the same reason. It was **removed rather than softened** — a line reading _this address does not read replies_ is the same dead end, printed. The variable, the header, the prop and the sentence all come back on the day a mailbox exists, and not before. The amendment is recorded against DD14 in [the spec](../../docs/efforts/0002-profile-to-contact-exchange/spec.md).
 
 The kill switch and the transport variable fail in opposite directions, and that is deliberate. The kill switch can afford to read a typo as _engaged_, because a refusal is loud and a send is not undoable. The transport variable has no safe direction at all, so it refuses instead of guessing.
 

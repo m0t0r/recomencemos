@@ -90,8 +90,6 @@ export interface MagicLinkEmailProps {
   readonly url: string;
   /** How long the link lasts, in minutes. The flow owns the number (#12). */
   readonly expiresInMinutes: number;
-  /** Where a reply reaches a person. */
-  readonly replyTo: string;
 }
 
 /**
@@ -104,15 +102,11 @@ export interface MagicLinkEmailProps {
  * do next, in the same breath as what happened — and it says what a Block-style
  * absence says elsewhere: doing nothing is a complete answer.
  */
-export function MagicLinkEmail({ url, expiresInMinutes, replyTo }: MagicLinkEmailProps) {
+export function MagicLinkEmail({ url, expiresInMinutes }: MagicLinkEmailProps) {
   const href = safeUrl(url, "url");
 
   return (
-    <BaseEmail
-      title={MAGIC_LINK_SUBJECT}
-      preview={`El enlace dura ${expiresInMinutes} minutos.`}
-      replyTo={replyTo}
-    >
+    <BaseEmail title={MAGIC_LINK_SUBJECT} preview={`El enlace dura ${expiresInMinutes} minutos.`}>
       <Heading
         as="h1"
         className="m-0 mb-[16px] text-[24px] font-semibold leading-[32px] tracking-[-0.02em] text-foreground"
@@ -149,9 +143,8 @@ export function MagicLinkEmail({ url, expiresInMinutes, replyTo }: MagicLinkEmai
 }
 
 MagicLinkEmail.PreviewProps = {
-  url: "https://recomencemos.co/api/auth/magic-link/verify?token=preview-token",
+  url: "https://recomencemos.online/api/auth/magic-link/verify?token=preview-token",
   expiresInMinutes: 15,
-  replyTo: "hola@recomencemos.co",
 } satisfies MagicLinkEmailProps;
 
 export default MagicLinkEmail;

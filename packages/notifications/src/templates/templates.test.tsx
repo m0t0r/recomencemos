@@ -17,8 +17,6 @@ import type { ReactElement } from "react";
 import { BaseEmail } from "#templates/base";
 import { MAGIC_LINK_SUBJECT, MagicLinkEmail, safeUrl } from "#templates/magic-link";
 
-const REPLY_TO = "hola@recomencemos.co";
-
 /**
  * The field a person other than the recipient controls, per template.
  *
@@ -34,20 +32,18 @@ const templates: ReadonlyArray<{
   {
     name: "base",
     render: ({ scripted }) => (
-      <BaseEmail title="Vista previa" preview="Vista previa" replyTo={REPLY_TO}>
+      <BaseEmail title="Vista previa" preview="Vista previa">
         <p>{scripted}</p>
       </BaseEmail>
     ),
   },
   {
     name: "magic-link",
-    render: ({ linked }) => (
-      <MagicLinkEmail url={linked} expiresInMinutes={15} replyTo={REPLY_TO} />
-    ),
+    render: ({ linked }) => <MagicLinkEmail url={linked} expiresInMinutes={15} />,
   },
 ];
 
-const SAFE_URL = "https://recomencemos.co/api/auth/magic-link/verify?token=abc";
+const SAFE_URL = "https://recomencemos.online/api/auth/magic-link/verify?token=abc";
 const SCRIPTED = '<script>alert("xss")</script>';
 
 function benign() {
@@ -181,7 +177,7 @@ describe("safeUrl", () => {
 });
 
 describe("the magic-link email", () => {
-  const props = { url: SAFE_URL, expiresInMinutes: 15, replyTo: REPLY_TO };
+  const props = { url: SAFE_URL, expiresInMinutes: 15 };
 
   it("opens with exactly one h1", async () => {
     const html = await render(<MagicLinkEmail {...props} />);
@@ -205,10 +201,24 @@ describe("the magic-link email", () => {
     expect(html).toContain("7 minutos");
   });
 
-  it("names the reply-to it was given, because the from address is never noreply@", async () => {
+  /**
+   * **The amendment, asserted at the surface a reader actually sees.**
+   *
+   * This case used to assert the opposite — that the frame names a reply-to,
+   * because an address a reader cannot see is not an invitation. The sending
+   * subdomain is send-only in Resend, so the invitation was a promise nobody
+   * could keep, and it was removed rather than reworded.
+   *
+   * It goes red on the *word*, not on an address, because that is the failure
+   * worth catching: someone reintroducing the invitation with a new mailbox in
+   * mind, before that mailbox exists. The `mailto:` half is the same rule
+   * enforced against a link rather than a sentence.
+   */
+  it("invites no reply, because there is no mailbox behind the sending domain", async () => {
     const html = await render(<MagicLinkEmail {...props} />);
 
-    expect(html).toContain(REPLY_TO);
+    expect(html).not.toContain("responder");
+    expect(html).not.toContain("mailto:");
   });
 
   // The Email row of the tone matrix: the subject says what happened. No urgency

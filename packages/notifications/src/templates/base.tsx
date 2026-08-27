@@ -6,10 +6,12 @@
  * - **`lang="es"`.** React Email's `<Html>` defaults to `lang="en"`; `es-CO` is
  *   this product's only language, and a screen reader announcing Spanish with an
  *   English voice is NFR20's failure rather than a cosmetic one.
- * - **A monitored reply-to in the footer.** The `from` address is a real address
- *   and is not `noreply@` (DD14) — a woman who replies to an Offer notification
- *   must reach a person. The footer says so, because an address a reader cannot
- *   see is not an invitation.
+ * - **One footer line, and it is not an invitation to reply.** DD14 wanted a
+ *   monitored reply-to here and this frame carried one; the sending subdomain is
+ *   configured send-only, so there is no mailbox behind it and the invitation
+ *   was a promise nobody could keep. The line was removed rather than softened —
+ *   see the DD14 amendment in the spec. What remains says what this email *is*,
+ *   which is the obligation a frame actually owes a reader.
  * - **`pixelBasedPreset`**, no flexbox, no grid, no media queries, no `dark:`.
  *   None of them survive the clients this product's readers are on.
  * - **One `<Container>`**, which carries React Email's own `max-width`. A second
@@ -53,12 +55,10 @@ export interface BaseEmailProps {
    * spends it.
    */
   readonly preview: string;
-  /** Where a reply reaches a person. Server-owned; see `#config`. */
-  readonly replyTo: string;
   readonly children: ReactNode;
 }
 
-export function BaseEmail({ title, preview, replyTo, children }: BaseEmailProps) {
+export function BaseEmail({ title, preview, children }: BaseEmailProps) {
   return (
     <Html lang="es" dir="ltr">
       <Tailwind
@@ -88,17 +88,21 @@ export function BaseEmail({ title, preview, replyTo, children }: BaseEmailProps)
 
             <Section>
               {/*
-                The two footer lines are the frame's whole content obligation.
-                The first is DD14's monitored reply-to, said as an invitation
-                rather than printed as metadata. The second is what this email
-                is, so a reader who does not remember asking for it can tell
-                whether it concerns her — `docs/policy/voice.md`, Do 1: present
-                tense, actor visible.
+                One line, and it is the frame's whole content obligation: what
+                this email is, so a reader who does not remember asking for it
+                can tell whether it concerns her — `docs/policy/voice.md`, Do 1:
+                present tense, actor visible.
+
+                A second line used to sit above it inviting a reply. It was
+                removed rather than reworded when the sending subdomain was
+                configured send-only: an invitation nobody answers is the failure
+                DD14 was written to prevent, and a notice saying *this address
+                does not read replies* would be the same dead end printed instead
+                of promised. The subdomain publishes no MX, so a reply bounces
+                back to her within seconds — which tells her more, sooner, than
+                any line here could.
               */}
               <Text className="m-0 text-[14px] leading-[20px] text-mutedForeground">
-                Puedes responder a este correo escribiendo a {replyTo}. Te contesta una persona.
-              </Text>
-              <Text className="m-0 mt-[8px] text-[14px] leading-[20px] text-mutedForeground">
                 Te escribimos desde Recomencemos porque tienes una cuenta aquí.
               </Text>
             </Section>

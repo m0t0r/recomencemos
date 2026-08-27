@@ -12,7 +12,6 @@ import { AppError } from "@repo/errors/app-error";
 import {
   API_KEY_VARIABLE,
   FROM_VARIABLE,
-  REPLY_TO_VARIABLE,
   TRANSPORT_VARIABLE,
   createTransport,
   transportName,
@@ -21,8 +20,7 @@ import {
 const RESEND_ENV = {
   [TRANSPORT_VARIABLE]: "resend",
   [API_KEY_VARIABLE]: "re_test",
-  [FROM_VARIABLE]: "Recomencemos <hola@mail.recomencemos.co>",
-  [REPLY_TO_VARIABLE]: "hola@recomencemos.co",
+  [FROM_VARIABLE]: "Recomencemos <hola@mail.recomencemos.online>",
 };
 
 describe("transportName", () => {
@@ -80,8 +78,8 @@ describe("createTransport", () => {
     ).not.toThrow();
   });
 
-  it("still requires all three for the resend branch", () => {
-    for (const missing of [API_KEY_VARIABLE, FROM_VARIABLE, REPLY_TO_VARIABLE]) {
+  it("still requires both for the resend branch", () => {
+    for (const missing of [API_KEY_VARIABLE, FROM_VARIABLE]) {
       const env = { ...RESEND_ENV, [missing]: undefined };
 
       expect(() => createTransport(env), `${missing} must be required`).toThrow(AppError);

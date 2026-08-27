@@ -3,7 +3,6 @@ import {
   API_KEY_VARIABLE,
   FROM_VARIABLE,
   KILL_SWITCH_VARIABLE,
-  REPLY_TO_VARIABLE,
   resendApiKey,
   sendingIsKilled,
   senderIdentity,
@@ -77,28 +76,30 @@ describe("resendApiKey", () => {
 });
 
 describe("senderIdentity", () => {
-  it("returns both halves when both are set", () => {
+  it("returns the from address when it is set", () => {
     expect(
-      senderIdentity({
-        [FROM_VARIABLE]: "Recomencemos <hola@mail.recomencemos.co>",
-        [REPLY_TO_VARIABLE]: "hola@recomencemos.co",
-      }),
-    ).toEqual({
-      from: "Recomencemos <hola@mail.recomencemos.co>",
-      replyTo: "hola@recomencemos.co",
-    });
-  });
-
-  // DD14 makes the reply-to a product commitment rather than a config line: a
-  // woman replying to an Offer notification must reach a person. A default here
-  // would be the `noreply@` that decision refuses, arrived at by accident.
-  it("refuses to default the reply-to", () => {
-    expect(() => senderIdentity({ [FROM_VARIABLE]: "hola@mail.recomencemos.co" })).toThrow(
-      AppError,
-    );
+      senderIdentity({ [FROM_VARIABLE]: "Recomencemos <hola@mail.recomencemos.online>" }),
+    ).toEqual({ from: "Recomencemos <hola@mail.recomencemos.online>" });
   });
 
   it("refuses to default the from address", () => {
-    expect(() => senderIdentity({ [REPLY_TO_VARIABLE]: "hola@recomencemos.co" })).toThrow(AppError);
+    expect(() => senderIdentity({})).toThrow(AppError);
+  });
+
+  /**
+   * **The amendment, asserted.** DD14 required a monitored `Reply-To` and this
+   * function resolved one. The sending subdomain is send-only in Resend — no MX,
+   * no mailbox — so the header would have named an address that receives
+   * nothing. It was removed rather than pointed somewhere plausible, and this
+   * case is what stops it drifting back in as a defaulted or optional field: the
+   * identity has exactly one key.
+   */
+  it("carries no reply-to, because nothing receives one", () => {
+    const identity = senderIdentity({
+      [FROM_VARIABLE]: "Recomencemos <hola@mail.recomencemos.online>",
+      NOTIFICATIONS_REPLY_TO: "hola@recomencemos.online",
+    });
+
+    expect(Object.keys(identity)).toEqual(["from"]);
   });
 });

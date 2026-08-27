@@ -32,16 +32,22 @@ export const KILL_SWITCH_VARIABLE = "NOTIFICATIONS_KILL_SWITCH";
  */
 export const TRANSPORT_VARIABLE = "NOTIFICATIONS_TRANSPORT";
 
-/** The `from` address. A real, monitored address on the sending subdomain (DD14). */
-export const FROM_VARIABLE = "NOTIFICATIONS_FROM";
-
 /**
- * Where a reply lands, and it is a product decision rather than a config line
- * (DD14). A displaced woman who replies to an Offer notification must reach a
- * person, which is why this is required rather than defaulted and why the
- * `from` address is never `noreply@`.
+ * The `from` address. A real address on the sending subdomain (DD14).
+ *
+ * **Still not `noreply@`, and that half of DD14 survives** — the local part is a
+ * name a reader can read as belonging to someone. What no longer survives is the
+ * promise that replying to it reaches that person: `mail.recomencemos.online` is
+ * configured in Resend as **send-only**, so it publishes no MX record and there
+ * is no mailbox behind it. See the DD14 amendment in
+ * [the spec](../../../docs/efforts/0002-profile-to-contact-exchange/spec.md).
+ *
+ * There is deliberately **no `NOTIFICATIONS_REPLY_TO` beside this one.** A
+ * `Reply-To` header pointing at an address that receives nothing is worse than
+ * its absence: it is the same dead end, asserted. The variable comes back on the
+ * day a mailbox exists, and not before.
  */
-export const REPLY_TO_VARIABLE = "NOTIFICATIONS_REPLY_TO";
+export const FROM_VARIABLE = "NOTIFICATIONS_FROM";
 
 /** Resend's own. Never in a `.env` file in this repo; `fly secrets` holds it (NFR24). */
 export const API_KEY_VARIABLE = "RESEND_API_KEY";
@@ -73,10 +79,16 @@ export function sendingIsKilled(env: NotificationsEnv): boolean {
   return !DISENGAGED_VALUES.has((env[KILL_SWITCH_VARIABLE] ?? "").trim().toLowerCase());
 }
 
-/** Who the mail is from, and where a reply reaches a person. */
+/**
+ * Who the mail is from.
+ *
+ * One field, and it stays a record rather than collapsing to a bare `string`
+ * because the second field is a removal rather than a thing that never existed
+ * — `replyTo` returns here the day a mailbox does, and a record gains a field
+ * without every caller changing shape.
+ */
 export interface SenderIdentity {
   readonly from: string;
-  readonly replyTo: string;
 }
 
 /**
@@ -105,12 +117,9 @@ export function resendApiKey(env: NotificationsEnv = process.env): string {
   return required(env, API_KEY_VARIABLE);
 }
 
-/** The sender identity. Both halves required; neither has a safe default. */
+/** The sender identity. Required; there is no safe default for who mail is from. */
 export function senderIdentity(env: NotificationsEnv = process.env): SenderIdentity {
-  return {
-    from: required(env, FROM_VARIABLE),
-    replyTo: required(env, REPLY_TO_VARIABLE),
-  };
+  return { from: required(env, FROM_VARIABLE) };
 }
 
 /** The implementations of the seam that ship. Adding a channel adds a member here. */
