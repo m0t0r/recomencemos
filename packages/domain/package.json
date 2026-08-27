@@ -4,17 +4,24 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#auth/*": "./src/auth/*.ts",
+    "#auth-schema": "./src/auth-schema.ts",
+    "#column-types": "./src/column-types.ts",
     "#config": "./src/config.ts",
     "#connection": "./src/connection.ts",
+    "#database": "./src/database.ts",
     "#migrate": "./src/migrate/index.ts",
+    "#rate-limit": "./src/rate-limit.ts",
     "#schema": "./src/schema.ts",
     "#server-only": "./src/server-only.ts",
     "#testing/database": "./src/testing/database.ts",
     "#user-messages": "./src/user-messages.ts"
   },
   "exports": {
+    "./auth-handler": "./src/auth/index.ts",
     "./health": "./src/health.ts",
-    "./migrate": "./src/migrate/index.ts"
+    "./migrate": "./src/migrate/index.ts",
+    "./rate-limit": "./src/rate-limit.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",
@@ -25,6 +32,7 @@
   "dependencies": {
     "@repo/errors": "workspace:*",
     "@repo/observability": "workspace:*",
+    "better-auth": "1.7.1",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.23.0",
     "server-only": "^0.0.1"
@@ -36,6 +44,7 @@
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.10",
     "typescript": "7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "zod": "4.4.3"
   }
 }

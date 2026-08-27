@@ -18,3 +18,17 @@
  */
 export const SERVICE_UNAVAILABLE =
   "El servicio no está disponible en este momento. Intenta de nuevo en un momento.";
+
+/**
+ * A sign-in that broke on our side rather than on hers.
+ *
+ * **Not** what a consumed or expired link says — that is an ordinary outcome
+ * with its own copy on `/sign-in`, and calling it an error would make our rule
+ * read as her mistake (`docs/policy/voice.md`, Don't 4). This is the string for
+ * a door that failed: an unknown path minting a session, a provider that broke.
+ *
+ * Names the other door, because the refusal tone is Optimism 3→4 and the whole
+ * design of this surface is that neither door is ever a dead end.
+ */
+export const SIGN_IN_FAILED =
+  "No pudimos entrar a tu cuenta. Intenta de nuevo, o entra con la otra opción.";
