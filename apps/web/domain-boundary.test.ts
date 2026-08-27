@@ -1,0 +1,54 @@
+/**
+ * The proof that `@repo/domain`'s `exports` map actually withholds what it says
+ * it withholds.
+ *
+ * [ADR-0010](../../docs/adr/0010-the-domain-package-is-the-only-door-to-the-database.md)
+ * rests one architectural claim on a `package.json` field: _"an unexported
+ * subpath is unresolvable under pnpm's isolated store, so reaching past the
+ * domain layer is a module-resolution error rather than a review comment
+ * somebody has to notice."_ A claim that strong should not be checked by reading
+ * the manifest.
+ *
+ * **Node's resolver, not Vite's.** `createRequire(...).resolve` is the same
+ * algorithm `next build` and the running server use, so a pass here is a
+ * statement about the app rather than about the test runner's configuration. It
+ * also answers at resolution time, which is what lets a withheld subpath be
+ * asserted without importing a module that opens a database connection.
+ *
+ * **Both directions.** A test that only proved the failures would pass just as
+ * happily if `@repo/domain` were not installed at all.
+ */
+
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
+/**
+ * Everything the domain must never publish. The Better Auth instance joins this
+ * list with #12, and `./schema` grows tables rather than losing them — the list
+ * only ever gets longer.
+ */
+const WITHHELD = ["@repo/domain/schema", "@repo/domain/connection", "@repo/domain/config"];
+
+/** What the app is allowed to reach, and therefore what it must actually reach. */
+const PUBLISHED = ["@repo/domain/health", "@repo/domain/migrate"];
+
+describe("the domain package's export map", () => {
+  it.each(WITHHELD)("refuses %s to apps/web", (specifier) => {
+    expect(() => require.resolve(specifier)).toThrow(
+      expect.objectContaining({ code: "ERR_PACKAGE_PATH_NOT_EXPORTED" }),
+    );
+  });
+
+  it.each(PUBLISHED)("resolves %s, so the refusals above mean something", (specifier) => {
+    expect(require.resolve(specifier)).toContain("packages/domain");
+  });
+
+  it("keeps the package's internal specifiers private too", () => {
+    // `#config` is `@repo/domain`'s own `imports` entry. A `#`-prefixed
+    // specifier is scoped to the package that declares it, so it is not a second
+    // door into the domain — it resolves against *this* package, where nothing
+    // declares it.
+    expect(() => require.resolve("#config")).toThrow();
+  });
+});

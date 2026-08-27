@@ -77,3 +77,10 @@ _Avoid_: Ban, mute, hide — and avoid describing it as making her invisible, wh
 A staff Account. Holds the daily queue — photos, Offers, Reports — plus takedown, unfreeze, and
 vocabulary promotion. The only role that can read Contact Exchange data in bulk.
 _Avoid_: Moderator, staff, superuser, operator
+
+**RateCounter**:
+One row per principal, per ceilinged action, per time window — the record every ceiling in NFR26 is
+counted against. Internal plumbing with no Spanish rendering, because nobody reads it: what a person
+sees when a ceiling is reached is the refusal, in her own terms, with the time she may try again.
+_Avoid_: Throttle, quota, bucket — and avoid calling the row a "limit", which is the policy rather
+than the count

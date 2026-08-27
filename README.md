@@ -39,6 +39,8 @@ cp apps/web/.env.example apps/web/.env.local   # once
 pnpm db:up        # postgres on :5432, pgbouncer on :6432, waits for both to be healthy
 pnpm db:down      # stop; the data volume survives
 pnpm db:reset     # stop and discard the volume
+pnpm db:migrate   # apply the committed migrations on the direct connection
+pnpm db:generate  # write a new migration from `packages/domain/src/schema.ts`
 ```
 
 The app connects through **6432** and migrations through **5432**, and that split is the point: PgBouncer runs in transaction-pooling mode, the mode PlanetScale's pooler runs in, so session advisory locks, `LISTEN`/`NOTIFY`, temp tables and cross-transaction prepared statements fail here exactly as they would in production.
