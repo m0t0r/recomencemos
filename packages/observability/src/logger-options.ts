@@ -123,6 +123,12 @@ const STACK_ALLOWANCE_DIVISOR = 2;
  * this list, under {@link LINE_PLAN}'s ordering, because each can itself be
  * oversized and has a better fate than take-or-drop — `context` is selected
  * from key by key, `msg` is shortened, and `err` is sized to what remains.
+ *
+ * `elided` is last and is preserved for the same reason `truncated` is emitted at
+ * all: a line that has quietly lost part of a field is disproportionately likely
+ * to be the one being read during an incident, and dropping the marker under byte
+ * pressure would hide the loss on exactly the lines that suffered two of them.
+ * It costs 15 bytes. See {@link toJsonSafe}.
  */
 const PRESERVED_ON_TRUNCATION = [
   "level",
@@ -138,6 +144,7 @@ const PRESERVED_ON_TRUNCATION = [
   "status",
   "route",
   "duration_ms",
+  "elided",
 ] as const;
 
 /** The environment this reads. Passed in rather than read, so the function stays pure. */
@@ -758,6 +765,327 @@ function admitRecord(
 }
 
 /**
+ * The markers this pass leaves where a value could not be carried whole.
+ *
+ * Bracketed and lower-case, the shape {@link REDACTED} already established, so a
+ * reader meets one vocabulary for "the logger put this here" rather than two.
+ * They are values rather than a schema change: they appear at the position the
+ * loss happened, which is the only place that answers *what* was lost.
+ */
+const CIRCULAR = "[circular]";
+const DEPTH_LIMIT = "[depth limit]";
+const UNSERIALISABLE = "[unserialisable]";
+
+/**
+ * How deep {@link toJsonSafe} descends before it writes {@link DEPTH_LIMIT}.
+ *
+ * The same number, and the same argument, as {@link MAX_SELECTION_DEPTH} and
+ * {@link MAX_CAUSE_DEPTH}: deeper than any record a log call has business
+ * carrying. What makes it load-bearing here rather than merely prudent is that
+ * it is a *constant* — far below the call stack of any platform this runs on —
+ * so `JSON.stringify` cannot raise `RangeError` on this pass's output. That is
+ * the whole cross-platform claim in #41, and it holds by construction rather
+ * than by measurement.
+ */
+const MAX_LOG_DEPTH = 16;
+
+/** Whether this line lost anything, accumulated across one emit. */
+interface Elision {
+  any: boolean;
+}
+
+/**
+ * What a value turned out to be, once `toJSON` has had its say.
+ *
+ * `omit` is its own case rather than an `undefined` value because `undefined`
+ * is a legitimate thing to write into an array — `JSON.stringify` puts `null`
+ * there and drops the key in an object, and this pass matches it in both
+ * places.
+ */
+type Classified =
+  | { kind: "value"; value: unknown }
+  | { kind: "omit" }
+  | { kind: "container"; source: object; target: Record<string, unknown> | unknown[] };
+
+/**
+ * `toJSON`, applied exactly once, the way `JSON.stringify` applies it.
+ *
+ * Not an optional nicety: `Date` carries its whole value in this hook, so a walk
+ * that ignored it would turn every timestamp in a `context` into `{}`. Both the
+ * property read and the call are guarded, because a getter that throws is a
+ * thing a caller can hand the logger and the logger is the one place that must
+ * not throw.
+ */
+function applyToJson(value: object, elide: Elision): unknown {
+  let hook: unknown;
+
+  try {
+    hook = (value as { toJSON?: unknown }).toJSON;
+  } catch {
+    elide.any = true;
+
+    return UNSERIALISABLE;
+  }
+
+  if (typeof hook !== "function") return value;
+
+  try {
+    return (hook as () => unknown).call(value);
+  } catch {
+    elide.any = true;
+
+    return UNSERIALISABLE;
+  }
+}
+
+/** Own enumerable keys, or none — `Object.keys` throws on a hostile proxy. */
+function ownKeys(source: object): string[] {
+  try {
+    return Object.keys(source);
+  } catch {
+    return [];
+  }
+}
+
+/** One property read, guarded, because a getter is caller code. */
+function readProperty(source: object, key: string | number, elide: Elision): unknown {
+  try {
+    return (source as Record<string | number, unknown>)[key];
+  } catch {
+    elide.any = true;
+
+    return UNSERIALISABLE;
+  }
+}
+
+/**
+ * One value's fate, before anything is written.
+ *
+ * `ancestors` is the path currently being walked, **not** every object seen. A
+ * value repeated as a sibling is a shared reference, which `JSON.stringify`
+ * serialises twice and so does this; only a value that is its own ancestor is a
+ * cycle. Marking by "seen anywhere" would report a DAG as circular, which is a
+ * false claim about the caller's data.
+ */
+function classify(raw: unknown, depth: number, ancestors: Set<object>, elide: Elision): Classified {
+  const value = typeof raw === "object" && raw !== null ? applyToJson(raw, elide) : raw;
+
+  switch (typeof value) {
+    case "undefined":
+    case "function":
+    case "symbol":
+      return { kind: "omit" };
+
+    case "bigint":
+      // Lossless as a decimal string, so this is **not** counted as an elision —
+      // nothing was lost, only respelled. It is here because `JSON.stringify`
+      // throws on a `BigInt`, and a Postgres `bigint` column reaching a `context`
+      // is the realistic way that happens.
+      return { kind: "value", value: value.toString() };
+
+    case "number":
+      // `NaN` and the infinities serialise as `null`. Matching that keeps this
+      // pass invisible for every input that did not need it.
+      return { kind: "value", value: Number.isFinite(value) ? value : null };
+
+    case "string":
+    case "boolean":
+      return { kind: "value", value };
+  }
+
+  if (value === null) return { kind: "value", value: null };
+
+  if (ancestors.has(value as object)) {
+    elide.any = true;
+
+    return { kind: "value", value: CIRCULAR };
+  }
+
+  if (depth >= MAX_LOG_DEPTH) {
+    elide.any = true;
+
+    return { kind: "value", value: DEPTH_LIMIT };
+  }
+
+  return {
+    kind: "container",
+    source: value as object,
+    target: Array.isArray(value) ? [] : {},
+  };
+}
+
+/** One level of the walk, held on an explicit stack rather than in a call frame. */
+interface Frame {
+  source: object;
+  target: Record<string, unknown> | unknown[];
+  /** The keys to visit, or `undefined` when the source is an array. */
+  keys: string[] | undefined;
+  index: number;
+  depth: number;
+}
+
+/**
+ * A value `JSON.stringify` is guaranteed to accept, built from one that isn't.
+ *
+ * **This is the fix for #70 and #41, and it is one mechanism for both.** pino
+ * hands the line to `JSON.stringify` and, on *any* throw, retries with
+ * `safe-stable-stringify` at `maximumDepth: 5`. That fallback does not refuse a
+ * cycle — it *unrolls* it — so it manufactures five levels of depth out of an
+ * object the caller wrote one level deep, and the fifth is past the depth-4
+ * horizon `redactionPaths` compiles. A caller who kept the rule about credentials
+ * in `context` had it broken for them by the logger. The same fallback stubs a
+ * deep field as `"[Object]"` and leaves nothing on the line to say so.
+ *
+ * Removing the *reachability* of that fallback is what closes both, and it is
+ * strictly better than teaching the fallback to behave: the output stops
+ * depending on which serialisation path an input happened to take, which is
+ * what made #41 pass on macOS and fail on Linux.
+ *
+ * Three properties, and each is load-bearing:
+ *
+ * - **No cycles.** A value that is its own ancestor becomes {@link CIRCULAR} at
+ *   the first recurrence, so depth is never manufactured and nothing is pushed
+ *   past the redaction horizon. Redaction still runs *after* this pass, on this
+ *   pass's output, so its reach is unchanged — the depth-4 bound in
+ *   `@repo/errors` is untouched, and a hand-written `context.a.b.c.d.password`
+ *   is still the documented, accepted limit it always was.
+ * - **Bounded depth**, at {@link MAX_LOG_DEPTH}, so `RangeError` is unreachable.
+ * - **Iterative.** The walk holds its state in {@link Frame}s on the heap, not in
+ *   call frames. A recursive version would reintroduce exactly the stack-size
+ *   dependence this exists to remove, and would do it silently — passing on a
+ *   development machine, failing on a CI runner. That is the shape of #41 and it
+ *   must not be rebuilt inside its own fix.
+ *
+ * The cost is one walk per line on top of the one `JSON.stringify` already does.
+ * It is paid unconditionally, and deliberately so: only trying it on failure
+ * would make the output depend on whether the first attempt threw, which is the
+ * platform dependence again wearing a different hat.
+ *
+ * @param elide - accumulates whether anything was lost, so the caller can put one
+ *   queryable marker on the line. The in-place markers say *where*; this says
+ *   *whether*, which is the half a drain can count.
+ */
+function toJsonSafe(root: unknown, elide: Elision): unknown {
+  const ancestors = new Set<object>();
+  const first = classify(root, 0, ancestors, elide);
+
+  if (first.kind === "omit") return undefined;
+  if (first.kind === "value") return first.value;
+
+  const frames: Frame[] = [];
+
+  const descend = (source: object, target: Record<string, unknown> | unknown[], depth: number) => {
+    ancestors.add(source);
+    frames.push({
+      source,
+      target,
+      keys: Array.isArray(source) ? undefined : ownKeys(source),
+      index: 0,
+      depth,
+    });
+  };
+
+  descend(first.source, first.target, 0);
+
+  while (frames.length > 0) {
+    const frame = frames[frames.length - 1] as Frame;
+    const array = frame.keys === undefined ? (frame.source as unknown[]) : undefined;
+    const length = array === undefined ? (frame.keys as string[]).length : array.length;
+
+    if (frame.index >= length) {
+      // Off the path, so a later sibling holding the same object is a shared
+      // reference rather than a cycle.
+      ancestors.delete(frame.source);
+      frames.pop();
+
+      continue;
+    }
+
+    const key =
+      array === undefined ? ((frame.keys as string[])[frame.index] as string) : frame.index;
+
+    frame.index += 1;
+
+    const classified = classify(
+      readProperty(frame.source, key, elide),
+      frame.depth + 1,
+      ancestors,
+      elide,
+    );
+
+    // `JSON.stringify` drops an omitted key in an object and writes `null` for
+    // one in an array, because an array's shape is its indices.
+    const written =
+      classified.kind === "omit"
+        ? { skip: array === undefined, value: null }
+        : {
+            skip: false,
+            value: classified.kind === "value" ? classified.value : classified.target,
+          };
+
+    if (!written.skip) {
+      if (array === undefined)
+        (frame.target as Record<string, unknown>)[key as string] = written.value;
+      else (frame.target as unknown[]).push(written.value);
+    }
+
+    if (classified.kind === "container") {
+      descend(classified.source, classified.target, frame.depth + 1);
+    }
+  }
+
+  return first.target;
+}
+
+/** The key pino puts an error under, and the one {@link serialiseError} answers for. */
+const ERROR_KEY = "err";
+
+/** The marker saying this line lost part of a field. See {@link toJsonSafe}. */
+const ELIDED_KEY = "elided";
+
+/**
+ * The whole line, made safe to serialise, in the one place that sees all of it.
+ *
+ * `formatters.log` is where this has to happen, and the position is exact rather
+ * than convenient. pino's `_asJson` runs it **first** — before the per-key
+ * serialisers and before the redaction-wrapped `stringify` — and `write()` has
+ * already normalised `logger.error(err)` into `{ err }` and merged the mixin by
+ * then. So this sees every field a caller can reach, redaction still runs after
+ * it and is unaffected, and there is no path left by which a caller-supplied
+ * value reaches `JSON.stringify` unchecked.
+ *
+ * `err` is serialised **here** rather than through `serializers.err`, and that is
+ * the reason the option is gone. Two things follow from the ordering above: a
+ * per-key serialiser runs after this pass, so its output would be the one thing
+ * on the line this never saw — and an ORM error carrying a cyclic own property is
+ * the realistic trigger #70 names, which arrives through `err`, not `context`.
+ * Doing both in one pass is also what lets {@link ELIDED_KEY} be accurate, since
+ * the marker has to be written after everything that could set it.
+ *
+ * A caller's own `elided` field is overwritten. That is the same trade
+ * `truncated` already makes: the line names its own fields (ADR-0005), and a
+ * marker a caller can forge is not a marker.
+ */
+function makeLineSafe(
+  obj: Record<string, unknown>,
+  stackAllowance: number,
+): Record<string, unknown> {
+  const elide: Elision = { any: false };
+  const safe: Record<string, unknown> = {};
+
+  for (const key of ownKeys(obj)) {
+    const raw = readProperty(obj, key, elide);
+    const value = toJsonSafe(key === ERROR_KEY ? serialiseError(raw, stackAllowance) : raw, elide);
+
+    if (value !== undefined) safe[key] = value;
+  }
+
+  if (elide.any) safe[ELIDED_KEY] = true;
+
+  return safe;
+}
+
+/**
  * NFR16, applied to the finished line.
  *
  * The line is **rebuilt**, not sliced. Cutting valid JSON at a byte offset
@@ -867,13 +1195,28 @@ export function createLoggerOptions(
     // fallback that note describes is not needed.
     redact: { paths: [...redactionPaths(REDACTION_ROOTS)], censor: REDACTED },
 
-    serializers: { err: (error: unknown) => serialiseError(error, stackAllowance) },
+    // `err` is serialised inside `formatters.log` — see {@link makeLineSafe} for
+    // why the ordering forces that — so what is left here is an **identity**, and
+    // it is not redundant. pino ships `stdSerializers.err` as the *default* value
+    // of this option, so omitting the key does not mean "nobody serialises err",
+    // it means "pino does". It then ran over the finished object from
+    // `formatters.log` and reserialised it: `type` became `"Object"`, and the
+    // cause chain was flattened into the stack string as `caused by:` — losing
+    // the nested `cause` this package walks deliberately. The identity is what
+    // says the work is already done.
+    serializers: { err: (value: unknown) => value },
 
     formatters: {
       // The name, not the number. A drain that has to map 30 to "info" before it
       // can filter is a drain with a parsing rule, which is the thing this whole
       // line exists to avoid.
       level: (label) => ({ level: label }),
+
+      // Every caller-supplied value on the line, made safe to serialise before
+      // pino tries. This is what puts pino's fallback serialiser out of reach,
+      // and with it the cyclic-context leak (#70) and the unmarked, platform-
+      // dependent stubbing (#41).
+      log: (obj) => makeLineSafe(obj, stackAllowance),
     },
 
     mixin: () => readTraceContext(),
