@@ -198,9 +198,13 @@ The kill switch and the transport variable fail in opposite directions, and that
 ## Working on it
 
 ```sh
-pnpm --filter @repo/notifications email   # React Email preview server, no sending
+pnpm --filter @repo/notifications email   # React Email preview server — renders; see the Send button below
 pnpm --filter @repo/notifications test    # 96 tests, none touching the network
 ```
+
+**`@react-email/ui` is pinned exactly, and `react-email` is not.** The CLI resolves `@react-email/ui` from this package's directory and compares the two versions for **equality** — not semver compatibility. On a mismatch it prompts to install, and then exits `0` whether you accept or decline, so the preview server does not start and nothing reports an error. That is why the pin next to `react-email`'s caret looks anomalous and must stay: normalising it to a caret lets the two settle on different `6.x` releases and brings the prompt back with both packages "up to date" (#69).
+
+**The preview UI has a `Send` button, and it is not this package's seam.** It POSTs the rendered markup and a recipient address to `https://react.email/api/send/test` — React Email's own hosted endpoint, a third party — with **no credential**, so it works out of the box for anyone with the server running. It reaches no `createNotifier`, so it is not stopped by `NOTIFICATIONS_KILL_SWITCH`, carries no idempotency key, and writes no `notification.sent` line. Treat it as a foreign door: do not use it to test this product's mail, and do not paste real personal data into a template while the preview server is up. Whether it should be blocked outright is [#69](https://github.com/m0t0r/recomencemos/issues/69)'s follow-up, not something this package currently enforces.
 
 Tests substitute the transport rather than mocking it into something claiming to be an integration. `src/transport/resend.test.tsx` is named for what it is: a unit test of the `{ data, error }` contract, proving nothing about delivery. The only claim that Resend delivers mail is a message in a real inbox, and that is a runbook act.
 
