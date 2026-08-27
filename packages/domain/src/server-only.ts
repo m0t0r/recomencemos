@@ -1,5 +1,12 @@
 /**
- * The runtime backstop on a boundary the `exports` map already enforces.
+ * The runtime backstop, and the **second** of two guards rather than the only one.
+ *
+ * `connection.ts` and `health.ts` also `import "server-only"`, which fails the
+ * **build** instead of a request — strictly better, and the reason this function
+ * is not the whole story. What it cannot cover is the migrate path: the marker
+ * package throws wherever the `react-server` condition is unset, and plain
+ * `node` sets none, so `src/migrate/cli.ts` in a Fly `release_command` and every
+ * Node-environment Vitest file would die on import. That is the gap this fills.
  *
  * `@repo/domain`'s public subpaths are the only way in, and an unexported one is
  * unresolvable under pnpm's isolated store ([ADR-0010](../../../docs/adr/0010-the-domain-package-is-the-only-door-to-the-database.md)) —

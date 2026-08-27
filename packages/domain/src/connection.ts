@@ -12,6 +12,20 @@
  * through `#migrate` and its direct connection instead.
  */
 
+/**
+ * **The build-time half of this package's server-only guarantee.** `server-only`
+ * is a marker package that resolves to an empty module under the `react-server`
+ * export condition and to a bare `throw` under every other, so a client module
+ * that pulls this in fails at **build** rather than in somebody's browser.
+ *
+ * It is on this module and `health.ts` and deliberately **not** on the migrate
+ * path: with no `react-server` condition set it throws, and plain `node` sets
+ * none — which is exactly what `src/migrate/cli.ts` runs as in a Fly
+ * `release_command`, and what every Node-environment Vitest file is. Verified
+ * both ways rather than assumed. `#server-only` below is the runtime backstop
+ * that covers what this cannot.
+ */
+import "server-only";
 import { logger } from "@repo/observability/logger";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
