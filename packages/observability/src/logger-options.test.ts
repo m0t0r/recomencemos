@@ -1411,21 +1411,279 @@ describe("what a truncated line keeps of the line's own context", () => {
     expect(lines()[0]).toMatchObject({ code: "abyss" });
     expect(Buffer.byteLength((raw()[0] ?? "").trimEnd())).toBeLessThanOrEqual(MAX_LINE_BYTES);
 
-    // `truncated: true` is deliberately **not** asserted, and the reason is the
-    // finding in #41. Which of two serialisation paths this input takes is a
-    // property of the available stack, not of the logger:
+    // This case used to stop here, with a comment saying `truncated: true` could
+    // not be asserted because which serialisation path the input took was "a
+    // property of the available stack, not of the logger". That is no longer
+    // true: the line object is made JSON-safe before pino serialises it, so
+    // pino's fallback is unreachable and the outcome is a property of the input.
     //
-    //   - a large stack serialises the whole 5,000-deep object, the line lands
-    //     far over the bound, and `capLine` rebuilds it — `truncated: true`;
-    //   - a small one raises `RangeError` inside `JSON.stringify`, pino falls
-    //     back to its depth-limited serializer, and the ~189-byte line it emits
-    //     was never over budget, so the cap correctly does not fire and
-    //     correctly does not claim it did.
-    //
-    // Both hold what this test is named for. Asserting the marker made the case
-    // pass on a macOS dev machine and fail on a Linux CI runner, which is how
-    // the repository's first CI run found it. What #41 still owes an answer is
-    // the gap underneath: a field pino's fallback stubs leaves no marker on the
-    // line at all.
+    // What the input now produces is a bounded, marked line, asserted in full by
+    // "a deeply nested context is bounded, marked, and platform-independent
+    // (#41)" below — including the byte-identical comparison across two depths
+    // that is the cross-platform claim itself. This case keeps the narrower
+    // guarantee it is named for.
+    expect(lines()[0]).toMatchObject({ elided: true });
+  });
+});
+
+describe("values JSON.stringify refuses (#70, #41)", () => {
+  /**
+   * The exposure this closes, stated as the caller sees it.
+   *
+   * `redactionPaths` compiles wildcards to depth 4, and that bound is deliberate
+   * and documented. It was never the problem here: the caller below writes
+   * **one** level, keeps the rule `CLAUDE.md` states about credentials in
+   * `context`, and still had the secret logged — because pino catches every
+   * throw out of `JSON.stringify` and retries with a serialiser that unrolls a
+   * cycle five levels deep rather than refusing it. The logger manufactured the
+   * depth that defeated its own redaction.
+   *
+   * So the assertion is on the **whole raw line**, not on a path within it. A
+   * per-path assertion would have to guess which depth the leak surfaced at, and
+   * the point of the finding is that the caller's depth is not the emitted one.
+   */
+  it("emits no clear copy of a secret held in a cyclic context", () => {
+    const { logger, raw } = harness();
+
+    const context: Record<string, unknown> = { password: SECRET };
+    context.self = context;
+
+    logger.error({ code: "circ_secret", context }, "failed");
+
+    expect(raw()[0]).not.toContain(SECRET);
+    expect(lineContextOf(JSON.parse(raw()[0] ?? "{}") as Record<string, unknown>)).toEqual({
+      password: REDACTED,
+      self: "[circular]",
+    });
+  });
+
+  it("marks a cyclic line as elided", () => {
+    const { logger, lines } = harness();
+
+    const context: Record<string, unknown> = { order_id: "ord_1" };
+    context.self = context;
+
+    logger.error({ code: "circ", context }, "failed");
+
+    expect(lines()[0]).toMatchObject({ elided: true });
+  });
+
+  /**
+   * The other trigger #70 names, and the realistic one: a Postgres `bigint`
+   * column reaching a `context`. It put the *whole line* on the fallback path,
+   * so a secret one level away from an unrelated `BigInt` was exposed by its
+   * neighbour.
+   */
+  it("emits no clear copy of a secret sharing a context with a BigInt", () => {
+    const { logger, raw, lines } = harness();
+
+    logger.error({ code: "bigint_secret", context: { password: SECRET, rows: 9n } }, "failed");
+
+    expect(raw()[0]).not.toContain(SECRET);
+    expect(lineContextOf(lines()[0])).toEqual({ password: REDACTED, rows: "9" });
+  });
+
+  /**
+   * A `BigInt` loses nothing — a decimal string carries it exactly — so the line
+   * must **not** claim it did. `elided` is a signal an operator acts on; a marker
+   * that fires on every respelling is one nobody reads.
+   */
+  it("does not claim elision for a BigInt, which is respelled rather than lost", () => {
+    const { logger, lines } = harness();
+
+    logger.error({ code: "big", context: { rows: 9_007_199_254_740_993n } }, "failed");
+
+    expect(lineContextOf(lines()[0])).toEqual({ rows: "9007199254740993" });
+    expect(lines()[0]).not.toHaveProperty("elided");
+  });
+
+  /**
+   * The path that reaches the line through `err` rather than `context`, which is
+   * the one #70's "an ORM error" reaches for. It matters because `err` is
+   * serialised separately, so a fix applied to `context` alone would leave it open.
+   */
+  it("emits no clear copy of a secret on an error carrying a cyclic own property", () => {
+    const { logger, raw } = harness();
+
+    const error = new Error("query failed") as Error & { detail?: unknown };
+    const detail: Record<string, unknown> = { password: SECRET };
+    detail.self = detail;
+    error.detail = detail;
+
+    logger.error({ err: withStack(error, 3) }, "failed");
+
+    expect(raw()[0]).not.toContain(SECRET);
+    expect(raw()[0]).toContain("[circular]");
+  });
+
+  it("still carries the error's own fields when a cycle is cut out of it", () => {
+    const { logger, lines } = harness();
+
+    const error = new AppError({ code: "db_down", message: "operator detail" }) as AppError & {
+      detail?: unknown;
+    };
+    const detail: Record<string, unknown> = { table: "offer" };
+    detail.self = detail;
+    error.detail = detail;
+
+    logger.error({ err: withStack(error, 3) }, "failed");
+
+    expect(errorField(lines()[0])).toMatchObject({ code: "db_down", message: "operator detail" });
+  });
+
+  /**
+   * A shared reference is not a cycle. Marking by "seen anywhere" instead of
+   * "seen on this path" would report an ordinary DAG — the same city object on
+   * two profiles — as circular, which is a false statement about the caller's
+   * data rather than a conservative one.
+   */
+  it("serialises a repeated sibling reference twice rather than calling it circular", () => {
+    const { logger, lines } = harness();
+
+    const shared = { city: "Pereira" };
+
+    logger.error({ code: "dag", context: { a: shared, b: shared } }, "failed");
+
+    expect(lineContextOf(lines()[0])).toEqual({ a: { city: "Pereira" }, b: { city: "Pereira" } });
+    expect(lines()[0]).not.toHaveProperty("elided");
+  });
+
+  /** `Date` carries its whole value in `toJSON`; a walk ignoring it emits `{}`. */
+  it("honours toJSON, so a Date in context survives as its timestamp", () => {
+    const { logger, lines } = harness();
+
+    logger.error(
+      { code: "dated", context: { at: new Date("2026-08-10T00:00:00.000Z") } },
+      "failed",
+    );
+
+    expect(lineContextOf(lines()[0])).toEqual({ at: "2026-08-10T00:00:00.000Z" });
+  });
+
+  it("survives a getter that throws rather than throwing out of the log call", () => {
+    const { logger, lines } = harness();
+
+    const context = {
+      order_id: "ord_1",
+      get hostile(): string {
+        throw new Error("nope");
+      },
+    };
+
+    expect(() => logger.error({ code: "hostile", context }, "failed")).not.toThrow();
+    expect(lineContextOf(lines()[0])).toEqual({
+      order_id: "ord_1",
+      hostile: "[unserialisable]",
+    });
+    expect(lines()[0]).toMatchObject({ elided: true });
+  });
+
+  /**
+   * `JSON.stringify` drops an omitted key in an object and writes `null` for one
+   * in an array, because an array's shape is its indices. This pass is only
+   * defensible if it is invisible for every input that did not need it.
+   */
+  it("drops undefined in an object and nulls it in an array, as JSON.stringify does", () => {
+    const { logger, lines } = harness();
+
+    logger.error(
+      { code: "holes", context: { kept: 1, gone: undefined, list: [1, undefined, 3] } },
+      "failed",
+    );
+
+    expect(lineContextOf(lines()[0])).toEqual({ kept: 1, list: [1, null, 3] });
+    expect(lines()[0]).not.toHaveProperty("elided");
+  });
+
+  it("leaves an ordinary line untouched and unmarked", () => {
+    const { logger, lines } = harness();
+
+    logger.error({ code: "plain", context: { order_id: "ord_1", tries: 2 } }, "failed");
+
+    expect(lines()[0]).toMatchObject({ code: "plain", msg: "failed" });
+    expect(lineContextOf(lines()[0])).toEqual({ order_id: "ord_1", tries: 2 });
+    expect(lines()[0]).not.toHaveProperty("elided");
+  });
+});
+
+/** `context` nested `depth` levels with a small leaf, so nothing else truncates. */
+function nestedContext(depth: number): Record<string, unknown> {
+  let value: Record<string, unknown> = { leaf: "end" };
+
+  for (let level = 0; level < depth; level += 1) value = { down: value };
+
+  return value;
+}
+
+describe("a deeply nested context is bounded, marked, and platform-independent (#41)", () => {
+  it("stops at the depth bound and says so, rather than stubbing silently", () => {
+    const { logger, lines } = harness();
+
+    logger.error({ code: "abyss", context: nestedContext(5_000) }, "failed");
+
+    expect(lines()[0]).toMatchObject({ code: "abyss", elided: true });
+    expect(JSON.stringify(lines()[0])).toContain("[depth limit]");
+  });
+
+  /**
+   * **This is the assertion #41 exists for.** The bug was never that the line was
+   * wrong on one platform: it was that the line was a function of the available
+   * call stack, so the same input produced a 163-byte truncated line on a macOS
+   * dev machine and a 189-byte stubbed one on a Linux CI runner, and the test
+   * that asserted either one was asserting a property of the runner.
+   *
+   * Two depths four orders of magnitude apart stand in for two stacks. A
+   * recursive sanitiser would die on the second; one that bounded depth but
+   * recursed to find it would die on both under a small stack. Byte-identical
+   * output for both is what "deterministic" means here, and it is checkable on
+   * one machine — which is the point, because the platform that hid this bug is
+   * the one most people run the suite on.
+   */
+  it("emits a byte-identical line whatever the input depth, so no stack can change it", () => {
+    const shallow = harness();
+    const abyssal = harness();
+
+    shallow.logger.error({ code: "abyss", context: nestedContext(5_000) }, "failed");
+    abyssal.logger.error({ code: "abyss", context: nestedContext(200_000) }, "failed");
+
+    expect(withoutClock(abyssal.raw()[0] ?? "")).toEqual(withoutClock(shallow.raw()[0] ?? ""));
+  });
+
+  it("does not throw, and stays inside the bound", () => {
+    const { logger, raw } = harness();
+
+    expect(() =>
+      logger.error({ code: "abyss", context: nestedContext(200_000) }, "failed"),
+    ).not.toThrow();
+    expect(Buffer.byteLength((raw()[0] ?? "").trimEnd())).toBeLessThanOrEqual(MAX_LINE_BYTES);
+  });
+
+  /**
+   * The bound is deeper than any record a log call has business carrying, so a
+   * realistic `context` must pass through whole and unmarked. A depth bound that
+   * fired on ordinary data would trade one silent loss for a noisier one.
+   */
+  it("carries a realistically nested context whole and unmarked", () => {
+    const { logger, lines } = harness();
+
+    logger.error({ code: "nested_ok", context: nestedContext(8) }, "failed");
+
+    expect(lines()[0]).not.toHaveProperty("elided");
+    expect(JSON.stringify(lines()[0])).not.toContain("[depth limit]");
+  });
+
+  /**
+   * The marker has to survive the cap, because a line that both lost a field and
+   * breached the bound is the one an operator is most likely to be reading.
+   */
+  it("keeps the elided marker on a line the cap also rebuilds", () => {
+    const { logger, lines } = harness();
+
+    const context: Record<string, unknown> = { bulk: "x".repeat(20_000) };
+    context.self = context;
+
+    logger.error({ code: "both", context }, "failed");
+
+    expect(lines()[0]).toMatchObject({ truncated: true, elided: true });
   });
 });
