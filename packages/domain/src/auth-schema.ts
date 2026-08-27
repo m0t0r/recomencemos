@@ -2,21 +2,32 @@
  * Better Auth's four tables plus its rate-limit table, as Drizzle.
  *
  * **Read this before editing, because DD5 says these are generated and they are
- * not.** DD5's three rules assume `@better-auth/cli generate` derives this file
- * from the auth config. That is not available at the version this repository
- * pins: `better-auth` is **1.7.1** and `@better-auth/cli`'s latest published
- * version is **1.4.21**, three minors behind, with no CLI shipped inside the
- * library itself (`better-auth@1.7.1` declares no `bin`). A 1.4 CLI computes the
- * schema from the `better-auth` *it* bundles, so it would emit a 1.4-shaped
- * schema for a 1.7 runtime — silently, which is the one failure mode DD5's rules
- * exist to prevent. `account.issuer` and its unique index are exactly the kind of
- * field that arrived between those versions.
+ * not.** DD5's three rules assume `auth generate` derives this file from the
+ * auth config.
+ *
+ * **A version-matched generator does exist.** The CLI ships as the `auth`
+ * package — `@better-auth/cli` is its former name and stopped at `1.4.21` — and
+ * `auth@1.7.1` depends on `better-auth@1.7.1` exactly, the version this package
+ * pins, so pnpm resolves both to one directory in the store. It was run against
+ * this configuration and it emits these five tables with these column names.
+ * Availability is not the reason this file is hand-written.
+ *
+ * **The reason is that its pg type map cannot express what DD2 requires.** Every
+ * `date` field becomes `timestamp('…')` and every `string` field becomes
+ * `text('…')`, both hardcoded with no option — while DD2 requires `TIMESTAMPTZ`
+ * for every instant and `citext` for the email, the type that stops one person
+ * holding two Accounts by capitalising. The generator also has no concept of a
+ * `CHECK`, which is DD2's rule for an enum-shaped column and what
+ * `session.sign_in_method` needs. Generated output would therefore have to be
+ * hand-edited on every regeneration — which is exactly what DD5's "never
+ * hand-edit the generated schema" rule exists to prevent.
  *
  * **So the mechanism is inverted rather than dropped, and it is stronger.** The
  * tables are written by hand here, and `auth-schema.test.ts` pins them to
- * `getSchema()` from the **installed** `better-auth/db` — the same function the
- * CLI calls — field by field, type by type, nullability included. DD5's three
- * rules survive intact and get sharper:
+ * `getSchema()` from the **installed** `better-auth/db` — the same core the
+ * generator reads — on fields, on nullability in both directions, on uniqueness,
+ * on every index the library declares, and on the places this repository is
+ * deliberately stricter. DD5's three rules survive intact and get sharper:
  *
  * 1. A hand-added column is caught, because it is not in `getSchema()`'s answer.
  * 2. Adding a plugin without adding its tables is caught, because its tables
