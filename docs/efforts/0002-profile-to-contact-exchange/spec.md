@@ -1618,6 +1618,31 @@ receives an Offer notification and replies to it must reach a person, not a boun
 operator (C43) a monitored `Reply-To` is a real commitment, which is why it is named here rather than
 assumed.
 
+> **Amendment, 2026-08-27 — the `Reply-To` half is withdrawn until a mailbox exists.**
+>
+> The domain is `recomencemos.online` and the sending subdomain is `mail.recomencemos.online`,
+> verified in Resend and **configured send-only**: no MX record, no inbound route, no mailbox. The
+> paragraph above asked for something the infrastructure cannot currently provide, and the choice was
+> not between keeping the commitment and dropping it — it was between **an unkept promise and no
+> promise**.
+>
+> So: `NOTIFICATIONS_REPLY_TO` is removed, `@repo/notifications` sends no `Reply-To` header, and the
+> email frame's _"Puedes responder a este correo…"_ line is removed from the footer. It was removed
+> rather than reworded. A line reading _this address does not read replies_ is the same dead end,
+> printed instead of promised, and it spends a footer line saying nothing she can act on. Without the
+> header a reply goes to `from`, finds no MX, and **her own provider bounces it within seconds** —
+> which tells her more, sooner, than any sentence in the footer could.
+>
+> **What survives is the half that was always the real decision:** the `from` address is still not
+> `noreply@`. The local part names someone, so the day the mailbox exists the address is already
+> right.
+>
+> **This is a withdrawal, not a reversal, and the way back is one step.** The root domain already
+> carries Namecheap forwarding MX; a single forwarding rule to a real inbox makes this paragraph true
+> again, at which point the variable, the header and the footer line come back **together** — and
+> that is an amendment in this direction too, not a config change made quietly. Runbook §4 carries
+> the unticked box that owns it.
+
 **Two things this adds to the workspace.** `@repo/notifications` now contains JSX, so it takes
 `react` and `@react-email/components` as dependencies and a tsconfig extending
 `@repo/typescript-config/react-library.json`. And it gains a preview server — `email dev --dir

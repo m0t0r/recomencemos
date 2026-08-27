@@ -28,8 +28,7 @@ const message: OutboundMessage = {
 function transportOver(emails: ResendEmailsApi) {
   return createResendTransport({
     apiKey: "re_test",
-    from: "Recomencemos <hola@mail.recomencemos.co>",
-    replyTo: "hola@recomencemos.co",
+    from: "Recomencemos <hola@mail.recomencemos.online>",
     emails,
   });
 }
@@ -123,12 +122,30 @@ describe("what reaches the SDK", () => {
     await transportOver(emails).send(message);
 
     expect(calls[0]?.[0]).toMatchObject({
-      from: "Recomencemos <hola@mail.recomencemos.co>",
+      from: "Recomencemos <hola@mail.recomencemos.online>",
       to: ["ana@example.com"],
-      replyTo: "hola@recomencemos.co",
       react: message.body,
     });
     expect(calls[0]?.[0]).not.toHaveProperty("html");
+  });
+
+  /**
+   * **The amendment, asserted at the wire.** `mail.recomencemos.online` is
+   * send-only in Resend: no MX record, no mailbox. A `Reply-To` header would
+   * name an address that receives nothing — a dead end asserted rather than
+   * merely present — so the payload carries none, and a reply bounces back to
+   * her instead of vanishing.
+   *
+   * Asserted over the payload rather than over the transport's options, because
+   * this is the half a recipient's mail client reads.
+   */
+  it("sends no reply-to header, because nothing receives one", async () => {
+    const { emails, calls } = stub({ data: { id: "msg_1" }, error: null });
+
+    await transportOver(emails).send(message);
+
+    expect(calls[0]?.[0]).not.toHaveProperty("replyTo");
+    expect(calls[0]?.[0]).not.toHaveProperty("reply_to");
   });
 
   it("names itself `resend` on the line", () => {

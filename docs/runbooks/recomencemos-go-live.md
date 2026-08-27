@@ -96,13 +96,56 @@ fly secrets list                                          # names and digests on
 guidance for a new domain is 50–100 sends/day in week 1 and 200–500 in week 2; the announcement is a
 spike onto a domain that has never sent anything.
 
-- [ ] Sending subdomain added in Resend, DNS records published
-- [ ] **SPF, DKIM and DMARC resolve** — verified with `dig`, not assumed:
-      `sh
-dig +short TXT <sending-subdomain>              # SPF
-dig +short TXT resend._domainkey.<subdomain>    # DKIM
-dig +short TXT _dmarc.<root-domain>             # DMARC
-`
+**The domain is `recomencemos.online`, and the sending subdomain is `mail.recomencemos.online`.**
+Both are real as of 2026-08-27, which is why the first two boxes below are ticked and the rest are
+not — the clock on the warm-up curve started when the subdomain verified, not when this section was
+written.
+
+**It is configured in Resend as send-only.** No MX record, no inbound route, no mailbox. That is a
+deliberate narrowing and it cost a product decision: DD14 required a monitored `Reply-To` on every
+notification, and a header naming an address that receives nothing is a dead end asserted rather than
+merely present. The spec carries the amendment; `@repo/notifications` sends no `Reply-To` and the
+email frame invites no reply. **The day a mailbox exists, all three come back** — the variable, the
+header, and the footer line — and that is a spec amendment in the other direction, not a config
+change somebody makes quietly.
+
+- [x] Sending subdomain added in Resend, DNS records published — `mail.recomencemos.online`
+- [x] **SPF and DKIM resolve** — verified 2026-08-27 with `dig`, not assumed. Both answer:
+
+```sh
+dig @1.1.1.1 +short TXT send.mail.recomencemos.online
+# "v=spf1 include:_spf.forge.rmta.net ~all"
+dig @1.1.1.1 +short TXT resend._domainkey.mail.recomencemos.online
+# "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDttG/1du2yT25l…"
+```
+
+> **Query a public resolver explicitly.** The same two lookups returned **empty** through the
+> operator's default resolver on the day they were checked, which reads exactly like an unpublished
+> record. `@1.1.1.1` is the difference between "not published" and "my resolver has not caught up",
+> and this check is worthless if it cannot tell those apart.
+
+- [ ] **DMARC — not published, and this is the open one.** `_dmarc.recomencemos.online` has no `TXT`
+      record (same date, same resolver). Resend does not require it, which is why it can be missed:
+      SPF and DKIM verify green in the dashboard with this absent. Publish at the **root**, not the
+      sending subdomain — a `_dmarc` record on `mail.` is not consulted for `recomencemos.online`:
+
+```
+_dmarc.recomencemos.online   TXT   "v=DMARC1; p=none; rua=mailto:<an address you read>; fo=1"
+```
+
+      `p=none` first, so reports arrive before anything is enforced; tighten to `quarantine` once the
+      reports show only Resend signing. Tracked as an issue rather than living only in this checkbox.
+
+```sh
+dig @1.1.1.1 +short TXT _dmarc.recomencemos.online   # ticks this box when it answers
+```
+
+- [ ] **A receiving mailbox, or the decision not to have one, recorded.** The root domain carries
+      Namecheap forwarding MX (`eforward1–5.registrar-servers.com`) — but those are added at
+      registration and deliver nothing without a forwarding rule, and no rule exists. So a reply to a
+      notification is rejected at the forwarder. **This box is what reopens DD14's amendment**: one
+      forwarding rule to a real inbox makes the monitored `Reply-To` true again, and the variable,
+      the header and the footer line all come back together.
 - [ ] **Warming started at the first deploy, not at the announcement.** Every ticket's test sends
       count toward the curve; there is no separate warming exercise to schedule.
 - [ ] **Fallback subdomain held and warmed in parallel**, so a reputation problem on the primary is a

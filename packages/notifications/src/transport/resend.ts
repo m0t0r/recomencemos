@@ -29,7 +29,6 @@ export interface ResendEmailsApi {
       to: string[];
       subject: string;
       react: OutboundMessage["body"];
-      replyTo: string;
     },
     options: { idempotencyKey: string },
   ): Promise<{ data: { id: string } | null; error: { name?: string; message: string } | null }>;
@@ -38,7 +37,6 @@ export interface ResendEmailsApi {
 export interface ResendTransportOptions {
   readonly apiKey: string;
   readonly from: string;
-  readonly replyTo: string;
   /** Substituted in a unit test. Defaults to a real client built from `apiKey`. */
   readonly emails?: ResendEmailsApi;
 }
@@ -46,7 +44,6 @@ export interface ResendTransportOptions {
 export function createResendTransport({
   apiKey,
   from,
-  replyTo,
   emails,
 }: ResendTransportOptions): NotificationTransport {
   const api: ResendEmailsApi = emails ?? (new Resend(apiKey).emails as unknown as ResendEmailsApi);
@@ -61,13 +58,21 @@ export function createResendTransport({
        * requirement met by the send path rather than by every template
        * remembering to produce two bodies.
        */
+      /**
+       * **No `replyTo`, and its absence is the decision rather than an
+       * omission.** `mail.recomencemos.online` is a send-only domain in Resend
+       * — no MX record, no mailbox. A `Reply-To` header would name an address
+       * that receives nothing, which is a dead end asserted instead of merely
+       * present. Without one, a reply goes to `from`, finds no MX, and the
+       * sender's own provider bounces it: she is told, rather than left to
+       * wonder. That is DD14's amended answer; see the spec.
+       */
       const { data, error } = await api.send(
         {
           from,
           to: [message.to],
           subject: message.subject,
           react: message.body,
-          replyTo,
         },
         { idempotencyKey: message.idempotencyKey },
       );

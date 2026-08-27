@@ -288,9 +288,9 @@ export function createTransport(env: NotificationsEnv = process.env): Notificati
     return createTerminalTransport({ nodeEnv: env.NODE_ENV });
   }
 
-  const { from, replyTo } = senderIdentity(env);
+  const { from } = senderIdentity(env);
 
-  return createResendTransport({ apiKey: resendApiKey(env), from, replyTo });
+  return createResendTransport({ apiKey: resendApiKey(env), from });
 }
 
 /** The seam, wired from the environment. What a Server Action calls. */
@@ -307,7 +307,6 @@ export {
   API_KEY_VARIABLE,
   FROM_VARIABLE,
   KILL_SWITCH_VARIABLE,
-  REPLY_TO_VARIABLE,
   TRANSPORT_NAMES,
   TRANSPORT_VARIABLE,
   resendApiKey,
