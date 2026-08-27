@@ -15,6 +15,7 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
+import { SERVICE_UNAVAILABLE } from "#user-messages";
 
 /** What the application uses. PgBouncer locally, PlanetScale's pooler in production. */
 export const POOLED_URL_VARIABLE = "DATABASE_URL";
@@ -73,7 +74,7 @@ function connectionString(env: DatabaseEnv, variable: string): string {
       `${variable} is unset or empty, so no database connection can be opened. ` +
       "Locally: `cp apps/web/.env.example apps/web/.env.local` and `pnpm db:up`. " +
       "In production it comes from `fly secrets`.",
-    userMessage: "El servicio no está disponible en este momento. Intenta de nuevo en un momento.",
+    userMessage: SERVICE_UNAVAILABLE,
     context: { variable },
   });
 }

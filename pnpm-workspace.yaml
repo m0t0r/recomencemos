@@ -44,6 +44,22 @@ minimumReleaseAgeExclude:
 # prove is an upload — that needs real credentials, so the first credentialed
 # build is the one to watch. If it ever fails to find the binary, the fix is to
 # flip this to `true`, not to unpick anything else.
+
+# `esbuild`'s postinstall is a *verifier*, not the install step, in the same way
+# `@sentry/cli`'s is: it resolves the platform package pnpm has already placed —
+# `@esbuild/darwin-arm64` and friends — and only downloads a binary when there
+# isn't one. It arrives here as a transitive dependency of `drizzle-kit`, which
+# is the only thing in this repo that runs it.
+#
+# What was checked rather than assumed: with this denied, `pnpm exec drizzle-kit
+# generate` runs and writes `packages/domain/drizzle/0000_initial_rate_counter.sql`.
+# That is the whole of esbuild's job here — generation is the only drizzle-kit
+# command this repo uses, because applying migrations is `@repo/domain/migrate`
+# on the direct connection (spec 0002, DD10) and never the CLI.
+#
+# An undecided entry is not neutral: it exits `pnpm install` non-zero with
+# `ERR_PNPM_IGNORED_BUILDS`, so this has to say something. If `drizzle-kit
+# generate` ever fails to find its binary, the fix is to flip this to `true`.
 allowBuilds:
   "@sentry/cli": false
   esbuild: false

@@ -1,10 +1,10 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "ignorePatterns": [
-    "**/drizzle/**",
     ".agents/**",
     ".claude/**",
     "docs/efforts/*/advisories/**",
+    "packages/domain/drizzle/**",
     "pnpm-workspace.yaml"
   ]
 }

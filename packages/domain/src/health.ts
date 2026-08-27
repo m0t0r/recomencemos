@@ -19,6 +19,7 @@
 import { AppError, isAppError } from "@repo/errors/app-error";
 import { sql } from "drizzle-orm";
 import { db } from "#connection";
+import { SERVICE_UNAVAILABLE } from "#user-messages";
 import { assertServerOnly } from "#server-only";
 
 assertServerOnly("health");
@@ -66,7 +67,7 @@ function asFailure(error: unknown): AppError {
     code: "database_unreachable",
     status: 503,
     message: "The database round trip failed. See `cause` for the driver's own error.",
-    userMessage: "El servicio no está disponible en este momento. Intenta de nuevo en un momento.",
+    userMessage: SERVICE_UNAVAILABLE,
     cause: error,
   });
 }

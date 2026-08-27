@@ -40,7 +40,14 @@ export async function GET(): Promise<Response> {
      * endpoint that is hit 1,440 times a day and fires repeatedly during exactly
      * the incident somebody is already being paged about.
      */
-    logRequestError(health.failure, { level: "warn", route: ROUTE });
+    logRequestError(health.failure, {
+      level: "warn",
+      route: ROUTE,
+      // How long the failure took to arrive, which is what separates "refused
+      // immediately" from "timed out after five seconds" — two different
+      // outages, and the line is the only place that distinction survives.
+      context: { duration_ms: health.durationMs },
+    });
 
     const { status, body, headers } = toErrorResponse(health.failure);
     return Response.json(body, { status, headers });
