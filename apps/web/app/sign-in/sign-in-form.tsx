@@ -102,12 +102,13 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
             <Button
               type="button"
               variant="outline"
-              className="h-12 w-full gap-3 text-base font-medium"
+              size="lg"
+              className="w-full"
               onClick={machine.signInWithGoogle}
               disabled={machine.googlePending}
               aria-busy={machine.googlePending}
             >
-              <GoogleMark className="size-5 shrink-0" />
+              <GoogleMark />
               {GOOGLE_BUTTON}
             </Button>
 
@@ -151,13 +152,13 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
               spellCheck={false}
               required
               aria-invalid={machine.state.status === "field_error"}
-              className="h-12 text-base"
             />
           </Field>
 
           <Button
             type="submit"
-            className="h-12 w-full text-base"
+            size="lg"
+            className="w-full"
             disabled={machine.emailPending}
             aria-busy={machine.emailPending}
           >
@@ -174,7 +175,7 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
             className="mt-1"
           />
           <div className="flex flex-col gap-1">
-            <Label htmlFor={sharedDeviceId} className="text-base font-normal">
+            <Label htmlFor={sharedDeviceId} className="font-normal">
               {SHARED_DEVICE_LABEL}
             </Label>
             {/* Hours, not policy language. What it does, in the unit she thinks in. */}

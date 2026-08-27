@@ -71,10 +71,10 @@ function PanelSkeleton() {
     >
       <div className="bg-card border-border flex w-full max-w-md flex-col gap-6 rounded-lg border p-6 sm:p-8">
         <div className="bg-muted h-8 w-2/3 animate-pulse rounded" />
-        <div className="bg-muted h-12 w-full animate-pulse rounded-md" />
+        <div className="bg-muted h-10 w-full animate-pulse rounded-md" />
         <div className="bg-muted h-4 w-3/4 animate-pulse rounded" />
-        <div className="bg-muted h-28 w-full animate-pulse rounded-md" />
-        <div className="bg-muted h-12 w-full animate-pulse rounded-md" />
+        <div className="bg-muted h-24 w-full animate-pulse rounded-md" />
+        <div className="bg-muted h-10 w-full animate-pulse rounded-md" />
       </div>
     </main>
   );
