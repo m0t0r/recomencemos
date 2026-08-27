@@ -31,7 +31,7 @@ export default function Home() {
       </div>
 
       <p className="text-muted-foreground text-sm">
-        Todavía no está abierto. Aquí van a estar los perfiles publicados más recientes.
+        Todavía no está abierto. Cuando lo abramos, aquí vas a ver los perfiles más recientes.
       </p>
     </main>
   );

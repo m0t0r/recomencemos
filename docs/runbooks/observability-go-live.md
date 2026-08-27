@@ -18,7 +18,7 @@ stale number from a current one instead of trusting an undated claim.
 | Plan the figures describe | Sentry **Developer** (free) |
 
 Re-check every figure in [§3](#3-the-free-tier-as-figures) before you rely on it. The
-[README's placeholder table](../../README.md#placeholders-to-change) carries a row saying so.
+[README's "Still to replace" list](../../README.md#still-to-replace) carries a row saying so.
 
 ---
 

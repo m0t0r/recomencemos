@@ -16,9 +16,13 @@ const fontMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Recomencemos",
+  // Deliberately not the same sentences as `app/page.tsx`. This one is read in a
+  // search result by someone who has not arrived yet, so it names the product and
+  // what it does; the page speaks to someone already here. Story 4 replaces the
+  // page and not this, and one string with two owners is how they drift apart.
   description:
-    "Personas de Pereira, Dosquebradas y Santa Rosa de Cabal publican lo que saben hacer. " +
-    "Quien quiera pagarles por un trabajo las encuentra aquí.",
+    "Recomencemos conecta a personas de Pereira, Dosquebradas y Santa Rosa de Cabal " +
+    "con quien quiera pagarles por un trabajo.",
 };
 
 export default function RootLayout({
