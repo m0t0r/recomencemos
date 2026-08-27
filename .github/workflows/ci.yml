@@ -56,12 +56,25 @@ jobs:
   # `git merge-base <default branch> HEAD` (NFR30, DD13). The default shallow
   # checkout has no merge base, and that gate refuses to call "I could not
   # compare" a pass -- it would exit 2 the day the first migration lands.
+  #
+  # `set-head` is the other half of the same sentence, and it is the half that was
+  # missing: the gate needs a *default branch* as well as the history reaching it.
+  # On a `pull_request` it reads GITHUB_BASE_REF, which GitHub sets and which is
+  # the PR's own base -- the stacked-PR case DD13 depends on. On a `push` that
+  # variable does not exist, so the gate falls back to `refs/remotes/origin/HEAD`,
+  # the ref every `git clone` writes and `actions/checkout` does not. So the run
+  # on `dev` exited 2 the day the first migration landed, exactly as predicted and
+  # one step earlier than expected. `--auto` asks the remote rather than naming a
+  # branch, because a clone whose default branch is not `dev` is not a special
+  # case here either.
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Give `migrations:check` a default branch to measure against
+        run: git remote set-head origin --auto
       - uses: ./.github/actions/setup
       - run: pnpm test
 
