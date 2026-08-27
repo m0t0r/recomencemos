@@ -19,6 +19,19 @@ import { SEND_FAILED } from "#user-messages";
  */
 export const KILL_SWITCH_VARIABLE = "NOTIFICATIONS_KILL_SWITCH";
 
+/**
+ * Which implementation of the seam is in play. `resend` or `terminal`.
+ *
+ * **It has no default, and refusing to pick one is the design.** Both wrong
+ * answers are bad in a way a default cannot hedge: defaulting to `resend` means
+ * a developer's first sign-in loop mails a stranger from an unwarmed domain,
+ * and defaulting to `terminal` means a production machine sends nothing at all
+ * and nobody finds out. There is no third value that is safe in both places, so
+ * the variable is required and an unset one throws — the same stance
+ * {@link senderIdentity} takes, for the same reason.
+ */
+export const TRANSPORT_VARIABLE = "NOTIFICATIONS_TRANSPORT";
+
 /** The `from` address. A real, monitored address on the sending subdomain (DD14). */
 export const FROM_VARIABLE = "NOTIFICATIONS_FROM";
 
@@ -98,4 +111,40 @@ export function senderIdentity(env: NotificationsEnv = process.env): SenderIdent
     from: required(env, FROM_VARIABLE),
     replyTo: required(env, REPLY_TO_VARIABLE),
   };
+}
+
+/** The implementations of the seam that ship. Adding a channel adds a member here. */
+export const TRANSPORT_NAMES = ["resend", "terminal"] as const;
+
+export type TransportName = (typeof TRANSPORT_NAMES)[number];
+
+function isTransportName(value: string): value is TransportName {
+  return (TRANSPORT_NAMES as readonly string[]).includes(value);
+}
+
+/**
+ * Which transport to build.
+ *
+ * An unrecognised value is refused rather than coerced to either name — the
+ * kill switch can afford to read a typo as "engaged" because that direction is
+ * the safe one, and this variable has no safe direction. So a typo stops the
+ * process with a message naming both valid values.
+ */
+export function transportName(env: NotificationsEnv = process.env): TransportName {
+  const value = required(env, TRANSPORT_VARIABLE).toLowerCase();
+
+  if (!isTransportName(value)) {
+    throw new AppError({
+      code: "notifications_transport_unknown",
+      status: 500,
+      message:
+        `${TRANSPORT_VARIABLE} is "${value}", which is not a transport this package ships. ` +
+        `Valid values: ${TRANSPORT_NAMES.join(", ")}. Neither is a safe default, so an ` +
+        "unrecognised value is refused rather than guessed.",
+      userMessage: SEND_FAILED,
+      context: { variable: TRANSPORT_VARIABLE, value },
+    });
+  }
+
+  return value;
 }
