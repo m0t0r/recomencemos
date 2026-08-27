@@ -1,0 +1,89 @@
+# The deploy (#9, spec 0002 DD10). `scripts/deploy.sh` is what invokes it.
+#
+# **Region.** `iad` with PlanetScale `us-east-1` — same metro, ~1–3 ms
+# app-to-database. The operability lens proposed Miami for Worker-side latency;
+# Fly has no Miami region, and its only South American one is `gru`, which is
+# *worse* for Pereira than `iad` because Colombian international traffic routes
+# north rather than south.
+#
+# **Every credential is absent from this file and reaches the app through
+# `fly secrets`** (NFR24, runbook §1). What is below `[env]` is configuration
+# that a person could read over your shoulder without consequence.
+
+app = "recomencemos"
+primary_region = "iad"
+
+[build]
+dockerfile = "Dockerfile"
+
+[deploy]
+# **Bluegreen, and this is the load-bearing line in the file.** On one machine
+# a rolling deploy is a stop and a start, so every deploy would be a small
+# outage several times a day — and worse, a broken build would replace a
+# working machine, because Fly's health check degrades to TCP-accept, which
+# succeeds while every route returns 500. Bluegreen brings the new machine up,
+# waits for its checks to pass, and only then moves traffic; a build that
+# cannot pass `/api/health` never serves a request and the old machine keeps
+# doing so. With `on-call-rotation` set to nobody, that abort is the only
+# rollback that works when nobody is watching.
+strategy = "bluegreen"
+
+# **Migrations here and not at server boot**: in a release command a failed
+# migration aborts the deploy with the old machine still serving, where at
+# boot it takes the site down. It runs on the **direct** connection
+# (`DIRECT_DATABASE_URL`, DD2) because DDL in a long transaction cannot cross
+# a transaction pooler.
+#
+# `/migrator` rather than `/app`: the Dockerfile keeps the migrator's
+# dependencies in a tree of their own, away from Next's standalone output.
+release_command = "node /migrator/packages/domain/src/migrate/cli.ts"
+
+# Runtime configuration, none of it secret. Turborepo declares each of these in
+# `globalPassThroughEnv` — runtime-only values, so hashing them would invalidate
+# the build cache for something no build reads.
+[env]
+# The format the drain parses. Development pretty-prints for a human; a drain
+# needs every line to survive a bare `JSON.parse`.
+LOG_FORMAT = "json"
+LOG_LEVEL = "info"
+PORT = "3000"
+
+[http_service]
+internal_port = 3000
+force_https = true
+
+# **Not `auto_stop_machines`.** NFR32 is 99.5% monthly measured by an external
+# probe, and a stopped machine is unavailable for as long as it takes to come
+# back — a cold start this app pays on every request that arrives to a stopped
+# machine, against a budget of about 3h 39m a month.
+auto_stop_machines = false
+auto_start_machines = true
+min_machines_running = 1
+
+[[http_service.checks]]
+# **The check that makes bluegreen mean something.** `GET /api/health` opens
+# a real database connection and round-trips it, so a build carrying a bad
+# `DATABASE_URL` fails here rather than deploying clean and answering 500 to
+# everyone with a green tick beside it. A TCP check would pass in exactly
+# that case, which is why there is not one.
+method = "GET"
+path = "/api/health"
+protocol = "http"
+
+# 15 s and a 30 s grace: the app boots in a few seconds, and a grace shorter
+# than the boot turns every deploy into a false failure while a grace much
+# longer than it delays every abort by the same amount.
+interval = "15s"
+grace_period = "30s"
+
+# Longer than `CONNECT_TIMEOUT_MS` in `@repo/domain`'s config (5 s), so a
+# database that is refusing connections reports *itself* through a 503 body
+# rather than being cut off as a timeout with nothing to read.
+timeout = "10s"
+
+[[vm]]
+# Runbook §5, C34. Below 1 GB the Node process and the Next server compete for
+# headroom under the announcement's traffic spike.
+memory = "1gb"
+cpu_kind = "shared"
+cpus = 1

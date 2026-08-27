@@ -1,7 +1,35 @@
+import path from "node:path";
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /**
+   * What the production image runs (#9, DD10).
+   *
+   * `next start` needs almost nothing from `node_modules` — React, Base UI and
+   * every icon are already inside `.next` — so a runner that installs the
+   * workspace's production dependencies ships about a gigabyte to serve fifty
+   * megabytes of it. Standalone traces what the server actually imports and
+   * emits a self-contained tree. Measured on this app: a production-dependency
+   * install of the workspace makes a **1.1 GB** image; the standalone one is
+   * **375 MB**, most of which is the Node base image.
+   *
+   * The two things it costs, both handled in the `Dockerfile` rather than here,
+   * because they are packaging facts rather than framework configuration: the
+   * static assets are emitted outside the standalone tree, and the migrate CLI
+   * is imported by no route, so tracing cannot see it.
+   */
+  output: "standalone",
+
+  /**
+   * Without this Next infers the trace root from the nearest lockfile and, in a
+   * monorepo, warns and guesses. The root is where `pnpm-workspace.yaml` is,
+   * because that is the tree the workspace symlinks point into — trace from
+   * `apps/web` and every `@repo/*` package resolves outside the root and is
+   * silently left behind.
+   */
+  outputFileTracingRoot: path.join(import.meta.dirname, "..", ".."),
+
   // Cache Components: data is dynamic by default and you opt into caching with
   // the `use cache` directive. This flag also makes Partial Prerendering the
   // App Router default — Next.js prerenders a static shell and streams the
