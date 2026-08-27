@@ -63,3 +63,29 @@ minimumReleaseAgeExclude:
 allowBuilds:
   "@sentry/cli": false
   esbuild: false
+
+# GHSA-67mh-4wv8-2f99 (esbuild <= 0.24.2): esbuild's dev server sets
+# `Access-Control-Allow-Origin: *` on every response, so any website the
+# developer happens to visit can read whatever that server is serving. It
+# reaches this repo through one chain and one only:
+#
+#   drizzle-kit -> @esbuild-kit/esm-loader -> @esbuild-kit/core-utils -> esbuild@0.18.20
+#
+# Both `@esbuild-kit/*` packages are deprecated ("Merged into tsx"), and
+# `drizzle-kit` already depends on `tsx` *and* on `esbuild@^0.25.4` directly —
+# the esm-loader is vestigial. But it is still declared, so pnpm still installs
+# the old esbuild behind `core-utils`'s `~0.18.20` pin, which no dedupe can
+# reach.
+#
+# What was checked rather than assumed: `core-utils` calls exactly three things
+# on esbuild — `transformSync`, `transform`, and `version`. It never calls
+# `serve`, which is the whole of the vulnerable surface, so the advisory was
+# already unreachable here. The override is taken anyway because it costs one
+# line, dedupes onto the 0.25.12 `drizzle-kit` already resolves, and leaves
+# nothing for a future reader to re-derive.
+#
+# Scoped to the one package rather than global: `drizzle-kit`, `vite` and
+# `webpack` each resolve their own esbuild, and a bare `esbuild:` override would
+# silently pin all three to this range.
+overrides:
+  "@esbuild-kit/core-utils>esbuild": "^0.25.0"
