@@ -24,6 +24,20 @@ colors:
   input: "oklch(0.65 0.02 248)"
   ring: "oklch(0.48 0.122 248)"
 typography:
+  # The ramp, enumerated. Every step is a whole number in BOTH rem and px, which
+  # is a constraint rather than a coincidence: `@repo/notifications` renders to
+  # email, where `rem` is unsupported and `pixelBasedPreset` forces px, so a step
+  # that is clean in one unit and fractional in the other cannot be shared. The
+  # named roles below point into this ladder.
+  scale:
+    caption: "0.875rem"
+    body: "1rem"
+    lead: "1.125rem"
+    h4: "1.25rem"
+    h3: "1.5rem"
+    h2: "1.75rem"
+    h1: "2rem"
+    display: "2.25rem"
   display:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "2.25rem"
@@ -146,7 +160,27 @@ display/body contrast reads as noise. Headings differ by size and weight, not by
 
 - **Fixed rem scale, not fluid.** No `clamp()` on UI type. Users view at consistent DPI, and a
   heading that shrinks inside a sidebar looks worse, not better.
-- **Tight scale ratio** — roughly 1.125–1.2 between steps.
+- **Tight scale ratio** — roughly 1.11–1.2 between steps. The ladder is `14 · 16 · 18 · 20 · 24 ·
+28 · 32 · 36`, enumerated as `typography.scale` in the frontmatter so it is machine-readable
+  rather than only asserted here.
+
+**Every step is a whole number in both rem and px, and that is a constraint rather than a tidy
+coincidence.** `@repo/notifications` renders the same visual system into email, where `rem` is
+unsupported and `pixelBasedPreset` forces pixels — so a step that is clean in one unit and
+fractional in the other cannot be shared between the two surfaces. A geometric ladder at a fixed
+1.2 gives 19.2px and 23.04px and fails that test; this one holds the ratio inside the band while
+landing on integers both ways.
+
+**The ramp was three steps until it was written down.** The frontmatter named only `display`,
+`body` and `mono`, so the email `<h1>` at 24px was off-ramp — flagged, correctly, by the design
+hook. The intermediate steps were always implied by the ratio rule above; enumerating them is what
+lets a tool tell a considered step from a stray literal. **A size outside this ladder is a change to
+it**, made here, not in the file that wanted it.
+
+`apps/web/design-tokens.test.ts` asserts that every literal font size in the email templates and in
+the root error boundary is on this ladder, for the same reason it asserts their colours: neither
+surface can read the stylesheet, so both hold copies, and a copy nothing checks drifts.
+
 - **Prose stays at 65–75ch.** Data and compact UI may run denser; tables at 120ch+ are fine.
 - Mono (`Geist Mono`) is for code, identifiers, and tabular figures. Not for labels.
 
