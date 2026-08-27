@@ -52,8 +52,28 @@ Everything else is `fly.toml`, and three lines in it carry the whole design:
 | `[[http_service.checks]] path = "/api/health"` | The check makes a real database round trip. Fly's default degrades to TCP-accept, which succeeds while every route returns 500 — so without this a build with a bad `DATABASE_URL` deploys clean       |
 
 **What a healthy deploy looks like:** the release command prints `migrations applied`, then the new
-machine's checks go green, then traffic moves. **What an aborted one looks like:** `fly deploy` exits
-non-zero, and `fly status` still shows the previous machine serving.
+machine's checks go green, then traffic moves. **What an aborted one looks like** — rehearsed against
+production on 2026-08-27 by deploying a build whose `/api/health` returned 503 on purpose:
+
+```
+✔ release_command 287e55ebd56318 completed successfully
+Creating green machines
+  Machine 8576209c7d5538 [app] - unchecked
+  Machine 8576209c7d5538 [app] - 0/1 passing
+Rolling back failed deployment
+  Deleted machine 8576209c7d5538 [app]
+Error: wait timeout
+```
+
+`fly deploy` exited **1**, the green machine was destroyed without ever taking traffic, and the public
+`GET /api/health` answered **200 on all 185 polls** taken across the whole deploy. Note the first
+line: the release command _succeeded_ — migrations are a separate gate from the health check, and this
+build broke only the second one.
+
+**The two failure modes are distinct, and both were rehearsed.** A release-command failure aborts
+before any machine is created at all — observed when `DIRECT_DATABASE_URL` was unset:
+`migrations failed: … the deploy must not proceed`, exit 1, no machine. A health-check failure aborts
+after the green machine exists and before traffic moves, as above.
 
 ---
 
@@ -106,6 +126,12 @@ No failed probe was observed, which is not the same as proving zero downtime at 
 a sub-second gap would not appear in a 1 s poll. What is proven is that the code-only class sits an
 order of magnitude inside its bound.
 
+**The release stamp survives the rollback**, and that is a design choice rather than luck:
+`NEXT_PUBLIC_RELEASE` is an `ENV` in the image (see the `Dockerfile`'s runner stage), not a machine
+environment value. Were it passed with `--env` at deploy time, this command — which rebuilds machine
+configuration from `fly.toml` and its flags — would drop it, and the rolled-back machine would log
+`release: "unknown"` during the incident that made you roll back.
+
 **After any rollback**, open a `needs-triage` issue naming the release that was rolled back and what
 was observed. [ADR-0001](../adr/0001-findings-enter-through-triage.md) is why the finding enters
 through triage rather than becoming a ticket directly.
@@ -157,7 +183,40 @@ monitor, not from the app.
 
 ---
 
-## 6. Two numbers from the first deploy, worth keeping
+## 6. The drain, and how to tell it is working
+
+`enableLogs: true` plus `Sentry.pinoIntegration()` in `apps/web/sentry.server.config.ts` forward
+every pino line to the reporting platform as a **log**, not as an error event — `error.levels`
+defaults to `[]` in 10.70.0, checked in the installed source rather than taken from the docs, which
+is what keeps NFR3's report-once intact.
+
+**One thing to know before trusting it.** Under `output: "standalone"` pino is _bundled into the
+server chunks_, while the integration hooks pino through module interception — so "the integration is
+configured" and "our lines are actually captured" are two different claims. Verified by pointing a
+build at a capture server and reading the envelope:
+
+```json
+{
+  "level": "info",
+  "body": "request complete",
+  "release": "capture-check",
+  "trace": "080efb3c…",
+  "route": "/api/health",
+  "status": 200
+}
+```
+
+`release`, `trace_id`, `route` and `status` all survive, which is what makes the log-line-to-trace
+pivot in [`observability-go-live.md`](observability-go-live.md) §9b work.
+
+**To check it end to end on the deployed app:** request `/api/example-error?mode=thrown`, take the
+`trace_id` off the `request error` line in `fly logs`, and search the drain for it. A thrown error
+produces one event _and_ one line carrying the same `trace_id` — if the line is there and the event
+is not, or the reverse, the two egresses have drifted apart.
+
+---
+
+## 7. Two numbers from the first deploy, worth keeping
 
 - **`max_connections` is 25.** Read out of the running cluster, and it is the number
   [`recomencemos-go-live.md`](recomencemos-go-live.md) §2 calls _"the one number effort 0002 could not
@@ -176,7 +235,7 @@ monitor, not from the app.
 
 ---
 
-## 7. What is not here yet
+## 8. What is not here yet
 
 - **The uptime monitor** itself — probing `/api/health` every 60 s and alerting after 2 consecutive
   failures — is [`recomencemos-go-live.md`](recomencemos-go-live.md) §5. With nobody on call,

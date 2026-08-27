@@ -34,6 +34,7 @@ const turboJson = read("turbo.json");
 const flyToml = read("fly.toml");
 const deployWorkflow = read(".github/workflows/deploy.yml");
 const deployScript = read("scripts/deploy.sh");
+const dockerfile = read("Dockerfile");
 
 /**
  * `fly.toml` with its comments removed.
@@ -103,8 +104,23 @@ function declaredEnvKeys(): { key: string; where: string }[] {
  * that silently accepted something else would be the failure mode here.
  */
 function flyEnvKeys(): string[] {
-  const table = flyTomlSettings.match(/^\[env\]\n([\s\S]*?)(?=^\[|Z)/m);
-  if (!table?.[1]) return [];
+  /**
+   * The lookahead ends the table at the next TOML header **or at end of input**.
+   * `\Z` is not a JavaScript anchor — written as one it is the literal letter
+   * `Z`, which happens to work only because `[http_service]` follows `[env]`
+   * today. Move `[env]` last and the match returns `null`, and a parser that
+   * returns `[]` on no-match makes the assertion below pass having checked
+   * nothing. That is the fail-open shape `CLAUDE.md` calls out in
+   * `audit-direct.mjs`, so it throws instead.
+   */
+  const table = flyTomlSettings.match(/^\[env\]\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m);
+
+  if (!table?.[1]) {
+    throw new Error(
+      "fly.toml has no readable `[env]` table. This test cannot tell an empty table " +
+        "from a parser that stopped matching, so it refuses rather than reporting a pass.",
+    );
+  }
 
   return table[1]
     .split("\n")
@@ -144,6 +160,19 @@ describe("NFR24 — every variable is declared, and no runtime credential is", (
   });
 
   /**
+   * NFR25's release stamp reaches the running process through the **image**, not
+   * through `fly.toml` or a `--env` flag, so `flyEnvKeys()` above will never see
+   * it and this is the assertion that covers that channel. Both halves matter:
+   * the `Dockerfile` must turn the build argument into an image `ENV`, and
+   * `deploy.sh` must not also pass it per-deploy — re-supplied from `HEAD`, it
+   * would stamp the current commit onto a rolled-back older image.
+   */
+  it("NEXT_PUBLIC_RELEASE travels in the image and is not passed per-deploy", () => {
+    expect(dockerfile).toMatch(/^ENV NEXT_PUBLIC_RELEASE=\$NEXT_PUBLIC_RELEASE$/m);
+    expect(deployScript).not.toMatch(/--env "NEXT_PUBLIC_RELEASE/);
+  });
+
+  /**
    * The coupling that actually breaks in practice. `web#build` **replaces** the
    * base `build` task rather than merging with it, so a variable added to
    * `build.env` and not to `web#build.env` is silently absent from the only
@@ -167,6 +196,14 @@ describe("NFR24 — every variable is declared, and no runtime credential is", (
    * Fly's own contract with the container, read by the Next server and by no
    * turbo task.
    */
+  /**
+   * The guard on the guard: an assertion over a list is only as good as the list,
+   * and the one above is the only thing reading it.
+   */
+  it("the fly.toml [env] reader finds the keys that are in the file", () => {
+    expect(flyEnvKeys()).toEqual(expect.arrayContaining(["LOG_FORMAT", "LOG_LEVEL", "PORT"]));
+  });
+
   it("every fly.toml [env] key is declared as a turbo pass-through", () => {
     const platformOwned = new Set(["PORT"]);
     const passThrough = new Set(turbo.globalPassThroughEnv ?? []);
