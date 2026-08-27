@@ -20,6 +20,7 @@ import { AppError } from "@repo/errors/app-error";
 import { betterAuth } from "better-auth";
 import {
   type AuthDependencies,
+  type AuthOptions,
   authOptions,
   googleSignInAvailable,
   MAGIC_LINK_TTL_MINUTES,
@@ -97,21 +98,50 @@ export interface AuthSession {
 }
 
 /**
- * Build the handler. **Memoised on first call**, because Better Auth opens no
- * connection at construction but does resolve its whole plugin and endpoint
- * graph, and one process wants one of those.
+ * Build the handler.
+ *
+ * **The Better Auth instance is built lazily and memoised**, and both halves are
+ * load-bearing rather than tuning. Memoised, because Better Auth resolves its
+ * whole plugin and endpoint graph at construction and one process wants one of
+ * those. Lazily, because building it needs the pooled connection — and
+ * `#connection` carries `import "server-only"`, which throws under plain `node`.
+ * A connection resolved at module scope would therefore make this subpath
+ * unimportable from `apps/web/domain-boundary.test.ts`, which is the test whose
+ * whole job is importing it.
+ *
+ * **`db` is optional here for the same reason it is required everywhere else in
+ * this package.** ADR-0010 withholds `#connection`, so `apps/web` has no handle
+ * to pass and must not need one; a test that has one passes it and never touches
+ * the pooled path.
  */
 let built: AuthHandler | undefined;
+
+/**
+ * Named through `AuthOptions` rather than left to `ReturnType<typeof
+ * betterAuth>`, which widens to `Auth<BetterAuthOptions>` and drops the
+ * magic-link plugin's endpoints — the same inference the options type exists to
+ * protect. See `AuthOptions` in `#auth/config`.
+ */
+type AuthInstance = ReturnType<typeof betterAuth<AuthOptions>>;
 
 export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
   if (built) return built;
 
-  const auth = betterAuth(authOptions(dependencies));
+  let instance: Promise<AuthInstance> | undefined;
+
+  const resolve = () => {
+    instance ??= (async () => {
+      const db = dependencies.db ?? (await import("#connection")).db();
+      return betterAuth(authOptions({ ...dependencies, db }));
+    })();
+    return instance;
+  };
 
   built = {
-    handler: (request) => auth.handler(request),
+    handler: async (request) => (await resolve()).handler(request),
 
     async getSession(headers) {
+      const auth = await resolve();
       const result = await auth.api.getSession({ headers });
       if (!result) return null;
 
@@ -128,6 +158,8 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 
     async requestMagicLink({ email, sharedDevice, returnPath, headers }) {
       try {
+        const auth = await resolve();
+
         await auth.api.signInMagicLink({
           body: {
             email,
