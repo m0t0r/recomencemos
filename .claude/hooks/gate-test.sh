@@ -743,6 +743,18 @@ else
   printf '       %s\n' "${out:-<empty>}"
 fi
 
+# The shape CI actually checks out, and the one no case here had: `actions/checkout`
+# writes no `refs/remotes/origin/HEAD`, and on a `push` event GitHub sets no
+# GITHUB_BASE_REF either -- so the gate has no default branch to measure against
+# and must say so. Every fixture above is handed one by `mig_repo`, which is why
+# this went uncaught until the run on `dev` went red the day the first migration
+# landed. `ci.yml`'s `git remote set-head origin --auto` is the answer to it; this
+# case is what says the refusal it answers is the correct one.
+D=$(mig_start nodefaultbranch)
+mig_add "$D" 0001_add_note 'ALTER TABLE "offer" ADD COLUMN "note" text;'
+git -C "$D" symbolic-ref -d refs/remotes/origin/HEAD
+run_mig "no origin/HEAD and no GITHUB_BASE_REF"           2 "could not run"               "$D"
+
 # A shallow clone has no merge base, and that is the failure this gate must not
 # report as a pass: nothing was compared, so nothing was checked.
 D=$(mig_start nobase)
