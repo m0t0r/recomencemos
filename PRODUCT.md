@@ -96,10 +96,8 @@ than that would be the kind of false a person relies on.
   segments, file names, tables, columns, enum values, log `event` names, test names. The
   route is `/offers`, the table is `offer`, the page says _Propuesta_.
 - **Monorepo:** Turborepo on pnpm 11, TypeScript 7 throughout. `apps/web` is the only
-  app; the packages that exist are `@repo/design-system`, `@repo/errors`,
-  `@repo/observability` and `@repo/typescript-config`, with `@repo/domain` — the only
-  door to the database — landing with
-  [#8](https://github.com/m0t0r/recomencemos/issues/8). Node 24.x and pnpm 11, both
+  app; the packages are `@repo/design-system`, `@repo/domain`, `@repo/errors`,
+  `@repo/observability` and `@repo/typescript-config`. Node 24.x and pnpm 11, both
   enforced rather than suggested.
 - **Data:** PlanetScale Postgres through Drizzle, reached only through `@repo/domain`
   ([ADR-0010](docs/adr/0010-the-domain-package-is-the-only-door-to-the-database.md)). Two
