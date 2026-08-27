@@ -82,8 +82,19 @@ export function isAcceptableAddress(value: string): boolean {
   return EMAIL.safeParse(value).success;
 }
 
-/** The one field a person can get wrong, named so both halves agree on the key. */
-export type SignInFieldErrors = Partial<Record<"email", string>>;
+/** The fields this form has. One today; `/publish` is where this earns its name. */
+export type SignInField = "email";
+
+/**
+ * **Which fields were refused — not why, and not in words.**
+ *
+ * It was `Partial<Record<"email", string>>` and held the sentinel `"email"` as
+ * its value, so the type promised a message and delivered a field name twice.
+ * The sentence is `messages.ts`'s and is Spanish under `docs/policy/voice.md`;
+ * Zod's own messages are English and reach nobody. So the honest shape is a set
+ * of field names, and the caller supplies the words.
+ */
+export type SignInFieldErrors = Partial<Record<SignInField, true>>;
 
 /**
  * Parse a `FormData` the way the Server Action does.
@@ -108,7 +119,7 @@ export function parseRequestMagicLink(
   // `messages.ts`'s and the caller's.
   const fieldErrors: SignInFieldErrors = {};
   for (const issue of result.error.issues) {
-    if (issue.path[0] === "email") fieldErrors.email = "email";
+    if (issue.path[0] === "email") fieldErrors.email = true;
   }
 
   return { ok: false, fieldErrors };

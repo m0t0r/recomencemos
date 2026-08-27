@@ -30,9 +30,10 @@ export const SIGN_IN_TITLE = "Entrar a Recomencemos";
 
 /**
  * What she is told before she types anything — the ticket's own acceptance
- * criterion, and the reason it is a heading rather than placeholder text: she
- * needs to know she needs a mailbox she can actually open **before** choosing
- * this door, not after committing to it.
+ * criterion. It renders as the field's description, above the input and inside
+ * the label's `aria-describedby`, rather than as placeholder text: placeholder
+ * text disappears the moment she starts typing, which is exactly when she would
+ * want to check it, and a screen reader may never announce it at all.
  */
 export const EMAIL_DOOR_PRECONDITION =
   "Para entrar por correo necesitas una dirección que puedas abrir ahora.";

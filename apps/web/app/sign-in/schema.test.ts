@@ -79,7 +79,7 @@ describe("parseRequestMagicLink", () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.fieldErrors.email).toBeDefined();
+    expect(result.fieldErrors.email).toBe(true);
   });
 
   // Zod's own messages are English and are not under `docs/policy/voice.md`.

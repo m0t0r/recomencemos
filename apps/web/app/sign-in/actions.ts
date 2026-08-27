@@ -21,7 +21,7 @@
 
 import type { ClientError } from "@repo/errors/app-error";
 import { MAGIC_LINK_TTL_MINUTES } from "@repo/domain/auth-handler";
-import { rateLimit } from "@repo/domain/rate-limit";
+import { ceilings } from "@repo/domain/rate-limit";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { headers } from "next/headers";
 import { auth } from "../../lib/auth";
@@ -45,16 +45,36 @@ export type RequestMagicLinkState =
   | { readonly status: "failed"; readonly error: ClientError };
 
 /**
- * The client IP, for NFR26's per-IP half.
+ * Who NFR26's per-IP half is charged against.
  *
- * `x-forwarded-for` is a list and the **first** entry is the client; Fly's proxy
- * appends. It is the same header `advanced.ipAddress.ipAddressHeaders` names,
- * and the reason both read it is that this ceiling and Better Auth's are two
- * different counters on two different doors.
+ * **The last entry, not the first, and that is the whole correctness of this
+ * function.** `x-forwarded-for` is a list each proxy *appends* to, so the
+ * leftmost entry is whatever the original caller sent — which a caller sets
+ * himself. Charging that would make the ≤ 20/hour bound defeatable by putting a
+ * fresh value in a header, which is the opposite of a ceiling. With exactly one
+ * trusted proxy in front of this app (Fly), the **rightmost** entry is the
+ * address Fly actually observed, and it is the only one in the list nobody
+ * downstream can choose.
+ *
+ * **An absent header charges a shared bucket rather than skipping the charge.**
+ * NFR26 says the counter *fails closed*, and returning "no principal" here used
+ * to mean the per-IP ceiling silently did not apply — so stripping the header
+ * removed the bound entirely. Every header-less caller now shares one counter:
+ * bounded together, which is the closed answer, and harmless in development
+ * where there is no proxy and one person.
  */
-function clientIp(requestHeaders: Headers): string | undefined {
+const NO_PROXY_PRINCIPAL = "no-forwarded-for";
+
+function clientIp(requestHeaders: Headers): string {
   const forwarded = requestHeaders.get("x-forwarded-for");
-  return forwarded?.split(",")[0]?.trim() || undefined;
+  if (!forwarded) return NO_PROXY_PRINCIPAL;
+
+  const hops = forwarded
+    .split(",")
+    .map((hop) => hop.trim())
+    .filter(Boolean);
+
+  return hops.at(-1) ?? NO_PROXY_PRINCIPAL;
 }
 
 export async function requestMagicLink(
@@ -78,10 +98,7 @@ export async function requestMagicLink(
   // Charged before anything is sent, and charged against both principals NFR26
   // names. The address bound is the real one; the IP bound is what stops the
   // address bound being defeated by rotating addresses.
-  const byAddress = await rateLimit.chargeCeiling(
-    { scope: "address", id: email },
-    "requestMagicLink",
-  );
+  const byAddress = await ceilings.charge({ scope: "address", id: email }, "requestMagicLink");
 
   if (!byAddress.allowed) {
     return {
@@ -91,17 +108,17 @@ export async function requestMagicLink(
     };
   }
 
-  const ip = clientIp(requestHeaders);
-  if (ip) {
-    const byIp = await rateLimit.chargeCeiling({ scope: "ip", id: ip }, "requestMagicLink");
+  const byIp = await ceilings.charge(
+    { scope: "ip", id: clientIp(requestHeaders) },
+    "requestMagicLink",
+  );
 
-    if (!byIp.allowed) {
-      return {
-        status: "rate_limited",
-        message: byIp.error.userMessage,
-        retryAfter: byIp.retryAfter,
-      };
-    }
+  if (!byIp.allowed) {
+    return {
+      status: "rate_limited",
+      message: byIp.error.userMessage,
+      retryAfter: byIp.retryAfter,
+    };
   }
 
   const outcome = await auth().requestMagicLink({
