@@ -62,11 +62,16 @@ jobs:
   # On a `pull_request` it reads GITHUB_BASE_REF, which GitHub sets and which is
   # the PR's own base -- the stacked-PR case DD13 depends on. On a `push` that
   # variable does not exist, so the gate falls back to `refs/remotes/origin/HEAD`,
-  # the ref every `git clone` writes and `actions/checkout` does not. So the run
-  # on `dev` exited 2 the day the first migration landed, exactly as predicted and
-  # one step earlier than expected. `--auto` asks the remote rather than naming a
-  # branch, because a clone whose default branch is not `dev` is not a special
-  # case here either.
+  # the ref every `git clone` writes and `actions/checkout` does not. The run on
+  # `dev` therefore exited 2 the day the first migration landed -- for the
+  # neighbouring reason, one step earlier than the paragraph above predicted.
+  #
+  # The branch is read from the webhook payload rather than asked of the remote
+  # (`set-head --auto`) or written here as `dev`: the payload carries it on both
+  # events, so this costs no network round-trip and no credential, and a clone
+  # whose default branch is not `dev` is still not a special case. It goes through
+  # `env` rather than into the command line because a `${{ }}` expanded into a
+  # shell is an injection seam whatever this particular value happens to be.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -74,7 +79,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Give `migrations:check` a default branch to measure against
-        run: git remote set-head origin --auto
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: git remote set-head origin "$DEFAULT_BRANCH"
       - uses: ./.github/actions/setup
       - run: pnpm test
 
