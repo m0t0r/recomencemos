@@ -1,7 +1,9 @@
 // @vitest-environment node
 
 /**
- * The palette exists in four files, and this is what stops them disagreeing.
+ * The design system's values exist in four files, and this is what stops them
+ * disagreeing. Two axes: **colour**, below, and the **type ramp** at the end of
+ * the file — the same argument, and both were added for the same reason.
  *
  * `packages/design-system/src/styles/globals.css` is the **source**: `oklch()`
  * custom properties over a private `--brand-*` ramp. Three files copy it, and
@@ -34,6 +36,12 @@
  * all three share, and it is also what lets the assertions cover the **doc
  * comments** — the `oklch()` value written above each hex is a claim a reader
  * trusts, and a stale one misleads exactly as badly as a stale hex.
+ *
+ * The type half exists because the impeccable design hook flagged a 24px heading
+ * in an email template as off-ramp and was **right**: `DESIGN.md` named three
+ * type steps while its own prose asserted a ratio ladder with more. The fix was
+ * to enumerate the ladder rather than suppress the finding, and this is what
+ * keeps the two surfaces that cannot read the stylesheet on it.
  */
 
 import { readFileSync } from "node:fs";
@@ -300,5 +308,91 @@ describe("the contrast table in palette.ts", () => {
 
     expect(measured).toBeCloseTo(expected, 1);
     expect(measured, "every documented pair must clear WCAG 2.2 AA").toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+/**
+ * The type ramp, on the two surfaces that cannot read the stylesheet.
+ *
+ * The same argument as the palette, one axis over. `DESIGN.md` states the scale;
+ * the email templates and the root error boundary each hold literal sizes,
+ * because email cannot resolve `rem` (`pixelBasedPreset` forces px) and the
+ * boundary has no stylesheet mounted at all.
+ *
+ * **This case exists because the ramp had a hole.** The frontmatter named three
+ * roles — `display`, `body`, `mono` — so the email `<h1>` at 24px was off-ramp,
+ * and the impeccable design hook said so. The intermediate steps were always
+ * implied by the prose's ratio rule; `typography.scale` enumerates them, and
+ * this asserts the templates stay on the enumeration rather than beside it.
+ */
+describe("literal font sizes against DESIGN.md's ramp", () => {
+  const frontmatter = read("DESIGN.md").split("---")[1] ?? "";
+
+  /**
+   * Every size in the frontmatter, in px — the `scale` ladder plus each named
+   * role's `fontSize`, unioned exactly the way the design hook unions them, so
+   * this and the hook cannot disagree about what "on the ramp" means.
+   */
+  // Sliced to the `typography:` block first. Without that, `rounded` and
+  // `spacing` — which are also bare rem values one indent down — join the ramp
+  // and 0.25rem silently becomes a legal font size.
+  const typography = frontmatter.slice(
+    frontmatter.indexOf("\ntypography:"),
+    frontmatter.indexOf("\nrounded:"),
+  );
+
+  const ramp = new Set(
+    [...typography.matchAll(/^\s+(?:\w[\w-]*|fontSize):\s*"([\d.]+)(rem|px)"$/gm)].map(
+      ([, size, unit]) => Number(size) * (unit === "rem" ? 16 : 1),
+    ),
+  );
+
+  it("enumerates a ladder rather than three roles", () => {
+    // 14 · 16 · 18 · 20 · 24 · 28 · 32 · 36. Fewer than eight means `scale` was
+    // dropped and the hole this suite closed has reopened.
+    expect([...ramp].toSorted((a, b) => a - b)).toEqual([14, 16, 18, 20, 24, 28, 32, 36]);
+  });
+
+  /**
+   * Read as text for the reason the palette cases are: these are literals inside
+   * a Tailwind class string and a template literal, neither of which is a value
+   * any import would expose.
+   */
+  const surfaces = [
+    "packages/notifications/src/templates/base.tsx",
+    "packages/notifications/src/templates/magic-link.tsx",
+    "apps/web/app/global-error.tsx",
+  ];
+
+  const sizes = surfaces.flatMap((path) => {
+    const source = read(path);
+
+    return [
+      ...[...source.matchAll(/\btext-\[([\d.]+)px\]/g)].map(([, px]) => ({
+        path,
+        written: `${px}px`,
+        px: Number(px),
+      })),
+      ...[...source.matchAll(/font-size:\s*([\d.]+)(rem|px)\s*;/g)].map(([, size, unit]) => ({
+        path,
+        written: `${size}${unit}`,
+        px: Number(size) * (unit === "rem" ? 16 : 1),
+      })),
+    ];
+  });
+
+  it("finds sizes on every surface, so a rename cannot empty this suite", () => {
+    for (const path of surfaces) {
+      expect(
+        sizes.some((size) => size.path === path),
+        `no font size found in ${path}`,
+      ).toBe(true);
+    }
+  });
+
+  it.each(sizes)("$path uses $written, which is on the ramp", ({ px, written }) => {
+    expect(ramp.has(px), `${written} (${px}px) is not a step in DESIGN.md's typography.scale`).toBe(
+      true,
+    );
   });
 });
