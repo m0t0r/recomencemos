@@ -28,7 +28,14 @@ const require = createRequire(import.meta.url);
  * list with #12, and `./schema` grows tables rather than losing them — the list
  * only ever gets longer.
  */
-const WITHHELD = ["@repo/domain/schema", "@repo/domain/connection", "@repo/domain/config"];
+const WITHHELD = [
+  // The package root itself: there is no `"."` entry in the map, so `import
+  // "@repo/domain"` is not a shortcut past the subpaths either.
+  "@repo/domain",
+  "@repo/domain/schema",
+  "@repo/domain/connection",
+  "@repo/domain/config",
+];
 
 /** What the app is allowed to reach, and therefore what it must actually reach. */
 const PUBLISHED = ["@repo/domain/health", "@repo/domain/migrate"];
@@ -42,13 +49,5 @@ describe("the domain package's export map", () => {
 
   it.each(PUBLISHED)("resolves %s, so the refusals above mean something", (specifier) => {
     expect(require.resolve(specifier)).toContain("packages/domain");
-  });
-
-  it("keeps the package's internal specifiers private too", () => {
-    // `#config` is `@repo/domain`'s own `imports` entry. A `#`-prefixed
-    // specifier is scoped to the package that declares it, so it is not a second
-    // door into the domain — it resolves against *this* package, where nothing
-    // declares it.
-    expect(() => require.resolve("#config")).toThrow();
   });
 });

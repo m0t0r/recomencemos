@@ -9,7 +9,8 @@
     "#migrate": "./src/migrate/index.ts",
     "#schema": "./src/schema.ts",
     "#server-only": "./src/server-only.ts",
-    "#testing/database": "./src/testing/database.ts"
+    "#testing/database": "./src/testing/database.ts",
+    "#user-messages": "./src/user-messages.ts"
   },
   "exports": {
     "./health": "./src/health.ts",
