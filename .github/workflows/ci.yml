@@ -20,6 +20,12 @@ on:
   push:
     branches: [dev]
 
+  # Called by `deploy.yml` before it ships anything to Fly, so the five checks a
+  # pull request had to pass are the same five, run by the same jobs, on the
+  # commit actually being deployed. Restating them in the deploy workflow would
+  # give this repository two definitions of "green" that drift apart quietly.
+  workflow_call:
+
 # The production gate, as a permission rather than as a convention: a read-only
 # GITHUB_TOKEN cannot push to the default branch and cannot merge a pull request,
 # whatever any step goes on to run.

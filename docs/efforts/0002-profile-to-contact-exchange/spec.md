@@ -347,13 +347,29 @@ concerns.
   shared secret** (DD10) are needed by no turbo task, and `.env*` files are `build`
   inputs. They reach the app through `fly secrets` only. `turbo build --dry` lists what remains.
   **Binds:** 1, 2, 9, 15.
-- **NFR25 — The gate runs off a developer's terminal, and a bad deploy cannot take the site.**
+- **NFR25 — The deploy is a promotion, not a terminal habit, and a bad deploy cannot take the site.**
   `pnpm lint`, `check-types`, `test` and `build` run in CI on every PR; the default branch refuses a
   direct push; deploys are **bluegreen and health-gated**, so a failing `GET /api/health` aborts the
   deploy and leaves the previous machine serving. A completed deploy is undoable in **≤ 5 minutes** by
-  one documented command. `NEXT_PUBLIC_RELEASE` is set from the commit SHA, or every log line reads
-  `release: "unknown"` while Sentry events carry a plugin-injected one and the two halves disagree.
-  Settles `required-checks`, `branch-protection`, `rollback-mechanism`. **Binds:** 15.
+  one documented command. `NEXT_PUBLIC_RELEASE` is set from the commit SHA **at build time and again
+  at runtime** — `NEXT_PUBLIC_*` is inlined into the client bundle by the build, but the logger is
+  externalised out of the server bundle and reads `process.env` at start, so a build-only value gives
+  a browser that reports the release correctly and server log lines that all read `release: "unknown"`.
+  Settles `required-checks`, `branch-protection`, `rollback-mechanism`, `release-branch`. **Binds:** 15.
+  **Amended at #9, and the amendment is the first clause.** This requirement was written as _"the gate
+  runs off a developer's terminal"_: CI ran the checks and a human ran `fly deploy`. Two things were
+  wrong with that. A deploy nobody can perform except the one person with `flyctl` logged in is a
+  bus-factor of one on the only irreversible operation in the system, which sits badly beside
+  `on-call-rotation` being nobody. And a deploy path that exists only on a laptop is a path no gate
+  covers — the checks are advisory the moment the command that ships is typed by hand.
+  So: **`main` is the release branch and `dev` is the default branch**, deploys run from
+  `.github/workflows/deploy.yml` on a push to `main` and from nowhere else, and that workflow **calls
+  `ci.yml` as a reusable workflow** rather than restating the five jobs — one definition of green,
+  run on the commit actually being deployed. Merging a ticket into `dev` integrates it; reaching
+  `main` is a promotion a human performs, which is what keeps "continuous deployment" from meaning
+  "every merged ticket is a release". `scripts/deploy.sh` stays the single deploy path and CI invokes
+  it, so a terminal deploy and a CI deploy cannot diverge; it refuses any branch but `main` unless
+  `DEPLOY_ALLOW_BRANCH=1` says a rehearsal is meant.
 - **NFR26 — Ceilings on the two exhaustible resources.** Gated profile reads **≤ 60 per Account per
   hour, ≤ 300 per day**, with a higher per-IP bound above it. Per Account and per IP:
   `publishProfile` **≤ 3/day**, `sendOffer` **≤ 10/day**, `reportOffer` **≤ 10/day**, `requestSkill`
