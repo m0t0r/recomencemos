@@ -60,14 +60,25 @@ const REDACTED_KEY_SPELLINGS: readonly string[] = [
   "cvv",
   "ssn",
   // NFR19's sweep, read out of `@sentry/core@10.70.0` rather than recalled. A
-  // query string does not only travel *inside* a URL: `RequestEventData` carries
-  // `query_string` on its own (typed `string | Record | Array<[string, string]>`,
-  // so the whole value goes whichever shape it arrives in), and
-  // `SanitizedRequestData` — what an `http.client` span and an `http` breadcrumb
-  // carry — is the SDK splitting `http.query` and `http.fragment` off the URL
-  // into fields of their own. {@link reduceUrl} closes the URL; these close the
-  // half the SDK moved out of it.
+  // query string does not only travel *inside* a URL, and {@link reduceUrl}
+  // closes only the URL — these close the half the SDK moves out of it:
+  //
+  // - `query_string` is `RequestEventData`, typed
+  //   `string | Record | Array<[string, string]>`, so the whole value goes
+  //   whichever of the three shapes it arrives in.
+  // - `url.query` / `url.fragment` are what the installed code **emits**:
+  //   `getHttpSpanDetailsFromUrlObject` sets them from `search` and `hash` on
+  //   every http span, `server` and `client` kind alike (`utils/url.js:68,71`).
+  // - `http.query` / `http.fragment` are `SanitizedRequestData`, the other
+  //   spelling, carried by an `http` breadcrumb.
+  //
+  // Both spellings are listed because both are reachable and neither is
+  // expensive; taking the emitted one alone would have made this list track a
+  // vendor's refactor. `url.path`, `url.scheme` and `url.port` are deliberately
+  // absent — they are where the request went, which is the half NFR19 keeps.
   "query_string",
+  "url.query",
+  "url.fragment",
   "http.query",
   "http.fragment",
 ];
@@ -106,12 +117,17 @@ const MAX_DEPTH = 4;
  * `data`, while `beforeSendTransaction` brings `spans`. All three are listed, so
  * one scrubber serves every hook.
  *
- * `request` is named whole rather than at `headers` and `cookies`, which is what
- * the first two entries here used to be. Those two were narrower than the SDK:
- * `RequestEventData` also carries `query_string` and `data` — the request body —
- * so a name on the shipped list could sit directly on `request` and be out of the
- * walk's reach at the same time. The broader root subsumes both and costs one
- * level of the depth budget under `headers`, which is flat.
+ * `request` is named **as well as** `request.headers` and `request.cookies`, and
+ * the apparent redundancy is load-bearing. The narrow pair alone was narrower
+ * than the SDK — `RequestEventData` also carries `query_string` and `data`, the
+ * request body, so a name on the shipped list could sit directly on `request` and
+ * be out of the walk's reach at the same time. But the broad root does **not**
+ * subsume them, because {@link MAX_DEPTH} is counted *from the carrier root*:
+ * reached through `["request"]`, a header is already one level down, and
+ * `request.headers.a.b.c.token` stops being redacted. Review caught that as a
+ * silent narrowing of NFR18, so both are listed and the subtree is walked twice.
+ * The second walk sees an already-scrubbed copy, so the two compose to the union
+ * of their reach rather than fighting.
  *
  * **What key names cannot reach**: a secret in a URL rather than under a key —
  * `request.url` holding `?token=…`. Matching by key name structurally cannot see
@@ -124,6 +140,8 @@ const MAX_DEPTH = 4;
 const CARRIER_PATHS: readonly (readonly string[])[] = [
   ["data"],
   ["request"],
+  ["request", "headers"],
+  ["request", "cookies"],
   ["contexts"],
   ["extra"],
   ["tags"],
@@ -137,6 +155,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function scrubBranch(value: unknown, depth: number): unknown {
+  // The second rule, and the only one in this module that reads a *value*
+  // instead of a key. It rides the same walk rather than taking one of its own,
+  // which is what keeps both rules answering for the same region of the event:
+  // the carriers, where data lives. Outside them sit the SDK's own metadata --
+  // `culprit`, `debug_meta`, and a stack frame's `abs_path` and `filename`,
+  // which are URLs that a processor resolves to source rather than URLs anyone
+  // fetched with a credential.
+  if (typeof value === "string") {
+    return reduceUrl(value);
+  }
+
   if (Array.isArray(value)) {
     return value.map((item) => scrubBranch(item, depth));
   }
@@ -155,14 +184,39 @@ function scrubBranch(value: unknown, depth: number): unknown {
 }
 
 /**
- * A string is treated as a URL when it parses **whole** as an absolute one — a
- * scheme and everything after it, nothing before. That is the class, and it is
- * what makes this a general answer rather than a `request.url` special case.
+ * The four schemes over which a request carrying a credential actually travels.
  *
- * What it removes is everything a URL can carry beyond where it points: the
- * query, the fragment, and userinfo. The fragment is not decoration — an OAuth
- * provider returns `#access_token=…` there, so dropping the query alone would
- * leave the second-most-likely credential position open. Userinfo is the third:
+ * Restricting to them is not tidiness. `new URL` accepts any scheme, so without
+ * this a Windows path (`C:\\Users\\v\\x?a=1`), a `mailto:` with a subject, a
+ * `data:` URI, and — the one that bites — a bundler's `webpack-internal:///…?hash`
+ * or `turbopack:///…?hash` all parse and all get rewritten. Those last two are
+ * how a processor resolves a stack frame to source, and reducing them breaks
+ * symbolication and shifts grouping while looking like a redaction win.
+ */
+const FETCHED_SCHEMES: ReadonlySet<string> = new Set(["http:", "https:", "ws:", "wss:"]);
+
+/**
+ * A path-absolute reference — `/verify?token=…` — which is the shape a relative
+ * URL takes on a fetch breadcrumb, where the SDK records what the caller passed
+ * rather than what it resolved to (`fetch.js:197`, and `parseStringToURLObject`
+ * handles relative input explicitly).
+ *
+ * Leading `/`, no whitespace, and a `?` or `#` somewhere after. All three
+ * clauses earn their place: without the anchor, `GET /orders?page=2` and
+ * `what? no.` both parse as relative references and get truncated, which is
+ * prose destroyed to remove a query that was never there.
+ */
+const PATH_ABSOLUTE_WITH_QUERY = /^\/\S*[?#]/;
+
+/**
+ * Everything a URL can carry beyond where it points, removed — by class, not by
+ * the name of the key holding it.
+ *
+ * The class is "a string that is wholly a URL": absolute with a fetched scheme,
+ * or a path-absolute reference. What comes off is the query, the fragment, and
+ * userinfo. The fragment is not decoration — an OAuth provider returns
+ * `#access_token=…` there, so dropping the query alone would leave the
+ * second-most-likely credential position open. Userinfo is the third:
  * `https://admin:hunter2@host/` is a credential in a URL wearing neither a query
  * nor a key.
  *
@@ -171,21 +225,40 @@ function scrubBranch(value: unknown, depth: number): unknown {
  * bare origin, lowercases the host, drops a default port — so re-serialising
  * unconditionally would put a diff on every clean URL in every event. The guard
  * is the four emptiness checks, and it is load-bearing rather than an
- * optimisation.
+ * optimisation. The relative branch never serialises at all: it cuts the
+ * original string, which is what `@repo/observability`'s `pathnameOf` does with
+ * the same input, so the two egresses reduce a path the same way.
  *
- * **The residue is named, not guessed at.** A URL *embedded* in a longer string
- * — a message reading `fetch failed for https://…?token=…` — is left alone,
- * because no scanner can tell a link in an error message from a link that is a
- * credential, and any bound that caught the second would mangle the first.
+ * **Two residues, named rather than guessed at.** A URL *embedded* in a longer
+ * string — a message reading `fetch failed for https://…?token=…` — is left
+ * alone, and so is a relative reference that does not start with `/`. No scanner
+ * can tell a link in an error message from a link that is a credential, and any
+ * bound that caught the second would mangle the first.
  * [ADR-0006](../../../docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)
- * is the precedent for saying so here rather than shipping the heuristic.
+ * is the precedent for writing the gap down here rather than shipping the
+ * heuristic that half-closes it.
  */
 function reduceUrl(value: string): string {
+  // Nothing a URL carries beyond its destination can be present without one of
+  // these three characters, so the overwhelming majority of strings in an event
+  // leave here without being parsed at all.
+  if (!value.includes("?") && !value.includes("#") && !value.includes("@")) {
+    return value;
+  }
+
+  if (PATH_ABSOLUTE_WITH_QUERY.test(value)) {
+    return value.split(/[?#]/, 1)[0] ?? value;
+  }
+
   let url: URL;
 
   try {
     url = new URL(value);
   } catch {
+    return value;
+  }
+
+  if (!FETCHED_SCHEMES.has(url.protocol)) {
     return value;
   }
 
@@ -199,51 +272,6 @@ function reduceUrl(value: string): string {
   url.username = "";
 
   return url.toString();
-}
-
-/**
- * Only a plain object or an array is walked into. Anything else — a `Date`, a
- * class instance, anything with a prototype of its own — is handed back as it
- * arrived, because rebuilding it from `Object.entries` would return `{}` and
- * destroy the value. {@link scrubBranch} can afford the looser test because it
- * runs only at the carrier roots, where a Sentry payload is JSON-shaped by the
- * time a hook sees it; this pass runs over the **whole** event, so it meets
- * fields that walk never touches.
- */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (!isRecord(value)) return false;
-
-  const prototype: unknown = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
-}
-
-/**
- * {@link reduceUrl} over every string in the event, at every depth and under
- * every key.
- *
- * Unbounded, unlike {@link scrubBranch}'s {@link MAX_DEPTH} — that bound exists
- * so the walker and {@link redactionPaths} agree about how deep a *name* is
- * matched, and this pass generates no paths and matches no names, so there is
- * nothing for it to agree with. A pathologically deep event overflows the stack
- * instead, which throws, which {@link scrubOrDrop} turns into a dropped event.
- * That is the same fail-closed contract the rest of this module states, reached
- * by a different route.
- */
-function reduceUrlsIn(value: unknown): unknown {
-  if (typeof value === "string") return reduceUrl(value);
-
-  if (Array.isArray(value)) return value.map((item) => reduceUrlsIn(item));
-
-  if (!isPlainObject(value)) return value;
-
-  const reduced: Record<string, unknown> = {};
-
-  for (const [key, nested] of Object.entries(value)) {
-    reduced[key] = reduceUrlsIn(nested);
-  }
-
-  return reduced;
 }
 
 function scrubAtPath(node: unknown, path: readonly string[]): unknown {
@@ -293,18 +321,19 @@ export function redactionPaths(roots: readonly string[], depth = MAX_DEPTH): rea
 
   for (const root of roots) {
     for (let level = 0; level < depth; level++) {
-      const wildcards = "*.".repeat(level);
+      // The prefix is built with its own separators rather than assembled and
+      // then patched, because the two segment forms need different ones and a
+      // `.replace` over the finished string would hunt for the first `.[` in it
+      // — which is only the right one for the roots this repository happens to
+      // pass.
+      const prefix =
+        level === 0 ? root : `${root}.${Array.from({ length: level }, () => "*").join(".")}`;
 
       for (const spelling of REDACTED_KEY_SPELLINGS) {
-        // A spelling carrying a dot is one key, not two. `err.http.query` tells
-        // `fast-redact` to descend through an `http` object that does not exist;
-        // `err["http.query"]` is the literal-key form, and it is the reason the
-        // prefix drops its own separator when the segment is bracketed.
-        paths.push(
-          spelling.includes(".")
-            ? `${root}.${wildcards}["${spelling}"]`.replace(".[", "[")
-            : `${root}.${wildcards}${spelling}`,
-        );
+        // A spelling carrying a dot is one key, not two. `err.url.query` tells
+        // `fast-redact` to descend through a `url` object that does not exist;
+        // `err["url.query"]` is the literal-key form.
+        paths.push(spelling.includes(".") ? `${prefix}["${spelling}"]` : `${prefix}.${spelling}`);
       }
     }
   }
@@ -337,10 +366,7 @@ export function scrubEvent<T>(event: T): T {
     scrubbed = scrubAtPath(scrubbed, path);
   }
 
-  // Names first, URLs second, and the order is deliberate: a value the key-name
-  // pass has already reduced to `[redacted]` is not a URL, so the second pass
-  // never re-parses what the first one settled.
-  return reduceUrlsIn(scrubbed) as T;
+  return scrubbed as T;
 }
 
 /**
