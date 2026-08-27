@@ -5,8 +5,15 @@
  * visual system as `oklch()` values delivered through CSS custom properties;
  * email clients support neither. There is no build step that could derive this
  * file — `globals.css` is a stylesheet a browser resolves, and an inbox never
- * sees it — so drift between the two is a real maintenance cost with a manual
- * mitigation: **when `DESIGN.md`'s colours change, this file is reviewed** (DD14).
+ * sees it.
+ *
+ * **The mitigation is no longer manual, and that is the part worth knowing.**
+ * This file used to say *when `DESIGN.md`'s colours change, this file is
+ * reviewed* (DD14), which is a discipline rather than a mechanism.
+ * `apps/web/design-tokens.test.ts` now re-derives every hex below from
+ * `globals.css` — including the `oklch()` written in each doc comment, because a
+ * stale comment misleads whoever next updates this by hand — and re-measures the
+ * six contrast pairs in the table. Drift goes red. Do not restore the manual note.
  *
  * Only the eight tokens the templates actually use are copied. Copying the rest
  * would be eleven more values to keep in step for no reader.

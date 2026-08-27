@@ -5,24 +5,37 @@
  *
  * **It replaces the root layout**, so nothing the app normally mounts is
  * available to it — no design-system stylesheet, no fonts, and no theme
- * provider. Every rule it needs it carries, and it follows the **OS** colour
- * scheme rather than the app's theme, because the thing that reads the app's
- * theme is one of the pieces that did not mount.
+ * provider. Every rule it needs it carries, which is why the colours below are
+ * literal hex rather than tokens: the token layer is one of the pieces that did
+ * not mount.
  *
- * **Two `prefers-color-scheme` media queries, not one colour function.** The
- * same amount of code as `light-dark()`, and it raises no question about which
- * browsers are in the floor. The `light` query is the one that carries a user
- * who has expressed no preference, and every value also has an inline fallback
- * in its `var()` so that a browser matching neither query still renders legible
- * text rather than transparent-on-transparent.
+ * **The six values are the product's own palette, and there is no dark scheme.**
+ * They were Tailwind's zinc defaults with a `prefers-color-scheme: dark` block
+ * beside them, which was wrong twice over: the greys belonged to no palette this
+ * product ships, and the dark block made the one screen a visitor sees when
+ * everything else has failed the only dark surface in a product that is
+ * deliberately light-only (`globals.css` binds Tailwind's `dark` variant to a
+ * class nothing sets, precisely so the OS cannot decide this). A root boundary
+ * that does not look like the product is a second failure layered on the first.
  *
- * The palette clears WCAG 2.2 AA in both schemes on its own — it cannot borrow
- * the token layer's guarantee, because the token layer is not here.
+ * So the values are `background`, `foreground`, `mutedForeground`, `muted`,
+ * `primary` and `primaryForeground`, converted from `globals.css`'s `oklch()`
+ * exactly as `@repo/notifications` converts them for email — and for the same
+ * reason, that this surface cannot read the stylesheet either.
+ * `apps/web/design-tokens.test.ts` is what keeps all three in step.
  *
- * **The copy here is still English, and so is the palette an open row.** Both
- * are listed in the repo README under "Still to replace"; the copy is rewritten
- * in `es-CO` under `docs/policy/voice.md`, and whatever replaces these six hex
- * values must clear AA in both schemes on its own.
+ * **It still clears WCAG 2.2 AA on its own**, because it cannot borrow the token
+ * layer's guarantee: 18.04:1 for body text, 5.04:1 for the muted reference line,
+ * and 6.51:1 for the button. Those are the same three numbers the email palette
+ * tabulates, which is what being one palette means.
+ *
+ * `color-scheme: light` is now stated rather than `light dark`, so form controls
+ * and scrollbars match the page instead of following the OS on a page that does
+ * not.
+ *
+ * **The copy here is still English.** That row stays open in the repo README
+ * under "Still to replace"; it is rewritten in `es-CO` under
+ * `docs/policy/voice.md`.
  */
 
 import type { BoundaryError } from "../lib/report-client-error";
@@ -30,35 +43,23 @@ import { useErrorBoundary } from "../lib/use-error-boundary";
 
 const styles = `
   :root {
-    color-scheme: light dark;
-  }
+    color-scheme: light;
 
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #ffffff;
-      --fg: #18181b;
-      --muted: #52525b;
-      --surface: #f4f4f5;
-      --button-bg: #18181b;
-      --button-fg: #ffffff;
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #09090b;
-      --fg: #fafafa;
-      --muted: #a1a1aa;
-      --surface: #27272a;
-      --button-bg: #fafafa;
-      --button-fg: #09090b;
-    }
+    /* The product's palette, from globals.css. Custom properties with inline
+     * var() fallbacks below, so a browser that drops this block still renders
+     * legible text rather than transparent-on-transparent. */
+    --bg: #ffffff;          /* --background      oklch(1 0 0)          */
+    --fg: #12171b;          /* --foreground      oklch(0.2 0.012 248)  */
+    --muted: #66707a;       /* --muted-foreground oklch(0.54 0.02 248) */
+    --surface: #f3f5f8;     /* --muted           oklch(0.97 0.004 248) */
+    --button-bg: #10619e;   /* --primary         oklch(0.48 0.122 248) */
+    --button-fg: #ffffff;   /* --primary-foreground oklch(1 0 0)       */
   }
 
   body {
     margin: 0;
     background: var(--bg, #ffffff);
-    color: var(--fg, #18181b);
+    color: var(--fg, #12171b);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 1rem;
     line-height: 1.5;
@@ -96,7 +97,7 @@ const styles = `
   }
 
   .muted {
-    color: var(--muted, #52525b);
+    color: var(--muted, #66707a);
   }
 
   .reference {
@@ -104,14 +105,14 @@ const styles = `
   }
 
   .reference code {
-    background: var(--surface, #f4f4f5);
+    background: var(--surface, #f3f5f8);
     border-radius: 0.25rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     padding: 0.125rem 0.375rem;
   }
 
   .boundary button {
-    background: var(--button-bg, #18181b);
+    background: var(--button-bg, #10619e);
     border: 1px solid transparent;
     border-radius: 0.375rem;
     color: var(--button-fg, #ffffff);
@@ -127,7 +128,7 @@ const styles = `
   .boundary button:focus-visible {
     /* Offset so the indicator sits on the page background rather than on the
        button it outlines, where it would have the button's own contrast. */
-    outline: 2px solid var(--fg, #18181b);
+    outline: 2px solid var(--fg, #12171b);
     outline-offset: 2px;
   }
 `;
