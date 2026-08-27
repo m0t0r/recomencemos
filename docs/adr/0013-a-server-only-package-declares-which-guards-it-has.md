@@ -52,10 +52,11 @@ Then, always, mechanism 3.
 - **`@repo/domain`** uses 1 (withholding the schema, both connections and the auth instance), 2 on
   `connection.ts` and `health.ts`, and 3 everywhere. Not 2 on `migrate/cli.ts`, which runs as plain
   `node` in a Fly `release_command`.
-- **`@repo/notifications`** uses 1 (only `./send` and `./templates/*` are published) and 3. Not 2: a
-  template is a React component rendered to a _string_, and the two places that render one outside a
-  request — the `email dev` preview server and every Node-environment test — set no `react-server`
-  condition.
+- **`@repo/notifications`** uses 1 in **both** its forms — only `./send` and `./templates/*` are
+  published, and each points at `src/browser-refusal.ts` under the `browser` condition — and 3. Not
+  2: a template is a React component rendered to a _string_, and the two places that render one
+  outside a request — the `email dev` preview server and every Node-environment test — set no
+  `react-server` condition.
 
 ## Why the backstop is duplicated three times rather than shared
 
@@ -93,15 +94,25 @@ package and never considered in the other two.
 **A new server-only package walks the three questions and records its answers.** CLAUDE.md carries
 the table so it is read at the moment a package is created rather than found afterwards.
 
-**One gap is now visible, and naming it is this record's first dividend.** `@repo/notifications` has
-mechanism 1 in its withholding form but **no `browser` condition** on `./send` or `./templates/*`, so
-`assertServerOnly()` — a runtime throw — is the only thing between a `"use client"` import and
-`resend` plus the code path that reads `RESEND_API_KEY` entering the client graph.
-`@repo/observability`, which holds no credential, has the stronger guard. That inversion was invisible
-while each package argued its own case in its own file. It is filed as [#64](https://github.com/m0t0r/recomencemos/issues/64) for `/triage` per
+**One gap was made visible here, and naming it was this record's first dividend — it is now closed.**
+`@repo/notifications` had mechanism 1 in its withholding form but **no `browser` condition** on
+`./send` or `./templates/*`, so `assertServerOnly()` — a runtime throw — was the only thing between a
+`"use client"` import and `resend` plus the code path that reads `RESEND_API_KEY` entering the client
+graph. `@repo/observability`, which holds no credential, had the stronger guard. That inversion was
+invisible while each package argued its own case in its own file. It was filed as
+[#64](https://github.com/m0t0r/recomencemos/issues/64) for `/triage` per
 [ADR-0001](0001-findings-enter-through-triage.md) rather than fixed here, because this record moves
-no code and the fix touches a manifest, a new module, and the resolution assertions in
-`apps/web/notifications-boundary.test.ts`.
+no code.
+
+**What closing it showed is worth keeping.** The issue was careful not to assume that
+`RESEND_API_KEY` itself would reach a client bundle — "a question about how the env read is compiled,
+not something to assume either way". Measured on the commit before the fix, with a `"use client"`
+page calling the send seam: `Compiled successfully`, and `.next/static` carrying **152** occurrences
+of `resend`, the live `api.resend.com` endpoint, and `RESEND_API_KEY` three times. The build said
+nothing. With the condition in place the same page fails to resolve, and with the seam imported from
+a Route Handler instead the client bundle holds none of those four strings. The measurements and the
+verbatim build error are in `packages/notifications/src/browser-refusal.ts`; the manifest half is
+asserted in `apps/web/notifications-boundary.test.ts`.
 
 **The runtime backstop stays duplicated.** A review comment proposing to share it is answered by this
 record, not re-argued.

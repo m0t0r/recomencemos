@@ -16,6 +16,16 @@
  * both directions, asserted where the consumer sits rather than where the
  * manifest is written.
  *
+ * **The third block is a manifest-shape assertion rather than a resolution one,
+ * and that is a limit worth stating.** `createRequire().resolve` answers under
+ * the conditions *this* process runs with, and there is no way to ask it for
+ * `browser` — so the `browser` condition cannot be proved the way the other two
+ * halves are. What it can be is read off the map that Node consults, which is
+ * what that block does. The proof that the condition *works* is the build error
+ * quoted in `packages/notifications/src/browser-refusal.ts`, produced by hand
+ * against a real `"use client"` import; `@repo/observability` records its own
+ * the same way, and has no automated test for its condition at all.
+ *
  * The second claim is the one this file exists for. The notification seam emits
  * its `notification.sent` line through a **port it declares** —
  * `NotificationLogger` — rather than by importing `@repo/observability`, because
@@ -27,6 +37,7 @@
  */
 
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { logger } from "@repo/observability/logger";
 import type { NotificationLogger } from "@repo/notifications/send";
 
@@ -67,6 +78,48 @@ describe("the notifications package's export map", () => {
 
   it.each(PUBLISHED)("resolves %s, so the refusals above mean something", (specifier) => {
     expect(require.resolve(specifier)).toContain("packages/notifications");
+  });
+});
+
+/**
+ * The refusal module every published subpath resolves to for a browser, read
+ * off the manifest Node itself consults rather than off a path this file
+ * spells. Resolving `./send` gives the package root without a second constant
+ * to keep in step with the first.
+ */
+const BROWSER_REFUSAL = "./src/browser-refusal.ts";
+
+interface Manifest {
+  readonly exports: Record<string, string | Record<string, string>>;
+}
+
+function notificationsManifest(): Manifest {
+  const sendPath = require.resolve("@repo/notifications/send");
+  const packageRoot = sendPath.slice(0, sendPath.indexOf("/src/"));
+
+  return JSON.parse(readFileSync(`${packageRoot}/package.json`, "utf8")) as Manifest;
+}
+
+describe("the browser condition on that map", () => {
+  /**
+   * The half `require.resolve` cannot be asked about. Without it a
+   * `"use client"` module importing the send seam resolves cleanly, and the
+   * only thing between it and `resend` plus the code path that reads
+   * `RESEND_API_KEY` is a runtime throw that fires *after* the module is in the
+   * bundle — which is the inversion ADR-0013 made visible and #64 closed.
+   */
+  it.each(PUBLISHED)("points %s at the package's own refusal module", (specifier) => {
+    const subpath = `.${specifier.slice("@repo/notifications".length)}`;
+    const pattern = subpath.replace(/\/(base|magic-link)$/, "/*");
+    const entry = notificationsManifest().exports[pattern];
+
+    expect(entry).toMatchObject({ browser: BROWSER_REFUSAL });
+  });
+
+  it("leaves every published subpath resolving to its real module otherwise", () => {
+    for (const entry of Object.values(notificationsManifest().exports)) {
+      expect(entry).toMatchObject({ default: expect.not.stringContaining("browser-refusal") });
+    }
   });
 });
 
