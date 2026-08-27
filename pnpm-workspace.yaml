@@ -29,6 +29,7 @@ minimumReleaseAgeExclude:
   - "@next/swc-win32-x64-msvc@16.3.2"
   - next@16.3.2
   - shadcn@4.19.0
+  - resend@6.24.0
 
 # `@sentry/cli`'s postinstall is a *fallback* downloader, not the install step:
 # it resolves `@sentry/cli-<platform>` — an optional dependency pnpm has already
