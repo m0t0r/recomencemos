@@ -256,7 +256,10 @@ export async function chargeCeiling(
         scope: principal.scope,
         count,
         max: ceiling.max,
-        retryAfter,
+        // `snake_case` on the line, whatever the source calls it (ADR-0005).
+        // The refusal's own `retryAfter` stays camelCase: that one is a
+        // TypeScript field a surface reads, not a field on a log line.
+        retry_after: retryAfter,
       },
     }),
   };

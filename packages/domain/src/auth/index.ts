@@ -206,8 +206,9 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
               "rather than swallowed because it happens identically for an address that has " +
               "an Account and one that does not, so it discloses nothing about the address.",
             userMessage: SIGN_IN_FAILED,
-            // No address, no token, no URL — NFR18.
-            context: { sharedDevice },
+            // No address, no token, no URL — NFR18. `snake_case` on the line,
+            // whatever the source calls it (ADR-0005).
+            context: { shared_device: sharedDevice },
             cause,
           }),
         };

@@ -168,8 +168,11 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
    *
    * `created_at` and its kind are why the first check reads
    * `!attribute.defaultValue`, and why the second skips a column that has one:
-   * `NOT NULL` with a default where the vendor calls the field optional is DD2's
-   * rule for every table, not a deviation.
+   * a default makes `NOT NULL` unreachable by the adapter, so it cannot produce
+   * the constraint violation this case is about. That is a statement about
+   * *safety*, not about whether it is a deviation — the next test counts it as
+   * one either way, because it is still a state the vendor allows and this
+   * schema does not.
    */
   it.each(MODELS)("agrees with %s on which fields may be null", (model) => {
     const fields = betterAuthSchema[model]?.fields ?? {};
@@ -188,8 +191,9 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
       expect(
         column?.notNull,
         `${model}.${name} is optional in Better Auth but NOT NULL here with no default, so the ` +
-          "adapter writing null is a constraint violation. Give it a default, or declare the " +
-          "deviation in STRICTER_NOT_NULL with the writer that makes it safe.",
+          "adapter writing null is a constraint violation. Give the column a default — that is " +
+          "the only thing that closes this, since an entry in STRICTER_NOT_NULL records a " +
+          "deviation without making the write safe.",
       ).toBe(false);
     }
   });
@@ -198,6 +202,13 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
    * The deviations, held to the list. An entry that stops being stricter is as
    * much a finding as an undeclared one — it means the list has started
    * describing something that is no longer true.
+   *
+   * **Every** `NOT NULL` where the vendor calls the field optional counts here,
+   * whether or not the column has a default. The default decides whether the
+   * strictness is *safe*, which is the previous test's question; it does not
+   * decide whether it is a deviation. So a later DD2-conforming column of that
+   * shape earns a line in `STRICTER_NOT_NULL` saying which writer fills it,
+   * which is the sentence worth having.
    */
   it("is stricter than Better Auth in exactly the declared places", () => {
     const stricter: string[] = [];

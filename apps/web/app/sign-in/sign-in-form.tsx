@@ -43,6 +43,7 @@ import { Label } from "@repo/design-system/components/label";
 import { useId } from "react";
 import { GoogleMark } from "./google-mark";
 import {
+  DOOR_DIVIDER,
   EMAIL_DOOR_PRECONDITION,
   EMAIL_LOOKS_WRONG,
   EMAIL_LABEL,
@@ -145,7 +146,7 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
         {googleAvailable ? (
           <div className="flex items-center gap-3" aria-hidden="true">
             <span className="bg-border h-px flex-1" />
-            <span className="text-muted-foreground text-sm">o</span>
+            <span className="text-muted-foreground text-sm">{DOOR_DIVIDER}</span>
             <span className="bg-border h-px flex-1" />
           </div>
         ) : null}
