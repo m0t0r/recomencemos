@@ -43,6 +43,12 @@ const WITHHELD = [
   "@repo/notifications/config",
   "@repo/notifications/palette",
   "@repo/notifications/transport/resend",
+  // The development inbox is internal for a second reason on top of the usual
+  // one: it is the only module here that can cause silence rather than an
+  // error, and `NOTIFICATIONS_TRANSPORT` plus its own NODE_ENV guard are the
+  // two things standing between it and a deploy. A reachable subpath would be a
+  // third way in that neither of them covers.
+  "@repo/notifications/transport/terminal",
 ];
 
 /** The spec's two public subpaths, and therefore what must actually resolve. */

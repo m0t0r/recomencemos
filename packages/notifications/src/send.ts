@@ -14,8 +14,16 @@
 
 import { AppError } from "@repo/errors/app-error";
 import type { ReactElement } from "react";
-import { type NotificationsEnv, sendingIsKilled } from "#config";
+import {
+  type NotificationsEnv,
+  resendApiKey,
+  senderIdentity,
+  sendingIsKilled,
+  transportName,
+} from "#config";
 import { assertServerOnly } from "#server-only";
+import { createResendTransport } from "#transport/resend";
+import { createTerminalTransport } from "#transport/terminal";
 import { SEND_FAILED } from "#user-messages";
 
 assertServerOnly("send");
@@ -191,7 +199,7 @@ export function idempotencyKeyFor(notification: Notification): string {
  */
 function sentLine(
   notification: Notification,
-  transportName: string,
+  channel: string,
   receipt: TransportReceipt,
 ): Record<string, unknown> {
   return {
@@ -200,7 +208,7 @@ function sentLine(
     recipient_id: notification.recipientId,
     entity_id: notification.entityId,
     message_id: receipt.id,
-    transport: transportName,
+    transport: channel,
   };
 }
 
@@ -259,15 +267,54 @@ export function createNotifier({
   };
 }
 
+/**
+ * The composition point: the one place that decides which implementation of the
+ * seam is in play.
+ *
+ * A caller asks for *a notifier*, not for Resend and not for a terminal — so
+ * "which transport" is answered here, once, from configuration, and #12's
+ * `requestMagicLink` never learns that a second one exists. That is intent Q1's
+ * rule read literally: **a channel is added by implementing the seam, never by
+ * editing a call site**, and a call site that branched on `NODE_ENV` would have
+ * broken it while appearing to comply.
+ *
+ * Each branch resolves only the configuration it needs, which is what lets a
+ * developer run the whole sign-in loop with no `RESEND_API_KEY` and no verified
+ * domain: `terminal` never calls {@link resendApiKey}, so the credential is not
+ * merely unused, it is never asked for.
+ */
+export function createTransport(env: NotificationsEnv = process.env): NotificationTransport {
+  if (transportName(env) === "terminal") {
+    return createTerminalTransport({ nodeEnv: env.NODE_ENV });
+  }
+
+  const { from, replyTo } = senderIdentity(env);
+
+  return createResendTransport({ apiKey: resendApiKey(env), from, replyTo });
+}
+
+/** The seam, wired from the environment. What a Server Action calls. */
+export function createNotifierFromEnv(
+  logger: NotificationLogger,
+  env: NotificationsEnv = process.env,
+): Notifier {
+  return createNotifier({ transport: createTransport(env), logger, env });
+}
+
 export { createResendTransport, type ResendTransportOptions } from "#transport/resend";
+export { createTerminalTransport, type TerminalTransportOptions } from "#transport/terminal";
 export {
   API_KEY_VARIABLE,
   FROM_VARIABLE,
   KILL_SWITCH_VARIABLE,
   REPLY_TO_VARIABLE,
+  TRANSPORT_NAMES,
+  TRANSPORT_VARIABLE,
   resendApiKey,
   senderIdentity,
   sendingIsKilled,
+  transportName,
   type NotificationsEnv,
   type SenderIdentity,
+  type TransportName,
 } from "#config";

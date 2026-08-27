@@ -9,7 +9,7 @@
     "#send": "./src/send.ts",
     "#server-only": "./src/server-only.ts",
     "#templates/*": "./src/templates/*.tsx",
-    "#transport/resend": "./src/transport/resend.ts",
+    "#transport/*": "./src/transport/*.ts",
     "#user-messages": "./src/user-messages.ts"
   },
   "exports": {
