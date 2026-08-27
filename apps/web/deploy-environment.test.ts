@@ -35,6 +35,7 @@ const flyToml = read("fly.toml");
 const deployWorkflow = read(".github/workflows/deploy.yml");
 const deployScript = read("scripts/deploy.sh");
 const dockerfile = read("Dockerfile");
+const dockerignore = read(".dockerignore");
 
 /**
  * `fly.toml` with its comments removed.
@@ -259,5 +260,53 @@ describe("the deploy runs from the release branch and nowhere else", () => {
     expect(deployWorkflow).toMatch(/FLY_API_TOKEN:\s*\$\{\{\s*secrets\.FLY_API_TOKEN\s*\}\}/);
     expect(deployWorkflow).not.toMatch(/vars\.FLY_API_TOKEN/);
     expect(deployWorkflow).not.toMatch(/FlyV1/);
+  });
+});
+
+/**
+ * The three findings from `/security-review` on #9, each as the assertion that
+ * would have caught it. All three are one-word regressions — a `**\/` dropped, a
+ * `USER` line deleted as noise, an `env -u` tidied out of a `CMD` — and none of
+ * them fails anything at build or at deploy. They fail silently, in production,
+ * and only under an attacker.
+ */
+describe("the production image does not hand an attacker more than it must", () => {
+  /**
+   * Docker matches `.dockerignore` against the whole context-relative path, so a
+   * bare `.env` excludes `./.env` and nothing else. The only `.env.local` this
+   * repo has is `apps/web/.env.local` — `next dev` reads it from its own project
+   * directory — so the root-anchored form excluded nothing that exists, while
+   * `fly deploy` builds on a **remote** builder. A developer's `RESEND_API_KEY`
+   * was being uploaded into a builder layer cache.
+   */
+  it(".dockerignore excludes env files at every depth, not just the root", () => {
+    expect(dockerignore).toMatch(/^\*\*\/\.env$/m);
+    expect(dockerignore).toMatch(/^\*\*\/\.env\.\*$/m);
+    // The committed example carries no secret and is what a reader copies from.
+    expect(dockerignore).toMatch(/^!\*\*\/\.env\.example$/m);
+  });
+
+  /**
+   * `node:24-slim` defaults to UID 0. As root, an arbitrary-write bug in the
+   * Next server also rewrites `server.js` — persistence across restarts — and
+   * reads `/proc/1/environ`, where Fly's init holds every secret.
+   */
+  it("the runner drops to the unprivileged user the base image ships", () => {
+    expect(dockerfile).toMatch(/^USER node$/m);
+  });
+
+  /**
+   * Fly secrets are app-wide, so `DIRECT_DATABASE_URL` — the role that inherits
+   * `postgres` and can run DDL — reaches every process unless something takes it
+   * away. The request path uses the pooled connection and has no use for it; the
+   * release command is a separate command on a separate machine and still gets
+   * it. Without this the least-privilege split between the two database roles is
+   * undone at the process, and `exports`-map enforcement (ADR-0010) is worth
+   * nothing to code that is already executing.
+   */
+  it("the server process is started without the migration credential", () => {
+    expect(dockerfile).toMatch(
+      /^CMD \["env", "-u", "DIRECT_DATABASE_URL", "node", "apps\/web\/server\.js"\]$/m,
+    );
   });
 });

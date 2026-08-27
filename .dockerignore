@@ -4,9 +4,21 @@
 # declares those files a `build` input, and a development database URL copied
 # into an image is a production secret's worth of surprise waiting in a layer.
 # Real credentials reach the app through `fly secrets` (NFR24, runbook §1).
+#
+# **Both forms, and the recursive one is the one that matters.** Docker matches
+# these against the whole context-relative path, so a bare `.env` excludes
+# `./.env` and nothing else — while the only `.env.local` this repo ever has is
+# at `apps/web/.env.local`, because that is the directory `next dev` reads it
+# from. Written root-anchored, this block excluded nothing that exists, and
+# `fly deploy` builds on a **remote** builder, so a developer's `RESEND_API_KEY`
+# would have been uploaded off their machine into a builder layer cache. Every
+# other pattern here already carries its `**/` twin; this one did not.
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
 
 node_modules
 **/node_modules

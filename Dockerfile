@@ -111,11 +111,11 @@ ENV NEXT_PUBLIC_RELEASE=$NEXT_PUBLIC_RELEASE
 # The migrator first, so the layer that changes least often sits lowest: it is
 # invalidated by the lockfile and by `packages/`, not by an app change.
 WORKDIR /migrator
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY --chown=node:node package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # Every workspace manifest, because `--frozen-lockfile` verifies the lockfile
 # against the whole workspace and not against the one project being filtered.
-COPY apps/web/package.json ./apps/web/package.json
-COPY packages ./packages
+COPY --chown=node:node apps/web/package.json ./apps/web/package.json
+COPY --chown=node:node packages ./packages
 
 # `--filter @repo/domain` and not `@repo/domain...`: the CLI's import graph is
 # `#migrate` → `drizzle-orm`, `pg`, `#config` → `@repo/errors` (which has no
@@ -133,8 +133,21 @@ RUN --mount=type=bind,from=store,source=/pnpm/store,target=/pnpm/store,rw \
 # inside it, so it is a second COPY — miss it and the app serves HTML with no
 # CSS or JS, which looks like a styling bug rather than a packaging one.
 WORKDIR /app
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+
+# **Not root.** `node:24-slim` defaults to UID 0, and the process this image
+# exists to run is the one facing the internet. As root, any arbitrary-write bug
+# in the Next server is also a write to `server.js` and `.next/**` — a backdoor
+# that survives every restart within the machine's life — and a read of
+# `/proc/1/environ`, which is where Fly's init holds every secret. As UID 1000
+# the same bug has no write primitive and cannot read another user's process
+# environment. The base image already ships this user; it was simply unused.
+#
+# `--chown` on the COPYs rather than a `RUN chown -R`: the recursive form
+# rewrites every file into a new layer, which on the standalone tree is most of
+# the image.
+USER node
 
 EXPOSE 3000
 
@@ -144,4 +157,21 @@ EXPOSE 3000
 # of these from the environment.
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-CMD ["node", "apps/web/server.js"]
+
+# **The server does not get the migration credential**, and this is the line that
+# takes it away.
+#
+# `@repo/domain` keeps two connections apart — pooled for requests, direct for
+# migrations (DD2) — and production backs that with two PlanetScale roles: `app`
+# inherits `pg_read_all_data`/`pg_write_all_data` and is refused `CREATE` and
+# `DROP`, while `migrations` inherits `postgres` and can do DDL. But **Fly
+# secrets are app-wide**, so `DIRECT_DATABASE_URL` lands in every process's
+# environment, and a boundary enforced by `exports` maps and module resolution
+# (ADR-0010, ADR-0013) is worth nothing to code that is already executing:
+# `process.env.DIRECT_DATABASE_URL` plus the `pg` already in the bundle is two
+# lines to a connection with `DROP TABLE` on it.
+#
+# The release command is a **separate command on a separate machine**, so it
+# still receives the variable and migrations are unaffected. Verified after
+# deploy by reading the server's own environment.
+CMD ["env", "-u", "DIRECT_DATABASE_URL", "node", "apps/web/server.js"]
