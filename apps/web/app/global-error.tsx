@@ -19,8 +19,10 @@
  * The palette clears WCAG 2.2 AA in both schemes on its own — it cannot borrow
  * the token layer's guarantee, because the token layer is not here.
  *
- * **The copy is settled at Design and ships as written.** It is a placeholder —
- * see the "Placeholders to change" table in the repo README.
+ * **The copy here is still English, and so is the palette an open row.** Both
+ * are listed in the repo README under "Still to replace"; the copy is rewritten
+ * in `es-CO` under `docs/policy/voice.md`, and whatever replaces these six hex
+ * values must clear AA in both schemes on its own.
  */
 
 import type { BoundaryError } from "../lib/report-client-error";
