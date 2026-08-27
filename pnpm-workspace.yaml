@@ -46,3 +46,4 @@ minimumReleaseAgeExclude:
 # flip this to `true`, not to unpick anything else.
 allowBuilds:
   "@sentry/cli": false
+  esbuild: false
