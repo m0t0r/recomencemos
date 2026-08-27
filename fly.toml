@@ -55,7 +55,8 @@ force_https = true
 # **Not `auto_stop_machines`.** NFR32 is 99.5% monthly measured by an external
 # probe, and a stopped machine is unavailable for as long as it takes to come
 # back — a cold start this app pays on every request that arrives to a stopped
-# machine, against a budget of about 3h 39m a month.
+# machine, against a budget of 216 minutes a month — NFR32's 0.5%, with the
+# arithmetic in `docs/runbooks/deploy-and-rollback.md` §5.
 auto_stop_machines = false
 auto_start_machines = true
 min_machines_running = 1

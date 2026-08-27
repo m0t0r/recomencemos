@@ -4,7 +4,7 @@
 # is shaped the way it is:
 #
 #   - `next start`, which the machine runs, and
-#   - `node /app/packages/domain/src/migrate/cli.ts`, which Fly's
+#   - `node /migrator/packages/domain/src/migrate/cli.ts`, which Fly's
 #     `release_command` runs before any machine is replaced (DD10).
 #
 # Next's `output: "standalone"` traces only what the **server** imports, and the
@@ -94,6 +94,19 @@ RUN --mount=type=bind,from=store,source=/pnpm/store,target=/pnpm/store,rw \
 # ---------------------------------------------------------------------------
 FROM base AS runner
 ENV NODE_ENV=production
+
+# **The release name travels in the image, not in the machine's environment.**
+#
+# It is a property of the build — this image was built from that commit, and no
+# later deploy can make that untrue — so putting it anywhere else invites the two
+# to disagree. Concretely: a rollback is `fly deploy --image <ref>`, which
+# rebuilds machine configuration from `fly.toml` and the flags given. Pass the
+# release with `--env` at deploy time and a rollback silently drops it, so the
+# restored machine logs `release: "unknown"` — during an incident, which is the
+# one time NFR25's "the two halves disagree" costs something. Declared here, the
+# rolled-back machine reports the release it is actually running.
+ARG NEXT_PUBLIC_RELEASE
+ENV NEXT_PUBLIC_RELEASE=$NEXT_PUBLIC_RELEASE
 
 # The migrator first, so the layer that changes least often sits lowest: it is
 # invalidated by the lockfile and by `packages/`, not by an app change.

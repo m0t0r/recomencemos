@@ -23,6 +23,11 @@ on:
 permissions:
   contents: read
 
+# The deployed origin, written once. `fly.toml` owns the app name; this is the
+# hostname that name produces, and it is needed twice below.
+env:
+  APP_URL: https://recomencemos.fly.dev
+
 # **Never `cancel-in-progress`.** A cancelled deploy is a deploy in an unknown
 # state — bluegreen halfway through, with green machines up and traffic not yet
 # moved. Queue instead, so a second merge waits for the first to finish.
@@ -43,7 +48,7 @@ jobs:
     # an approval later without touching this file.
     environment:
       name: production
-      url: https://recomencemos.fly.dev
+      url: https://recomencemos.fly.dev # `environment:` cannot read `env`, so this one is literal
 
     steps:
       # `fetch-depth: 0` because `scripts/deploy.sh` refuses a commit that is on
@@ -79,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://recomencemos.fly.dev/api/health || true)
+            code=$(curl -s -o /dev/null -w '%{http_code}' "${APP_URL}/api/health" || true)
             [ "$code" = "200" ] && echo "healthy after ${attempt} attempt(s)" && exit 0
             echo "attempt ${attempt}: HTTP ${code}"
             sleep 10
