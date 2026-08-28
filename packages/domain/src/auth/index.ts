@@ -4,11 +4,12 @@
  * **The Better Auth instance never leaves this package**, which is what
  * `## Modules and workspaces` means by _"not exported, therefore unreachable
  * from `apps/web`: the Drizzle schema, the connection, and the Better Auth
- * instance"_. What escapes is the four things a Next.js app actually needs —
- * a request handler, a session read, and the one call each of the two doors
- * makes — so the boundary is a **narrower interface**, not a re-export wearing a
- * different name. `apps/web/domain-boundary.test.ts` asserts both halves against
- * Node's own resolver.
+ * instance"_. What escapes is the five things a Next.js app actually needs —
+ * a request handler, a session read, the one call each of the two doors makes,
+ * and the one call that ends a session — so the boundary is a **narrower
+ * interface**, not a re-export wearing a different name.
+ * `apps/web/domain-boundary.test.ts` asserts both halves against Node's own
+ * resolver.
  *
  * **No browser holds an auth client any more, and that is the point of
  * `startGoogleSignIn`.** DD5 gave `better-auth/react` to `apps/web` as its own
@@ -38,7 +39,7 @@ import {
 } from "#auth/config";
 import { safeReturnPath } from "#auth/return-path";
 import { SHARED_DEVICE_HEADER } from "#auth/sign-in-attempt";
-import { SIGN_IN_FAILED } from "#user-messages";
+import { SIGN_IN_FAILED, SIGN_OUT_FAILED } from "#user-messages";
 
 /**
  * Where a failed verification lands. Owned here rather than by `apps/web`,
@@ -78,6 +79,33 @@ export type RequestMagicLinkOutcome =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: AppError };
 
+export interface SignOutInput {
+  /** The caller's request headers, carrying the session cookie to revoke. */
+  readonly headers: Headers;
+}
+
+/**
+ * What `signOut` answers.
+ *
+ * **`setCookie` is the half a caller must not drop**, for exactly the reason
+ * {@link StartGoogleSignInOutcome} says it: Better Auth writes the *clearing*
+ * `Set-Cookie` onto the response of a call this package makes internally, and a
+ * Server Action does not return that to the browser on its own. A caller that
+ * revokes the row and forgets these leaves the browser holding a cookie that no
+ * longer works but does not go away, so every later request carries a dead
+ * credential until it expires on its own — 8 hours on the shared device this is
+ * most used from.
+ *
+ * **This is single-session, and deliberately so.** `signOutEverywhere` is story
+ * 12's ([#13](https://github.com/m0t0r/recomencemos/issues/13)); it arrives as a
+ * second method on this interface rather than as a flag on this one, so that
+ * ending *this* session can never become ending *every* session by way of a
+ * default someone changed.
+ */
+export type SignOutOutcome =
+  | { readonly ok: true; readonly setCookie: readonly string[] }
+  | { readonly ok: false; readonly error: AppError };
+
 export interface StartGoogleSignInInput {
   /** Her answer to _"este no es mi teléfono"_. */
   readonly sharedDevice: boolean;
@@ -110,10 +138,12 @@ export type StartGoogleSignInOutcome =
 /**
  * The narrow interface `apps/web` holds.
  *
- * Deliberately three methods rather than the Better Auth instance: a route
- * handler, a session read, and one action. Anything a later story needs is a
- * method added here on purpose, which is a review conversation, rather than a
- * capability that arrived because the whole library was in scope.
+ * Deliberately five methods rather than the Better Auth instance: a route
+ * handler, a session read, one call per door in, and one call out. Anything a
+ * later story needs is a method added here on purpose, which is a review
+ * conversation, rather than a capability that arrived because the whole library
+ * was in scope. `signOut` is the worked example — #80 added it and wrote down
+ * why it is not `signOutEverywhere`, which is #13's.
  */
 export interface AuthHandler {
   /**
@@ -140,6 +170,25 @@ export interface AuthHandler {
    * implementation detail of this package.
    */
   readonly startGoogleSignIn: (input: StartGoogleSignInInput) => Promise<StartGoogleSignInOutcome>;
+
+  /**
+   * End **this** session, on the server.
+   *
+   * Added by [#80](https://github.com/m0t0r/recomencemos/issues/80), which is
+   * the ticket that first gave a person anywhere to press _Salir_. It is a
+   * method on this interface rather than a native `<form>` POST to the mounted
+   * `/api/auth/*` catch-all because the shell's Server Action has to authorize
+   * independently first, and because the narrow interface is where a later
+   * reader looks for the capability — a door that exists only as a URL is a door
+   * nobody finds.
+   *
+   * **It revokes the row.** Better Auth deletes the session record, so a cookie
+   * kept from before the call is refused rather than merely absent from the
+   * browser that had it. That distinction is the whole point on a shared device:
+   * `sign-out.integration.test.ts` replays the old cookie precisely because a
+   * cookie-deletion-only implementation passes every other assertion.
+   */
+  readonly signOut: (input: SignOutInput) => Promise<SignOutOutcome>;
 }
 
 /**
@@ -214,6 +263,81 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
         signInMethod: String((result.session as { signInMethod?: unknown }).signInMethod ?? ""),
         expiresAt: result.session.expiresAt,
       };
+    },
+
+    async signOut({ headers }) {
+      try {
+        const auth = await resolve();
+
+        /**
+         * `returnHeaders` for the same reason `signInSocial` needs it: the
+         * clearing `Set-Cookie` is written onto this endpoint's response, and
+         * without asking for it the header is built and dropped.
+         */
+        const { headers: responseHeaders } = await auth.api.signOut({
+          headers,
+          returnHeaders: true,
+        });
+
+        /**
+         * **Better Auth reports success even when the row survives, so the
+         * revocation is confirmed here rather than assumed.**
+         *
+         * Read out of `better-auth@1.7.1/dist/api/routes/sign-out.mjs`, not
+         * recalled: the endpoint carries **no middleware**, and its delete is
+         *
+         * ```js
+         * if (sessionCookieToken) try {
+         *   await ctx.context.internalAdapter.deleteSession(sessionCookieToken);
+         * } catch (e) {
+         *   ctx.context.logger.error("Failed to delete session from database", e);
+         * }
+         * deleteSessionCookie(ctx);
+         * ```
+         *
+         * The `catch` logs and does not rethrow, and the cookie is cleared
+         * either way. So a database fault mid-sign-out returns `{success:
+         * true}` with the session row still live — which is Better Auth
+         * degrading to **exactly cookie deletion alone**, the one thing AC 2 of
+         * [#80](https://github.com/m0t0r/recomencemos/issues/80) forbids. The
+         * browser looks signed out; anyone holding the cookie is not.
+         *
+         * That matters most in the case this method exists for: a Worker on a
+         * borrowed phone, told she is out, handing back a device that is still
+         * hers to anyone who kept the cookie.
+         *
+         * **This read is authoritative because DD5 disables the session cookie
+         * cache** (NFR13: _"Any session cookie cache is off, or every revocation
+         * here … lags by its TTL"_). With it on, this check would read the same
+         * stale cache the revocation was supposed to invalidate and would agree
+         * with a lie.
+         */
+        if (await auth.api.getSession({ headers })) {
+          throw new Error(
+            "better-auth reported a successful sign-out but the session is still resolvable; " +
+              "its deleteSession failure is logged and swallowed, so the row survived",
+          );
+        }
+
+        return { ok: true, setCookie: responseHeaders.getSetCookie() };
+      } catch (cause) {
+        return {
+          ok: false,
+          error: new AppError({
+            code: "sign_out_failed",
+            status: 502,
+            message:
+              "Revoking the session failed, so the session row is still live and the caller's " +
+              "cookie still works. The surface says so rather than showing her signed out, " +
+              "because on a shared device an optimistic sign-out is the failure that matters.",
+            userMessage: SIGN_OUT_FAILED,
+            // No cookie, no token, no address — NFR18. There is nothing to
+            // identify here that is not a credential, so the context is empty
+            // rather than padded with something that looks like evidence.
+            cause,
+          }),
+        };
+      }
     },
 
     async requestMagicLink({ email, sharedDevice, returnPath, headers }) {
