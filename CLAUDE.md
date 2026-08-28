@@ -65,8 +65,11 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
 - `@repo/design-system:test` — `vitest run`, **happy-dom**, React Testing Library. Config in `vitest.config.mts`, cleanup between tests in `vitest.setup.ts`.
 - `@repo/errors:test` — `vitest run`, **Node default environment**, no plugin and no setup file. The prior art for a Node package here: a `vitest.config.mts` carrying `resolve.tsconfigPaths`, `globals`, and an `include` glob, and nothing else.
 - `@repo/observability:test` — `vitest run`, Node environment, the same minimal config as `@repo/errors`. It is the **stdout seam**: a test that asserts on a _line_ builds a `pino` instance from `createLoggerOptions` over an in-memory `Writable`, and pino's own test utility is deliberately unused because it asserts on `pid`/`hostname` before stripping them, which these options replace. The two modules that emit no line — the report seam and the trace-context reader — are tested against the real SDK with no client initialised, which is a real state this repo runs in rather than a mock.
-- `@repo/domain:test` — `vitest run`, Node environment, and **two seams in one config** (spec 0002, `## Testing Decisions`). Seam 1 is pure — the connection-string resolvers, the server-only backstop — in the same minimal shape `@repo/errors` set. Seam 2 runs against **PGlite in-process**, replaying the **committed migrations** rather than a `CREATE TABLE` written for tests, which is the whole reason it is a seam and not a mock. Its `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows. PGlite 0.5.7 reports **PostgreSQL 18.3** against PlanetScale's 18.4 — read out of the running engine by the suite itself, so the claim cannot go stale silently.
-- `web:test` — `vitest run`, **happy-dom**, the design system's config copied per the paragraph below. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`.
+- `@repo/domain:test` — `vitest run`, Node environment, and **two seams as two Vitest projects** in one config (spec 0002, `## Testing Decisions`). Seam 1 is pure — the connection-string resolvers, the server-only backstop — in the same minimal shape `@repo/errors` set. Seam 2 runs against **PGlite in-process**, replaying the **committed migrations** rather than a `CREATE TABLE` written for tests, which is the whole reason it is a seam and not a mock. PGlite 0.5.7 reports **PostgreSQL 18.3** against PlanetScale's 18.4 — read out of the running engine by the suite itself, so the claim cannot go stale silently.
+  - **The filename is the seam.** `src/**/*.integration.test.ts` is seam 2; every other `*.test.ts` is seam 1. The projects exist so that `globalSetup` applies only to the files that need it — it is per-config, so before the split a run touching only the pure resolvers still replayed every migration into PGlite and dumped a data directory before the first assertion. `pnpm exec vitest --project seam-1` is now a real thing to run while iterating on a pure function.
+  - **The database arrives as a `test.extend` fixture, not as hooks.** Import `test` from `#testing/fixtures` in an `*.integration.test.ts` and destructure `{ database }`; the restore-and-close lifecycle is the fixture's. Three files used to open with the identical `let database` / `beforeEach` / `afterEach`. The fixture lives in `#testing/fixtures` and **not** in `#testing/database` on purpose: `global-setup.ts` imports the latter for `SNAPSHOT_PATH`, and a `test.extend` at that module's top level aborts the run with _"Vitest failed to find the current suite"_ because `globalSetup` runs with no suite. The globals stay — this replaces `describe`/`it`/`expect` with nothing.
+  - `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows.
+- `web:test` — `vitest run`, **happy-dom**, the design system's config copied per the paragraph below, plus `vitest.setup.ts`. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`. Its setup file registers **`toMatchSchema`** from `apps/web/testing/matchers.ts` — a custom matcher taking a **Standard Schema** rather than a Zod schema, so nothing in a test has an opinion about the validation library. Reach for a matcher over a helper when the assertion's failure message is the thing worth owning: `expect(x).toBe(true)` on a `safeParse` result reports `false is not true` and names neither the rule nor the value.
 - `//#test:gates` — `gate-test.sh`, the 120 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the two gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and both scripts.
   - The **dependency audit** (`scripts/audit-direct.mjs`), thirteen cases. Five exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0.
   - **Migration integrity** (`scripts/migration-integrity.mjs`), forty-three cases across NFR30's four counts — an append-only journal, immutable shipped migrations, destructive statements travelling alone under a `contract` marker, and a marked migration never sharing a pull request with `@repo/domain`'s query modules. Its fixtures are real git repositories, because the gate's whole frame is `git merge-base <base branch> HEAD` and there is nothing left to mock that would still be the thing under test. Ten of the forty-three are a section of their own — holes `/code-review` found in the first draft, four of which passed green while checking nothing. Read them before touching the SQL scan: an escaped quote that swallowed the rest of the file, and an `ALTER TABLE` whose comma-separated actions hid a `DROP` beside an `ADD`. **`run_mig` unsets `GITHUB_BASE_REF` for every case**, and that is load-bearing: CI sets it on a `pull_request` event, the gate reads it ahead of `origin/HEAD`, and a fixture is a different repository with no such ref — thirty-five cases went red on the first CI run for exactly that.
@@ -131,6 +134,41 @@ that does.
 ## Architecture
 
 Workspaces are declared in `pnpm-workspace.yaml` (`apps/*`, `packages/*`) and referenced across packages as `workspace:*`. Guidance for `packages/design-system` — including the single Tailwind v4 stylesheet it owns, whose `@source` globs a new app workspace must be added to — lives in `packages/design-system/CLAUDE.md`; `apps/web`'s Cache Components rules live in `apps/web/AGENTS.md`.
+
+**A surface under `app/` is a folder, not a pile of files.** A route directory holds `page.tsx` and
+`actions.ts` — the two things the framework and the network reach — and everything else sits in a
+Next **private folder** (`_`-prefixed, so it is excluded from routing):
+
+```
+app/(auth)/sign-in/
+  page.tsx                        # the route, and nothing else
+  actions.ts                      # "use server"; one file, however many actions
+  _components/{sign-in-form,google-mark}.tsx
+  _lib/{schema,messages,use-sign-in}.ts
+```
+
+Route groups (`(auth)`) carry no URL segment and exist to group surfaces that share a shape. The
+split is by **role**, not by kind: `_lib` holds what the surface knows (its schema, its Spanish, its
+client machine) and `_components` holds what it renders. The flat twelve-file `app/sign-in/` this
+replaced is the shape to avoid, and it is why `/code-review` should flag a route directory growing
+past its two files plus two folders.
+
+**Every Server Action is built from `apps/web/lib/safe-action.ts`.** That module holds
+`actionClient`, the `handleServerError` bridge from `AppError` to the client envelope,
+`returnActionError` for an expected refusal, and `rateLimit` — NFR26's ceilings as `useValidated`
+middleware an action opts into by naming its principals. Three rules, all in
+[ADR-0015](docs/adr/0015-both-doors-are-server-actions-and-the-browser-holds-no-auth-client.md):
+
+- **`.stateAction()` + React's `useActionState`.** Never next-safe-action's `useStateAction` or
+  `useAction` — the vendor's own form guide marks both as not working without JavaScript, which
+  would put NFR4 out of reach.
+- **`returnActionError` for an expected refusal; `throw` for the unexpected.** That is "thrown is
+  reported; returned is logged" made structural — a thrown error reaches `handleServerError` and
+  costs a Sentry event, a returned one bypasses it and costs one `warn` line.
+- **Values that travel with a submit but are not typed into it are bound arguments**, not hidden
+  inputs. `action.bind(null, returnPath, sharedDevice)` with `bindArgsSchemas` is typed, validated on
+  arrival, encoded by React, and survives with JavaScript unavailable. A hidden `<input>` mirroring a
+  piece of client state is the shape to replace.
 
 **`@repo/errors` has no `dependencies` key, and that absence is the design.** It is isomorphic — importable from a Server Component, a Client Component, a Route Handler, a Server Action, or either instrumentation entry point — and the empty dependency list is what _enforces_ that rather than documenting it: a stray `import pino` there fails to resolve under pnpm's isolated store, where a semantic subpath in a single package would only fail a `.next/static` grep after the fact. Never add a runtime dependency to it. Anything needing one belongs in a server-only package instead — which is what `@repo/observability` is.
 
@@ -281,6 +319,12 @@ every clone's drain queries bind to them, and no clone can be migrated by us.
 
 ## Things to get right
 
+- **No `apps/web` module may import `better-auth/react`, and nothing in a browser holds an auth client**
+  ([ADR-0015](docs/adr/0015-both-doors-are-server-actions-and-the-browser-holds-no-auth-client.md)).
+  Both sign-in doors are Server Actions calling `@repo/domain/auth-handler`. The vendor adapter
+  `@next-safe-action/adapter-better-auth` cannot be used here either — it takes the Better Auth
+  _instance_, which ADR-0010 withholds — so an authenticated action gets a local middleware over
+  `AuthHandler.getSession`. `sign-in-form.test.tsx` asserts the first half over the surface's source.
 - **Spanish is the interface; English is the code** ([ADR-0012](docs/adr/0012-spanish-is-the-interface-english-is-the-code.md)). `es-CO` is the product's only language and it governs **only what a person reads**. Every identifier you type is English: route segments, file and directory names, database tables and columns, enum values, query parameters, API field names, log `event` names, test names, branch names. The line is **identifier versus value** — `Skill.labelEs` is an English column holding a Spanish string. So the route is `/offers`, the table is `offer`, the entity is `Offer`, and the page says _Propuesta_. This is written down because effort 0002's spec routed the entire product in Spanish — `/perfiles`, `/publicar`, `app/mi-perfil/page.tsx` — through the API contract and the deep dives before a human caught it. `CONTEXT.md`'s glossary gives every term both names; use the English one everywhere except the rendered string.
 - `apps/web/app/layout.tsx` carries the product's metadata and `lang="es-CO"`. The `lang` attribute is not decoration: every string below it is Spanish, and a wrong `lang` has a screen reader announce Spanish with English phonemes.
 - `apps/web/app/page.tsx` is a **holding page**, not the Wall. Story 4 ([#21](https://github.com/m0t0r/recomencemos/issues/21)) replaces it. It deliberately makes no claim about verification or money — those are story 11's two standing notices ([#22](https://github.com/m0t0r/recomencemos/issues/22)), and a half-version anywhere else gives them a second source.

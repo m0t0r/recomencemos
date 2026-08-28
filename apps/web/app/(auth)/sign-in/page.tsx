@@ -20,8 +20,8 @@ import { Card } from "@repo/design-system/components/card";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { googleSignInAvailable } from "../../lib/auth";
-import { SignInForm } from "./sign-in-form";
+import { googleSignInAvailable } from "../../../lib/auth";
+import { SignInForm } from "./_components/sign-in-form";
 
 export const metadata: Metadata = {
   title: "Entrar — Recomencemos",
@@ -50,17 +50,16 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
       googleAvailable={googleSignInAvailable()}
       /*
         Passed through as she sent it and validated **server-side**, never here:
-        this renders into a hidden field, and a check performed at render is a
-        check an attacker posts straight past.
+        this becomes a bound argument on both actions, and a check performed at
+        render is a check an attacker posts straight past.
 
         **The two doors are guarded by two different things**, which is worth
-        knowing before trusting either. The magic link goes through the Server
-        Action to `safeReturnPath` in `@repo/domain`, which *coerces* anything
-        unsafe to `/` and signs her in. The Google door hands `returnPath`
-        straight to `authClient.signIn.social({ callbackURL })`, so what rejects
-        `//evil.co` there is Better Auth's own relative-path check on
-        `callbackURL` — `/^\/(?!\/|\\|%2f|%5c)[\w\-.\+\/@]*…$/`, read out of
-        `matchesOriginPattern` at 1.7.1 — and it *refuses* with 403
+        knowing before trusting either. Both now run server-side, and both reach
+        `safeReturnPath` in `@repo/domain` — which *coerces* anything unsafe to
+        `/` — but the Google door then hands the coerced value to Better Auth as
+        `callbackURL`, where its own relative-path check applies:
+        `/^\/(?!\/|\\|%2f|%5c)[\w\-.\+\/@]*…$/`, read out of
+        `matchesOriginPattern` at 1.7.1, which *refuses* with 403
         INVALID_CALLBACK_URL rather than coercing.
 
         Both are closed. They are not the same guard and they do not accept the

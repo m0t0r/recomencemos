@@ -20,23 +20,20 @@
 import { eq } from "drizzle-orm";
 import { chargeCeiling, CEILINGS, principalKey } from "#rate-limit";
 import { rateCounter } from "#schema";
-import { restoreDatabase, type TestDatabase } from "#testing/database";
-
-let database: TestDatabase;
-
-beforeEach(async () => {
-  database = await restoreDatabase();
-});
-
-afterEach(async () => {
-  await database.close();
-});
+import { test, type TestDatabase } from "#testing/fixtures";
 
 const ana = { scope: "address", id: "ana@example.co" } as const;
 const noon = new Date("2026-08-27T12:00:00.000Z");
 
-/** Charge the ceiling `times` times at one instant and return the last outcome. */
-async function chargeRepeatedly(times: number, at: Date = noon) {
+/**
+ * Charge the ceiling `times` times at one instant and return the last outcome.
+ *
+ * It takes the database rather than closing over a module-level one, which is
+ * the same shape `chargeCeiling` itself has and what the `database` fixture
+ * requires: the handle now arrives per test, so nothing at module scope holds
+ * one.
+ */
+async function chargeRepeatedly(database: TestDatabase, times: number, at: Date = noon) {
   let outcome = await chargeCeiling(database.db, ana, "requestMagicLink", at);
 
   for (let charge = 1; charge < times; charge += 1) {
@@ -53,21 +50,23 @@ async function chargeRepeatedly(times: number, at: Date = noon) {
 }
 
 describe("chargeCeiling, against the committed migrations", () => {
-  it("allows the first request", async () => {
+  test("allows the first request", async ({ database }) => {
     const outcome = await chargeCeiling(database.db, ana, "requestMagicLink", noon);
 
     expect(outcome.allowed).toBe(true);
   });
 
-  it("allows exactly NFR26's five in an hour and refuses the sixth", async () => {
-    expect((await chargeRepeatedly(CEILINGS.requestMagicLink.address.max)).allowed).toBe(true);
+  test("allows exactly NFR26's five in an hour and refuses the sixth", async ({ database }) => {
+    expect((await chargeRepeatedly(database, CEILINGS.requestMagicLink.address.max)).allowed).toBe(
+      true,
+    );
 
     const sixth = await chargeCeiling(database.db, ana, "requestMagicLink", noon);
     expect(sixth.allowed).toBe(false);
   });
 
-  it("counts on one row per principal, action and window", async () => {
-    await chargeRepeatedly(3);
+  test("counts on one row per principal, action and window", async ({ database }) => {
+    await chargeRepeatedly(database, 3);
 
     const rows = await database.db
       .select()
@@ -80,7 +79,7 @@ describe("chargeCeiling, against the committed migrations", () => {
 
   // The upsert is the mechanism. Two statements race, and the race is won by the
   // caller sending the flood the ceiling exists to bound.
-  it("counts concurrent charges without losing any", async () => {
+  test("counts concurrent charges without losing any", async ({ database }) => {
     const outcomes = await Promise.all(
       Array.from({ length: 5 }, () => chargeCeiling(database.db, ana, "requestMagicLink", noon)),
     );
@@ -95,7 +94,7 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(row?.count).toBe(5);
   });
 
-  it("does not store the address it is charging", async () => {
+  test("does not store the address it is charging", async ({ database }) => {
     await chargeCeiling(database.db, ana, "requestMagicLink", noon);
 
     const rows = await database.db.select().from(rateCounter);
@@ -105,7 +104,7 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(rows[0]?.principal).toMatch(/^address:[0-9a-f]{64}$/);
   });
 
-  it("charges one counter however she capitalised her address", async () => {
+  test("charges one counter however she capitalised her address", async ({ database }) => {
     await chargeCeiling(database.db, ana, "requestMagicLink", noon);
     await chargeCeiling(
       database.db,
@@ -120,8 +119,8 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(rows[0]?.count).toBe(2);
   });
 
-  it("keeps one person's allowance out of another's", async () => {
-    await chargeRepeatedly(6);
+  test("keeps one person's allowance out of another's", async ({ database }) => {
+    await chargeRepeatedly(database, 6);
 
     const other = await chargeCeiling(
       database.db,
@@ -133,8 +132,8 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(other.allowed).toBe(true);
   });
 
-  it("keeps the per-IP allowance separate from the per-address one", async () => {
-    await chargeRepeatedly(6);
+  test("keeps the per-IP allowance separate from the per-address one", async ({ database }) => {
+    await chargeRepeatedly(database, 6);
 
     const byIp = await chargeCeiling(
       database.db,
@@ -146,7 +145,7 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(byIp.allowed).toBe(true);
   });
 
-  it("gives the IP scope NFR26's higher bound", async () => {
+  test("gives the IP scope NFR26's higher bound", async ({ database }) => {
     const ip = { scope: "ip", id: "190.0.2.10" } as const;
 
     for (let charge = 0; charge < CEILINGS.requestMagicLink.ip.max; charge += 1) {
@@ -159,8 +158,8 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect((await chargeCeiling(database.db, ip, "requestMagicLink", noon)).allowed).toBe(false);
   });
 
-  it("starts a fresh allowance in the next window", async () => {
-    await chargeRepeatedly(6);
+  test("starts a fresh allowance in the next window", async ({ database }) => {
+    await chargeRepeatedly(database, 6);
     expect((await chargeCeiling(database.db, ana, "requestMagicLink", noon)).allowed).toBe(false);
 
     const nextHour = new Date("2026-08-27T13:00:00.000Z");
@@ -169,8 +168,8 @@ describe("chargeCeiling, against the committed migrations", () => {
     );
   });
 
-  it("keeps the earlier window's row rather than resetting the counter", async () => {
-    await chargeRepeatedly(2);
+  test("keeps the earlier window's row rather than resetting the counter", async ({ database }) => {
+    await chargeRepeatedly(database, 2);
     await chargeCeiling(database.db, ana, "requestMagicLink", new Date("2026-08-27T13:00:00.000Z"));
 
     const rows = await database.db.select().from(rateCounter);
@@ -181,8 +180,8 @@ describe("chargeCeiling, against the committed migrations", () => {
   // Nothing else deletes from rate_counter, so without this the table accretes
   // one row per principal, action and window forever — and a caller rotating
   // principals mints a permanent row per request.
-  it("sweeps rows old enough that no chargeable window can reach them", async () => {
-    await chargeRepeatedly(2);
+  test("sweeps rows old enough that no chargeable window can reach them", async ({ database }) => {
+    await chargeRepeatedly(database, 2);
 
     const threeHoursLater = new Date("2026-08-27T15:00:00.000Z");
     await chargeCeiling(database.db, ana, "requestMagicLink", threeHoursLater);
@@ -195,16 +194,16 @@ describe("chargeCeiling, against the committed migrations", () => {
 });
 
 describe("what a refusal carries (NFR26, C39)", () => {
-  it("returns the refusal rather than throwing it", async () => {
+  test("returns the refusal rather than throwing it", async ({ database }) => {
     // The whole reason: a thrown refusal on every crawler request spends the
     // month's 5,000-event Sentry allowance in a day.
-    const refusal = await chargeRepeatedly(6);
+    const refusal = await chargeRepeatedly(database, 6);
 
     expect(refusal.allowed).toBe(false);
   });
 
-  it("carries a retryAfter the surface can render", async () => {
-    const refusal = await chargeRepeatedly(6, new Date("2026-08-27T12:48:00.000Z"));
+  test("carries a retryAfter the surface can render", async ({ database }) => {
+    const refusal = await chargeRepeatedly(database, 6, new Date("2026-08-27T12:48:00.000Z"));
 
     expect(refusal.allowed).toBe(false);
     if (refusal.allowed) return;
@@ -214,8 +213,10 @@ describe("what a refusal carries (NFR26, C39)", () => {
     expect(refusal.error.status).toBe(429);
   });
 
-  it("says it in her terms, with her count and the door that is still open", async () => {
-    const refusal = await chargeRepeatedly(6, new Date("2026-08-27T12:48:00.000Z"));
+  test("says it in her terms, with her count and the door that is still open", async ({
+    database,
+  }) => {
+    const refusal = await chargeRepeatedly(database, 6, new Date("2026-08-27T12:48:00.000Z"));
 
     expect(refusal.allowed).toBe(false);
     if (refusal.allowed) return;
@@ -227,8 +228,8 @@ describe("what a refusal carries (NFR26, C39)", () => {
 
   // NFR18. `context` reaches the log line, and an address on a line is a leak
   // whatever key it arrived under.
-  it("keeps the address out of the operator-facing error", async () => {
-    const refusal = await chargeRepeatedly(6);
+  test("keeps the address out of the operator-facing error", async ({ database }) => {
+    const refusal = await chargeRepeatedly(database, 6);
 
     expect(refusal.allowed).toBe(false);
     if (refusal.allowed) return;
@@ -242,7 +243,7 @@ describe("what a refusal carries (NFR26, C39)", () => {
 describe("the CHECK the first ceiling put on rate_counter.action", () => {
   // DD2's rule for an enum-shaped column, and the database refusing what
   // `CEILINGS` does not know.
-  it("refuses an action the registry does not name", async () => {
+  test("refuses an action the registry does not name", async ({ database }) => {
     await expect(
       database.db
         .insert(rateCounter)

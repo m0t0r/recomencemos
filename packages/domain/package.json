@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#auth/*": "./src/auth/*.ts",
     "#auth-schema": "./src/auth-schema.ts",
+    "#auth/*": "./src/auth/*.ts",
     "#column-types": "./src/column-types.ts",
     "#config": "./src/config.ts",
     "#connection": "./src/connection.ts",
@@ -15,6 +15,7 @@
     "#schema": "./src/schema.ts",
     "#server-only": "./src/server-only.ts",
     "#testing/database": "./src/testing/database.ts",
+    "#testing/fixtures": "./src/testing/fixtures.ts",
     "#user-messages": "./src/user-messages.ts"
   },
   "exports": {

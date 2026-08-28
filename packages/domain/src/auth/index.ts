@@ -4,16 +4,27 @@
  * **The Better Auth instance never leaves this package**, which is what
  * `## Modules and workspaces` means by _"not exported, therefore unreachable
  * from `apps/web`: the Drizzle schema, the connection, and the Better Auth
- * instance"_. What escapes is the three things a Next.js app actually needs —
- * a request handler, a session read, and the one call `requestMagicLink` makes —
- * so the boundary is a **narrower interface**, not a re-export wearing a
+ * instance"_. What escapes is the four things a Next.js app actually needs —
+ * a request handler, a session read, and the one call each of the two doors
+ * makes — so the boundary is a **narrower interface**, not a re-export wearing a
  * different name. `apps/web/domain-boundary.test.ts` asserts both halves against
  * Node's own resolver.
  *
- * **`better-auth/react` is `apps/web`'s own dependency and is imported there
- * directly** (DD5). That is what removes the draft's contradiction of a
- * server-only package carrying a browser-reachable subpath: nothing here is
- * client-safe and nothing here needs to be.
+ * **No browser holds an auth client any more, and that is the point of
+ * `startGoogleSignIn`.** DD5 gave `better-auth/react` to `apps/web` as its own
+ * dependency, and until the server-side rework the Google door really was a
+ * `createAuthClient().signIn.social` call from a Client Component. Both doors are
+ * now Server Actions calling this interface, so the browser holds no auth
+ * client, no auth transport, and no knowledge that Better Auth exists.
+ *
+ * **`@next-safe-action/adapter-better-auth` cannot be used here**, and this is
+ * the reason a later session should not reach for it: its signature is
+ * `betterAuth<O>(auth: Auth<O>)` — it takes the Better Auth *instance* and calls
+ * `auth.api.getSession()` on it. That instance is exactly what ADR-0010
+ * withholds, so adopting the adapter means widening this package's `exports` map
+ * and failing `domain-boundary.test.ts`. Its whole body is eighteen lines and
+ * every one of them is satisfiable through `getSession` below, which `apps/web`
+ * already holds.
  */
 
 import { AppError } from "@repo/errors/app-error";
@@ -26,6 +37,7 @@ import {
   MAGIC_LINK_TTL_MINUTES,
 } from "#auth/config";
 import { safeReturnPath } from "#auth/return-path";
+import { SHARED_DEVICE_HEADER } from "#auth/sign-in-attempt";
 import { SIGN_IN_FAILED } from "#user-messages";
 
 /**
@@ -66,6 +78,35 @@ export type RequestMagicLinkOutcome =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: AppError };
 
+export interface StartGoogleSignInInput {
+  /** Her answer to _"este no es mi teléfono"_. */
+  readonly sharedDevice: boolean;
+  /** Where to land afterwards. Validated — see `#auth/return-path`. */
+  readonly returnPath?: string | undefined;
+  /** The caller's request headers, so Better Auth can read origin and IP. */
+  readonly headers: Headers;
+}
+
+/**
+ * What `startGoogleSignIn` answers.
+ *
+ * **`setCookie` is the half a caller must not drop.** Better Auth writes its
+ * OAuth state cookie — and this package writes the shared-device cookie beside
+ * it — onto the *response* of the call, which a Server Action does not
+ * automatically return to the browser. So the header values come back here and
+ * `apps/web` is responsible for putting them on its own response. A caller that
+ * redirects to `url` without writing these gets a `state_mismatch` from the
+ * provider's callback, which is the failure this field exists to prevent.
+ *
+ * Returned rather than written through Better Auth's `nextCookies()` plugin on
+ * purpose: that plugin reaches for `next/headers`, and this package takes no
+ * dependency on the framework — `apps/web` binds it, the same way it binds the
+ * request handler.
+ */
+export type StartGoogleSignInOutcome =
+  | { readonly ok: true; readonly url: string; readonly setCookie: readonly string[] }
+  | { readonly ok: false; readonly error: AppError };
+
 /**
  * The narrow interface `apps/web` holds.
  *
@@ -87,6 +128,18 @@ export interface AuthHandler {
 
   /** The `requestMagicLink` Server Action's one call. */
   readonly requestMagicLink: (input: RequestMagicLinkInput) => Promise<RequestMagicLinkOutcome>;
+
+  /**
+   * The `startGoogleSignIn` Server Action's one call.
+   *
+   * **This method exists so that no browser has to hold an auth client.** It was
+   * `better-auth/react`'s `signIn.social` on a Client Component until the
+   * server-side rework; moving it here removed `createAuthClient`,
+   * `@better-fetch/fetch`, `nanostores` and `defu` from the client graph, and
+   * turned the shared-device header from a browser-facing wire contract into an
+   * implementation detail of this package.
+   */
+  readonly startGoogleSignIn: (input: StartGoogleSignInInput) => Promise<StartGoogleSignInOutcome>;
 }
 
 /**
@@ -214,6 +267,83 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
         };
       }
     },
+
+    async startGoogleSignIn({ sharedDevice, returnPath, headers }) {
+      try {
+        const auth = await resolve();
+
+        /**
+         * **The shared-device answer is set on the headers here, by us.**
+         *
+         * `/sign-in/social`'s request body is a closed Zod schema that strips
+         * unknown keys, so there is no field to put this in — which is why the
+         * carrier is a header at all. What changed with the server-side rework
+         * is *who sets it*: the browser used to, which made the spelling a wire
+         * contract `apps/web` had to pin with a test. Now this package sets it
+         * on a request this package makes, so it is an internal detail of the
+         * hop between here and `#auth/config`'s `before` middleware, and no
+         * caller can supply it.
+         */
+        const forwarded = new Headers(headers);
+        forwarded.set(SHARED_DEVICE_HEADER, sharedDevice ? "1" : "0");
+
+        /**
+         * `returnHeaders` is what makes this callable from a Server Action at
+         * all. Better Auth's OAuth state cookie and the shared-device cookie the
+         * `before` middleware sets are both written onto the endpoint's response
+         * headers; without asking for them they are built and dropped, and the
+         * provider's callback then fails on a state it never received.
+         */
+        const { headers: responseHeaders, response } = await auth.api.signInSocial({
+          body: {
+            provider: "google",
+            callbackURL: safeReturnPath(returnPath),
+            /**
+             * The same reasoning as the magic link's: a refused or abandoned
+             * Google sign-in must land back on `/sign-in`, which is the one
+             * surface that reads `?error=` and can offer her the other door.
+             */
+            errorCallbackURL: SIGN_IN_PATH,
+          },
+          headers: forwarded,
+          returnHeaders: true,
+        });
+
+        /**
+         * `signInSocial` has two branches and only one of them is ours: the
+         * `idToken` branch returns a session and no `url`. This product has no
+         * id-token path, so a missing `url` is a configuration fault rather than
+         * an alternative to handle — and failing loudly here beats redirecting a
+         * Worker to `undefined`.
+         */
+        if (!response.url) {
+          throw new Error("signInSocial returned no authorization URL for the google provider");
+        }
+
+        return {
+          ok: true,
+          url: response.url,
+          setCookie: responseHeaders.getSetCookie(),
+        };
+      } catch (cause) {
+        return {
+          ok: false,
+          error: new AppError({
+            code: "google_sign_in_start_failed",
+            status: 502,
+            message:
+              "Starting the Google sign-in flow failed before the Worker could be redirected to " +
+              "the provider. Nothing was created and no session exists; the surface offers her " +
+              "the email door, which does not depend on this provider being reachable.",
+            userMessage: SIGN_IN_FAILED,
+            // No address and no URL — the authorization URL carries the state
+            // token, which is a credential (NFR18).
+            context: { shared_device: sharedDevice },
+            cause,
+          }),
+        };
+      }
+    },
   };
 
   return built;
@@ -223,9 +353,10 @@ export { googleSignInAvailable, MAGIC_LINK_TTL_MINUTES };
 export type { AuthDependencies, MagicLinkRequest, AuthLogger, AuthEnv } from "#auth/config";
 export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
 /**
- * Published so the browser half has something to be pinned against. It is not
- * *imported* by the Client Component — that would pull `#connection` onto the
- * client graph, which happened once on this surface already — so
- * `shared-device-header.test.ts` asserts the two spellings match instead.
+ * **`SHARED_DEVICE_HEADER` is deliberately no longer exported.** It was
+ * published so `apps/web` had something to pin the browser's spelling against,
+ * back when the browser set it. `startGoogleSignIn` sets it now, on a request
+ * this package makes to itself, so there is no second speller and nothing to
+ * keep in agreement — `apps/web/app/(auth)/sign-in/shared-device-header.ts` and
+ * its test were deleted with the export.
  */
-export { SHARED_DEVICE_HEADER } from "#auth/sign-in-attempt";
