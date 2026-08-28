@@ -29,6 +29,13 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { SessionList } from "./_components/session-list";
+// PROTOTYPE ONLY — both imports leave with the switcher. Does not merge.
+import {
+  PrototypeSessionList,
+  VARIANTS,
+  type Variant,
+} from "./_components/prototype-session-lists";
+import { PrototypeSwitcher } from "./_components/prototype-switcher";
 import { SessionsPanel } from "./_components/sessions-panel";
 import {
   ACCOUNT_PAGE_TITLE,
@@ -38,6 +45,8 @@ import {
   SESSIONS_HEADING,
 } from "./_lib/messages";
 import { toSessionViews } from "./_lib/view";
+
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 export const metadata: Metadata = {
   title: ACCOUNT_PAGE_TITLE,
@@ -56,8 +65,13 @@ export const metadata: Metadata = {
  * refuses a shared cache anyway) and over `[block]`, because the page's heading
  * can paint before the list resolves.
  */
-async function AccountPanel() {
+async function AccountPanel({ searchParams }: { searchParams: SearchParams }) {
   const requestHeaders = await headers();
+  // PROTOTYPE ONLY — `?variant=` picks the list treatment. Does not merge.
+  const variantParam = (await searchParams).variant;
+  const variant: Variant = VARIANTS.includes(variantParam as Variant)
+    ? (variantParam as Variant)
+    : "A";
 
   const [session, sessions] = await Promise.all([
     auth().getSession(requestHeaders),
@@ -101,9 +115,11 @@ async function AccountPanel() {
         </div>
 
         {/* Evidence first, control after — never the other way round. */}
-        <SessionList sessions={views} />
+        <PrototypeSessionList variant={variant} sessions={views} />
         <SessionsPanel otherCount={otherCount} />
       </section>
+
+      <PrototypeSwitcher current={variant} />
     </Card>
   );
 }
@@ -134,12 +150,12 @@ function PanelSkeleton() {
   );
 }
 
-export default function AccountPage() {
+export default function AccountPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <main className="bg-muted flex min-h-svh flex-col items-center px-4 py-12">
       <div className="w-full max-w-md">
         <Suspense fallback={<PanelSkeleton />}>
-          <AccountPanel />
+          <AccountPanel searchParams={searchParams} />
         </Suspense>
       </div>
     </main>
