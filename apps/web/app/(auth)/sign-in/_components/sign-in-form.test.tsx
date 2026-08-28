@@ -32,14 +32,25 @@ import userEvent from "@testing-library/user-event";
  * `.bind(null, returnPath, sharedDevice)` on them — so a recorded call carries
  * the bound arguments ahead of React's own, which is how the two values that
  * used to be hidden inputs are asserted now.
+ *
+ * **`vi.hoisted` is what lets the imports below be static, and it is required
+ * rather than decorative.** `vi.mock` is lifted above every `const` in this
+ * file, so a factory closing over a plain `const requestMagicLink = vi.fn()`
+ * reads it in the temporal dead zone the moment a static import evaluates the
+ * mocked module — `ReferenceError: Cannot access 'requestMagicLink' before
+ * initialization`. This file used to dodge that with `await import(...)`, which
+ * worked only because a dynamic import runs after the module body. `vi.hoisted`
+ * lifts the definitions instead, which is the thing it exists for.
  */
-const requestMagicLink = vi.fn();
-const startGoogleSignIn = vi.fn();
+const { requestMagicLink, startGoogleSignIn } = vi.hoisted(() => ({
+  requestMagicLink: vi.fn(),
+  startGoogleSignIn: vi.fn(),
+}));
 
 vi.mock("../actions", () => ({ requestMagicLink, startGoogleSignIn }));
 
-const { SignInForm } = await import("./sign-in-form");
-const {
+import { SignInForm } from "./sign-in-form";
+import {
   EMAIL_DOOR_PRECONDITION,
   EMAIL_LOOKS_WRONG,
   GOOGLE_ACCOUNT_NOTICE,
@@ -47,7 +58,7 @@ const {
   RESEND_LINK_BUTTON,
   SEND_LINK_BUTTON,
   SHARED_DEVICE_LABEL,
-} = await import("../_lib/messages");
+} from "../_lib/messages";
 
 beforeEach(() => {
   requestMagicLink.mockReset();
@@ -191,13 +202,15 @@ describe("what she is told on the way back", () => {
   // The live region is what a screen reader hears, and focus lands on it rather
   // than on the field — what happened, before where to fix it.
   it("puts every outcome in one polite live region", () => {
-    const { container } = renderForm({ error: "INVALID_TOKEN" });
-    const region = container.querySelector('[aria-live="polite"]');
+    renderForm({ error: "INVALID_TOKEN" });
+    // `role="status"` is the region, and asking for it by role is what proves it
+    // is in the accessibility tree at all — an `aria-live` attribute on a div
+    // with no role is reachable by CSS selector and by nothing a user has.
+    const region = screen.getByRole("status");
 
-    expect(region).toBeTruthy();
-    expect(region?.textContent).toContain("ya se usó");
+    expect(region).toHaveTextContent("ya se usó");
     // Focusable programmatically, but not in the tab order.
-    expect(region?.getAttribute("tabindex")).toBe("-1");
+    expect(region).toHaveAttribute("tabindex", "-1");
   });
 });
 
@@ -234,7 +247,7 @@ describe("client-side validation", () => {
 
   it("marks the field invalid for a screen reader, not only in colour", async () => {
     const user = userEvent.setup();
-    const { container } = renderForm();
+    renderForm();
 
     await user.type(screen.getByRole("textbox"), "ana");
     await user.click(screen.getByRole("button", { name: SEND_LINK_BUTTON }));
@@ -250,11 +263,7 @@ describe("client-side validation", () => {
      * screen reader following a dangling `aria-describedby` finds nothing, and
      * NFR20 is WCAG 2.2 AA.
      */
-    const describedBy = input.getAttribute("aria-describedby");
-    expect(describedBy).toBeTruthy();
-    expect(container.querySelector(`#${CSS.escape(describedBy ?? "")}`)?.textContent).toBe(
-      EMAIL_LOOKS_WRONG,
-    );
+    expect(input).toHaveAccessibleDescription(EMAIL_LOOKS_WRONG);
   });
 
   /**
@@ -270,7 +279,7 @@ describe("client-side validation", () => {
       validationErrors: { email: { _errors: ["rejected by the server"] } },
     });
 
-    const { container } = renderForm();
+    renderForm();
 
     await user.type(screen.getByRole("textbox"), "ana@example.co");
     await user.click(screen.getByRole("button", { name: SEND_LINK_BUTTON }));
@@ -278,11 +287,7 @@ describe("client-side validation", () => {
     const input = await screen.findByRole("textbox");
     await waitFor(() => expect(input.getAttribute("aria-invalid")).toBe("true"));
 
-    const describedBy = input.getAttribute("aria-describedby");
-    expect(describedBy).toBeTruthy();
-    expect(container.querySelector(`#${CSS.escape(describedBy ?? "")}`)?.textContent).toBe(
-      EMAIL_LOOKS_WRONG,
-    );
+    expect(input).toHaveAccessibleDescription(EMAIL_LOOKS_WRONG);
   });
 
   // A valid submit is never intercepted, so the server still performs the parse
@@ -314,6 +319,13 @@ describe("the form before hydration", () => {
    * second source for a value that already travels.
    */
   it("keeps a native action and a named email field", () => {
+    // **The one place a raw DOM query is the right tool, and the rule is in
+    // `CLAUDE.md`.** "Are there two `<form>` elements, each with an `action`?"
+    // is a question about the HTML that survives with no JavaScript, not about
+    // the accessibility tree — a `<form>` has no implicit role until it carries
+    // an accessible name, and giving it one purely so a test could ask for it
+    // would be markup written for the test. Everything a role query *can*
+    // answer is asked that way instead.
     const { container } = renderForm();
     const forms = container.querySelectorAll("form");
 
@@ -321,10 +333,13 @@ describe("the form before hydration", () => {
     expect(forms.length).toBe(2);
     for (const form of forms) expect(form.getAttribute("action")).toBeTruthy();
 
-    expect(container.querySelector('input[name="email"]')).toBeTruthy();
+    expect(screen.getByRole("textbox")).toHaveAttribute("name", "email");
   });
 
   it("carries no hidden inputs at all", () => {
+    // The same escape hatch, and the clearest case for it: a hidden input has no
+    // accessible role *by definition*, so its absence is unassertable through
+    // any query built on the accessibility tree.
     const { container } = renderForm();
 
     expect(container.querySelectorAll('input[type="hidden"]').length).toBe(0);

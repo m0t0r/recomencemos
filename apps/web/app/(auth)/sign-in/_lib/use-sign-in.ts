@@ -132,7 +132,7 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
   /**
    * Focus moves to what happened, not to where to fix it. A screen-reader user
    * dropped straight into the field hears the field and has to go looking for
-   * the reason it is still there. The region is `aria-live` too, so a change
+   * the reason it is still there. The region is `role="status"` too, so a change
    * nobody is focused on is still announced.
    */
   useEffect(() => {
@@ -173,8 +173,16 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
  * status code.** `lib/safe-action.ts` puts that field on the error precisely so
  * this decision is a property read rather than a string match, and so the number
  * C39 asks the surface to render is carried as a number.
+ *
+ * **Exported for its own test, and it is the only export here that is.** The
+ * hook around it is covered through the component that renders it, which is
+ * where its `useActionState` wiring and its focus effect actually run. This
+ * function is the part that has a *rule* rather than a wiring — an ordering
+ * between five outcomes, argued above and asserted nowhere until
+ * `use-sign-in.test.ts`. It is pure, it needs no DOM, and the ordering is the
+ * thing that would break silently.
  */
-function feedbackFor(
+export function feedbackFor(
   result: SignInResult,
   arrival: { consumedLink: boolean; googleFailed: boolean },
 ): Feedback | undefined {

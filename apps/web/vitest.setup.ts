@@ -1,5 +1,12 @@
 import { cleanup } from "@testing-library/react";
 
+// jest-dom's matchers, for the whole suite. They are what let an accessibility
+// assertion be written as the question it actually is: `toHaveAccessibleDescription`
+// resolves `aria-describedby` to the text a screen reader would announce, which
+// this suite previously hand-rolled as `container.querySelector('#' + id)`.
+// oxlint-disable-next-line import/no-unassigned-import
+import "@testing-library/jest-dom/vitest";
+
 // Custom matchers, registered for every file in this suite. A side-effect import
 // is the shape a matcher module has to have — `expect.extend` runs at module
 // scope and there is nothing to bind — so the rule is disabled here, with a
