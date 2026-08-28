@@ -21,7 +21,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 /**
@@ -117,12 +117,12 @@ describe("the shared-device checkbox", () => {
    */
   it("carries own-device to the email door while unticked", async () => {
     const user = userEvent.setup();
-    renderForm({ returnPath: "/mi-perfil" });
+    renderForm({ returnPath: "/profile" });
 
     await user.type(screen.getByRole("textbox"), "ana@example.co");
     await user.click(screen.getByRole("button", { name: SEND_LINK_BUTTON }));
 
-    expect(requestMagicLink.mock.calls[0]?.slice(0, 2)).toEqual(["/mi-perfil", false]);
+    expect(requestMagicLink.mock.calls[0]?.slice(0, 2)).toEqual(["/profile", false]);
   });
 
   it("carries shared-device to the email door once ticked", async () => {
@@ -234,14 +234,55 @@ describe("client-side validation", () => {
 
   it("marks the field invalid for a screen reader, not only in colour", async () => {
     const user = userEvent.setup();
-    renderForm();
+    const { container } = renderForm();
 
     await user.type(screen.getByRole("textbox"), "ana");
     await user.click(screen.getByRole("button", { name: SEND_LINK_BUTTON }));
 
     const input = screen.getByRole("textbox");
     expect(input.getAttribute("aria-invalid")).toBe("true");
-    expect(input.getAttribute("aria-describedby")).toBeTruthy();
+
+    /**
+     * **The target has to resolve, not merely exist.** This assertion used to be
+     * `toBeTruthy()` on the attribute, which passes while pointing at an id
+     * nothing rendered — and review found exactly that state was reachable when
+     * the server rejected an address and the client had no error of its own. A
+     * screen reader following a dangling `aria-describedby` finds nothing, and
+     * NFR20 is WCAG 2.2 AA.
+     */
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`#${CSS.escape(describedBy ?? "")}`)?.textContent).toBe(
+      EMAIL_LOOKS_WRONG,
+    );
+  });
+
+  /**
+   * **The state the dangling `aria-describedby` was reachable in.** The server
+   * rejects the address and the client has no error of its own — which is every
+   * refusal when JavaScript is unavailable, and any case where the two parses
+   * disagree. Before the fix the field was marked invalid and pointed at an id
+   * nothing had rendered.
+   */
+  it("names the server's rejection where aria-describedby points", async () => {
+    const user = userEvent.setup();
+    requestMagicLink.mockResolvedValue({
+      validationErrors: { email: { _errors: ["rejected by the server"] } },
+    });
+
+    const { container } = renderForm();
+
+    await user.type(screen.getByRole("textbox"), "ana@example.co");
+    await user.click(screen.getByRole("button", { name: SEND_LINK_BUTTON }));
+
+    const input = await screen.findByRole("textbox");
+    await waitFor(() => expect(input.getAttribute("aria-invalid")).toBe("true"));
+
+    const describedBy = input.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`#${CSS.escape(describedBy ?? "")}`)?.textContent).toBe(
+      EMAIL_LOOKS_WRONG,
+    );
   });
 
   // A valid submit is never intercepted, so the server still performs the parse
@@ -344,15 +385,6 @@ function code(source: string): string {
 
 describe("no auth client reaches the browser", () => {
   const root = join(import.meta.dirname, "..");
-  /**
-   * **Comments are stripped before matching, and that is not a convenience.**
-   * The first version of this guard failed on `actions.ts`, whose doc comment
-   * explains that the door "was `createAuthClient().signIn.social(...)` from a
-   * Client Component" — prose about the thing being banned, read as the thing
-   * itself. It is the same false-positive class `gate-lib.sh` strips heredocs
-   * for: a rule that refuses the sentence documenting it teaches everyone to
-   * stop writing the sentence.
-   */
   it.each(sourcesUnder(root).map((path) => [path.slice(root.length + 1), path]))(
     "%s imports no auth client",
     (_name, path) => {

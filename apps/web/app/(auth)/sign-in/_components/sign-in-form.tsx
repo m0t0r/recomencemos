@@ -49,6 +49,7 @@ import {
   DOOR_DIVIDER,
   EMAIL_DOOR_PRECONDITION,
   EMAIL_LABEL,
+  EMAIL_LOOKS_WRONG,
   GOOGLE_ACCOUNT_NOTICE,
   GOOGLE_BUTTON,
   RESEND_LINK_BUTTON,
@@ -57,7 +58,7 @@ import {
   SHARED_DEVICE_LABEL,
   SIGN_IN_TITLE,
 } from "../_lib/messages";
-import { emailField, emailFieldOnBlur } from "../_lib/schema";
+import { emailField, emailFieldOnBlur, requestMagicLinkSchema } from "../_lib/schema";
 import { useSignIn } from "../_lib/use-sign-in";
 import { GoogleMark } from "./google-mark";
 
@@ -141,13 +142,23 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
         <form
           action={machine.formAction}
           /*
-            Runs before the action. The browser answers with the same schema the
-            server will, so an address it already knows is wrong costs her no
-            round trip — and a valid one is never intercepted, so the server
-            still performs the parse that actually decides.
+            Runs before the action, and answers with **the same schema, over the
+            same bytes**: `new FormData(event.currentTarget)` is what the Server
+            Action is about to receive, and `requestMagicLinkSchema` is what it
+            will parse it with. So an address the browser already knows is wrong
+            costs her no round trip, and a valid one is never intercepted — the
+            server still performs the parse that actually decides.
+
+            Reading the form rather than `form.state.values` is deliberate. The
+            two agree today because the input is controlled, but they are two
+            sources for one question, and the one that matters is the one that
+            will be posted. Review named the divergence; this removes it rather
+            than documenting it.
           */
           onSubmit={(event) => {
-            if (emailField.safeParse(form.state.values.email).success) return;
+            if (requestMagicLinkSchema.safeParse(new FormData(event.currentTarget)).success) {
+              return;
+            }
 
             event.preventDefault();
             void form.handleSubmit();
@@ -183,9 +194,25 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
                 // either one marks the field. Hers arrives instantly; the
                 // server's is the one that counts.
                 const clientError = field.state.meta.errors[0];
-                const invalid = machine.emailRejected || Boolean(clientError);
+
+                /**
+                 * **The message and the invalid flag are derived from the same
+                 * thing, and that is a fix rather than a simplification.** They
+                 * used to be computed separately: `invalid` counted the server's
+                 * verdict, `message` did not, and a server rejection with no
+                 * client error therefore set `aria-describedby` to the id of an
+                 * element that was never rendered. A screen reader following it
+                 * finds nothing — NFR20 is WCAG 2.2 AA, and a dangling
+                 * `aria-describedby` fails it while looking correct in the DOM.
+                 *
+                 * That state is reachable: with JavaScript unavailable no client
+                 * validator ever runs, so every refusal is the server's.
+                 */
                 const message =
-                  typeof clientError === "string" ? clientError : clientError?.message;
+                  (typeof clientError === "string" ? clientError : clientError?.message) ??
+                  (machine.emailRejected ? EMAIL_LOOKS_WRONG : undefined);
+
+                const invalid = message !== undefined;
 
                 return (
                   <>
@@ -204,9 +231,9 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
                       aria-invalid={invalid}
                       aria-describedby={invalid ? emailErrorId : undefined}
                     />
-                    {invalid && message ? (
+                    {message === undefined ? null : (
                       <FieldError id={emailErrorId}>{message}</FieldError>
-                    ) : null}
+                    )}
                   </>
                 );
               }}

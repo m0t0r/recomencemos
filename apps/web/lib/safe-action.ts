@@ -26,7 +26,7 @@ import "server-only";
  * it. Do not swap `useActionState` for `useStateAction` to gain the callbacks.
  */
 
-import { AppError, type ClientError, projectClientError } from "@repo/errors/app-error";
+import { type ClientError, projectClientError } from "@repo/errors/app-error";
 import {
   type CeilingedAction,
   type CeilingPrincipal,
@@ -40,6 +40,7 @@ import {
   returnServerError,
 } from "next-safe-action";
 import { headers } from "next/headers";
+import { clientIp } from "./client-ip";
 
 /**
  * What a failed action puts on the wire.
@@ -83,44 +84,6 @@ function handleServerError(error: Error): ActionError {
 }
 
 export const actionClient = createSafeActionClient({ handleServerError });
-
-/**
- * Who NFR26's per-IP half is charged against.
- *
- * **`Fly-Client-IP` first**, because it is set by Fly's proxy to the address it
- * actually observed, is always a single value, and cannot be chosen by the
- * caller — the same reason `#auth/config` puts it first for Better Auth's own
- * limiter, so the two resolvers agree on who a request is.
- *
- * The `x-forwarded-for` fallback reads the **last entry, not the first**: that
- * header is a list each proxy *appends* to, so the leftmost entry is whatever
- * the original caller sent, and charging it would make the ≤ 20/hour bound
- * defeatable by putting a fresh value in a header. With one trusted proxy in
- * front, the rightmost entry is the only one nobody downstream can choose.
- *
- * **An absent header charges a shared bucket rather than skipping the charge.**
- * NFR26 says the counter *fails closed*, and returning "no principal" here used
- * to mean the per-IP ceiling silently did not apply — so stripping the header
- * removed the bound entirely. Every header-less caller now shares one counter:
- * bounded together, which is the closed answer, and harmless in development
- * where there is no proxy and one person.
- */
-const NO_PROXY_PRINCIPAL = "no-forwarded-for";
-
-export function clientIp(requestHeaders: Headers): string {
-  const flyClientIp = requestHeaders.get("fly-client-ip")?.trim();
-  if (flyClientIp) return flyClientIp;
-
-  const forwarded = requestHeaders.get("x-forwarded-for");
-  if (!forwarded) return NO_PROXY_PRINCIPAL;
-
-  const hops = forwarded
-    .split(",")
-    .map((hop) => hop.trim())
-    .filter(Boolean);
-
-  return hops.at(-1) ?? NO_PROXY_PRINCIPAL;
-}
 
 /**
  * How an action names the principals its ceiling is charged against.
@@ -184,5 +147,3 @@ export function rateLimit<Input extends object>({ action, principals }: RateLimi
     },
   );
 }
-
-export { AppError };

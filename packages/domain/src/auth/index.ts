@@ -357,6 +357,6 @@ export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
  * published so `apps/web` had something to pin the browser's spelling against,
  * back when the browser set it. `startGoogleSignIn` sets it now, on a request
  * this package makes to itself, so there is no second speller and nothing to
- * keep in agreement — `apps/web/app/(auth)/sign-in/shared-device-header.ts` and
+ * keep in agreement — `apps/web/app/sign-in/shared-device-header.ts` and
  * its test were deleted with the export.
  */
