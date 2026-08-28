@@ -13,20 +13,21 @@
  * next-safe-action's own form guide marks the other two as not working
  * unhydrated; a `.stateAction()` is a real server-action reference, so React
  * emits the no-JS form encoding and an un-hydrated submit posts natively. The
- * page then re-renders with the list already re-read — which is the whole
- * outcome, without a line of client JavaScript having run.
+ * page then re-renders with the list already re-read — the whole outcome,
+ * without a line of client JavaScript having run.
  *
  * **There is no dialog and no confirmation step**, decided at shape: a modal on
  * a phone covers the list she just read, which is the one thing a confirmation
  * must not do when the list is why the action feels safe. The count in the
- * button label carries that weight instead. See `.impeccable/briefs/account.md`.
+ * button label carries that weight instead.
  */
 
+import { Alert, AlertDescription } from "@repo/design-system/components/alert";
 import { Button } from "@repo/design-system/components/button";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { signOutEverywhere } from "../actions";
-import { closeOthersButton, FEEDBACK_REGION_LABEL, ONLY_THIS_SESSION } from "../_lib/messages";
+import { closeOthersButton, ONLY_THIS_SESSION } from "../_lib/messages";
 
 type Result = Awaited<ReturnType<typeof signOutEverywhere>>;
 
@@ -60,8 +61,8 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
   /**
    * **Focus follows the outcome, not the control.** A list shrinking by two rows
    * announces nothing on its own, and a person using a screen reader would
-   * otherwise have to go looking for what happened. Moving focus to the live
-   * region says what happened first and leaves the button one step away.
+   * otherwise have to go looking for what happened. Moving focus to the alert
+   * says what happened first and leaves the button one step away.
    */
   useEffect(() => {
     if (announcement) announcementRef.current?.focus();
@@ -69,27 +70,33 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div
-        ref={announcementRef}
-        // Focusable programmatically but not in the tab order: it is a
-        // destination for focus after an outcome, never a stop on the way to the
-        // button.
-        tabIndex={-1}
-        role="status"
-        aria-live="polite"
-        aria-label={FEEDBACK_REGION_LABEL}
-        className="focus-visible:ring-ring focus-visible:ring-3 focus-visible:outline-none"
-      >
-        {announcement ? (
-          <p
-            className={
-              success ? "text-success text-sm font-medium" : "text-destructive text-sm font-medium"
-            }
-          >
-            {announcement}
-          </p>
-        ) : null}
-      </div>
+      {announcement ? (
+        <Alert
+          ref={announcementRef}
+          variant={failure ? "destructive" : "default"}
+          /*
+            `role="status"` overrides the component's own `role="alert"`, and the
+            override is the point: `alert` is assertive and interrupts whatever a
+            screen reader is saying. This is the result of something she just
+            asked for, so it is announced politely — `alert` is for the
+            unexpected.
+
+            The lint rule below prefers the `<output>` element to this role, and
+            it is right in general — but the element here is `Alert`, which is
+            registry output rendering a `div`, and `DESIGN.md` forbids hand-editing
+            files under `src/components/`. Scoped to this line with the reason
+            rather than turned off anywhere wider.
+          */
+          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Alert is registry output and renders a div; see above.
+          role="status"
+          aria-live="polite"
+          // Focusable programmatically but not in the tab order: a destination
+          // for focus after an outcome, never a stop on the way to the button.
+          tabIndex={-1}
+        >
+          <AlertDescription>{announcement}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {otherCount === 0 ? (
         /*
@@ -112,6 +119,17 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
  * on the nearest ancestor `<form>`, so a component that renders the form cannot
  * also read its status.
  *
+ * **Primary, not outline.** This is the only action on the surface and the whole
+ * reason the page exists, and `DESIGN.md` gives `primary` to primary actions.
+ * Nothing competes with it, so there is no hierarchy to solve by demoting it —
+ * an `outline` button on a white card read as tertiary on a phone.
+ *
+ * **Not `destructive`**, and that follows from the same argument that removed
+ * the dialog: closing a session is disruptive, not destructive — nothing is lost
+ * and anyone affected signs in again. `deleteAccount` (#29) is the surface that
+ * is genuinely irreversible, and spending the destructive treatment here would
+ * flatten the difference when it lands.
+ *
  * **The list is not disabled while this is busy.** It is still accurate and she
  * may still be reading it; disabling the evidence during the action would take
  * away the thing she is acting on.
@@ -120,7 +138,7 @@ function CloseOthersButton({ count }: { readonly count: number }) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" variant="outline" disabled={pending} aria-busy={pending}>
+    <Button type="submit" disabled={pending} aria-busy={pending}>
       {closeOthersButton(count)}
     </Button>
   );

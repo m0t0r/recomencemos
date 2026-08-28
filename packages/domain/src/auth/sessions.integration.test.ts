@@ -58,7 +58,9 @@ describe("the list `/account` renders", () => {
     const accountId = await principal(database, "worker@example.co");
     const currentToken = (await database.db.select().from(schema.session))
       .map((row) => row.token)
-      .find((token) => phone.cookie.includes(encodeURIComponent(token)) || phone.cookie.includes(token));
+      .find(
+        (token) => phone.cookie.includes(encodeURIComponent(token)) || phone.cookie.includes(token),
+      );
 
     const sessions = await listAccountSessions(database.db, {
       accountId,
@@ -98,7 +100,7 @@ describe("the list `/account` renders", () => {
       now: new Date(),
     });
 
-    expect(Object.keys(session!).sort()).toEqual([
+    expect(Object.keys(session!).toSorted()).toEqual([
       "createdAt",
       "current",
       "expiresAt",

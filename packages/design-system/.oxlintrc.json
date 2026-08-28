@@ -16,7 +16,7 @@
       }
     },
     {
-      "files": ["src/components/field.tsx"],
+      "files": ["src/components/field.tsx", "src/components/item.tsx"],
       "rules": {
         "jsx-a11y/prefer-tag-over-role": "off",
         "react/no-array-index-key": "off"

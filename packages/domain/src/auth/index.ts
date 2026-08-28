@@ -582,20 +582,16 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
       }
 
       try {
-        /**
-         * **Counted before the revocation, not after.** `/revoke-other-sessions`
-         * answers `{ status: true }` and nothing else, and the count is what
-         * `/account` says back to her. Reading the list first is also the only
-         * order that can produce a number at all — afterwards there is nothing
-         * left to count.
-         */
-        const sessions = await listAccountSessions(current.db, {
-          accountId: current.accountId,
-          currentToken: current.token,
-          now: new Date(),
-        });
+        const others = async () =>
+          (
+            await listAccountSessions(current.db, {
+              accountId: current.accountId,
+              currentToken: current.token,
+              now: new Date(),
+            })
+          ).filter((session) => !session.current).length;
 
-        const revoked = sessions.filter((session) => !session.current).length;
+        const before = await others();
 
         /**
          * Better Auth's own endpoint rather than a `DELETE` written here, and
@@ -611,7 +607,40 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
          */
         await current.auth.api.revokeOtherSessions({ headers });
 
-        return { ok: true, revoked };
+        /**
+         * **The rows are read back, and the count is the difference rather than
+         * a prediction.** Two reasons, and the second is why this is not
+         * belt-and-braces:
+         *
+         * - A count taken only before the call is a **forecast**. What she is
+         *   told — _"Cerramos 2 sesiones"_ — should be an observation, and
+         *   `/revoke-other-sessions` answers `{ status: true }` with no number of
+         *   its own.
+         * - **A library's success is not evidence that the rows are gone.**
+         *   Better Auth's `/sign-out` is the worked example of the failure this
+         *   guards against: it catches a database fault, logs it, clears the
+         *   cookie and still answers success, so the browser looks signed out
+         *   while the session lives (found on #80, in
+         *   `dist/api/routes/sign-out.mjs`). `/revoke-other-sessions` has no such
+         *   catch at 1.7.1 — its deletes run under `Promise.all` and a rejection
+         *   propagates — but it is one upgrade away from acquiring one, and this
+         *   is the endpoint where that would matter most. What makes the re-read
+         *   authoritative rather than theatre is that the cookie cache is off.
+         *
+         * `Promise.all` also means a **partial** failure is possible: some rows
+         * deleted, then a rejection. That path throws into the `catch` below,
+         * where the copy must not claim they are all still open.
+         */
+        const after = await others();
+
+        if (after > 0) {
+          throw new Error(
+            `revokeOtherSessions reported success but ${after} of ${before} other sessions ` +
+              "are still readable",
+          );
+        }
+
+        return { ok: true, revoked: before - after };
       } catch (cause) {
         return {
           ok: false,

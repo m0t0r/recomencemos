@@ -46,7 +46,6 @@ describe("a shared-device sign-in", () => {
     database,
   }) => {
     const stack = signInStack(database);
-    const { auth } = stack;
     await signIn(stack, "worker@example.co", { sharedDevice: true });
 
     const row = await sessionRow(database);
@@ -121,7 +120,6 @@ describe("a shared-device sign-in", () => {
 describe("an own-device sign-in", () => {
   test("gets the thirty-day row NFR13 promises", async ({ database }) => {
     const stack = signInStack(database);
-    const { auth } = stack;
     await signIn(stack, "worker@example.co", { sharedDevice: false });
 
     expect(secondsUntil((await sessionRow(database))!.expiresAt)).toBe(OWN_DEVICE_SESSION_SECONDS);
