@@ -8,6 +8,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## The design system comes first
+
+Before writing any presentational element, read the inventory in
+`packages/design-system/src/components/`. A component the registry lacks is added with
+`pnpm dlx shadcn@latest add <component> -c packages/design-system`; hand-roll only what has no
+registry equivalent. The root `REVIEW.md`'s registry-equivalents pass blocks a merge on a
+hand-rolled equivalent of a component the registry already exports.
+
 ## Cache Components and the dev loop
 
 **Cache Components is on.** `apps/web/next.config.ts` sets `cacheComponents: true`. Consequences you must design around, not work around:
