@@ -47,14 +47,16 @@ export type RequestMagicLinkState =
 /**
  * Who NFR26's per-IP half is charged against.
  *
- * **The last entry, not the first, and that is the whole correctness of this
- * function.** `x-forwarded-for` is a list each proxy *appends* to, so the
- * leftmost entry is whatever the original caller sent — which a caller sets
- * himself. Charging that would make the ≤ 20/hour bound defeatable by putting a
- * fresh value in a header, which is the opposite of a ceiling. With exactly one
- * trusted proxy in front of this app (Fly), the **rightmost** entry is the
- * address Fly actually observed, and it is the only one in the list nobody
- * downstream can choose.
+ * **`Fly-Client-IP` first**, because it is set by Fly's proxy to the address it
+ * actually observed, is always a single value, and cannot be chosen by the
+ * caller — the same reason `#auth/config` puts it first for Better Auth's own
+ * limiter, so the two resolvers agree on who a request is.
+ *
+ * The `x-forwarded-for` fallback reads the **last entry, not the first**: that
+ * header is a list each proxy *appends* to, so the leftmost entry is whatever
+ * the original caller sent, and charging it would make the ≤ 20/hour bound
+ * defeatable by putting a fresh value in a header. With one trusted proxy in
+ * front, the rightmost entry is the only one nobody downstream can choose.
  *
  * **An absent header charges a shared bucket rather than skipping the charge.**
  * NFR26 says the counter *fails closed*, and returning "no principal" here used
@@ -66,6 +68,9 @@ export type RequestMagicLinkState =
 const NO_PROXY_PRINCIPAL = "no-forwarded-for";
 
 function clientIp(requestHeaders: Headers): string {
+  const flyClientIp = requestHeaders.get("fly-client-ip")?.trim();
+  if (flyClientIp) return flyClientIp;
+
   const forwarded = requestHeaders.get("x-forwarded-for");
   if (!forwarded) return NO_PROXY_PRINCIPAL;
 
@@ -98,27 +103,24 @@ export async function requestMagicLink(
   // Charged before anything is sent, and charged against both principals NFR26
   // names. The address bound is the real one; the IP bound is what stops the
   // address bound being defeated by rotating addresses.
-  const byAddress = await ceilings.charge({ scope: "address", id: email }, "requestMagicLink");
-
-  if (!byAddress.allowed) {
-    return {
-      status: "rate_limited",
-      message: byAddress.error.userMessage,
-      retryAfter: byAddress.retryAfter,
-    };
-  }
-
-  const byIp = await ceilings.charge(
+  const principals = [
+    { scope: "address", id: email },
     { scope: "ip", id: clientIp(requestHeaders) },
-    "requestMagicLink",
-  );
+  ] as const;
 
-  if (!byIp.allowed) {
-    return {
-      status: "rate_limited",
-      message: byIp.error.userMessage,
-      retryAfter: byIp.retryAfter,
-    };
+  for (const principal of principals) {
+    // Sequential on purpose: a refusal on the first principal must not charge
+    // the second.
+    // oxlint-disable-next-line no-await-in-loop
+    const outcome = await ceilings.charge(principal, "requestMagicLink");
+
+    if (!outcome.allowed) {
+      return {
+        status: "rate_limited",
+        message: outcome.error.userMessage,
+        retryAfter: outcome.retryAfter,
+      };
+    }
   }
 
   const outcome = await auth().requestMagicLink({

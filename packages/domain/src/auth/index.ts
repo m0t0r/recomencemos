@@ -219,14 +219,6 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
   return built;
 }
 
-/**
- * Forget the memoised handler. For a test with a lifecycle, mirroring
- * `closeDatabase` in `#connection`. A request path never calls it.
- */
-export function resetAuthHandler(): void {
-  built = undefined;
-}
-
 export { googleSignInAvailable, MAGIC_LINK_TTL_MINUTES };
 export type { AuthDependencies, MagicLinkRequest, AuthLogger, AuthEnv } from "#auth/config";
 export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";

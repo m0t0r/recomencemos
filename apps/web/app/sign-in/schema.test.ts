@@ -74,22 +74,12 @@ describe("parseRequestMagicLink", () => {
     expect(result.value.sharedDevice).toBe(false);
   });
 
-  it("names the field that was wrong", () => {
-    const result = parseRequestMagicLink(form({ email: "ana" }));
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.fieldErrors.email).toBe(true);
-  });
-
   // Zod's own messages are English and are not under `docs/policy/voice.md`.
-  // Nothing this returns is rendered; the sentence comes from `messages.ts`.
-  it("does not carry Zod's English message toward a person", () => {
+  // Nothing a refusal returns is rendered; the sentence comes from `messages.ts`.
+  it("refuses a wrong-shaped address without carrying words toward a person", () => {
     const result = parseRequestMagicLink(form({ email: "ana" }));
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(JSON.stringify(result.fieldErrors)).not.toMatch(/invalid|expected|string/i);
+    expect(result).toEqual({ ok: false });
   });
 
   // Shape only. Whether the path is *safe* is `safeReturnPath`'s question in

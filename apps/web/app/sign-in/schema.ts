@@ -82,30 +82,18 @@ export function isAcceptableAddress(value: string): boolean {
   return EMAIL.safeParse(value).success;
 }
 
-/** The fields this form has. One today; `/publish` is where this earns its name. */
-export type SignInField = "email";
-
-/**
- * **Which fields were refused — not why, and not in words.**
- *
- * It was `Partial<Record<"email", string>>` and held the sentinel `"email"` as
- * its value, so the type promised a message and delivered a field name twice.
- * The sentence is `messages.ts`'s and is Spanish under `docs/policy/voice.md`;
- * Zod's own messages are English and reach nobody. So the honest shape is a set
- * of field names, and the caller supplies the words.
- */
-export type SignInFieldErrors = Partial<Record<SignInField, true>>;
-
 /**
  * Parse a `FormData` the way the Server Action does.
  *
  * Exported so the client can run the identical check before spending a round
  * trip, and so the test drives one function rather than two implementations of
- * one rule.
+ * one rule. A refusal carries no words and no field map: the form has one
+ * field, the sentence is `messages.ts`'s, and Zod's own English messages reach
+ * nobody. `/publish` is where a per-field error shape earns its way in.
  */
 export function parseRequestMagicLink(
   formData: FormData,
-): { ok: true; value: RequestMagicLinkInput } | { ok: false; fieldErrors: SignInFieldErrors } {
+): { ok: true; value: RequestMagicLinkInput } | { ok: false } {
   const result = requestMagicLinkSchema.safeParse({
     email: formData.get("email") ?? "",
     sharedDevice: formData.get("sharedDevice") ?? undefined,
@@ -114,13 +102,5 @@ export function parseRequestMagicLink(
 
   if (result.success) return { ok: true, value: result.data };
 
-  // Zod's own messages are English and are not under `docs/policy/voice.md`, so
-  // none of them reaches a person. The field is what this maps; the sentence is
-  // `messages.ts`'s and the caller's.
-  const fieldErrors: SignInFieldErrors = {};
-  for (const issue of result.error.issues) {
-    if (issue.path[0] === "email") fieldErrors.email = true;
-  }
-
-  return { ok: false, fieldErrors };
+  return { ok: false };
 }

@@ -1,44 +1,12 @@
 /**
- * The pin that stands in for `auth generate`, and the checked half of the reason
- * it stands in for it.
- *
- * DD5/C29 asks for a generated schema. **A version-matched generator does
- * exist** — the CLI ships as the `auth` package (`@better-auth/cli` is its
- * former name and stopped at `1.4.21`), `auth@1.7.1` depends on
- * `better-auth@1.7.1` exactly, and pnpm resolves the two to one directory in the
- * store. It was run against this configuration and it produces these five tables
- * with these column names. So the reason this schema is written by hand is not
- * that generation is unavailable.
- *
- * **It is that the pg generator's type map cannot express two things DD2
- * requires.** In `src/generators/drizzle.ts` the map sends every `date` field to
- * `timestamp('…')` and every `string` field to `text('…')`, with no option on
- * either — while DD2 requires `TIMESTAMPTZ` for every instant and `citext` for
- * the email, which is the mechanism that stops one person holding two Accounts
- * by capitalising. It also has no concept of a `CHECK`, which is DD2's rule for
- * an enum-shaped column and what `session.sign_in_method` needs. Generated
- * output would therefore have to be hand-edited on every regeneration, which is
- * the failure DD5's "never hand-edit the generated schema" rule exists to
- * prevent — so the generation step is dropped and its guarantee is rebuilt here.
- *
- * **What replaces it is stronger than the rule it replaces**, because DD5's
- * three rules are disciplines and these are red CI. The oracle is `getSchema()`
- * from the installed `better-auth/db` — the same core the generator reads — and
- * every assertion below is about *this repository's* tables, held to what the
- * library declares:
- *
- * 1. A hand-added column is caught: it is not in `getSchema()`'s answer.
- * 2. A plugin added without its tables is caught — DD5's "the common Better Auth
- *    mistake", and under file generation it is caught only if somebody remembers
- *    to re-run the CLI.
- * 3. An upgrade that changes the vendor's tables is caught on the version bump
- *    rather than in production, and produces an ordinary Drizzle migration
- *    reviewed under the expand/contract rule like any other (NFR30).
- *
- * Beyond the three, this pins what a field-name comparison cannot: nullability
- * **in both directions**, uniqueness, every index the library declares, and the
- * places this repository is deliberately stricter — which are listed as data, so
- * a deviation nobody declared fails rather than drifting.
+ * The pin that stands in for `auth generate`. The full argument — why the
+ * schema is hand-written, why the generator cannot express DD2's types, and how
+ * DD5's three rules survive as red CI instead of discipline — is the header of
+ * `auth-schema.ts`; this file is its enforcement. The oracle is `getSchema()`
+ * from the installed `better-auth/db`, and the assertions pin fields,
+ * nullability in both directions, uniqueness, every declared index, and the
+ * deliberate deviations as data, so a deviation nobody declared fails rather
+ * than drifting.
  */
 
 import { getSchema } from "better-auth/db";
@@ -382,8 +350,15 @@ describe("the configuration DD5 says is not the default", () => {
     expect(options.rateLimit?.customRules?.["/magic-link/verify"]).toBeDefined();
   });
 
-  it("reads the client IP from the header Fly's proxy sets", () => {
-    expect(options.advanced?.ipAddress?.ipAddressHeaders).toEqual(["x-forwarded-for"]);
+  // `fly-client-ip` first: 1.7.1 refuses a multi-entry forwarded header, and
+  // Fly appends to a caller-sent `x-forwarded-for` — so that header alone
+  // collapses to a shared bucket exactly when a caller wants it to. The
+  // argument is at the option in `#auth/config`.
+  it("reads the client IP from the single-value header Fly's proxy sets", () => {
+    expect(options.advanced?.ipAddress?.ipAddressHeaders).toEqual([
+      "fly-client-ip",
+      "x-forwarded-for",
+    ]);
   });
 
   // Naming Google here is what would let a Google identity link into an

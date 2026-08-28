@@ -1,14 +1,10 @@
 "use client";
 
 /**
- * Everything `/sign-in` *does*, separated from everything it *looks like*.
- *
- * The split exists because `/prototype` UI needed three variants to disagree
- * about structure while agreeing about behaviour — a variant wired to a stub
- * would have been judged on a page that does not work. It is worth keeping after
- * the prototype is thrown away: the per-door pending state, the Google failure
- * path, and the focus move are the parts that are easy to get subtly wrong, and
- * they now have one home rather than one per layout.
+ * Everything `/sign-in` *does*, separated from everything it *looks like*: the
+ * per-door pending state, the Google failure path, and the focus move are the
+ * parts that are easy to get subtly wrong, and they have one home here rather
+ * than one per layout.
  */
 
 import { createAuthClient } from "better-auth/react";

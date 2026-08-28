@@ -177,6 +177,21 @@ describe("chargeCeiling, against the committed migrations", () => {
 
     expect(rows).toHaveLength(2);
   });
+
+  // Nothing else deletes from rate_counter, so without this the table accretes
+  // one row per principal, action and window forever — and a caller rotating
+  // principals mints a permanent row per request.
+  it("sweeps rows old enough that no chargeable window can reach them", async () => {
+    await chargeRepeatedly(2);
+
+    const threeHoursLater = new Date("2026-08-27T15:00:00.000Z");
+    await chargeCeiling(database.db, ana, "requestMagicLink", threeHoursLater);
+
+    const rows = await database.db.select().from(rateCounter);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.windowStart.toISOString()).toBe("2026-08-27T15:00:00.000Z");
+  });
 });
 
 describe("what a refusal carries (NFR26, C39)", () => {

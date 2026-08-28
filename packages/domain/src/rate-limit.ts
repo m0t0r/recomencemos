@@ -28,7 +28,7 @@
 
 import { createHash } from "node:crypto";
 import { AppError } from "@repo/errors/app-error";
-import { sql } from "drizzle-orm";
+import { lt, sql } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import { rateCounter } from "#schema";
 import { SERVICE_UNAVAILABLE } from "#user-messages";
@@ -65,6 +65,24 @@ export const CEILINGS = {
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
+
+/**
+ * How long a settled window's row is kept before {@link chargeCeiling} sweeps
+ * it: twice the longest window any ceiling declares, so a row is only deleted
+ * when no window that could still be charged can reach it.
+ *
+ * The sweep exists because nothing else deletes from `rate_counter` — without
+ * it the table accretes one row per principal, action and window forever, and
+ * a caller rotating principals mints a permanent row per request. Better Auth's
+ * own limiter table prunes itself the same way, on the charge path.
+ */
+export const RATE_COUNTER_RETENTION_SECONDS =
+  2 *
+  Math.max(
+    ...Object.values(CEILINGS).flatMap((scopes) =>
+      Object.values(scopes).map((ceiling) => ceiling.windowSeconds),
+    ),
+  );
 
 /**
  * Who a ceiling is charged against.
@@ -206,6 +224,16 @@ export async function chargeCeiling(
       set: { count: sql`${rateCounter.count} + 1` },
     })
     .returning({ count: rateCounter.count });
+
+  // The sweep. On the charge path rather than a scheduler, because a counter
+  // that is being charged is the one moment the table is guaranteed to have a
+  // caller paying attention — and charges are bounded by the ceilings
+  // themselves, so the extra statement is bounded with them.
+  await db
+    .delete(rateCounter)
+    .where(
+      lt(rateCounter.windowStart, new Date(now.getTime() - RATE_COUNTER_RETENTION_SECONDS * 1000)),
+    );
 
   // `RETURNING` on an upsert that matched or inserted always yields one row, so
   // no row means the statement did something this code does not model. Failing

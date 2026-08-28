@@ -16,6 +16,8 @@
  * one row #12 owns.
  */
 
+import { Card } from "@repo/design-system/components/card";
+import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { googleSignInAvailable } from "../../lib/auth";
@@ -73,8 +75,8 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
 
 /**
  * The fallback holds the card's shape rather than showing a spinner, so nothing
- * moves when the panel resolves. A fallback of a different shape than the
- * content it replaces is a layout shift you just specified.
+ * moves when the panel resolves. The wrappers are the same `main` classes and
+ * the same `Card` the form renders, so the two cannot drift apart in outline.
  */
 function PanelSkeleton() {
   return (
@@ -82,13 +84,13 @@ function PanelSkeleton() {
       className="bg-muted flex min-h-svh flex-col items-center justify-center px-4 py-12"
       aria-hidden="true"
     >
-      <div className="bg-card border-border flex w-full max-w-md flex-col gap-6 rounded-lg border p-6 sm:p-8">
-        <div className="bg-muted h-8 w-2/3 animate-pulse rounded" />
-        <div className="bg-muted h-9 w-full animate-pulse rounded-md" />
-        <div className="bg-muted h-4 w-3/4 animate-pulse rounded" />
-        <div className="bg-muted h-24 w-full animate-pulse rounded-md" />
-        <div className="bg-muted h-9 w-full animate-pulse rounded-md" />
-      </div>
+      <Card className="flex w-full max-w-md flex-col gap-6 p-6 sm:p-8">
+        <Skeleton className="h-8 w-2/3" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-9 w-full" />
+      </Card>
     </main>
   );
 }

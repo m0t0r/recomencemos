@@ -90,9 +90,6 @@ export const SIGN_IN_METHODS = ["magic_link", "google"] as const;
 
 export type SignInMethod = (typeof SIGN_IN_METHODS)[number];
 
-/** Every passwordless door. NFR14's refusal for an Admin is written over this set. */
-export const PASSWORDLESS_SIGN_IN_METHODS: readonly SignInMethod[] = SIGN_IN_METHODS;
-
 /**
  * **Account** in `CONTEXT.md`'s vocabulary, `user` in Better Auth's.
  *

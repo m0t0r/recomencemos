@@ -3,41 +3,38 @@
 /**
  * The two doors, and the one choice that governs both.
  *
- * **This is variant B, "Framed card", locked after `/prototype` UI.** Three
- * variants ran on this real route against the real Server Action; the losing two
- * and the switcher are on the `prototype/12-sign-in-variants` branch. The
- * argument that won: on a surface where familiarity beats expression, a boundary
- * helps — a card says "this is the thing to deal with" and gives the eye an edge
- * that an open column, floating in a lot of white, does not. It is also the shape
- * of every sign-in page a Hirer has already used.
+ * Variant B ("Framed card"), locked after `/prototype` UI — the losing variants
+ * live on `prototype/12-sign-in-variants`, and the shaping is
+ * `.impeccable/briefs/sign-in.md`. Four decisions are load-bearing here and are
+ * not free to drift:
  *
- * Shaped at `.impeccable/briefs/sign-in.md`. Four decisions are load-bearing here
- * and are not free to drift:
- *
- * 1. **Google leads and the email door is fully present below it**, never behind
- *    a disclosure. Where Google is unconfigured the email form is the whole card,
- *    with no dead button and no dangling separator.
- * 2. **The Google button wears Google's own treatment** — white, bordered, with
- *    the four-colour mark — because recognition is the whole reason that door
- *    exists. See the hierarchy note on the button itself.
+ * 1. **Google leads and the email door is fully present below it**, never
+ *    behind a disclosure. Where Google is unconfigured the email form is the
+ *    whole card, with no dead button and no dangling separator.
+ * 2. **The Google button wears Google's own treatment** — recognition is the
+ *    whole reason that door exists. See the hierarchy note on the button.
  * 3. **The shared-device checkbox sits outside the email form**, because it
- *    governs both doors; inside it, it would read as an email-door setting while
- *    silently shortening a Google session too.
+ *    governs both doors; inside it, it would read as an email-door setting
+ *    while silently shortening a Google session too.
  * 4. **The sent state keeps the form and her address**, so a link a scanner ate
- *    is one tap from a resend and the Google door is still on screen at the
- *    moment the email door may have failed her.
+ *    is one tap from a resend with the Google door still on screen.
  *
- * `"use client"` because there is state, a pending transition per door, and a
- * focus move on every outcome. The **email door still works without it**: it is a
- * plain `<form action={…}>` bound to a Server Action, so a submit before
- * hydration posts and re-renders.
+ * `"use client"` for per-door pending state and the focus move on every
+ * outcome. The email door still works without it: a plain `<form action={…}>`
+ * posts before hydration and the Server Action answers.
  */
 
 import { useForm } from "@tanstack/react-form";
 import { Button } from "@repo/design-system/components/button";
 import { Card } from "@repo/design-system/components/card";
 import { Checkbox } from "@repo/design-system/components/checkbox";
-import { Field, FieldDescription, FieldLabel } from "@repo/design-system/components/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldSeparator,
+} from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
 import { Label } from "@repo/design-system/components/label";
 import { useId } from "react";
@@ -144,11 +141,7 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
         ) : null}
 
         {googleAvailable ? (
-          <div className="flex items-center gap-3" aria-hidden="true">
-            <span className="bg-border h-px flex-1" />
-            <span className="text-muted-foreground text-sm">{DOOR_DIVIDER}</span>
-            <span className="bg-border h-px flex-1" />
-          </div>
+          <FieldSeparator aria-hidden="true">{DOOR_DIVIDER}</FieldSeparator>
         ) : null}
 
         <form
@@ -241,11 +234,7 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
                       aria-invalid={invalid}
                       aria-describedby={invalid ? emailErrorId : undefined}
                     />
-                    {invalid ? (
-                      <p id={emailErrorId} className="text-destructive text-sm leading-5">
-                        {message}
-                      </p>
-                    ) : null}
+                    {invalid ? <FieldError id={emailErrorId}>{message}</FieldError> : null}
                   </>
                 );
               }}
