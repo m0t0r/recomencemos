@@ -19,11 +19,36 @@ every new project on a question with no wrong answer, which is not what that mec
 | `stacked-prs`       | **Yes**, for genuine chains only — a maximal chain of blocking edges publishes as a stack; a ticket with two blockers stays serialized; unrelated tickets are never stacked                                                                                                          | Whether a chain of blocking edges is published as a stack of PRs (`gh stack`) or as independent ones. See the section below                                                                                                                                    |
 | `pr-merge-method`   | **Rebase**                                                                                                                                                                                                                                                                           | Squash, merge commit, or rebase. Decides what a ticket looks like in the history, and interacts with `stacked-prs` — a stack is a chain of branches each based on the one below, and squashing a lower PR rewrites the base every branch above it was cut from |
 | `who-may-merge`     | **Repo owner**                                                                                                                                                                                                                                                                       | The role that may merge to the default branch. Never the agent — that part is fixed below, not a choice                                                                                                                                                        |
-| `required-checks`   | **`lint`, `check-types`, `test` (including `test:gates` and `migrations:check`), `build`, and a dependency audit failing on `high` or above in a direct dependency**                                                                                                                 | The checks that must be green before a PR is mergeable. Run on every PR by `.github/workflows/ci.yml`, one job per entry, so each is requirable by name                                                                                                        |
+| `required-checks`   | **`lint`, `format`, `check-types`, `test` (including `test:gates` and `migrations:check`), `build`, and a dependency audit failing on `high` or above in a direct dependency**                                                                                                       | The checks that must be green before a PR is mergeable. Run on every PR by `.github/workflows/ci.yml`, one job per entry, so each is requirable by name. `format` is `oxfmt --check` and reports rather than rewrites — see the note below                     |
 | `pr-size-ceiling`   | `1000`                                                                                                                                                                                                                                                                               | Changed lines (additions + deletions) counting only files a person reviews — lockfiles and generated files are excluded. Above it, the PR body must say why the ticket was not split; effort 0001's largest PR was +1,832 with nothing measuring it            |
 | `coverage-floor`    | `UNSET`                                                                                                                                                                                                                                                                              | The coverage number a change may not drop below, or "none" — a real answer that stops `/tdd` asking                                                                                                                                                            |
 | `release-branch`    | **`main`**, with `dev` as the default branch — a ticket merges into `dev` and reaching `main` is a deliberate promotion. `.github/workflows/deploy.yml` deploys on a push to `main` and on nothing else; `scripts/deploy.sh` refuses any other branch unless `DEPLOY_ALLOW_BRANCH=1` | Which branch is deployed, and therefore what a merge means. Set by #9, which amended NFR25 — see the spec. Deploying from the default branch would make every merged ticket a production release                                                               |
 | `branch-protection` | **Required status checks and no direct push to the default branch; no required reviews** — on a one-person repository a required review either locks the operator out or normalizes admin bypass                                                                                     | Whether the remote enforces no-direct-push and required reviews. Until set, the hooks are the only thing enforcing it                                                                                                                                          |
+
+### Why `format` is a required check
+
+It was not one until 2026-08-28, and the reason it became one is measured rather than argued.
+
+Three files under `docs/` sat unformatted on the default branch. `oxfmt` is not run by CI and was not
+run by `verify-before-stop.sh`, so nothing noticed. Every local `pnpm format:fix` rewrote them, and 54
+lines of unrelated churn then appeared in whatever pull request its author happened to be writing.
+During [#80](https://github.com/m0t0r/recomencemos/issues/80) that happened **three times** and was
+reverted three times.
+
+**The cost of formatting drift is always paid by a different change than the one that caused it**,
+which is why neither the author nor the reviewer ever has the incentive to fix it, and why it needs a
+gate rather than a convention.
+
+Two things it deliberately is not:
+
+- **It reports; it never rewrites.** The job runs `pnpm format`, which is `oxfmt --check`. A CI job
+  that formatted the tree would push to a contributor's branch, which is a different and much larger
+  decision.
+- **It is not a licence to widen `ignorePatterns`.** That list exists for files another tool owns —
+  `pnpm-workspace.yaml`, `packages/domain/drizzle/`, and the committed advisories under
+  `docs/efforts/*/advisories/`, each for a reason recorded in the root `CLAUDE.md`. Adding an entry to
+  make this gate pass removes the gate for everything the pattern matches. The remedy is
+  `pnpm format:fix`.
 
 ## Fixed by this repo
 
@@ -50,7 +75,7 @@ definition of done that only a human can evaluate is a definition of done that e
 1. **Every acceptance criterion on the issue is checked, and each one names its evidence** — the
    command that proves it, or the test that covers it. A criterion checked with no evidence is a
    claim, and the Spec axis of `/code-review` is what catches it.
-2. `pnpm lint && pnpm check-types && pnpm test` is green. Add `pnpm build` where the change touches
+2. `pnpm lint && pnpm format && pnpm check-types && pnpm test` is green. Add `pnpm build` where the change touches
    Next.js config, routing, Tailwind sources, or `@repo/design-system` exports.
 3. Where the change touches `apps/web`, it has been verified **running** — `next-dev-loop`, not just
    a green build. Vitest cannot reach `async` Server Components, so a compile is not a verification.

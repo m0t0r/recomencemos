@@ -113,7 +113,7 @@ Be honest about what that probe shows, though: it tested **presence, not fidelit
 
 ## Verifying your work
 
-Before reporting a change complete, run `pnpm lint && pnpm check-types && pnpm test` (add `pnpm build` for anything touching Next.js config, routing, Tailwind sources, or `@repo/design-system` exports). Healthy output is Turborepo's summary with every task `cached` or `successful` and a non-zero `Tasks: N successful`.
+Before reporting a change complete, run `pnpm lint && pnpm format && pnpm check-types && pnpm test` (add `pnpm build` for anything touching Next.js config, routing, Tailwind sources, or `@repo/design-system` exports). Healthy output is Turborepo's summary with every task `cached` or `successful` and a non-zero `Tasks: N successful`.
 
 **CI runs exactly these commands, on every pull request.** `.github/workflows/ci.yml` is five jobs — `lint`, `check-types`, `test`, `build`, `audit` — one per entry in `docs/policy/build.md`'s `required-checks`, named so that a human can require each by name as a status check (`docs/runbooks/recomencemos-go-live.md` §8). Each job runs the **root script**, never a `turbo run` restated in YAML, so the two cannot drift; the Node and pnpm versions are read from `.nvmrc` and `packageManager` for the same reason. The fifth job is `pnpm audit:direct`, which is `scripts/audit-direct.mjs`: `high` or above in a **direct** dependency fails the run, and a transitive advisory is printed but never blocking (`docs/policy/security.md` → `dependency-policy`). Do not reach for `pnpm audit --audit-level=high` instead — this repo already carries a `high` transitive advisory, so that gate is red on arrival.
 

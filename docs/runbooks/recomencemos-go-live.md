@@ -280,11 +280,15 @@ registration does not apply** to a _persona natural_. International transmission
 ## 8. Repository and release (C7, C16)
 
 - [ ] **Required status checks** on the default branch, by the job names
-      `.github/workflows/ci.yml` publishes: **`lint`**, **`check-types`**, **`test`** (which is
-      `turbo run test test:gates`, so `test:gates` is inside this one), **`build`**, and **`audit`**.
-      The workflow is five jobs rather than five steps precisely so each is requirable by name.
-      **No required reviews** — on a one-person repository they lock the operator out or normalize
-      admin bypass
+      `.github/workflows/ci.yml` publishes: **`lint`**, **`format`**, **`check-types`**, **`test`**
+      (which is `turbo run test test:gates`, so `test:gates` is inside this one), **`build`**, and
+      **`audit`**. The workflow is six jobs rather than six steps precisely so each is requirable by
+      name. **No required reviews** — on a one-person repository they lock the operator out or
+      normalize admin bypass
+- [ ] `format` is **`oxfmt --check`** — it reports and never rewrites, so requiring it cannot push to
+      a contributor's branch. It was added on 2026-08-28 after formatting drift on three `docs/`
+      files put 54 lines of unrelated churn into three separate pull requests; the reasoning is in
+      [`../policy/build.md`](../policy/build.md) → "Why `format` is a required check"
 - [ ] Dependency audit fails the build on **`high` or above in a direct dependency** (C7). This is
       the `audit` job, running `pnpm audit:direct` — `scripts/audit-direct.mjs`, not
       `pnpm audit --audit-level=high`, which is red on arrival against a transitive advisory this

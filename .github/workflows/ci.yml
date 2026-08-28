@@ -1,11 +1,11 @@
 # The gate from `docs/policy/build.md` -> `required-checks`, run on the pull
 # request instead of on a developer's terminal.
 #
-# Five jobs rather than one job with five steps, because
+# Six jobs rather than one job with six steps, because
 # `docs/runbooks/recomencemos-go-live.md` §8 asks a human to set required status
-# checks named `lint`, `check-types`, `test`, `build` and the dependency audit --
-# and a required status check is a job name. One job would leave that step with
-# one check to require and four names that do not exist.
+# checks named `lint`, `format`, `check-types`, `test`, `build` and the
+# dependency audit -- and a required status check is a job name. One job would
+# leave that step with one check to require and five names that do not exist.
 #
 # Each job runs the same root script a developer runs, so the two cannot drift;
 # `turbo run` lives in package.json, not here.
@@ -46,6 +46,26 @@ jobs:
         with:
           turbo-cache: "false"
       - run: pnpm lint
+
+  # `pnpm format` is `oxfmt --check`, so this job reports rather than rewrites.
+  #
+  # It exists because its absence was measured, not predicted: three files under
+  # `docs/` sat unformatted on `dev` and every local `pnpm format:fix` rewrote
+  # them, so 54 lines of unrelated churn appeared in whatever pull request its
+  # author happened to be writing. During #80 that happened three times and was
+  # reverted three times. Formatting drift is invisible without a gate, and the
+  # cost of the drift is paid by a *different* change than the one that caused it.
+  #
+  # `turbo-cache: "false"` for the same reason `lint` sets it: oxfmt reads the
+  # whole tree in under a second, so a cache restore costs more than the work.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache: "false"
+      - run: pnpm format
 
   check-types:
     runs-on: ubuntu-latest
