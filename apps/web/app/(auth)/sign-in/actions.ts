@@ -23,12 +23,14 @@
  */
 
 import { MAGIC_LINK_TTL_MINUTES } from "@repo/domain/auth-handler";
-import { headers } from "next/headers";
+import { projectClientError } from "@repo/errors/app-error";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { auth } from "../../../lib/auth";
+import { logRequestError } from "@repo/observability/log-request-error";
 import { actionClient, rateLimit, returnActionError } from "../../../lib/safe-action";
 import { checkYourEmail } from "./_lib/messages";
+import { parseSetCookie } from "./_lib/set-cookie";
 import {
   requestMagicLinkSchema,
   returnPathArg,
@@ -87,9 +89,12 @@ export const requestMagicLink = actionClient
 
       if (!outcome.ok) {
         // Returned, not thrown, so it costs one `warn` line and no Sentry event —
-        // CLAUDE.md's "thrown is reported; returned is logged". She still gets a
-        // real sentence and her address stays in the field.
-        return returnActionError(outcome.error.toClientError());
+        // CLAUDE.md's "thrown is reported; returned is logged". The line is not
+        // optional: `returnActionError` bypasses `handleServerError`, which is
+        // where every *thrown* error gets logged, so a returned one that is not
+        // logged here is a failure nothing records.
+        logRequestError(outcome.error, { level: "warn" });
+        return returnActionError(projectClientError(outcome.error));
       }
 
       return { sent: true, message: checkYourEmail(MAGIC_LINK_TTL_MINUTES) };
@@ -128,39 +133,25 @@ export const startGoogleSignIn = actionClient
     });
 
     if (!outcome.ok) {
-      return returnActionError(outcome.error.toClientError());
+      logRequestError(outcome.error, { level: "warn" });
+      return returnActionError(projectClientError(outcome.error));
     }
 
     const cookieStore = await cookies();
 
-    for (const setCookie of outcome.setCookie) {
-      const [pair] = setCookie.split(";");
-      const separator = pair?.indexOf("=") ?? -1;
-      if (!pair || separator < 1) continue;
-
-      /**
-       * Parsed rather than passed through, because `cookies()` takes a name and
-       * a value and not a `Set-Cookie` line. The attributes Better Auth set —
-       * `httpOnly`, `sameSite`, `maxAge`, `secure` — are re-derived from the
-       * line so the cookie this action writes is the cookie the callback
-       * expects; `state` is the one that has to survive verbatim.
-       */
-      cookieStore.set({
-        name: pair.slice(0, separator),
-        value: pair.slice(separator + 1),
-        httpOnly: /;\s*httponly/i.test(setCookie),
-        secure: /;\s*secure/i.test(setCookie),
-        sameSite: /;\s*samesite=strict/i.test(setCookie)
-          ? "strict"
-          : /;\s*samesite=none/i.test(setCookie)
-            ? "none"
-            : "lax",
-        path: /;\s*path=([^;]+)/i.exec(setCookie)?.[1]?.trim() ?? "/",
-        ...(() => {
-          const maxAge = /;\s*max-age=(-?\d+)/i.exec(setCookie)?.[1];
-          return maxAge === undefined ? {} : { maxAge: Number(maxAge) };
-        })(),
-      });
+    /**
+     * **Every cookie, or the flow fails at the provider.** Better Auth's OAuth
+     * `state` cookie and the shared-device cookie beside it are written onto the
+     * response of a call this action makes internally, so they reach the browser
+     * only if this loop puts them there.
+     *
+     * `parseSetCookie` is a module of its own and is tested there — it is the one
+     * piece of this door a machine with no Google credentials can verify, and a
+     * review found it functionally broken when it was an inline loop here.
+     */
+    for (const line of outcome.setCookie) {
+      const cookie = parseSetCookie(line);
+      if (cookie) cookieStore.set(cookie);
     }
 
     /**
