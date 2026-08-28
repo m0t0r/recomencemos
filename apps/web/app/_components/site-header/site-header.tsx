@@ -32,7 +32,7 @@ import { auth } from "@/lib/auth";
 import { SignInLink } from "./sign-in-link";
 import { StickyHeader } from "./sticky-header";
 import { SessionMenu } from "./session-menu";
-import { HEADER_LANDMARK, HOME_LINK_LABEL, PRODUCT_NAME } from "./messages";
+import { HOME_LINK_LABEL, PRODUCT_NAME } from "./messages";
 import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT } from "./slots";
 
 /**
@@ -97,7 +97,7 @@ export async function SiteHeader() {
 
   return (
     <>
-      <HeaderRow aria-label={HEADER_LANDMARK}>
+      <HeaderRow>
         {/*
           The product name is the way back to the Wall. Link text names its
           destination (`docs/policy/voice.md`), which for a wordmark means the
