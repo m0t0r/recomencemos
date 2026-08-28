@@ -85,11 +85,16 @@ export const SESSION_REQUIRED = "Tu sesión ya no está abierta. Entra otra vez 
 /**
  * Sign-out-everywhere broke on our side.
  *
- * **The second sentence is the load-bearing one.** A failure here leaves the
- * other sessions open, and a person who is closing a session on a machine she no
- * longer controls has to be told that plainly rather than left to assume it
- * worked. Directness 5, and the refusal says what to do next in the same breath
+ * **It says "todas" rather than claiming they are all still open**, and the
+ * precision is the point. The revocation deletes rows under a `Promise.all`, so
+ * a fault can leave *some* closed and others not — a sentence asserting they all
+ * survived would be false in exactly the case a person most needs the truth.
+ * This one is true of a total failure and a partial one alike.
+ *
+ * It then sends her to the evidence rather than to a retry alone: the list
+ * re-renders on the same page, so "revisa la lista" is a step she can actually
+ * take. Directness 5, and the refusal says what to do next in the same breath
  * (Do 3).
  */
 export const SIGN_OUT_EVERYWHERE_FAILED =
-  "No pudimos cerrar las otras sesiones. Siguen abiertas. Intenta de nuevo.";
+  "No pudimos cerrar todas las otras sesiones. Revisa la lista e intenta de nuevo.";

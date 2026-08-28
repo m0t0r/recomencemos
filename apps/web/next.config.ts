@@ -1,6 +1,7 @@
 import path from "node:path";
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
+import { gatedRouteHeaders } from "./lib/gated-routes";
 
 const nextConfig: NextConfig = {
   /**
@@ -36,6 +37,20 @@ const nextConfig: NextConfig = {
   // dynamic parts in — which is why there is no separate `experimental.ppr`
   // flag to set. See https://nextjs.org/docs/app/getting-started/caching
   cacheComponents: true,
+
+  /**
+   * NFR8's header half, for every gated route at once.
+   *
+   * The list is data in `lib/gated-routes.ts` and `gated-routes.test.ts` drives
+   * a table over it, which is the shape NFR8 asks for in as many words: asserted
+   * "by a table-driven test over the route list rather than a per-page
+   * attribute". Each page still sets `metadata.robots` for the `<meta>` half —
+   * NFR8 wants both, because a crawler that never parses the body still reads
+   * the header, and a saved copy of a page keeps only the meta.
+   */
+  async headers() {
+    return gatedRouteHeaders();
+  },
 
   logging: {
     // Forward browser console errors and warnings into the `next dev` terminal

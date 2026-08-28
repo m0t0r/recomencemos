@@ -50,7 +50,31 @@ Three decisions, each with the alternative it beat:
    **The count in the button label is the confirmation**: she reads _Cerrar las otras 2_ directly
    under two rows she can see.
 
-3. **The page teaches through the scene, never the term.** No definition of _sesión_ appears. The
+3. **The row treatment is A′, locked after `/prototype` UI on 2026-08-28.** Three variants ran on
+   the real route against real session rows — A device-led and separated, B state-led and bordered,
+   C field-labelled cards — and they live on `prototype/13-account-variants`. Two findings decided
+   it, neither visible before the variants were rendered:
+   - **B collapsed on ordinary data.** Leading each row with _"Abierta hace 6 días"_ reads well
+     until every session was opened the same day, which is the common case; then all three rows
+     lead _"Abierta hoy"_ and the primary line carries nothing.
+   - **The task is recognition, so the device name must lead _every_ row.** She is hunting a
+     machine she does not recognise, which makes the device name the scan column. A and B both
+     broke that column on the first row — the one row that is not a candidate for closing — by
+     making _Este aparato_ the heading. C kept the column but pushed the button below the fold on a
+     phone, and a control out of sight is worse than an unlabelled value on a surface whose whole
+     job is one action.
+
+   **A′** is A's density with the device name leading every row and _Este aparato_ as a `Badge`
+   beside it. C's real gain — a screen reader announcing the field names — is available here through
+   the description line at no vertical cost.
+
+4. **The control is `primary`, not `outline`.** It is the only action on the surface and the whole
+   reason the page exists, and `DESIGN.md` gives `primary` to primary actions; nothing competes with
+   it, so there is no hierarchy to solve by demoting it. `outline` on a white card read as tertiary
+   on a phone. **Not `destructive`** — that follows from the same argument that removed the dialog,
+   and spending it here would flatten the difference with `deleteAccount` (#29).
+
+5. **The page teaches through the scene, never the term.** No definition of _sesión_ appears. The
    sentence names the situation she would recognise — a borrowed phone, a computer that is not hers
    — and the word is learned from its context. Voice guide Sophistication 2, and its rule against a
    sentence only someone who already knows the product can parse.
@@ -71,16 +95,16 @@ is the kind of false a person relies on. No modal. No per-row control.
 
 The spec's surface table for Account, plus the ranges the list has to survive.
 
-| State               | What it shows                                                                                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loading`           | Skeleton in the shape of the list — rows and the button — so nothing moves when it resolves. `Skeleton` from the registry, not a spinner                            |
-| `only this session` | **The common case, and it must not read as a failure.** The list holds one row, _Este aparato_. The close-all control is absent, not disabled. A sentence says why  |
-| `loaded, 2–5 rows`  | The typical case. This device first, then the others newest-first                                                                                                   |
-| `loaded, many rows` | No cap and no pagination — a person with 12 open sessions is exactly who needs to see 12. The list scrolls with the page                                             |
-| `submitting`        | The one button is busy; the list stays readable and is not disabled. Per-action, per the spec's surface table                                                        |
-| `success`           | The list re-reads and the confirmation names the count: _Cerramos 2 sesiones. Esta sigue abierta._ Announced, not merely rendered                                    |
-| `action failed`     | What happened and what to do, in the same breath. The list is unchanged and still accurate, and the button is offered again                                          |
-| `signed out`        | Redirect to `/sign-in`. This is the spec's empty state for this surface, and it is reached by an expired or revoked session, never by the action itself              |
+| State               | What it shows                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `loading`           | Skeleton in the shape of the list — rows and the button — so nothing moves when it resolves. `Skeleton` from the registry, not a spinner                           |
+| `only this session` | **The common case, and it must not read as a failure.** The list holds one row, _Este aparato_. The close-all control is absent, not disabled. A sentence says why |
+| `loaded, 2–5 rows`  | The typical case. This device first, then the others newest-first                                                                                                  |
+| `loaded, many rows` | No cap and no pagination — a person with 12 open sessions is exactly who needs to see 12. The list scrolls with the page                                           |
+| `submitting`        | The one button is busy; the list stays readable and is not disabled. Per-action, per the spec's surface table                                                      |
+| `success`           | The list re-reads and the confirmation names the count: _Cerramos 2 sesiones. Esta sigue abierta._ Announced, not merely rendered                                  |
+| `action failed`     | What happened and what to do, in the same breath. The list is unchanged and still accurate, and the button is offered again                                        |
+| `signed out`        | Redirect to `/sign-in`. This is the spec's empty state for this surface, and it is reached by an expired or revoked session, never by the action itself            |
 
 **Row ranges to design against:** a session created minutes ago and one created 29 days ago; an
 8-hour shared-device session that expires this evening; a session whose device string is absent

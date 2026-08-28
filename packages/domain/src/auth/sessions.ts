@@ -97,26 +97,26 @@ export async function listAccountSessions(
     .where(and(eq(schema.session.userId, accountId), gt(schema.session.expiresAt, now)))
     .orderBy(desc(schema.session.createdAt));
 
-  const sessions = rows.map(
-    ({ token, signInMethod, userAgent, ...row }): AccountSession => ({
-      ...row,
-      current: token === currentToken,
-      // The column is `TEXT` with a `CHECK` (DD2), so the engine already refuses
-      // anything outside the set; this narrows the driver's `string` to it.
-      signInMethod: signInMethod as SignInMethod,
-      /**
-       * **`""` and `null` are one state, and it is spelled `null` here.**
-       * Measured rather than assumed: a request carrying no `User-Agent` — a
-       * scripted client, a stripped header, `next dev`'s own internal fetches —
-       * lands in the column as an **empty string**, not as `NULL`, because
-       * Better Auth writes `ctx.headers.get("user-agent") || ""`. A surface
-       * given both spellings renders an empty line for one of them, so the two
-       * are collapsed at the boundary that owns the type rather than in every
-       * component that reads it.
-       */
-      userAgent: userAgent || null,
-    }),
-  );
+  const sessions = rows.map((row): AccountSession => ({
+    id: row.id,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    current: row.token === currentToken,
+    // The column is `TEXT` with a `CHECK` (DD2), so the engine already refuses
+    // anything outside the set; this narrows the driver's `string` to it.
+    signInMethod: row.signInMethod as SignInMethod,
+    /**
+     * **`""` and `null` are one state, and it is spelled `null` here.**
+     * Measured rather than assumed: a request carrying no `User-Agent` — a
+     * scripted client, a stripped header, `next dev`'s own internal fetches —
+     * lands in the column as an **empty string**, not as `NULL`, because
+     * Better Auth writes `ctx.headers.get("user-agent") || ""`. A surface
+     * given both spellings renders an empty line for one of them, so the two
+     * are collapsed at the boundary that owns the type rather than in every
+     * component that reads it.
+     */
+    userAgent: row.userAgent || null,
+  }));
 
-  return [...sessions].sort((a, b) => Number(b.current) - Number(a.current));
+  return sessions.toSorted((a, b) => Number(b.current) - Number(a.current));
 }
