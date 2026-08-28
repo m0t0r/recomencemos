@@ -15,7 +15,8 @@
  * 1. **The device name leads every row, including this one.** The task on this
  *    surface is *recognition* — she is hunting a machine she does not recognise
  *    — which makes the device name the scan column. The first draft made
- *    _Este aparato_ the row's heading and demoted the device to the meta line,
+ *    the current-device marker the row's heading and demoted the device to the
+ *    meta line,
  *    so the one row that is **not** a candidate for closing was the row that
  *    broke the column. It is a `Badge` beside the name now, so the three names
  *    line up.
@@ -24,10 +25,13 @@
  *    same day, which is the common case — then all three rows lead
  *    _"Abierta hoy"_ and the primary line carries nothing.
  *
- * **_Este aparato_ stays a word.** NFR20 and the voice guide both refuse meaning
- * carried by anything a screen-reader user or a person who cannot distinguish
- * the accent would miss, so the marker is read aloud in the row's own flow — it
- * is never the tint, never the border, never "the first one".
+ * **The marker stays a word, and names no device.** NFR20 and the voice guide
+ * both refuse meaning carried by anything a screen-reader user or a person who
+ * cannot distinguish the accent would miss, so it is read aloud in the row's own
+ * flow — never the tint, never the border, never "the first one". It says
+ * _Estás aquí_ rather than naming a device because a session is a browser, not a
+ * machine: two browsers on one laptop are two rows, and a device noun would tell
+ * her the other one is somewhere else. See `THIS_DEVICE` in `_lib/messages.ts`.
  *
  * A Server Component: no state, no handlers, no effects, so it costs the client
  * bundle nothing.
