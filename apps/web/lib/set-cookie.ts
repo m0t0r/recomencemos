@@ -2,11 +2,19 @@
  * One `Set-Cookie` line, as the object Next's `cookies().set()` takes.
  *
  * **This exists because a Server Action cannot pass a `Set-Cookie` header
- * through.** Better Auth writes its OAuth `state` cookie onto the response of a
- * call `startGoogleSignIn` makes internally; the only way to get it onto *our*
- * response is `next/headers`' cookie store, which takes a name, a value and
- * options rather than a serialised line. So the line has to be taken apart and
- * put back together, and that is the whole job here.
+ * through.** Better Auth writes its cookies onto the response of a call
+ * `@repo/domain` makes internally; the only way to get one onto *our* response
+ * is `next/headers`' cookie store, which takes a name, a value and options
+ * rather than a serialised line. So the line has to be taken apart and put back
+ * together, and that is the whole job here.
+ *
+ * **It sits in `lib/` rather than under a surface, because two surfaces need
+ * it**: `startGoogleSignIn` writing the OAuth `state` cookie, and the shell's
+ * `signOut` writing the clearing ones (#80). It lived in
+ * `app/(auth)/sign-in/_lib/` while the Google door was its only caller; a
+ * private `_lib` reached across surfaces is exactly the shape the
+ * folder-per-surface rule in the root `CLAUDE.md` refuses, so the second caller
+ * moved it rather than importing sideways into a `_`-prefixed folder.
  *
  * It is a module of its own rather than a loop inside the action for one
  * reason: **the action cannot be tested and this can.** The Google door needs
