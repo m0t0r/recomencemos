@@ -30,7 +30,7 @@ import { auth } from "@/lib/auth";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { actionClient, rateLimit, returnActionError } from "@/lib/safe-action";
 import { checkYourEmail } from "./_lib/messages";
-import { parseSetCookie } from "./_lib/set-cookie";
+import { parseSetCookie } from "@/lib/set-cookie";
 import {
   requestMagicLinkSchema,
   returnPathArg,

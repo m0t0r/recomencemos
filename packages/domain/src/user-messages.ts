@@ -32,3 +32,17 @@ export const SERVICE_UNAVAILABLE =
  */
 export const SIGN_IN_FAILED =
   "No pudimos entrar a tu cuenta. Intenta de nuevo, o entra con la otra opción.";
+
+/**
+ * Sign-out failed, and the session is still open.
+ *
+ * **The second sentence is the load-bearing one.** The person most likely to
+ * meet this string is NFR13's shared-device Worker — she pressed _Salir_ on a
+ * phone that is not hers and is about to hand it back. Telling her only that
+ * something failed would leave her to assume the safe thing, and the safe thing
+ * is not what happened. Directness 5, and the absence stated first
+ * (`docs/policy/voice.md`, Do 2 and Do 3): what happened, what is true now, what
+ * to do.
+ */
+export const SIGN_OUT_FAILED =
+  "No pudimos cerrar tu sesión. Sigue abierta en este dispositivo. Intenta de nuevo.";

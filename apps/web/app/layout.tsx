@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
+import { Suspense } from "react";
 import { Toaster } from "@repo/design-system/components/sonner";
 import { cn } from "@repo/design-system/lib/utils";
+import { SiteHeader, SiteHeaderSkeleton } from "./_components/site-header/site-header";
 import "@repo/design-system/globals.css";
 
 const fontSans = Inter({
@@ -39,6 +41,20 @@ export default function RootLayout({
       className={cn("font-sans antialiased", fontSans.variable, fontMono.variable)}
     >
       <body>
+        {/*
+          The shell (#80), above every page. It reads the session, which is
+          **dynamic** — no `use cache` anywhere near it, per ADR-0011 and
+          `apps/web/AGENTS.md`, because a cached session read serves one person's
+          identity to the next.
+
+          Cache Components therefore requires a boundary here. `[stream]` from
+          the framework's own menu rather than `[block]`: no page should wait on
+          chrome before it paints, and the fallback holds the header's exact
+          height so nothing moves when the read resolves.
+        */}
+        <Suspense fallback={<SiteHeaderSkeleton />}>
+          <SiteHeader />
+        </Suspense>
         {children}
         <Toaster />
       </body>
