@@ -48,7 +48,16 @@ export function EntrarLink() {
   if (pathname === SIGN_IN_PATH) return <span />;
 
   return (
-    <Button variant="outline" size="lg" render={<Link href={SIGN_IN_PATH} />}>
+    /*
+      **Primary, not outline.** Signed out, this is the only action the shell
+      offers and the only thing in the row that is not the product's own name —
+      so there is nothing for a primary weight to compete with, and an outline
+      button here reads as the secondary half of a pair that does not exist.
+
+      `primary` carries primary actions and is not decoration (`DESIGN.md` →
+      Colors); one accent on a Restrained palette, on the one control.
+    */
+    <Button size="lg" render={<Link href={SIGN_IN_PATH} />}>
       {SIGN_IN}
     </Button>
   );

@@ -37,6 +37,12 @@ Four decisions taken at shape, each with the alternative it beat.
    the header is the same height in both states, so nothing moves when a person crosses the boundary.
    It is suppressed on `/sign-in` itself, where it would point at the page you are already on.
 
+   **It carries `primary` weight, not `outline`** _(2026-08-28, at the design lead's direction)_.
+   Signed out, it is the only action the shell offers and the only thing in the row that is not the
+   product's own name — so there is nothing for a primary weight to compete with, and an outline
+   button reads as the secondary half of a pair that does not exist. One accent on a Restrained
+   palette, on the one control (`DESIGN.md` → Colors).
+
    _Beat:_ brand-only, which leaves a Hirer reading a public profile no visible route to an account;
    and no shell at all when signed out, which makes the boundary a real shift.
 
@@ -72,9 +78,15 @@ Four decisions taken at shape, each with the alternative it beat.
    natively with neither cost and is **ruled out by NFR5**: Baseline since April 2024, which is about
    two months short of the 30-month Widely Available bar. Worth re-reading in late 2026.
 
-4. **No `/prototype` round.** The ticket makes it conditional — _"if the shape session leaves a
-   genuine alternative"_. It does not: the interview closed every fork above with a direct answer, and
-   a variant switcher needs a real difference to switch between.
+4. **A `/prototype` round on the identity trigger, at 360 px.**
+
+   _This reverses an earlier line in this brief, and the reversal is the record._ The first draft said
+   no prototype was needed because the interview had closed every fork. That was wrong on its own
+   terms: the interview settled _what the trigger contains_ and never settled _how it composes on a
+   360 px phone_, which is the width mobile-first makes the deciding one. Three variants ran on the
+   real `/` route with the real session read above them — one control with a menu, one icon control
+   with a menu, and no menu at all — and the third exists to reopen decision 3, because a header with
+   no menu needs no `<noscript>` fallback and no unhydrated dead window.
 
 ## The honest gap
 
