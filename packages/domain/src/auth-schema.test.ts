@@ -354,6 +354,24 @@ describe("the configuration DD5 says is not the default", () => {
     expect(options.session?.cookieCache?.enabled).toBe(false);
   });
 
+  /**
+   * NFR13's shared-device promise rests on this one flag. Better Auth measures a
+   * session's age as `expiresAt - expiresIn + updateAge <= now`, and the create
+   * hook deliberately writes an `expiresAt` shorter than `expiresIn` — so with
+   * refresh on, the *first* `/get-session` promotes an 8-hour shared-device
+   * session to 30 rolling days and re-persists its cookie. See `#auth/config`.
+   *
+   * `session-lifetime.database.test.ts` proves the behaviour end to end; this
+   * asserts the mechanism, so the reason survives next to the other DD5 rows.
+   */
+  it("refuses Better Auth's session refresh, which would extend a shared device", () => {
+    expect(options.session?.disableSessionRefresh).toBe(true);
+    // Gone with it: its only reader outside the cookie-cache path is the
+    // expression above, and leaving it would imply a rolling session there is
+    // not one.
+    expect(options.session?.updateAge).toBeUndefined();
+  });
+
   it("puts Better Auth's own limiter in the database, not in memory", () => {
     expect(options.rateLimit?.storage).toBe("database");
     expect(options.rateLimit?.enabled).toBe(true);

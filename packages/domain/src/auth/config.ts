@@ -262,7 +262,52 @@ export function authOptions({
      */
     session: {
       expiresIn: 60 * 60 * 24 * 30,
-      updateAge: 60 * 60 * 24,
+
+      /**
+       * **Off, and NFR13's shared-device promise is what depends on it.**
+       *
+       * Better Auth infers how old a session is by subtracting the *configured*
+       * `expiresIn` from the **row's** `expiresAt`
+       * (`dist/api/routes/session.mjs`):
+       *
+       * ```js
+       * const shouldBeUpdated =
+       *   session.session.expiresAt.valueOf() - expiresIn * 1e3 + updateAge * 1e3 <= Date.now();
+       * ```
+       *
+       * That inference is only sound while the row agrees with the option, and
+       * here it deliberately does not: `databaseHooks.session.create.before`
+       * writes **8 hours** for a shared device while `expiresIn` above stays at
+       * the own-device 30 days. The subtraction then lands about 29 days in the
+       * past, so the predicate is true on the **first** `/get-session` — and the
+       * refresh writes `expiresAt = now + 30 days` and re-issues the cookie with
+       * `Max-Age = 2592000`, undoing **both** halves of the promise, the row as
+       * well as the cookie.
+       *
+       * **The arithmetic is inverted**, which is what makes it dangerous: the
+       * shorter the session was meant to be, the sooner it is extended. An
+       * own-device row is not touched, so nothing looks wrong until you check
+       * the one case that matters.
+       *
+       * **A `session.update.before` clamp cannot do this job.** That hook is
+       * called as `toRun(data, context)` — the partial update only, with no
+       * `where`, no token and no existing row — so it cannot read the row's
+       * device class or `createdAt` to clamp against. Refusing the refresh is
+       * the mechanism that is actually available, and it makes the row the one
+       * authority on when a session ends, which is what DD5 says it should be.
+       *
+       * **What it costs, stated plainly:** an own-device session is now an
+       * absolute 30 days rather than a rolling one, so a Worker who uses the
+       * product every day is signed out on day 30. That is the price of the
+       * shared-device guarantee being real, and it is the right side to err on
+       * for a product whose own copy asks _"¿este no es tu teléfono?"_.
+       *
+       * `updateAge` is gone with it: the expression above is its only reader
+       * outside the cookie-cache path, which is off below. **Turning this back
+       * on means first making the row and `expiresIn` agree** — otherwise the
+       * defect returns exactly as it was.
+       */
+      disableSessionRefresh: true,
 
       /**
        * **Off, and this is one of DD5's three security-relevant rows.** With a

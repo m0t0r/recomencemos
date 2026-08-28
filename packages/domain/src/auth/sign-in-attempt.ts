@@ -82,7 +82,14 @@ export const NO_SIGN_IN_ATTEMPT: SignInAttempt = { sharedDevice: false };
  * design rather than a missing default.
  */
 export function signInMethodForPath(path: string): SignInMethod {
-  const method = SIGN_IN_PATHS[path];
+  // `Object.hasOwn` rather than a bare lookup: a plain object literal inherits
+  // `constructor`, `toString` and the rest, so `SIGN_IN_PATHS["constructor"]`
+  // is truthy and would return a function where a method belongs. Not reachable
+  // today — `path` is a route template from Better Auth's endpoint table, never
+  // a string a caller supplies — but this is the field NFR14 gates Admin
+  // authority on, and "not reachable today" is the wrong thing for that to rest
+  // on.
+  const method = Object.hasOwn(SIGN_IN_PATHS, path) ? SIGN_IN_PATHS[path] : undefined;
   if (method) return method;
 
   throw new AppError({
