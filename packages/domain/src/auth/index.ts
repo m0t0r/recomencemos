@@ -38,8 +38,15 @@ import {
   MAGIC_LINK_TTL_MINUTES,
 } from "#auth/config";
 import { safeReturnPath } from "#auth/return-path";
+import type { DomainDatabase } from "#database";
+import { type AccountSession, listAccountSessions } from "#auth/sessions";
 import { SHARED_DEVICE_HEADER } from "#auth/sign-in-attempt";
-import { SIGN_IN_FAILED, SIGN_OUT_FAILED } from "#user-messages";
+import {
+  SESSION_REQUIRED,
+  SIGN_IN_FAILED,
+  SIGN_OUT_EVERYWHERE_FAILED,
+  SIGN_OUT_FAILED,
+} from "#user-messages";
 
 /**
  * Where a failed verification lands. Owned here rather than by `apps/web`,
@@ -136,14 +143,37 @@ export type StartGoogleSignInOutcome =
   | { readonly ok: false; readonly error: AppError };
 
 /**
+ * What `signOutEverywhere` answers.
+ *
+ * **`revoked` is a count and the API contract says `{ ok }`.** The extra field
+ * is deliberate: `/account`'s success state quotes the number back at her —
+ * _"Cerramos 2 sesiones"_ — which is voice guide Do 4, and a refusal she can
+ * check is a refusal she can trust. It names no session, carries no token and
+ * carries no device string, so it discloses nothing the caller did not already
+ * have on screen.
+ *
+ * **A missing session is `ok: false`, not an empty success.** This method
+ * authorizes independently, because Next compiles the action calling it to a
+ * directly reachable POST endpoint and a page-level check never extends to it.
+ */
+export type SignOutEverywhereOutcome =
+  | { readonly ok: true; readonly revoked: number }
+  | { readonly ok: false; readonly error: AppError };
+
+/**
  * The narrow interface `apps/web` holds.
  *
- * Deliberately five methods rather than the Better Auth instance: a route
- * handler, a session read, one call per door in, and one call out. Anything a
+ * Deliberately seven named methods rather than the Better Auth instance: a route
+ * handler, a session read, one call per door in, and three ways out. Anything a
  * later story needs is a method added here on purpose, which is a review
  * conversation, rather than a capability that arrived because the whole library
- * was in scope. `signOut` is the worked example — #80 added it and wrote down
- * why it is not `signOutEverywhere`, which is #13's.
+ * was in scope.
+ *
+ * **The three exits are three methods, not one with a flag**, and that is the
+ * shape to keep. `signOut` (#80) ends *this* session; `signOutEverywhere` (#13)
+ * ends every *other* one; `listSessions` is what makes the second an informed
+ * act rather than a blind one. Collapsing the first two into a boolean would put
+ * "end every session I have" one changed default away from "end this one".
  */
 export interface AuthHandler {
   /**
@@ -189,6 +219,33 @@ export interface AuthHandler {
    * cookie-deletion-only implementation passes every other assertion.
    */
   readonly signOut: (input: SignOutInput) => Promise<SignOutOutcome>;
+
+  /**
+   * Every session of the caller's Account that has not expired, this device
+   * first. `null` where the caller has no session at all — which is a different
+   * answer from an empty list and must not be conflated with one, because
+   * `/account` redirects on the first and could not reach the second.
+   *
+   * **This does not go through Better Auth's `/list-sessions`**, and
+   * `#auth/sessions` carries the two reasons: that endpoint's freshness gate
+   * refuses the six-day-old session this surface exists to serve, and it returns
+   * the row's `token`.
+   */
+  readonly listSessions: (headers: Headers) => Promise<readonly AccountSession[] | null>;
+
+  /**
+   * NFR13's revocation. Ends every session of the caller's Account **except the
+   * one making the request**, and answers with how many it ended.
+   *
+   * **The current session survives on purpose.** NFR13 asks that a Worker end
+   * all her sessions from any device she holds, and the pair of controls does
+   * that — this one plus _salir_. Ending the session she is holding would revoke
+   * the one session with no security value to revoke, cost her a fresh sign-in
+   * on a connection she pays for, and destroy the feedback: ejected to
+   * `/sign-in`, she cannot tell whether the action worked or whether she was
+   * merely logged out. The argument is recorded at `.impeccable/briefs/account.md`.
+   */
+  readonly signOutEverywhere: (headers: Headers) => Promise<SignOutEverywhereOutcome>;
 }
 
 /**
@@ -236,21 +293,42 @@ type AuthInstance = ReturnType<typeof betterAuth<AuthOptions>>;
 export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
   if (built) return built;
 
-  let instance: Promise<AuthInstance> | undefined;
+  /**
+   * **The database handle is memoised beside the instance, not re-derived.**
+   * `listSessions` reads rows this package owns rather than going through Better
+   * Auth's endpoint (see `#auth/sessions`), so it needs the same handle the
+   * adapter was built over — resolving `#connection` a second time would open a
+   * second pool against the cap DD2 sets at 10 per machine.
+   */
+  let instance: Promise<{ auth: AuthInstance; db: DomainDatabase }> | undefined;
 
   const resolve = () => {
     instance ??= (async () => {
       const db = dependencies.db ?? (await import("#connection")).db();
-      return betterAuth(authOptions({ ...dependencies, db }));
+      return { auth: betterAuth(authOptions({ ...dependencies, db })), db };
     })();
     return instance;
   };
 
+  /**
+   * The caller's session, with the token — which {@link AuthSession}
+   * deliberately withholds and both methods below genuinely need: one to mark a
+   * row as this device, the other to know which row to spare.
+   *
+   * It stays inside this closure, so the token has no path to a caller.
+   */
+  const currentSession = async (headers: Headers) => {
+    const { auth, db } = await resolve();
+    const result = await auth.api.getSession({ headers });
+    if (!result) return null;
+    return { auth, db, accountId: result.user.id, token: result.session.token };
+  };
+
   built = {
-    handler: async (request) => (await resolve()).handler(request),
+    handler: async (request) => (await resolve()).auth.handler(request),
 
     async getSession(headers) {
-      const auth = await resolve();
+      const { auth } = await resolve();
       const result = await auth.api.getSession({ headers });
       if (!result) return null;
 
@@ -267,7 +345,7 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 
     async signOut({ headers }) {
       try {
-        const auth = await resolve();
+        const { auth } = await resolve();
 
         /**
          * `returnHeaders` for the same reason `signInSocial` needs it: the
@@ -342,7 +420,7 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 
     async requestMagicLink({ email, sharedDevice, returnPath, headers }) {
       try {
-        const auth = await resolve();
+        const { auth } = await resolve();
 
         await auth.api.signInMagicLink({
           body: {
@@ -394,7 +472,7 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 
     async startGoogleSignIn({ sharedDevice, returnPath, headers }) {
       try {
-        const auth = await resolve();
+        const { auth } = await resolve();
 
         /**
          * **The shared-device answer is set on the headers here, by us.**
@@ -468,6 +546,90 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
         };
       }
     },
+
+    async listSessions(headers) {
+      const current = await currentSession(headers);
+      if (!current) return null;
+
+      return listAccountSessions(current.db, {
+        accountId: current.accountId,
+        currentToken: current.token,
+        // Taken here rather than inside the query, so the expiry boundary is one
+        // instant for the whole list rather than one per row.
+        now: new Date(),
+      });
+    },
+
+    async signOutEverywhere(headers) {
+      const current = await currentSession(headers);
+
+      if (!current) {
+        return {
+          ok: false,
+          error: new AppError({
+            code: "session_required",
+            status: 401,
+            message:
+              "signOutEverywhere was called with no session. The action authorizes " +
+              "independently rather than trusting the page that rendered the form, so this " +
+              "is the ordinary answer to an expired or already-revoked cookie — not an " +
+              "attack signal on its own.",
+            userMessage: SESSION_REQUIRED,
+            // No account id: there is no session, so there is nothing to name.
+            context: {},
+          }),
+        };
+      }
+
+      try {
+        /**
+         * **Counted before the revocation, not after.** `/revoke-other-sessions`
+         * answers `{ status: true }` and nothing else, and the count is what
+         * `/account` says back to her. Reading the list first is also the only
+         * order that can produce a number at all — afterwards there is nothing
+         * left to count.
+         */
+        const sessions = await listAccountSessions(current.db, {
+          accountId: current.accountId,
+          currentToken: current.token,
+          now: new Date(),
+        });
+
+        const revoked = sessions.filter((session) => !session.current).length;
+
+        /**
+         * Better Auth's own endpoint rather than a `DELETE` written here, and
+         * the difference matters for one reason: `internalAdapter.deleteSession`
+         * is what a secondary session store would be wired behind. This product
+         * has none today, so the two are equivalent today — and the day one is
+         * added, a hand-written delete is the thing that silently stops working.
+         *
+         * It sits behind `sensitiveSessionMiddleware`, which re-reads the
+         * session authoritatively with the cookie cache disabled. DD5 has that
+         * cache off, so **there is no cache in front of this and the revocation
+         * lag is zero** rather than bounded by a TTL.
+         */
+        await current.auth.api.revokeOtherSessions({ headers });
+
+        return { ok: true, revoked };
+      } catch (cause) {
+        return {
+          ok: false,
+          error: new AppError({
+            code: "sign_out_everywhere_failed",
+            status: 502,
+            message:
+              "Revoking the Account's other sessions failed. They are still open, which is " +
+              "what the user-facing copy says — a Worker closing a session on a machine she " +
+              "no longer controls must not be left assuming it worked.",
+            userMessage: SIGN_OUT_EVERYWHERE_FAILED,
+            // An id and a count. No token, no device string, no address (NFR18).
+            context: { account_id: current.accountId },
+            cause,
+          }),
+        };
+      }
+    },
   };
 
   return built;
@@ -475,6 +637,7 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 
 export { googleSignInAvailable, MAGIC_LINK_TTL_MINUTES };
 export type { AuthDependencies, MagicLinkRequest, AuthLogger, AuthEnv } from "#auth/config";
+export type { AccountSession } from "#auth/sessions";
 export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
 /**
  * **`SHARED_DEVICE_HEADER` is deliberately no longer exported.** It was
