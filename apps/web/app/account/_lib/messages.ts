@@ -23,9 +23,20 @@ export const ACCOUNT_TITLE = "Tu cuenta";
 /** The `<title>`, which is read in a tab rather than on the page. */
 export const ACCOUNT_PAGE_TITLE = "Tu cuenta — Recomencemos";
 
-/** Her address, named plainly. Not "usuario", not "perfil" — this is the Account. */
+/**
+ * Her address, named by **what it is for** rather than restated as a label.
+ *
+ * _"Tu cuenta es X"_ was the first draft and it is a caption: it tells her a
+ * thing she already knows in a sentence that does no work. What is useful is
+ * that this is the address we write to — which is why the magic link arrives
+ * where it does, and where every later notification will go. Voice guide Do 1:
+ * name what we actually do, present tense, actor visible.
+ *
+ * `nosotros` is legitimate here because the platform genuinely acts — we send
+ * that mail. It is not _te acompañamos_.
+ */
 export function accountIs(email: string): string {
-  return `Tu cuenta es ${email}`;
+  return `Te escribimos a ${email}`;
 }
 
 export const SESSIONS_HEADING = "Sesiones abiertas";
@@ -39,8 +50,30 @@ export const SESSIONS_HEADING = "Sesiones abiertas";
 export const SESSIONS_EXPLANATION =
   "Si entraste desde un computador o un teléfono prestado, esa sesión sigue abierta hasta que la cierres.";
 
-/** The row she is reading this on, which is the one she cannot close from here. */
-export const THIS_DEVICE = "Este aparato";
+/**
+ * The row she is reading this on, which is the one she cannot close from here.
+ *
+ * **It names no device, and that is a correctness fix rather than a preference.**
+ * The first draft said _"Este aparato"_, and a session is not a device — it is a
+ * browser. Open Chrome and Firefox on one laptop and there are two rows, one
+ * marked _"Este aparato"_, which tells her the other one is somewhere else. It
+ * is not. The label was false in a case a person actually reaches.
+ *
+ * **`teléfono` would be false in the other direction**, which is worth recording
+ * because it is the product's own word four times over (`SHARED_DEVICE_LABEL`
+ * and the magic-link copy). Those four are addressed to a Worker signing in on a
+ * phone and are right where they stand; this string is read by a Hirer on a
+ * desktop and by a Worker at a cybercafé too, and naming a phone to either is a
+ * small lie at the moment they are deciding what to close. `dispositivo` is
+ * institutional register and fails Sophistication 2. #80 reached the same
+ * conclusion from the other side and made its own string device-neutral.
+ *
+ * So the marker carries **position, not taxonomy** — which is also what the row
+ * needs, because the heading beside it already names the browser. The voice
+ * guide asks for the verb before the classifying noun, and this is that rule
+ * applied to two words.
+ */
+export const THIS_DEVICE = "Estás aquí";
 
 /**
  * The common case, and it must not read as a failure or as an error state.
