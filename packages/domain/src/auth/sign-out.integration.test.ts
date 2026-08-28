@@ -69,21 +69,39 @@ describe("signing out", () => {
     expect(await readSession(auth, cookie)).toBeNull();
   });
 
-  test("leaves the other device signed in, because #13 owns everywhere", async ({ database }) => {
+  /**
+   * **The boundary is scope, not hardware**, and the name says so deliberately.
+   *
+   * It read _"leaves the other device signed in"_ when #80 wrote it, and that
+   * conflates the two things story 12 had to pull apart: a session is a
+   * **browser**, not a machine. Two browsers on one laptop are two sessions, so
+   * signing out of one leaves "the other session" open on the same device — a
+   * sentence the old name made unsayable. Renamed on #13 rather than on #80's
+   * own branch because this file was being restructured here at the time, and a
+   * one-word rename into a file another open PR is rewriting is a guaranteed
+   * conflict for nothing.
+   *
+   * **It also asserts more than it used to.** When it was written
+   * `signOutEverywhere` did not exist, so it pinned a boundary against a
+   * hypothetical. That method is now real and sits beside this one, which is
+   * precisely when a test like this earns its place: if the two ever collapse
+   * into one method with a flag, this goes red.
+   */
+  test("leaves her other session open, because ending every one is #13's", async ({ database }) => {
     const stack = signInStack(database);
     const { auth } = stack;
 
-    const phone = (await signIn(stack, "worker@example.co", { sharedDevice: true })).cookie;
-    const laptop = (await signIn(stack, "worker@example.co", { sharedDevice: false })).cookie;
+    // Named for the scenario each sign-in represents — a borrowed phone she
+    // ticked the shared-device box for, and her own machine — not for a claim
+    // that a session is hardware. See the note above.
+    const borrowed = (await signIn(stack, "worker@example.co", { sharedDevice: true })).cookie;
+    const own = (await signIn(stack, "worker@example.co", { sharedDevice: false })).cookie;
     expect(await database.db.select().from(schema.session)).toHaveLength(2);
 
-    await auth.api.signOut({ headers: new Headers({ cookie: phone }) });
+    await auth.api.signOut({ headers: new Headers({ cookie: borrowed }) });
 
-    // The boundary between this ticket and #13, asserted rather than assumed:
-    // `signOut` is single-session. `signOutEverywhere` is story 12's, and if it
-    // ever arrives by widening this method instead of adding one, this fails.
-    expect(await readSession(auth, phone)).toBeNull();
-    expect(await readSession(auth, laptop)).toBe("worker@example.co");
+    expect(await readSession(auth, borrowed)).toBeNull();
+    expect(await readSession(auth, own)).toBe("worker@example.co");
   });
 
   /**

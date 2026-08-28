@@ -48,7 +48,7 @@ async function sessionStillWorks(
 }
 
 describe("the list `/account` renders", () => {
-  test("holds every open session, and marks exactly one of them as this device", async ({
+  test("holds every open session, and marks exactly one of them as the caller's own", async ({
     database,
   }) => {
     const stack = signInStack(database);
@@ -70,7 +70,7 @@ describe("the list `/account` renders", () => {
 
     expect(sessions).toHaveLength(2);
     expect(sessions.filter((session) => session.current)).toHaveLength(1);
-    // This device leads the list — see the ordering note in `sessions.ts`.
+    // The caller's own session leads the list — see the ordering note in `sessions.ts`.
     expect(sessions[0]!.current).toBe(true);
     expect(sessions[0]!.userAgent).toBe(ANDROID);
   });

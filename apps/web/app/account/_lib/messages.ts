@@ -13,9 +13,16 @@
  * and factual: what is open, what closing it reaches, what happened.
  *
  * **The banned vocabulary that bites here**: _usuario/a_ (CONTEXT.md's Account
- * entry), _dispositivo_ is fine but _aparato_ is the ordinary Risaralda word and
- * Sophistication is 2, and nothing on this page may describe her by anything
- * that happened to her.
+ * entry), and nothing on this page may describe her by anything that happened to
+ * her.
+ *
+ * **No string here names hardware**, and that is a rule rather than a habit — see
+ * {@link CURRENT_SESSION_MARKER} for the case that established it. A session is a
+ * browser, so _dispositivo_, _aparato_ and _teléfono_ are each wrong in a
+ * different direction: the first is institutional register, the second is vague,
+ * and the third is false for the Hirer on a desktop who reads the same page. The
+ * only place a device is named at all is {@link deviceLabel}, where the value
+ * comes from the browser's own `User-Agent` rather than from us.
  */
 
 export const ACCOUNT_TITLE = "Tu cuenta";
@@ -73,7 +80,7 @@ export const SESSIONS_EXPLANATION =
  * guide asks for the verb before the classifying noun, and this is that rule
  * applied to two words.
  */
-export const THIS_DEVICE = "Estás aquí";
+export const CURRENT_SESSION_MARKER = "Estás aquí";
 
 /**
  * The common case, and it must not read as a failure or as an error state.
