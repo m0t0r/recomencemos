@@ -14,6 +14,7 @@
     "#rate-limit": "./src/rate-limit.ts",
     "#schema": "./src/schema.ts",
     "#server-only": "./src/server-only.ts",
+    "#testing/auth-stack": "./src/testing/auth-stack.ts",
     "#testing/database": "./src/testing/database.ts",
     "#testing/fixtures": "./src/testing/fixtures.ts",
     "#user-messages": "./src/user-messages.ts"

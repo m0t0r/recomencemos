@@ -20,79 +20,14 @@
  * anything being sent.
  */
 
-import { betterAuth } from "better-auth";
 import { eq } from "drizzle-orm";
-import { authOptions, MAGIC_LINK_TTL_MINUTES } from "#auth/config";
+import { MAGIC_LINK_TTL_MINUTES } from "#auth/config";
 import { OWN_DEVICE_SESSION_SECONDS, SHARED_DEVICE_SESSION_SECONDS } from "#auth/sign-in-attempt";
 import * as schema from "#schema";
+// The stack and the sign-in helper moved to `#testing/auth-stack` on #13, where
+// story 12 needed the same harness to hold two sessions at once.
+import { BASE_URL, signIn, signInStack } from "#testing/auth-stack";
 import { test, type TestDatabase } from "#testing/fixtures";
-
-const BASE_URL = "https://recomencemos.test";
-
-/**
- * A Better Auth instance over the restored engine, plus the one link it would
- * have emailed.
- *
- * Google is left unconfigured: this file is about session lifetime, the
- * magic-link door reaches every line of that, and configuring a social provider
- * would add an outbound leg a test has no business having.
- */
-function signInStack(database: TestDatabase) {
-  const links: { url: string }[] = [];
-
-  const auth = betterAuth(
-    authOptions({
-      db: database.db,
-      sendMagicLink: async ({ url }) => {
-        links.push({ url });
-      },
-      logger: { info: () => {}, warn: () => {} },
-      env: {
-        BETTER_AUTH_SECRET: "a-secret-long-enough-for-the-configuration-to-build",
-        BETTER_AUTH_URL: BASE_URL,
-      },
-    }),
-  );
-
-  return { auth, links };
-}
-
-/** Every cookie a response set, as one `Cookie` header value. */
-function cookieHeader(response: Response): string {
-  return response.headers
-    .getSetCookie()
-    .map((cookie) => cookie.split(";")[0])
-    .join("; ");
-}
-
-/**
- * Sign in through the magic-link door, end to end, and hand back the session
- * cookie the browser would now be holding.
- *
- * The link is opened with `redirect: "manual"` semantics — `auth.handler`
- * returns the 302 rather than following it — which is also the response that
- * carries `Set-Cookie`.
- */
-async function signIn(
-  auth: ReturnType<typeof signInStack>["auth"],
-  links: { url: string }[],
-  email: string,
-  sharedDevice: boolean,
-) {
-  await auth.api.signInMagicLink({
-    body: { email, callbackURL: "/", metadata: { sharedDevice } },
-    headers: new Headers({ origin: BASE_URL }),
-  });
-
-  const link = links.at(-1)?.url;
-  expect(link, "the magic link was never sent").toBeDefined();
-
-  const opened = await auth.handler(new Request(link as string));
-  const cookie = cookieHeader(opened);
-  expect(cookie, "opening the link set no session cookie").not.toBe("");
-
-  return { cookie, opened };
-}
 
 /** The one session row, read straight out of the engine. */
 async function sessionRow(database: TestDatabase) {
@@ -110,8 +45,9 @@ describe("a shared-device sign-in", () => {
   test("gets an eight-hour row, which is NFR13's half that is actually true", async ({
     database,
   }) => {
-    const { auth, links } = signInStack(database);
-    await signIn(auth, links, "worker@example.co", true);
+    const stack = signInStack(database);
+    const { auth } = stack;
+    await signIn(stack, "worker@example.co", { sharedDevice: true });
 
     const row = await sessionRow(database);
     expect(secondsUntil(row!.expiresAt)).toBe(SHARED_DEVICE_SESSION_SECONDS);
@@ -127,8 +63,9 @@ describe("a shared-device sign-in", () => {
   test("is not extended by reading the session, however many times it is read", async ({
     database,
   }) => {
-    const { auth, links } = signInStack(database);
-    const { cookie } = await signIn(auth, links, "worker@example.co", true);
+    const stack = signInStack(database);
+    const { auth } = stack;
+    const { cookie } = await signIn(stack, "worker@example.co", { sharedDevice: true });
 
     const before = (await sessionRow(database))!.expiresAt;
 
@@ -161,8 +98,9 @@ describe("a shared-device sign-in", () => {
    * the guarantee is that no later response re-persists it either.
    */
   test("never has its cookie re-persisted by a later read", async ({ database }) => {
-    const { auth, links } = signInStack(database);
-    const { cookie, opened } = await signIn(auth, links, "worker@example.co", true);
+    const stack = signInStack(database);
+    const { auth } = stack;
+    const { cookie, opened } = await signIn(stack, "worker@example.co", { sharedDevice: true });
 
     for (const set of opened.headers.getSetCookie()) {
       expect(set.toLowerCase()).not.toContain("max-age=");
@@ -182,8 +120,9 @@ describe("a shared-device sign-in", () => {
 
 describe("an own-device sign-in", () => {
   test("gets the thirty-day row NFR13 promises", async ({ database }) => {
-    const { auth, links } = signInStack(database);
-    await signIn(auth, links, "worker@example.co", false);
+    const stack = signInStack(database);
+    const { auth } = stack;
+    await signIn(stack, "worker@example.co", { sharedDevice: false });
 
     expect(secondsUntil((await sessionRow(database))!.expiresAt)).toBe(OWN_DEVICE_SESSION_SECONDS);
   });
@@ -197,8 +136,9 @@ describe("an own-device sign-in", () => {
   test("is absolute rather than rolling, which is what refusing the refresh costs", async ({
     database,
   }) => {
-    const { auth, links } = signInStack(database);
-    const { cookie } = await signIn(auth, links, "worker@example.co", false);
+    const stack = signInStack(database);
+    const { auth } = stack;
+    const { cookie } = await signIn(stack, "worker@example.co", { sharedDevice: false });
 
     const before = (await sessionRow(database))!.expiresAt;
 
@@ -212,7 +152,8 @@ describe("the verification row the link was minted from", () => {
   test("carries the shared-device answer, and is consumed by opening the link", async ({
     database,
   }) => {
-    const { auth, links } = signInStack(database);
+    const stack = signInStack(database);
+    const { auth, links } = stack;
 
     await auth.api.signInMagicLink({
       body: { email: "worker@example.co", callbackURL: "/", metadata: { sharedDevice: true } },
