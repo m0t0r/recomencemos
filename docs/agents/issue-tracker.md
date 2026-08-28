@@ -170,6 +170,16 @@ Where the ticket came from `/triage` rather than `/to-tickets` there is no paren
 1–7 are unchanged except that step 4 has no agreed seam to read, so the seams are confirmed with the
 user in-session, as `tdd` requires.
 
+**A Build session that discovers it is setting a convention stops and surfaces it before writing the
+ADR.** The tell is scope: the decision would bind surfaces beyond this ticket — a form idiom eight
+later screens will copy, an error envelope every action shares. Post the discovery as a comment on
+the ticket (what the convention is, what it binds, why this ticket surfaced it) and wait for the
+human's call: split it into its own `<type>/<slug>` PR, amend the spec, or proceed in-PR with the
+reason recorded in the plan comment. The ADR stays `status: proposed` on every path — what the stop
+buys is a review moment the convention gets on its own. ADR-0014 was adopted from inside story 1's
+PR, where it competed for review attention with security-critical auth code in a diff already 5×
+over the ceiling (#79 row 3); argued in the open is not the same as reviewed on its own terms.
+
 **A ticket or brief may not sequence its work on another PR merging first.** The agent cannot merge
 (`build-to-deploy-gate.sh`), so "land #63 before starting" is an instruction no Build session can
 satisfy — it either stalls the ticket or gets silently ignored, and effort 0001 hit exactly that on

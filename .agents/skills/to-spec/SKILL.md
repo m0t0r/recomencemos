@@ -68,7 +68,9 @@ Each step feeds the next. Do not skip ahead.
 
 1. **User stories**, prioritized `Must` / `Should` / `Could`. These are the functional requirements
    and they are what `/to-tickets` slices into tracer bullets, so each one must be demoable on its
-   own. An unprioritized list of forty stories is how a spec produces a breakdown with no shape.
+   own. An unprioritized list of forty stories is how a spec produces a breakdown with no shape. A
+   story whose first slice carries a package-level foundation with its own test seam is two stories —
+   the template says how and why.
 2. **Non-functional requirements**, with numbers, **each naming the user stories it binds**. That
    `Binds:` line is the whole coupling to Build: `/to-tickets` cuts one ticket per story and copies
    the spec's criteria onto it, so a bound NFR becomes an acceptance criterion by construction and
@@ -155,6 +157,15 @@ where infrastructure lives — deployment topology, runtime, regions, queues, cr
 behaviour at release. Not as a checklist section, but as the answer to a specific number you wrote
 in A4.2. An NFR with no deep dive is a claim that the obvious design already meets it; say that
 explicitly where it is true.
+
+**A deep dive that states how a dependency behaves verifies the claim against the installed version,
+or labels it.** Mechanism-level prose — "the schema is generated, never hand-edited"; "the session is
+rolling" — written from recall or the vendor's docs binds Build to behaviour nobody has run: four of
+effort 0002 DD5's rows differed from the installed better-auth's actual behaviour, and two became
+spec amendments after Build discovered them (#79 rows 4–5). Run the installed package (a
+`/prototype` LOGIC throwaway is the bounded way) or read its installed source; where neither is
+worth the cost, write `assumed, unverified against <version>` beside the claim, so Build inherits a
+question rather than a fact.
 
 ### C3. Propose ADRs where a deep dive sets precedent
 
@@ -258,6 +269,17 @@ Cover the feature completely, but the priority markers are what give Build its o
 blocking edges. Everything below **Must** is a candidate for **Out of Scope** if the effort has to
 shrink.
 
+**A story whose first slice carries a package-level foundation is two stories.** The tell is at
+Design time: the high-level design puts real machinery — new tables, a config factory, a migration, a
+shared mechanism — inside a package, and that machinery has a test seam of its own that no person
+sees on a screen. Write the foundation as its own story, demoed at that seam (its suite passing *is*
+the demo — "demoable on its own" includes "verifiable at its own seam"), and the surface story after
+it; the story order gives `/to-tickets` the blocking edge with nothing added to that skill. Effort
+0002's story 1 kept the auth foundation inside the sign-in story and shipped ~5,000 reviewable lines
+against `docs/policy/build.md`'s 1,000-line `pr-size-ceiling` — the ceiling and the tracer-bullet
+rule conflicted, and the ticket resolved it silently. This is where the conflict is resolved instead,
+by the party that can still see both halves.
+
 ## Non-functional requirements
 
 The numbers. One line each: the requirement, its value, and **which user stories it binds**.
@@ -279,6 +301,14 @@ say what the constrained output still contains ("…and still carries the ids th
 request"). Effort 0001 shipped three bugs through one bound with no second half; each passed the
 requirement green.
 
+**An NFR that names an operation binds it on every door, and says so in its own line.** An operation
+reachable through more than one surface — a Server Action and the vendor's direct endpoint, say —
+gets the qualifier inside the NFR ("≤ 5/hour per address, **on every door**"), because the NFR's
+line is what Build copies onto a ticket and prose elsewhere in the spec does not travel with it.
+Effort 0002's NFR26 named `requestMagicLink` per address, the spec elsewhere called the vendor's
+endpoint "a second door", and that door shipped bounded per-IP only — the qualifier existed, one
+section too far from the number it qualified.
+
 **The `Binds:` line is what carries the number into Build.** `/to-tickets` cuts one ticket per user
 story, and an NFR that names its stories arrives as an acceptance criterion on each of them rather
 than sitting in a document nobody re-reads at implementation time. An NFR binding no story is a
@@ -288,6 +318,12 @@ implements.
 ## Core entities
 
 The nouns, their relationships, and cardinality. Prose or a list; no DDL. Schema is a deep dive.
+
+Each entity states its **lifecycle in one findable sentence: the act that creates it, and the path
+that deletes it.** A lifecycle left inferable reads as a missing story: effort 0002 had no sign-up
+story *by design* — the first magic link creates the Account when it is opened — but the spec never
+said so in one place, and "why is there no sign-up?" was asked at review and will be asked again
+anywhere the sentence is absent.
 
 ## API / interface contract
 
@@ -311,6 +347,12 @@ proposes; do not restate it.
 The router's outcome, always stated. One of: `_No consumed surface._` with the reason; the existing
 surface and the states this change adds; a link to the surface brief for a new surface; or the agent
 consumer and its failure mode.
+
+Where the spec ships more than one surface, this section also answers **how a person gets between
+them**: which persistent chrome (navigation, header, signed-in state) connects the surfaces, or which
+existing shell they hang off. Surfaces enumerated without their connective tissue ship as
+destinations nobody can reach — effort 0002 put sign-out on a page nothing linked to, and the gap
+surfaced at review of story 1 rather than at Design (#79 row 9, cut late as #80).
 
 ## Testing Decisions
 
