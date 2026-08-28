@@ -260,7 +260,7 @@ concerns.
   8-hour shared-device session to 30 days on its first read. `session.disableSessionRefresh` is the
   one mechanism that keeps the 8-hour row honest, and it makes the own-device lifetime absolute: a
   Worker who uses the product daily signs in again on day 30. PR #77 carries the verification and
-  `session-lifetime.database.test.ts` asserts both halves)_. Shared
+  `session-lifetime.integration.test.ts` asserts both halves)_. Shared
   device, self-declared **8 hours**, enforced on the **session row** and not only by a non-persistent
   cookie, because a cybercafé browser may not close for a week. Admin **8 hours**, no rolling. A
   Worker ends all her sessions from any device she holds; an Admin ends a reported Hirer's while

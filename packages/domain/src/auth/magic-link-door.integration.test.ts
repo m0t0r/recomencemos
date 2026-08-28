@@ -14,21 +14,11 @@ import { betterAuth } from "better-auth";
 import { authOptions } from "#auth/config";
 import { CEILINGS } from "#rate-limit";
 import { rateCounter } from "#schema";
-import { restoreDatabase, type TestDatabase } from "#testing/database";
+import { test, type TestDatabase } from "#testing/fixtures";
 
 const BASE_URL = "https://recomencemos.test";
 
-let database: TestDatabase;
-
-beforeEach(async () => {
-  database = await restoreDatabase();
-});
-
-afterEach(async () => {
-  await database.close();
-});
-
-function signInStack() {
+function signInStack(database: TestDatabase) {
   const links: { url: string }[] = [];
 
   const auth = betterAuth(
@@ -63,8 +53,8 @@ async function postMagicLink(
 }
 
 describe("the direct /sign-in/magic-link door", () => {
-  it("allows NFR26's five per address and refuses the sixth with a 429", async () => {
-    const { auth, links } = signInStack();
+  test("allows NFR26's five per address and refuses the sixth with a 429", async ({ database }) => {
+    const { auth, links } = signInStack(database);
 
     for (let sent = 0; sent < CEILINGS.requestMagicLink.address.max; sent += 1) {
       // Sequential on purpose: the assertion is that each of the first five is
@@ -82,8 +72,8 @@ describe("the direct /sign-in/magic-link door", () => {
     expect(links).toHaveLength(CEILINGS.requestMagicLink.address.max);
   });
 
-  it("charges the address however the caller capitalised it", async () => {
-    const { auth } = signInStack();
+  test("charges the address however the caller capitalised it", async ({ database }) => {
+    const { auth } = signInStack(database);
 
     for (let sent = 0; sent < CEILINGS.requestMagicLink.address.max; sent += 1) {
       // oxlint-disable-next-line no-await-in-loop
@@ -95,8 +85,8 @@ describe("the direct /sign-in/magic-link door", () => {
     expect(sixth.status).toBe(429);
   });
 
-  it("keeps one address's allowance out of another's", async () => {
-    const { auth } = signInStack();
+  test("keeps one address's allowance out of another's", async ({ database }) => {
+    const { auth } = signInStack(database);
 
     for (let sent = 0; sent < CEILINGS.requestMagicLink.address.max + 1; sent += 1) {
       // oxlint-disable-next-line no-await-in-loop
@@ -114,8 +104,8 @@ describe("the direct /sign-in/magic-link door", () => {
    * request costs two of her five. `ctx.request` is the discriminator: the
    * router sets it on an HTTP hit and an internal `auth.api` call has none.
    */
-  it("does not charge the Server Action's own internal call", async () => {
-    const { auth, links } = signInStack();
+  test("does not charge the Server Action's own internal call", async ({ database }) => {
+    const { auth, links } = signInStack(database);
 
     await auth.api.signInMagicLink({
       body: { email: "worker@example.co", callbackURL: "/" },

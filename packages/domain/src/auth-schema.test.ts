@@ -329,7 +329,7 @@ describe("the configuration DD5 says is not the default", () => {
    * refresh on, the *first* `/get-session` promotes an 8-hour shared-device
    * session to 30 rolling days and re-persists its cookie. See `#auth/config`.
    *
-   * `session-lifetime.database.test.ts` proves the behaviour end to end; this
+   * `session-lifetime.integration.test.ts` proves the behaviour end to end; this
    * asserts the mechanism, so the reason survives next to the other DD5 rows.
    */
   it("refuses Better Auth's session refresh, which would extend a shared device", () => {

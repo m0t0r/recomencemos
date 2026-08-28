@@ -37,7 +37,7 @@ const SIGN_IN_PATHS: Readonly<Record<string, SignInMethod>> = {
  * mechanism that keeps a shared-device row honest keeps this one fixed too, so
  * a Worker who uses the product daily signs in again on day 30. The deviation
  * is argued at that option and asserted by
- * `session-lifetime.database.test.ts`; amending NFR13's word is flagged on the
+ * `session-lifetime.integration.test.ts`; amending NFR13's word is flagged on the
  * PR as a human's call.
  *
  * **Shared device 8 hours, and enforced here on the row.** DD5 is explicit that
@@ -161,18 +161,24 @@ export function readSignInAttempt(context: unknown): SignInAttempt {
 }
 
 /**
- * The header the browser declares the shared-device answer on for the **Google**
- * door, and the reason it is a header rather than the verification row the magic
- * link uses.
+ * The header the shared-device answer travels on for the **Google** door, and
+ * the reason it is a header rather than the verification row the magic link
+ * uses.
  *
  * `/sign-in/social`'s request body is a closed Zod schema that strips unknown
  * keys, so there is no field to put this in. A header is the one channel that
- * survives that and cannot be set cross-origin without a preflight, which is the
- * same property Better Auth's own CSRF checks rely on.
+ * survives that.
+ *
+ * **The browser no longer sets it, and that is the whole change.** It used to:
+ * the Google door was a `better-auth/react` call from a Client Component, which
+ * made this spelling a wire contract `apps/web` had to pin with a test of its
+ * own. `startGoogleSignIn` in `#auth/index` sets it now, on a request this
+ * package makes to itself, so it is internal to the hop between that function
+ * and the `before` middleware in `#auth/config` — and it is not exported.
  *
  * It is not a security boundary and does not need to be: the only thing a forged
- * value changes is how long **her own** session lasts, and she can already change
- * that by not ticking the box.
+ * value could change is how long **her own** session lasts, and she can already
+ * change that by not ticking the box.
  */
 export const SHARED_DEVICE_HEADER = "x-recomencemos-shared-device";
 

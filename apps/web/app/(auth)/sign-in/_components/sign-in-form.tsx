@@ -13,15 +13,21 @@
  *    whole card, with no dead button and no dangling separator.
  * 2. **The Google button wears Google's own treatment** — recognition is the
  *    whole reason that door exists. See the hierarchy note on the button.
- * 3. **The shared-device checkbox sits outside the email form**, because it
- *    governs both doors; inside it, it would read as an email-door setting
+ * 3. **The shared-device checkbox sits outside both forms**, because it governs
+ *    both doors; inside the email form it would read as an email-door setting
  *    while silently shortening a Google session too.
  * 4. **The sent state keeps the form and her address**, so a link a scanner ate
  *    is one tap from a resend with the Google door still on screen.
  *
- * `"use client"` for per-door pending state and the focus move on every
- * outcome. The email door still works without it: a plain `<form action={…}>`
- * posts before hydration and the Server Action answers.
+ * **Both doors now work with JavaScript unavailable, which is new.** The email
+ * door always did — a plain `<form action={…}>` posts before hydration. The
+ * Google door did not: it was a `better-auth/react` call from a click handler,
+ * so an unhydrated page had a button that did nothing. It is a second `<form>`
+ * with a Server Action now, so it posts and redirects natively.
+ *
+ * **There are no hidden inputs.** `returnPath` and `sharedDevice` are bound
+ * arguments — see `_lib/schema.ts`. `"use client"` remains for the checkbox's
+ * state, the per-door pending states, and the focus move on every outcome.
  */
 
 import { useForm } from "@tanstack/react-form";
@@ -38,11 +44,10 @@ import {
 import { Input } from "@repo/design-system/components/input";
 import { Label } from "@repo/design-system/components/label";
 import { useId } from "react";
-import { GoogleMark } from "./google-mark";
+import { useFormStatus } from "react-dom";
 import {
   DOOR_DIVIDER,
   EMAIL_DOOR_PRECONDITION,
-  EMAIL_LOOKS_WRONG,
   EMAIL_LABEL,
   GOOGLE_ACCOUNT_NOTICE,
   GOOGLE_BUTTON,
@@ -51,9 +56,10 @@ import {
   SHARED_DEVICE_HELP,
   SHARED_DEVICE_LABEL,
   SIGN_IN_TITLE,
-} from "./messages";
-import { isAcceptableAddress } from "./schema";
-import { useSignIn } from "./use-sign-in";
+} from "../_lib/messages";
+import { emailField, emailFieldOnBlur } from "../_lib/schema";
+import { useSignIn } from "../_lib/use-sign-in";
+import { GoogleMark } from "./google-mark";
 
 export interface SignInFormProps {
   /**
@@ -81,20 +87,25 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
    * layered rather than merged, and each keeps what it is good at.
    *
    * Two reasons it is arranged this way rather than through
-   * `@tanstack/react-form-nextjs`'s `mergeForm`/`useTransform`:
+   * `@tanstack/react-form-nextjs`'s `mergeForm`/`useTransform`, or through
+   * next-safe-action's `useStateAction`:
    *
    * - **The no-JavaScript path has to survive.** `action={machine.formAction}`
-   *   with named inputs means a submit before hydration posts natively and the
+   *   with a named input means a submit before hydration posts natively and the
    *   Server Action answers. NFR4 requires that of `/publish`; this surface is
    *   not bound by it, but the pattern set here is the one story 2 copies, and a
    *   form abstraction that only works hydrated would make NFR4 unreachable.
-   * - **The outcomes are not form state.** `rate_limited` carries a `retryAfter`,
-   *   `sent` is a success that keeps the form, and `failed` is a transport
-   *   problem — none is a field error, and folding them into a form state would
-   *   flatten distinctions NFR26 and the surface table depend on.
+   * - **The outcomes are not form state.** A ceiling carries a `retryAfter`,
+   *   `sent` is a success that deliberately keeps the form, and a transport
+   *   fault is neither — none is a field error, and folding them into form state
+   *   would flatten distinctions NFR26 and the surface table depend on.
    *
-   * The schema is the same one the Server Action parses, so the check she gets
-   * instantly and the check that actually decides cannot drift apart.
+   * **The validators are the schemas themselves.** `emailField` and
+   * `emailFieldOnBlur` are Zod objects handed to TanStack Form as Standard
+   * Schemas — the same `emailField` the Server Action parses with. There is no
+   * hand-written predicate restating the rule on this side any more, so the
+   * check she gets instantly and the check that actually decides are not merely
+   * kept in agreement; they are the same object.
    */
   const form = useForm({ defaultValues: { email: "" } });
 
@@ -110,31 +121,14 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
         {googleAvailable ? (
           <div className="flex flex-col gap-2">
             {/*
-              **`outline` rather than the filled primary, and that is a decision
-              about hierarchy rather than a downgrade.** Google's sign-in button
-              is recognised by its shape — white, bordered, four-colour mark — and
-              that recognition is the entire reason this door is first. Filling it
-              with the brand's own blue would make it *louder* and *less*
-              recognisable at the same time, which is the wrong trade on the
-              device most Workers hold.
-
-              What carries "Google leads" instead: position, the account notice
-              under it, and the fact that it asks her to type nothing. The email
-              submit below keeps the filled primary, because a form's submit is
-              where a filled button belongs and the two then read as two kinds of
-              action rather than as a ranking.
+              A form rather than a click handler, so the door survives with no
+              JavaScript. The action is bound with the same two values the email
+              door binds, so one checkbox governs both without either form
+              carrying a mirror of it.
             */}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={machine.signInWithGoogle}
-              disabled={machine.googlePending}
-              aria-busy={machine.googlePending}
-            >
-              <GoogleMark />
-              {GOOGLE_BUTTON}
-            </Button>
+            <form action={machine.googleFormAction}>
+              <GoogleButton />
+            </form>
 
             <p className="text-muted-foreground text-sm leading-5">{GOOGLE_ACCOUNT_NOTICE}</p>
           </div>
@@ -147,31 +141,19 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
         <form
           action={machine.formAction}
           /*
-            Runs before the action. `form.handleSubmit()` marks fields touched
-            and surfaces the message without a round trip; `preventDefault` stops
-            the post only when the client already knows the answer, so a valid
-            submit still goes to the server and an invalid one costs her nothing.
+            Runs before the action. The browser answers with the same schema the
+            server will, so an address it already knows is wrong costs her no
+            round trip — and a valid one is never intercepted, so the server
+            still performs the parse that actually decides.
           */
           onSubmit={(event) => {
-            if (isAcceptableAddress(form.state.values.email)) return;
+            if (emailField.safeParse(form.state.values.email).success) return;
 
-            // Only when the browser already knows the answer. A valid submit is
-            // never intercepted, so the server still performs the parse that
-            // actually decides.
             event.preventDefault();
             void form.handleSubmit();
           }}
           className="flex flex-col gap-4"
         >
-          <input type="hidden" name="returnPath" value={returnPath} />
-          {/*
-            The checkbox sits outside this form's block but its value has to
-            travel with the submit, so it rides as a hidden field. `"on"` is what
-            a checked checkbox posts, which is what the action reads — one
-            spelling, not two.
-          */}
-          <input type="hidden" name="sharedDevice" value={machine.sharedDevice ? "on" : "off"} />
-
           <Field>
             <FieldLabel htmlFor={emailId}>{EMAIL_LABEL}</FieldLabel>
             {/*
@@ -187,35 +169,23 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
                 lands where it is rendered instead of relying on the library
                 mapping a schema's paths down to fields.
 
-                The *rule* is still the shared one — `isAcceptableAddress` comes
-                from `./schema`, which the Server Action parses with. What lives
-                here is only the sentence, because the sentence is
-                `docs/policy/voice.md`'s and a schema is the wrong place for
-                Spanish.
-
-                `onBlur` lets an empty field alone: she has not finished, and
-                telling her an empty box is wrong while she is still filling it in
-                is the form nagging rather than helping. `onSubmit` has no such
-                exemption.
+                `onBlur` lets an empty field alone — she has not finished, and
+                telling her an empty box is wrong while she is still filling it
+                in is the form nagging rather than helping. `onSubmit` has no
+                such exemption. Both are schemas from `_lib/schema.ts`, and the
+                sentence inside them is `docs/policy/voice.md`'s rather than
+                Zod's.
               */
-              validators={{
-                onBlur: ({ value }: { value: string }) =>
-                  value === "" || isAcceptableAddress(value) ? undefined : EMAIL_LOOKS_WRONG,
-                onSubmit: ({ value }: { value: string }) =>
-                  isAcceptableAddress(value) ? undefined : EMAIL_LOOKS_WRONG,
-              }}
+              validators={{ onBlur: emailFieldOnBlur, onSubmit: emailField }}
             >
               {(field) => {
-                // The server's verdict and the client's are the same rule, so
+                // The server's verdict and the client's are the same schema, so
                 // either one marks the field. Hers arrives instantly; the
                 // server's is the one that counts.
-                // The validator's message, or the server's. Rendering what the
-                // validator actually returned is what stops it being computed
-                // and thrown away — and it is what would let a second rule on
-                // this field say something different from the first.
                 const clientError = field.state.meta.errors[0];
-                const invalid = machine.state.status === "field_error" || Boolean(clientError);
-                const message = typeof clientError === "string" ? clientError : EMAIL_LOOKS_WRONG;
+                const invalid = machine.emailRejected || Boolean(clientError);
+                const message =
+                  typeof clientError === "string" ? clientError : clientError?.message;
 
                 return (
                   <>
@@ -234,7 +204,9 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
                       aria-invalid={invalid}
                       aria-describedby={invalid ? emailErrorId : undefined}
                     />
-                    {invalid ? <FieldError id={emailErrorId}>{message}</FieldError> : null}
+                    {invalid && message ? (
+                      <FieldError id={emailErrorId}>{message}</FieldError>
+                    ) : null}
                   </>
                 );
               }}
@@ -271,6 +243,45 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
         </div>
       </Card>
     </main>
+  );
+}
+
+/**
+ * The Google door's button, split out for one reason: `useFormStatus` reports
+ * the status of the form **above** the component that calls it, so it has to sit
+ * inside the `<form>` rather than beside it.
+ *
+ * That is also what replaced the `googlePending` state the old hook carried —
+ * along with the `try`/`catch` around a vendor call that returns `{ error }`
+ * instead of throwing. The pending state is now the framework's, and the failure
+ * arrives as a redirect like every other one.
+ *
+ * **`outline` rather than the filled primary, and that is a decision about
+ * hierarchy rather than a downgrade.** Google's sign-in button is recognised by
+ * its shape — white, bordered, four-colour mark — and that recognition is the
+ * entire reason this door is first. Filling it with the brand's own blue would
+ * make it *louder* and *less* recognisable at the same time, which is the wrong
+ * trade on the device most Workers hold.
+ *
+ * What carries "Google leads" instead: position, the account notice under it,
+ * and the fact that it asks her to type nothing. The email submit below keeps
+ * the filled primary, because a form's submit is where a filled button belongs
+ * and the two then read as two kinds of action rather than as a ranking.
+ */
+function GoogleButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button
+      type="submit"
+      variant="outline"
+      className="w-full"
+      disabled={pending}
+      aria-busy={pending}
+    >
+      <GoogleMark />
+      {GOOGLE_BUTTON}
+    </Button>
   );
 }
 

@@ -25,19 +25,9 @@ import { eq } from "drizzle-orm";
 import { authOptions, MAGIC_LINK_TTL_MINUTES } from "#auth/config";
 import { OWN_DEVICE_SESSION_SECONDS, SHARED_DEVICE_SESSION_SECONDS } from "#auth/sign-in-attempt";
 import * as schema from "#schema";
-import { restoreDatabase, type TestDatabase } from "#testing/database";
+import { test, type TestDatabase } from "#testing/fixtures";
 
 const BASE_URL = "https://recomencemos.test";
-
-let database: TestDatabase;
-
-beforeEach(async () => {
-  database = await restoreDatabase();
-});
-
-afterEach(async () => {
-  await database.close();
-});
 
 /**
  * A Better Auth instance over the restored engine, plus the one link it would
@@ -47,7 +37,7 @@ afterEach(async () => {
  * magic-link door reaches every line of that, and configuring a social provider
  * would add an outbound leg a test has no business having.
  */
-function signInStack() {
+function signInStack(database: TestDatabase) {
   const links: { url: string }[] = [];
 
   const auth = betterAuth(
@@ -105,7 +95,7 @@ async function signIn(
 }
 
 /** The one session row, read straight out of the engine. */
-async function sessionRow() {
+async function sessionRow(database: TestDatabase) {
   const rows = await database.db.select().from(schema.session);
   expect(rows).toHaveLength(1);
   return rows[0];
@@ -117,11 +107,13 @@ function secondsUntil(expiresAt: Date): number {
 }
 
 describe("a shared-device sign-in", () => {
-  it("gets an eight-hour row, which is NFR13's half that is actually true", async () => {
-    const { auth, links } = signInStack();
+  test("gets an eight-hour row, which is NFR13's half that is actually true", async ({
+    database,
+  }) => {
+    const { auth, links } = signInStack(database);
     await signIn(auth, links, "worker@example.co", true);
 
-    const row = await sessionRow();
+    const row = await sessionRow(database);
     expect(secondsUntil(row!.expiresAt)).toBe(SHARED_DEVICE_SESSION_SECONDS);
     expect(row!.signInMethod).toBe("magic_link");
   });
@@ -132,11 +124,13 @@ describe("a shared-device sign-in", () => {
    * `/get-session`, with no attacker action, because the refresh predicate reads
    * the configured `expiresIn` rather than the row.
    */
-  it("is not extended by reading the session, however many times it is read", async () => {
-    const { auth, links } = signInStack();
+  test("is not extended by reading the session, however many times it is read", async ({
+    database,
+  }) => {
+    const { auth, links } = signInStack(database);
     const { cookie } = await signIn(auth, links, "worker@example.co", true);
 
-    const before = (await sessionRow())!.expiresAt;
+    const before = (await sessionRow(database))!.expiresAt;
 
     /** One read, asserted to have actually succeeded. */
     const readSession = async () => {
@@ -155,7 +149,7 @@ describe("a shared-device sign-in", () => {
     await readSession();
     await readSession();
 
-    const after = (await sessionRow())!.expiresAt;
+    const after = (await sessionRow(database))!.expiresAt;
 
     expect(after.getTime()).toBe(before.getTime());
     expect(secondsUntil(after)).toBe(SHARED_DEVICE_SESSION_SECONDS);
@@ -166,8 +160,8 @@ describe("a shared-device sign-in", () => {
    * sign-in, and the refresh used to put a 30-day `Max-Age` straight back — so
    * the guarantee is that no later response re-persists it either.
    */
-  it("never has its cookie re-persisted by a later read", async () => {
-    const { auth, links } = signInStack();
+  test("never has its cookie re-persisted by a later read", async ({ database }) => {
+    const { auth, links } = signInStack(database);
     const { cookie, opened } = await signIn(auth, links, "worker@example.co", true);
 
     for (const set of opened.headers.getSetCookie()) {
@@ -187,11 +181,11 @@ describe("a shared-device sign-in", () => {
 });
 
 describe("an own-device sign-in", () => {
-  it("gets the thirty-day row NFR13 promises", async () => {
-    const { auth, links } = signInStack();
+  test("gets the thirty-day row NFR13 promises", async ({ database }) => {
+    const { auth, links } = signInStack(database);
     await signIn(auth, links, "worker@example.co", false);
 
-    expect(secondsUntil((await sessionRow())!.expiresAt)).toBe(OWN_DEVICE_SESSION_SECONDS);
+    expect(secondsUntil((await sessionRow(database))!.expiresAt)).toBe(OWN_DEVICE_SESSION_SECONDS);
   });
 
   /**
@@ -200,21 +194,25 @@ describe("an own-device sign-in", () => {
    * turned back on, the shared-device case above is the one to check first —
    * these two are the same switch seen from either side.
    */
-  it("is absolute rather than rolling, which is what refusing the refresh costs", async () => {
-    const { auth, links } = signInStack();
+  test("is absolute rather than rolling, which is what refusing the refresh costs", async ({
+    database,
+  }) => {
+    const { auth, links } = signInStack(database);
     const { cookie } = await signIn(auth, links, "worker@example.co", false);
 
-    const before = (await sessionRow())!.expiresAt;
+    const before = (await sessionRow(database))!.expiresAt;
 
     await auth.handler(new Request(`${BASE_URL}/api/auth/get-session`, { headers: { cookie } }));
 
-    expect((await sessionRow())!.expiresAt.getTime()).toBe(before.getTime());
+    expect((await sessionRow(database))!.expiresAt.getTime()).toBe(before.getTime());
   });
 });
 
 describe("the verification row the link was minted from", () => {
-  it("carries the shared-device answer, and is consumed by opening the link", async () => {
-    const { auth, links } = signInStack();
+  test("carries the shared-device answer, and is consumed by opening the link", async ({
+    database,
+  }) => {
+    const { auth, links } = signInStack(database);
 
     await auth.api.signInMagicLink({
       body: { email: "worker@example.co", callbackURL: "/", metadata: { sharedDevice: true } },

@@ -1,7 +1,7 @@
 /**
  * Seam 1 for `./rate-limit`: everything that is a pure function over values.
  *
- * `chargeCeiling` itself is seam 2 — `rate-limit.database.test.ts` — because the
+ * `chargeCeiling` itself is seam 2 — `rate-limit.integration.test.ts` — because the
  * upsert *is* the mechanism and a test that mocked it would assert on the shape
  * of a guard clause rather than on behaviour.
  */
