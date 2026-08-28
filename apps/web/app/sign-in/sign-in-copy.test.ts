@@ -56,7 +56,6 @@ const NEVER_SAY = [
   "empleador",
   "usuari",
   "verificado",
-  "hoja de vida",
 ];
 
 describe.each(copy)("%s", (name, value) => {

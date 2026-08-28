@@ -1,28 +1,12 @@
 /**
- * Every `es-CO` string `/sign-in` puts in front of a person.
+ * Every `es-CO` string `/sign-in` puts in front of a person, in one module so
+ * the same fact reads the same way wherever it appears.
  *
- * Collected in one module rather than written at each render site, for the
- * reason `@repo/domain`'s own `user-messages.ts` gives: the same fact should
- * read the same way wherever it appears, and a surface with seven states has
- * seven chances to say the same thing three ways.
- *
- * The authority is [`docs/policy/voice.md`](../../../../docs/policy/voice.md).
- * The rules these strings are checked against, all countable:
- *
- * - **`tú`, throughout.** Second person singular, informal, on every surface.
- * - **Body copy ≤ 20 words per sentence; labels and buttons ≤ 5.**
- * - **No exclamation marks**, except at most one in a success state — and never
- *   in a refusal, a notice, or an email subject.
- * - **Buttons say the verb of their action**, never _Enviar_ or _Continuar_.
- * - **An error names what happened and what to do**, and never refers to meaning
- *   carried by colour or position.
- * - **Nobody is named by what happened to them.** No word from a `CONTEXT.md`
- *   _Avoid_ list, and the earthquake is never a property of a person.
- * - **Refusal tone** — Optimism 3→4, Energy 2→1, Warmth 5 unchanged: the refusal
- *   is our rule, never her mistake.
- *
- * `sign-in-copy.test.ts` checks the countable ones over every string here, so a
- * later edit cannot quietly break them.
+ * The authority is [`docs/policy/voice.md`](../../../../docs/policy/voice.md);
+ * `sign-in-copy.test.ts` enforces its countable rules over every string here,
+ * so a later edit cannot quietly break them. The half no test can reach —
+ * whether the care is aimed at the person rather than the process — is a
+ * reading, and it is the load-bearing one.
  */
 
 /** The page's one `<h1>`. A verb and the product, and nothing about her. */

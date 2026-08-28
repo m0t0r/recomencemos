@@ -32,8 +32,13 @@ const SIGN_IN_PATHS: Readonly<Record<string, SignInMethod>> = {
 /**
  * The two session lifetimes NFR13 fixes for a Worker, in seconds.
  *
- * **Own device 30 days, rolling.** She reaches her account from her own phone
- * without signing in again, which is the whole point of a passwordless design.
+ * **Own device 30 days, absolute.** NFR13 says "rolling", but
+ * `disableSessionRefresh` in `#auth/config` refuses every refresh — the
+ * mechanism that keeps a shared-device row honest keeps this one fixed too, so
+ * a Worker who uses the product daily signs in again on day 30. The deviation
+ * is argued at that option and asserted by
+ * `session-lifetime.database.test.ts`; amending NFR13's word is flagged on the
+ * PR as a human's call.
  *
  * **Shared device 8 hours, and enforced here on the row.** DD5 is explicit that
  * the row is the half that matters: a cybercafé browser may not close for a

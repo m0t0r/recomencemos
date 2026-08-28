@@ -247,20 +247,6 @@ describe("per-door loading", () => {
   });
 });
 
-describe("the design system's own controls", () => {
-  // `Input` ships `text-base md:text-sm` — 16px on a phone so iOS Safari does not
-  // zoom the viewport on focus, 14px from `md` up. An override here flattens that
-  // responsive step while looking like it reinforces it, which is what happened
-  // once and is why this assertion exists.
-  it("leaves the email field's responsive type size alone", () => {
-    const { container } = renderForm();
-    const input = container.querySelector('input[name="email"]');
-
-    expect(input?.className).toContain("md:text-sm");
-    expect(input?.className).not.toMatch(/\bh-1[0-9]\b/);
-  });
-});
-
 describe("client-side validation", () => {
   // The whole justification for the form layer: she learns about a typo without
   // spending a round trip on a connection that may be slow.

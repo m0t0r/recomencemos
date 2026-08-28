@@ -22,7 +22,6 @@ import { bigint, check, integer, pgTable, text, timestamp, unique } from "drizzl
  */
 export {
   account,
-  PASSWORDLESS_SIGN_IN_METHODS,
   rateLimit,
   session,
   SIGN_IN_METHODS,

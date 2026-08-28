@@ -19,7 +19,7 @@
 import { createHash } from "node:crypto";
 import { AppError } from "@repo/errors/app-error";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
 import {
@@ -34,6 +34,7 @@ import {
   signInMethodForPath,
 } from "#auth/sign-in-attempt";
 import type { DomainDatabase } from "#database";
+import { chargeCeiling } from "#rate-limit";
 import * as schema from "#schema";
 import { SIGN_IN_FAILED } from "#user-messages";
 
@@ -439,15 +440,26 @@ export function authOptions({
 
     advanced: {
       /**
-       * **Fly proxies every request** (DD5). Unset, every per-IP ceiling in
-       * NFR26 collapses into one global ceiling — which locks out legitimate
-       * users while barely inconveniencing an attacker.
+       * **`fly-client-ip` first, and `x-forwarded-for` alone is not enough.**
+       * Verified against `@better-auth/core`'s `utils/ip.mjs` at 1.7.1: with no
+       * `trustedProxies` configured, a forwarded header is trusted **only when
+       * it holds exactly one entry** — and Fly *appends* to a caller-sent
+       * `X-Forwarded-For`, so any request whose caller set that header arrives
+       * multi-entry, resolves to `null`, and lands in the limiter's one shared
+       * `no-trusted-ip` bucket. That collapse is caller-selectable, and it also
+       * hits a legitimate user behind a chained corporate proxy.
+       *
+       * `Fly-Client-IP` is set by Fly's proxy to the address it actually
+       * observed, always a single value, so it resolves on every request.
+       * `x-forwarded-for` stays as the fallback for an environment with no Fly
+       * in front; development and test fall back to localhost inside `getIP`
+       * before either is consulted.
        */
-      ipAddress: { ipAddressHeaders: ["x-forwarded-for"] },
+      ipAddress: { ipAddressHeaders: ["fly-client-ip", "x-forwarded-for"] },
     },
 
     hooks: {
-      before: createAuthMiddleware(async (ctx) => beforeSignIn(ctx)),
+      before: createAuthMiddleware(async (ctx) => beforeSignIn(ctx, db)),
       after: createAuthMiddleware(async (ctx) => afterSignIn(ctx, logger)),
     },
 
@@ -541,18 +553,24 @@ const NO_PROVIDER_TOKENS = {
  * with no module-level mutable state and nothing shared between concurrent
  * requests.
  */
-// oxlint-disable-next-line no-explicit-any -- Better Auth's middleware context is
-// structurally typed per endpoint; the four paths below read four different
-// shapes off it, and narrowing them here would restate the library's own types.
-async function beforeSignIn(ctx: any): Promise<{ context: Record<string, unknown> } | undefined> {
+async function beforeSignIn(
+  // oxlint-disable-next-line no-explicit-any -- Better Auth's middleware context
+  // is structurally typed per endpoint; the four paths below read four different
+  // shapes off it, and narrowing them here would restate the library's own types.
+  ctx: any,
+  db: DomainDatabase,
+): Promise<{ context: Record<string, unknown> } | undefined> {
   const path: string = ctx.path ?? "";
 
   switch (path) {
     /**
-     * The Server Action's own call. The answer arrives as `metadata` on the
-     * body, which is the one field `/sign-in/magic-link`'s schema keeps open.
+     * The Server Action's own call — and the direct door an attacker posts to.
+     * The answer arrives as `metadata` on the body, which is the one field
+     * `/sign-in/magic-link`'s schema keeps open.
      */
     case "/sign-in/magic-link": {
+      await chargeAddressCeilingAtTheDirectDoor(ctx, db);
+
       const metadata = ctx.body?.metadata;
       return {
         context: {
@@ -620,6 +638,47 @@ async function beforeSignIn(ctx: any): Promise<{ context: Record<string, unknown
       return { context: { [SIGN_IN_ATTEMPT_KEY]: { sharedDevice } satisfies SignInAttempt } };
     }
   }
+}
+
+/**
+ * NFR26's per-address half, on the door that bypasses the Server Action.
+ *
+ * The `requestMagicLink` Server Action charges ≤ 5/hour per address before it
+ * calls this package — but a client posting straight to
+ * `/api/auth/sign-in/magic-link` never runs the action, and Better Auth's own
+ * limiter on that path keys by IP only. Without this charge the per-address
+ * bound is 20/hour × the attacker's IPs rather than 5/hour, which defeats the
+ * half of NFR26 that protects the *address being flooded*.
+ *
+ * **`ctx.request` is what tells the two callers apart, and it is verified
+ * rather than assumed**: better-call's router puts the incoming `Request` on
+ * the endpoint context (`router.mjs`), while the Server Action's
+ * `auth.api.signInMagicLink({ body, headers })` passes no such field. So an
+ * HTTP hit charges here and the action's own call — already charged, with the
+ * refusal rendered in her terms — is not charged twice.
+ *
+ * The refusal is an `APIError` rather than a returned state because this door
+ * has no surface: a 429 with `Retry-After` is the whole conversation. A charge
+ * that cannot be counted throws (NFR26 fails closed), exactly as it does in the
+ * action's path.
+ */
+// oxlint-disable-next-line no-explicit-any -- see beforeSignIn.
+async function chargeAddressCeilingAtTheDirectDoor(ctx: any, db: DomainDatabase): Promise<void> {
+  if (!ctx.request) return;
+
+  const email = ctx.body?.email;
+  // Not an allow: the endpoint's own schema refuses a body with no address, so
+  // there is nothing to charge a counter against.
+  if (typeof email !== "string" || email.trim() === "") return;
+
+  const outcome = await chargeCeiling(db, { scope: "address", id: email }, "requestMagicLink");
+  if (outcome.allowed) return;
+
+  throw new APIError(
+    429,
+    { code: "RATE_LIMITED", message: outcome.error.userMessage },
+    { "retry-after": String(outcome.retryAfter) },
+  );
 }
 
 /**
