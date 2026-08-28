@@ -29,8 +29,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { EntrarLink } from "./entrar-link";
-import { Suspense } from "react";
-import { PrototypeSwitcher, PrototypeVariant } from "./prototype/switcher";
+import { SessionMenu } from "./session-menu";
 import { HEADER_LANDMARK, HOME_LINK_LABEL, PRODUCT_NAME } from "./messages";
 import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT } from "./slots";
 
@@ -108,22 +107,8 @@ export async function SiteHeader() {
           {PRODUCT_NAME}
         </Link>
 
-        {session ? (
-          /* PROTOTYPE (#80) — `?variant=` switches the identity trigger. Reverts
-             to `<SessionMenu email={session.email} />` when a variant wins. */
-          <Suspense fallback={null}>
-            <PrototypeVariant email={session.email} />
-          </Suspense>
-        ) : (
-          <EntrarLink />
-        )}
+        {session ? <SessionMenu email={session.email} /> : <EntrarLink />}
       </HeaderShell>
-
-      {session ? (
-        <Suspense fallback={null}>
-          <PrototypeSwitcher />
-        </Suspense>
-      ) : null}
 
       {session ? <noscript dangerouslySetInnerHTML={{ __html: NO_SCRIPT_RULE }} /> : null}
     </header>

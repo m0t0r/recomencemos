@@ -3,17 +3,30 @@
 /**
  * The signed-in half of the shell: who she is, and the way out.
  *
+ * **The trigger is the avatar and nothing else** — chosen at `/prototype` from
+ * three variants running on the real route (variant B; the losers are on
+ * `prototype/80-header-variants`). The address is not in the row at all: it is
+ * inside the menu, where it is never truncated, and in the trigger's accessible
+ * name, where a screen reader always gets it in full.
+ *
+ * **What that trade costs, stated rather than glossed:** the borrowed-Android
+ * check DD5 makes at sign-in — _"on a borrowed Android it may be the phone
+ * owner's"_ — is no longer continuous. She taps once to see whose account she is
+ * in. What it buys is a 40 px target that never competes with the product name
+ * for room on a 360 px screen, and an address that is never shown as
+ * `maria.rest…`, which is the form in which it answers nothing.
+ *
  * **One form, one action, two triggers.** The `<form>` lives here and carries an
  * `id`; the menu item and the `<noscript>` fallback in `site-header.tsx` are both
  * `<button type="submit" form={SIGN_OUT_FORM_ID}>`. A submit button needs no
- * ancestor form when it names one by id, which is what keeps the unhydrated path
- * from becoming a *second sign-out path* with its own logic to keep in
- * agreement — it is a second button on the same form.
+ * ancestor form when it names one by id, which keeps the unhydrated path from
+ * becoming a *second sign-out path* with its own logic to keep in agreement — it
+ * is a second button on the same form.
  *
- * That matters here for a structural reason as well as a tidiness one: the menu's
- * content is **portalled to the document body**, so a `<form>` wrapping the item
- * would not be the form the header renders, and a submit inside a menu item that
- * closes on click races its own submit. Naming the form by id sidesteps both.
+ * That matters structurally as well as tidily: the menu's content is **portalled
+ * to the document body**, so a `<form>` wrapping the item would not be the form
+ * the header renders, and a submit inside a menu item that closes on click races
+ * its own submit. Naming the form by id sidesteps both.
  *
  * **Why this is a Client Component at all**, given ADR-0015 keeps auth on the
  * server: the menu is, and only the menu. Nothing here holds an auth client,
@@ -30,11 +43,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/design-system/components/dropdown-menu";
-import { ChevronDownIcon } from "lucide-react";
 import { useActionState } from "react";
 import { signOut } from "./actions";
-import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT, SIGN_OUT_FORM_ID } from "./slots";
 import { SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
+import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT, SIGN_OUT_FORM_ID } from "./slots";
 
 /**
  * next-safe-action's own result shape, and `{}` is the library's "nothing has
@@ -49,9 +61,9 @@ const INITIAL: SignOutResult = {};
  * Her initial, for the avatar.
  *
  * The first character of the address, uppercased — there is no name to take one
- * from until a CapabilityProfile exists. It is decorative: the address itself is
- * beside it and in the accessible name, so a reader loses nothing if this is a
- * digit or a diacritic.
+ * from until a CapabilityProfile exists. It is decorative: the address is in the
+ * trigger's accessible name and in the open menu, so a reader loses nothing if
+ * this is a digit or a diacritic.
  */
 function initialOf(email: string): string {
   return [...email][0]?.toLocaleUpperCase("es-CO") ?? "";
@@ -68,7 +80,7 @@ export function SessionMenu({ email }: { email: string }) {
   const problem = result.serverError?.message;
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex items-center gap-2">
       {/*
         The form itself renders nothing. Both triggers name it by id, and React
         puts its own hidden action fields inside it — which is what makes the
@@ -82,45 +94,53 @@ export function SessionMenu({ email }: { email: string }) {
         own, and the trigger already carries its own `data-slot` from the
         registry — so neither is a place to hang one.
       */}
-      <div className="flex min-w-0" data-slot={SESSION_MENU_SLOT}>
+      <div className="flex" data-slot={SESSION_MENU_SLOT}>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button
                 variant="ghost"
-                size="lg"
                 /*
-                  `max-w` before `truncate` on the child, and `min-w-0` on both this
-                  and its flex parent: without it the address refuses to shrink and
-                  pushes the product name off a 360 px screen instead of ellipsing.
+                  **The avatar is the button, at the avatar's own size.** `size`
+                  is not one of the registry's steps here because none of them is
+                  a circle: `icon` is `size-9` with a rounded-*md* corner, so an
+                  avatar inside it reads as a small circle floating in a square.
+                  `size-10` matches `Avatar size="lg"` exactly and `rounded-full`
+                  makes the focus ring and the hover wash follow the avatar's own
+                  edge.
+
+                  40 px is the target. WCAG 2.2 AA asks 24, so this clears it
+                  with margin — the number is chosen for a thumb on a phone,
+                  which is the device this is mostly read on, not for the floor.
                 */
-                className="min-w-0 max-w-[9.5rem] sm:max-w-[16rem]"
+                className="size-10 rounded-full border-0 p-0"
                 aria-label={sessionMenuLabel(email)}
               />
             }
           >
-            <Avatar size="sm" aria-hidden="true">
+            <Avatar size="lg" aria-hidden="true">
               <AvatarFallback>{initialOf(email)}</AvatarFallback>
             </Avatar>
-            <span className="truncate text-sm">{email}</span>
-            <ChevronDownIcon aria-hidden="true" data-icon="inline-end" />
           </DropdownMenuTrigger>
 
           <DropdownMenuContent align="end" className="min-w-56">
             {/*
-              The **untruncated** address. The trigger ellipses it on a narrow
-              phone, so this is where the borrowed-phone question is actually
-              answerable — one tap, and the whole thing is on screen.
+              **The address, untruncated — and with this variant it is the only
+              place it is visible.** That makes this block load-bearing rather
+              than a courtesy header on a menu: it is the answer to "whose
+              account am I in", which on a borrowed phone is the question the
+              whole shared-device session exists around.
 
-              Not a `DropdownMenuLabel`: this is two lines with different emphasis
-              rather than a group heading, and the registry's label styles a
-              heading. It is `aria-hidden` because the trigger's accessible name
-              already announces the address, and announcing it a second time on
-              open is noise rather than information.
+              `break-all` because a long address must wrap rather than ellipse
+              here; ellipsing it would defeat the one job this block has.
+
+              `aria-hidden` because the trigger's accessible name already
+              announces the address — announcing it again on open is noise, not
+              information.
             */}
             <div className="px-2 py-1.5" aria-hidden="true">
               <p className="text-muted-foreground text-xs">{SIGNED_IN_AS}</p>
-              <p className="text-sm break-all">{email}</p>
+              <p className="text-sm font-medium break-all">{email}</p>
             </div>
 
             <DropdownMenuSeparator />
@@ -174,7 +194,7 @@ export function SessionMenu({ email }: { email: string }) {
       </output>
 
       {problem ? (
-        <p className="text-destructive absolute inset-x-0 top-full bg-background px-4 py-2 text-sm">
+        <p className="text-destructive bg-background absolute inset-x-0 top-full px-4 py-2 text-sm">
           {problem}
         </p>
       ) : null}
