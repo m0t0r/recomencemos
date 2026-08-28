@@ -1,9 +1,7 @@
 /**
- * Better Auth's four tables plus its rate-limit table, as Drizzle.
- *
- * **Read this before editing, because DD5 says these are generated and they are
- * not.** DD5's three rules assume `auth generate` derives this file from the
- * auth config.
+ * Better Auth's four tables plus its rate-limit table, as Drizzle — written by
+ * hand and pinned to the installed library, which is what DD5 says since the
+ * C29 amendment (2026-08-28, PR #77).
  *
  * **A version-matched generator does exist.** The CLI ships as the `auth`
  * package — `@better-auth/cli` is its former name and stopped at `1.4.21` — and
@@ -37,6 +35,20 @@
  * 3. An upgrade that changes Better Auth's own tables is caught on the version
  *    bump rather than in production, and produces an ordinary Drizzle migration
  *    reviewed under the expand/contract rule like any other (NFR30).
+ *
+ * **The upgrade loop, concretely — start here when a version bump turns
+ * `auth-schema.test.ts` red.** The oracle is called live from the installed
+ * library, so the red assertions name exactly the field, table, nullability or
+ * index the new version added, dropped or changed. Edit these tables to match,
+ * keeping DD2's types — `citext`, `withTimezone`, the `CHECK`s — which is the
+ * hand-edit generation could not survive; a new deliberate divergence goes in
+ * the test's deviations list, not silently here. Then `pnpm db:generate` turns
+ * the edit into an ordinary migration under NFR30's gates. The CLI is still
+ * useful as a **crib, never a commit**: `pnpm dlx auth@<new version> generate`
+ * prints what the new version expects in Drizzle form, ready to transcribe.
+ * What no schema shows — a behavioural change like the session-refresh
+ * predicate — is what the seam-2 suites over a real instance exist to catch on
+ * the same bump.
  *
  * **The vocabulary collision is worth naming once.** `CONTEXT.md`'s **Account**
  * is Better Auth's `user` row — one identity keyed by email. Better Auth's
