@@ -221,8 +221,8 @@ export interface AuthHandler {
   readonly signOut: (input: SignOutInput) => Promise<SignOutOutcome>;
 
   /**
-   * Every session of the caller's Account that has not expired, this device
-   * first. `null` where the caller has no session at all — which is a different
+   * Every session of the caller's Account that has not expired, the caller's
+   * own first. `null` where the caller has no session at all — which is a different
    * answer from an empty list and must not be conflated with one, because
    * `/account` redirects on the first and could not reach the second.
    *
@@ -313,7 +313,7 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
   /**
    * The caller's session, with the token — which {@link AuthSession}
    * deliberately withholds and both methods below genuinely need: one to mark a
-   * row as this device, the other to know which row to spare.
+   * row as the caller's own, the other to know which row to spare.
    *
    * It stays inside this closure, so the token has no path to a caller.
    */

@@ -69,7 +69,7 @@ export interface ListAccountSessionsInput {
 }
 
 /**
- * Every session of one Account that has not expired, this device first.
+ * Every session of one Account that has not expired, the caller's own first.
  *
  * **The ordering is here rather than in the surface** because it depends on
  * `current`, and `current` is a field only this module can compute — the surface

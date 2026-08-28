@@ -31,7 +31,7 @@
  * flow — never the tint, never the border, never "the first one". It says
  * _Estás aquí_ rather than naming a device because a session is a browser, not a
  * machine: two browsers on one laptop are two rows, and a device noun would tell
- * her the other one is somewhere else. See `THIS_DEVICE` in `_lib/messages.ts`.
+ * her the other one is somewhere else. See `CURRENT_SESSION_MARKER` in `_lib/messages.ts`.
  *
  * A Server Component: no state, no handlers, no effects, so it costs the client
  * bundle nothing.
@@ -45,7 +45,7 @@ import {
   ItemSeparator,
   ItemTitle,
 } from "@repo/design-system/components/item";
-import { THIS_DEVICE } from "../_lib/messages";
+import { CURRENT_SESSION_MARKER } from "../_lib/messages";
 import type { SessionView } from "../_lib/view";
 
 export interface SessionListProps {
@@ -72,7 +72,7 @@ export function SessionList({ sessions }: SessionListProps) {
                 {session.device}
                 {session.current ? (
                   <Badge variant="secondary" className="font-normal">
-                    {THIS_DEVICE}
+                    {CURRENT_SESSION_MARKER}
                   </Badge>
                 ) : null}
               </ItemTitle>
