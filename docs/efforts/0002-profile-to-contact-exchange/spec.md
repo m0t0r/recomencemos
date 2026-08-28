@@ -253,7 +253,14 @@ concerns.
   fragment it objected to and preserves everything the person typed**. **Second half:** this is a
   speed bump, not a control — human review of every Offer is the control, and no copy claims
   otherwise. **Binds:** 2, 6.
-- **NFR13 — Session lifetime, and revocation before expiry.** Own device **30 days** rolling. Shared
+- **NFR13 — Session lifetime, and revocation before expiry.** Own device **30 days, absolute**
+  _(amended 2026-08-28, with #12: this read "rolling", and rolling is not implementable without
+  breaking the shared-device promise — better-auth@1.7.1 computes its refresh predicate from the
+  configured `expiresIn` rather than from the row, so with per-device rows any refresh rewrites an
+  8-hour shared-device session to 30 days on its first read. `session.disableSessionRefresh` is the
+  one mechanism that keeps the 8-hour row honest, and it makes the own-device lifetime absolute: a
+  Worker who uses the product daily signs in again on day 30. PR #77 carries the verification and
+  `session-lifetime.database.test.ts` asserts both halves)_. Shared
   device, self-declared **8 hours**, enforced on the **session row** and not only by a non-persistent
   cookie, because a cybercafé browser may not close for a week. Admin **8 hours**, no rolling. A
   Worker ends all her sessions from any device she holds; an Admin ends a reported Hirer's while
@@ -1004,20 +1011,20 @@ Read against `better-auth@1.7.1`'s own guidance rather than recalled. Eleven set
 **not defaults** — each is either off, memory-backed, or pointed at the wrong thing until set, and
 three of them would ship as security holes rather than as rough edges.
 
-| Setting                                          | Value here                               | Why it is not the default                                                                                                     |
-| ------------------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `rateLimit.storage`                              | `"database"`                             | Defaults to memory; deploys are continuous, so the limiter resets several times a day (NFR26)                                 |
-| `rateLimit.customRules`                          | explicit on the magic-link and 2FA paths | Inheriting "3 per 10 s" leaves the one credential in this system on a default                                                 |
-| `advanced.ipAddress.ipAddressHeaders`            | `["x-forwarded-for"]`                    | Fly proxies every request; unset, every per-IP ceiling becomes one global ceiling                                             |
-| `session.cookieCache`                            | **disabled**                             | Enabled, every revocation in NFR13 and NFR15's zero lag by its TTL                                                            |
-| `session.expiresIn` / `updateAge`                | per NFR13, per device class              | Defaults are 7 days / 1 day for everyone                                                                                      |
-| `session.additionalFields`                       | records the sign-in method               | NFR14's mechanism; there is no built-in equivalent                                                                            |
-| `user.changeEmail.enabled`                       | `true`                                   | **Disabled by default** — the contract's `changeEmail` silently does nothing otherwise                                        |
-| `user.deleteUser.enabled`                        | `true`                                   | **Disabled by default** — same for story 13, which is a Ley 1581 surface                                                      |
-| `emailAndPassword.requireEmailVerification`      | `true`                                   | Admin only; the credential account is the one worth it                                                                        |
-| `emailAndPassword.revokeSessionsOnPasswordReset` | `true`                                   | Off by default, so a reset would leave the attacker's session alive                                                           |
-| `emailAndPassword.minPasswordLength`             | `16`                                     | Default is 8, for the one account that can read every phone number                                                            |
-| `twoFactor.trustDevice`                          | **`false`**                              | At its 30-day default it re-establishes an Admin session on a password alone for a month, contradicting NFR13's 8 hours (C44) |
+| Setting                                          | Value here                               | Why it is not the default                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rateLimit.storage`                              | `"database"`                             | Defaults to memory; deploys are continuous, so the limiter resets several times a day (NFR26)                                                                                                                                                                                                                                                                        |
+| `rateLimit.customRules`                          | explicit on the magic-link and 2FA paths | Inheriting "3 per 10 s" leaves the one credential in this system on a default                                                                                                                                                                                                                                                                                        |
+| `advanced.ipAddress.ipAddressHeaders`            | `["fly-client-ip", "x-forwarded-for"]`   | Fly proxies every request; unset, every per-IP ceiling becomes one global ceiling. _Amended with #12: 1.7.1 trusts a forwarded header only when it holds one entry, and Fly appends to a caller-sent `x-forwarded-for` — so that header alone collapses to a shared bucket exactly when a caller wants it to; `fly-client-ip` is proxy-set and single-value_         |
+| `session.cookieCache`                            | **disabled**                             | Enabled, every revocation in NFR13 and NFR15's zero lag by its TTL                                                                                                                                                                                                                                                                                                   |
+| `session.expiresIn` / `disableSessionRefresh`    | 30-day fallback; refresh **refused**     | Defaults are 7 days rolling for everyone. _Amended with #12: the per-device lifetime is written on the row by `session.create.before`, and the refresh predicate reads the configured `expiresIn` rather than the row — so the refresh must be refused or a shared-device row is promoted to 30 days on its first read (NFR13). `updateAge` has no remaining reader_ |
+| `session.additionalFields`                       | records the sign-in method               | NFR14's mechanism; there is no built-in equivalent                                                                                                                                                                                                                                                                                                                   |
+| `user.changeEmail.enabled`                       | `true`                                   | **Disabled by default** — the contract's `changeEmail` silently does nothing otherwise                                                                                                                                                                                                                                                                               |
+| `user.deleteUser.enabled`                        | `true`                                   | **Disabled by default** — same for story 13, which is a Ley 1581 surface                                                                                                                                                                                                                                                                                             |
+| `emailAndPassword.requireEmailVerification`      | `true`                                   | Admin only; the credential account is the one worth it                                                                                                                                                                                                                                                                                                               |
+| `emailAndPassword.revokeSessionsOnPasswordReset` | `true`                                   | Off by default, so a reset would leave the attacker's session alive                                                                                                                                                                                                                                                                                                  |
+| `emailAndPassword.minPasswordLength`             | `16`                                     | Default is 8, for the one account that can read every phone number                                                                                                                                                                                                                                                                                                   |
+| `twoFactor.trustDevice`                          | **`false`**                              | At its 30-day default it re-establishes an Admin session on a password alone for a month, contradicting NFR13's 8 hours (C44)                                                                                                                                                                                                                                        |
 
 **Trusted devices are disabled outright rather than capped** (C44). Capping `trustDeviceMaxAge` at the
 session length was the alternative, and it still leaves a borrowed or stolen laptop as an Admin session
@@ -1025,17 +1032,22 @@ on one factor until the day ends, while keeping two numbers in a relationship so
 Moderating daily costs six digits once a day, which is the right price for the account that can take
 down a profile and read every exchanged phone number.
 
-**The schema is generated, and three rules follow from that** (C29). `additionalFields` are declared in
-the **auth config**, and `npx @better-auth/cli generate --output …` derives the Drizzle schema from that
-config — so a declared field is re-emitted on every regeneration and cannot be silently dropped. What
-can go wrong is narrower:
+**The schema is pinned to the installed library, not generated** (C29, amended 2026-08-28 with #12).
+This read "the schema is generated", and Build showed the generator cannot be the mechanism: a
+version-matched CLI exists and was run, but its pg type map hardcodes `timestamp` and `text` where
+DD2 requires `TIMESTAMPTZ` and `citext`, and it has no concept of a `CHECK` — so generated output
+would need hand-editing on every regeneration, the exact failure the "never hand-edit" rule exists
+to prevent. The schema is therefore written by hand in `auth-schema.ts`, and `auth-schema.test.ts`
+pins it to `getSchema()` from the **installed** `better-auth/db` on fields, nullability in both
+directions, uniqueness, every declared index, and the deliberate deviations as data. The three rules
+survive, sharper:
 
-1. **Never hand-edit the generated schema file.** A hand-added column is what a regeneration drops.
-2. **Re-run the CLI after adding a plugin.** The `twoFactor` plugin brings its own tables; forgetting
-   this is the common Better Auth mistake, not a lost custom field.
-3. An upgrade touching Better Auth's own tables produces an ordinary Drizzle migration, reviewed under
-   the expand/contract rule like any other — and **DD13's integrity check (NFR30) already fails** if the
-   generated schema and the migrations disagree, so no separate test is warranted.
+1. **A hand-added column fails CI** rather than being dropped by a regeneration: it is not in
+   `getSchema()`'s answer.
+2. **A plugin added without its tables fails CI** — the common Better Auth mistake, caught by a red
+   test rather than by somebody remembering to re-run a CLI.
+3. An upgrade touching Better Auth's own tables fails the pin on the version bump and produces an
+   ordinary Drizzle migration, reviewed under the expand/contract rule like any other (NFR30).
 
 **The Admin second factor has a hole that is easy to miss.** Better Auth's `twoFactor` plugin can
 only be enabled for **credential accounts**, and its flow is credentials → session removed →
@@ -2514,6 +2526,15 @@ on its own — each concern below names its advisory.
       fails** if the generated schema and the migrations disagree.
       A second dedicated test was rejected as duplicate machinery for a failure DD13 already catches.
       **Follows:** DD5 gains those three lines; no new test, no per-upgrade review process.
+      **Amended 2026-08-28, with #12 (PR #77):** the resolution's premise — that the schema is
+      generated — did not survive contact with the version-matched generator. The CLI exists and was
+      run, but its pg type map cannot emit `TIMESTAMPTZ`, `citext`, or a `CHECK` (DD2's requirements),
+      so generated output would need hand-editing on every regeneration. The schema is hand-written
+      and `auth-schema.test.ts` pins it to `getSchema()` from the installed library — which is the
+      "second dedicated test" this entry rejected, shipped because the generation guarantee it
+      duplicated no longer exists. DD13's integrity check still holds the schema-to-migrations half;
+      the pin holds the schema-to-library half the generator was supposed to. DD5's paragraph now
+      states the pin mechanism.
 - [x] **C30** — **The duplicate-phone moderation signal was lost.** `phone (E.164)` landed; the
       non-unique index on the normalized value did not, and DD2's index table has no phone row. The
       data advisory noted this is "a moderation signal, not a verification gate, so it stays inside
