@@ -46,6 +46,25 @@ out=$(pnpm lint 2>&1) || block "\`pnpm lint\` fails, so this change is not done.
 
 $out"
 
+# `pnpm format` is `oxfmt --check`, so this reports rather than rewrites.
+#
+# It is here because its absence was measured rather than predicted: three files
+# under `docs/` sat unformatted on `dev`, every local `pnpm format:fix` rewrote
+# them, and 54 lines of unrelated churn then appeared in whatever change its
+# author happened to be writing. During #80 that happened three times and was
+# reverted three times. The cost of formatting drift is always paid by a
+# *different* change than the one that caused it, which is why neither the author
+# nor the reviewer ever has the incentive to fix it.
+#
+# The remedy is `pnpm format:fix`, never hand-formatting -- and never widening
+# `ignorePatterns` to make a file pass. That list is for files another tool owns
+# (`pnpm-workspace.yaml`, `packages/domain/drizzle/`, committed advisories), and
+# adding to it to silence this gate removes the gate for everything in the
+# pattern.
+out=$(pnpm format 2>&1) || block "\`pnpm format\` fails, so this change is not done. Run \`pnpm format:fix\` -- do not hand-format, and do not add the file to oxfmt's ignorePatterns to make this pass.
+
+$out"
+
 # The task list is restated here rather than run through `pnpm test`, and that is
 # a drift risk CLAUDE.md names for CI in the same words -- so anything added to
 # the root `test` script has to be added here too, or a session can report done
