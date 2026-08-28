@@ -16,66 +16,20 @@
  * injected so the link is caught in-process and nothing is sent.
  */
 
-import { betterAuth } from "better-auth";
 import { createAuthHandler } from "#auth/index";
-import { authOptions } from "#auth/config";
 import * as schema from "#schema";
-import { test, type TestDatabase } from "#testing/fixtures";
-
-const BASE_URL = "https://recomencemos.test";
+// The stack, the sign-in helper and the cookie reader are `#testing/auth-stack`'s.
+// They were a local copy on #80 because that module did not exist on `dev` yet;
+// #13 landed it and collapsed the duplicate on rebase, as agreed between the two
+// sessions. One harness means the two suites cannot drift into testing different
+// configurations of the same product.
+import { BASE_URL, cookieHeader, signIn, signInStack } from "#testing/auth-stack";
+import { test } from "#testing/fixtures";
 
 const AUTH_ENV = {
   BETTER_AUTH_SECRET: "a-secret-long-enough-for-the-configuration-to-build",
   BETTER_AUTH_URL: BASE_URL,
 } as const;
-
-/** A Better Auth instance over the restored engine, plus the link it would have emailed. */
-function signInStack(database: TestDatabase) {
-  const links: { url: string }[] = [];
-
-  const auth = betterAuth(
-    authOptions({
-      db: database.db,
-      sendMagicLink: async ({ url }) => {
-        links.push({ url });
-      },
-      logger: { info: () => {}, warn: () => {} },
-      env: AUTH_ENV,
-    }),
-  );
-
-  return { auth, links };
-}
-
-/** Every cookie a response set, as one `Cookie` header value. */
-function cookieHeader(response: Response): string {
-  return response.headers
-    .getSetCookie()
-    .map((cookie) => cookie.split(";")[0])
-    .join("; ");
-}
-
-/** Sign in through the magic-link door and hand back the cookie the browser now holds. */
-async function signIn(
-  auth: ReturnType<typeof signInStack>["auth"],
-  links: { url: string }[],
-  email: string,
-  sharedDevice: boolean,
-) {
-  await auth.api.signInMagicLink({
-    body: { email, callbackURL: "/", metadata: { sharedDevice } },
-    headers: new Headers({ origin: BASE_URL }),
-  });
-
-  const link = links.at(-1)?.url;
-  expect(link, "the magic link was never sent").toBeDefined();
-
-  const opened = await auth.handler(new Request(link as string));
-  const cookie = cookieHeader(opened);
-  expect(cookie, "opening the link set no session cookie").not.toBe("");
-
-  return cookie;
-}
 
 /** What `/get-session` answers for a cookie — the session's email, or `null`. */
 async function readSession(
@@ -96,8 +50,9 @@ describe("signing out", () => {
   test("deletes the session row, so the cookie she was holding is refused", async ({
     database,
   }) => {
-    const { auth, links } = signInStack(database);
-    const cookie = await signIn(auth, links, "worker@example.co", true);
+    const stack = signInStack(database);
+    const { auth } = stack;
+    const cookie = (await signIn(stack, "worker@example.co", { sharedDevice: true })).cookie;
 
     // The session is hers before we touch it — so a later `null` is revocation
     // and not a sign-in that quietly failed.
@@ -115,10 +70,11 @@ describe("signing out", () => {
   });
 
   test("leaves the other device signed in, because #13 owns everywhere", async ({ database }) => {
-    const { auth, links } = signInStack(database);
+    const stack = signInStack(database);
+    const { auth } = stack;
 
-    const phone = await signIn(auth, links, "worker@example.co", true);
-    const laptop = await signIn(auth, links, "worker@example.co", false);
+    const phone = (await signIn(stack, "worker@example.co", { sharedDevice: true })).cookie;
+    const laptop = (await signIn(stack, "worker@example.co", { sharedDevice: false })).cookie;
     expect(await database.db.select().from(schema.session)).toHaveLength(2);
 
     await auth.api.signOut({ headers: new Headers({ cookie: phone }) });
