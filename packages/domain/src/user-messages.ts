@@ -43,6 +43,19 @@ export const SIGN_IN_FAILED =
  * is not what happened. Directness 5, and the absence stated first
  * (`docs/policy/voice.md`, Do 2 and Do 3): what happened, what is true now, what
  * to do.
+ *
+ * **It names no device, and that is the correction rather than the compromise.**
+ * The first version said _dispositivo_, which is institutional register and
+ * fails Sophistication 2. The obvious repair is `teléfono`, which is what this
+ * product already says four times — `SHARED_DEVICE_LABEL` ("Este no es mi
+ * teléfono"), the hint beside it, the sent-state hint, and the magic-link email.
+ * That vocabulary is right where it stands, because all four are addressed to a
+ * Worker signing in on a phone.
+ *
+ * This string is not. **Both sides read it**, and a Hirer in Madrid meeting
+ * _"sigue abierta en este teléfono"_ on a desktop is told something false at the
+ * exact moment he is deciding whether he is still signed in. `aquí` is true on
+ * every device, is ordinary, and costs the sentence nothing — the force was
+ * never in the noun, it was in saying plainly that the session did not close.
  */
-export const SIGN_OUT_FAILED =
-  "No pudimos cerrar tu sesión. Sigue abierta en este dispositivo. Intenta de nuevo.";
+export const SIGN_OUT_FAILED = "No pudimos cerrar tu sesión. Sigue abierta aquí. Intenta de nuevo.";

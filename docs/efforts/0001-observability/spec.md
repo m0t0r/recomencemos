@@ -304,16 +304,16 @@ consumers over one input, not by exporting a constant a downstream project would
 Depends on `@repo/errors`, `pino`, `pino-pretty`, and `@sentry/nextjs`. Kept out of the browser by
 the dependency graph, with a runtime browser-global guard as a backstop.
 
-| Export                       | Shape                                                                                                                                                 | Who may call it                     |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `logger`                     | The module singleton, a `pino.Logger`                                                                                                                 | Any server module                   |
-| `createLoggerOptions`        | `(env) => LoggerOptions` — pure, exported **as the stdout test seam**                                                                                 | Tests; the module itself            |
-| `reportError`                | `(error, request, context, client?) => string \| undefined` — **the vendor seam**. Delegates to `Sentry.captureRequestError` and returns the event id | `reportRequestError` only           |
-| `reportRequestError`         | `(error, request, context, logger?, client?) => string \| undefined` — report first, then log with the returned id                                    | `instrumentation.ts` only           |
+| Export                       | Shape                                                                                                                                                                                                                                           | Who may call it                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `logger`                     | The module singleton, a `pino.Logger`                                                                                                                                                                                                           | Any server module                   |
+| `createLoggerOptions`        | `(env) => LoggerOptions` — pure, exported **as the stdout test seam**                                                                                                                                                                           | Tests; the module itself            |
+| `reportError`                | `(error, request, context, client?) => string \| undefined` — **the vendor seam**. Delegates to `Sentry.captureRequestError` and returns the event id                                                                                           | `reportRequestError` only           |
+| `reportRequestError`         | `(error, request, context, logger?, client?) => string \| undefined` — report first, then log with the returned id                                                                                                                              | `instrumentation.ts` only           |
 | `logRequestComplete`         | `(fields, logger?) => void` — the NFR17 emit; defaulted logger param is the injection point. Emits what it is given and decides nothing about **whether** to — that is the subscriber's call, so the rule stays testable apart from the channel | `subscribeRequestCompletion`, tests |
-| `readRequestContext`         | `() => Record<string, string>` — the `request_id` half of the mixin, sibling to `readTraceContext`. Returns `{}` outside a request, so a background line is not stamped with a stale id                                                        | `logger.ts`, tests                  |
-| `subscribeRequestCompletion` | `(logger?) => void` — idempotent; subscribes the emit to the process's HTTP traffic. **This** is what the entry point calls                           | `instrumentation.ts` only           |
-| `routeOf` / `pathOf`         | `(request) => string` — the bounded route pattern, and the concrete path. Pure, and exported because the fallbacks are what need testing              | `subscribeRequestCompletion`, tests |
+| `readRequestContext`         | `() => Record<string, string>` — the `request_id` half of the mixin, sibling to `readTraceContext`. Returns `{}` outside a request, so a background line is not stamped with a stale id                                                         | `logger.ts`, tests                  |
+| `subscribeRequestCompletion` | `(logger?) => void` — idempotent; subscribes the emit to the process's HTTP traffic. **This** is what the entry point calls                                                                                                                     | `instrumentation.ts` only           |
+| `routeOf` / `pathOf`         | `(request) => string` — the bounded route pattern, and the concrete path. Pure, and exported because the fallbacks are what need testing                                                                                                        | `subscribeRequestCompletion`, tests |
 
 **What crosses the seam and what does not** — the question [Q1](./intent.md) requires this spec to
 answer explicitly.
@@ -421,7 +421,7 @@ framework asset traffic alongside the app's own. On one dev page load that was ~
 consequences, and neither is cosmetic: `default-latency` in `docs/policy/operability.md` reads p95
 "from the log line on every request", and a population that is 95% chunk 304s at 1–5 ms puts p95
 around 5 ms permanently, so the page latency the SLO is about never appears in it; and the error
-*rate* this story exists to make readable is diluted by the same factor, so a route failing on every
+_rate_ this story exists to make readable is diluted by the same factor, so a route failing on every
 single request reads as roughly 2%. `hosting-target` is one Fly machine with no CDN and no
 `assetPrefix`, so this is production behaviour, not a dev-console annoyance.
 
@@ -925,7 +925,7 @@ now carries both axes, because recording only the cardinality one is what let th
 the whole effort.
 
 **What a second retrospective found, and why NFR17 changed** (2026-08-28). The line was emitted for
-every request the *process* handled rather than every request the *app routed*, and the gap between
+every request the _process_ handled rather than every request the _app routed_, and the gap between
 those two populations is roughly 30:1. The volume was the visible symptom; the measurements were the
 real defect, and both are written up under story 7 above. Four decisions came out of it, each
 recorded because the reasoning is less obvious than the change:
@@ -939,7 +939,7 @@ recorded because the reasoning is less obvious than the change:
   (an asset 5xx, a request the router never reached) still leaves a line.
 - **5xx logs at `error`, not `warn`.** The `warn` version was proposed to keep NFR18's denominator
   still, which is backwards — those lines carry `trace_id`, so they enlarge a denominator of
-  *correlated* lines and loosen the band rather than break it. It also gains coverage: a **handled**
+  _correlated_ lines and loosen the band rather than break it. It also gains coverage: a **handled**
   5xx logs at `warn` under "thrown is reported, returned is logged", so until now the band could not
   see it at all. 4xx stays `info`: a 401 or a 422 is the system correctly saying no, and `status` is
   the field for that distinction.
