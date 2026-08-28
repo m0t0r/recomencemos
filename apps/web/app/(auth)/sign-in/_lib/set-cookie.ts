@@ -22,7 +22,36 @@
  * unsafe in a browser; it simply has no reason to be there.
  */
 
-import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
+import type { ResponseCookie } from "@edge-runtime/cookies";
+
+/**
+ * **`@edge-runtime/cookies` ships its own `parseSetCookie`, and this module
+ * deliberately does not use it.** That is worth writing down, because the
+ * duplication is the first thing a reader notices and the reason not to is not
+ * visible from the type import above.
+ *
+ * It is the same package Next vendors at
+ * `next/dist/compiled/@edge-runtime/cookies`, at the same version — so the type
+ * is taken from the public one rather than reaching into `dist/compiled`, and
+ * the function is not. Measured against every case in `set-cookie.test.ts`, the
+ * library's parser differs on six, and one of them is a crash on this path:
+ *
+ * | line | library | here |
+ * | --- | --- | --- |
+ * | `a=%E0%A4%A` | **throws** | value passed through |
+ * | `novalue` | `{ name: "novalue", value: "true" }` | `undefined` |
+ * | `=orphaned` | `{ value: "orphaned" }`, no name | `undefined` |
+ * | `; Path=/` | `{ name: "Path", value: "/" }` | `undefined` |
+ * | `Expires=not-a-date` | `expires: null` | omitted |
+ * | no `Path` / `SameSite` | omitted | `/` and `lax` |
+ *
+ * The first row is the one that decides it. A malformed escape anywhere in a
+ * `Set-Cookie` Better Auth writes would throw out of the action, and this door
+ * has no test that could see it — which is the same shape of failure the module
+ * was extracted to fix. The rest are a parser that answers where it should
+ * refuse, and an object with no `name` reaching `cookies().set()` is not a
+ * failure this surface should discover in production.
+ */
 
 /**
  * **The value is decoded, and that is not tidying — it is the bug this module

@@ -317,7 +317,14 @@ function GoogleButton() {
  * the reading order rather than attached to whichever control produced it.
  *
  * `tabIndex={-1}` makes it programmatically focusable without putting it in the
- * tab order; `aria-live` covers the case where nobody is focused on it.
+ * tab order; `role="status"` covers the case where nobody is focused on it.
+ *
+ * **The role is explicit rather than left to `aria-live` alone.** `status`
+ * carries an implicit `aria-live="polite"` and `aria-atomic="true"`, so it says
+ * more to assistive technology than the bare attribute did — and it gives the
+ * region a name a test can ask for. Reaching for it by attribute through
+ * `container.querySelector('[aria-live="polite"]')` was the tell that this
+ * element was invisible to the accessibility tree the surface is judged on.
  */
 function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) {
   // Unpacked rather than reached through `machine` member by member, because
@@ -331,7 +338,16 @@ function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) 
     <div
       ref={announcementRef}
       tabIndex={-1}
-      aria-live="polite"
+      /*
+        `prefer-tag-over-role` asks for `<output>`, which is the right advice in
+        general and wrong here: `<output>`'s content model is **phrasing
+        content**, and this region holds a `<div>` and two `<p>`s — flow content.
+        Taking the rule's suggestion would produce invalid HTML for a role the
+        attribute already carries correctly. `packages/design-system` scopes the
+        same rule off `field.tsx` for the same shape of reason.
+      */
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+      role="status"
       className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
     >
       {feedback ? (

@@ -20,7 +20,7 @@ import { Card } from "@repo/design-system/components/card";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { googleSignInAvailable } from "../../../lib/auth";
+import { googleSignInAvailable } from "@/lib/auth";
 import { SignInForm } from "./_components/sign-in-form";
 
 export const metadata: Metadata = {

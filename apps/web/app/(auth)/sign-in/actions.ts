@@ -26,9 +26,9 @@ import { MAGIC_LINK_TTL_MINUTES } from "@repo/domain/auth-handler";
 import { projectClientError } from "@repo/errors/app-error";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "../../../lib/auth";
+import { auth } from "@/lib/auth";
 import { logRequestError } from "@repo/observability/log-request-error";
-import { actionClient, rateLimit, returnActionError } from "../../../lib/safe-action";
+import { actionClient, rateLimit, returnActionError } from "@/lib/safe-action";
 import { checkYourEmail } from "./_lib/messages";
 import { parseSetCookie } from "./_lib/set-cookie";
 import {

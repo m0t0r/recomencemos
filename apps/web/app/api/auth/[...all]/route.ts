@@ -12,7 +12,7 @@
  * no dependency on the framework.
  */
 
-import { auth } from "../../../../lib/auth";
+import { auth } from "@/lib/auth";
 
 /**
  * **No `export const dynamic`, and its absence is the correct configuration.**
