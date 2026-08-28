@@ -52,10 +52,21 @@ export const SIGN_IN_FAILED =
  * That vocabulary is right where it stands, because all four are addressed to a
  * Worker signing in on a phone.
  *
- * This string is not. **Both sides read it**, and a Hirer in Madrid meeting
- * _"sigue abierta en este teléfono"_ on a desktop is told something false at the
- * exact moment he is deciding whether he is still signed in. `aquí` is true on
- * every device, is ordinary, and costs the sentence nothing — the force was
- * never in the noun, it was in saying plainly that the session did not close.
+ * This string is not, for two reasons, and the second is the stronger one.
+ *
+ * **Both sides read it.** A Hirer in Madrid meeting _"sigue abierta en este
+ * teléfono"_ on a desktop is told something false at the exact moment he is
+ * deciding whether he is still signed in.
+ *
+ * **And a session is a browser, not a device.** Open Chrome and Firefox on one
+ * laptop and there are two sessions on one machine, so *every* hardware noun —
+ * `teléfono`, `aparato`, `dispositivo` — is false there, and not vaguely: it
+ * says the other session is somewhere else when it is a window away. That is a
+ * case a person actually reaches, and no amount of picking a better noun fixes
+ * it.
+ *
+ * So `aquí` is not a compromise between the nouns. It names **position rather
+ * than hardware**, which is what a session actually has. The force was never in
+ * the noun — it was in saying plainly that the session did not close.
  */
 export const SIGN_OUT_FAILED = "No pudimos cerrar tu sesión. Sigue abierta aquí. Intenta de nuevo.";
