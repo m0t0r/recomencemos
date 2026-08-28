@@ -181,8 +181,11 @@ Prioritized. Each is demoable on its own, because each becomes a tracer-bullet t
 
   **Binds:** 1, 11.
 
-- **NFR17 — Request-completion line.** Every completed request emits **exactly 1** `info` line
-  carrying `route`, `status`, `duration_ms`, and `trace_id` as top-level fields. **Binds:** 7.
+- **NFR17 — Request-completion line.** Every request the app **routed** emits **exactly 1** line
+  carrying `method`, `route`, `status`, `duration_ms`, `request_id`, and `trace_id` as top-level
+  fields — at `error` when `status` is 5xx, `info` otherwise. A request the router did **not** match
+  emits a line only when `status >= 400`. Unmatched success is framework traffic, not the app's, and
+  is not logged. **Binds:** 7.
 - **NFR18 — Correlation-loss band.** `error`-level lines lacking `trace_id` while reporting is active
   stay **≤ 1%** over a rolling 1h window. Outside it, a `needs-triage` issue. **Binds:** 6, 7, 15.
 
@@ -216,8 +219,11 @@ in `CLAUDE.md` rather than implied by a list.
 `release`, `level`, `time`, `msg`. Inside an uncached request with reporting active: `trace_id`,
 `span_id`. On a report: `event_id`. Request-error lines lift `code`, `status`, and `request_id` to
 the top level, so the three lookups an operator actually runs — by failure code, by status, and by
-the reference a user quotes — resolve without parsing `err`. Request-completion lines add `route`,
-`status`, `duration_ms`, and `context.path`. Everything else is free-form under `context`.
+the reference a user quotes — resolve without parsing `err`. Request-completion lines add `method`,
+`route`, `status`, `duration_ms`, and `context.path`. `request_id` is on **every** line emitted
+inside a request, contributed by the mixin from a request-scoped store rather than passed by a
+caller — so it correlates where `trace_id` cannot, which is every process with no DSN. Everything
+else is free-form under `context`.
 
 **Field names on a line are `snake_case`, all of them.** The line is its own namespace and names what
 it carries for itself, whatever the source called it. That costs exactly one rename —
@@ -304,7 +310,8 @@ the dependency graph, with a runtime browser-global guard as a backstop.
 | `createLoggerOptions`        | `(env) => LoggerOptions` — pure, exported **as the stdout test seam**                                                                                 | Tests; the module itself            |
 | `reportError`                | `(error, request, context, client?) => string \| undefined` — **the vendor seam**. Delegates to `Sentry.captureRequestError` and returns the event id | `reportRequestError` only           |
 | `reportRequestError`         | `(error, request, context, logger?, client?) => string \| undefined` — report first, then log with the returned id                                    | `instrumentation.ts` only           |
-| `logRequestComplete`         | `(fields, logger?) => void` — the NFR17 emit; defaulted logger param is the injection point                                                           | `subscribeRequestCompletion`, tests |
+| `logRequestComplete`         | `(fields, logger?) => void` — the NFR17 emit; defaulted logger param is the injection point. Emits what it is given and decides nothing about **whether** to — that is the subscriber's call, so the rule stays testable apart from the channel | `subscribeRequestCompletion`, tests |
+| `readRequestContext`         | `() => Record<string, string>` — the `request_id` half of the mixin, sibling to `readTraceContext`. Returns `{}` outside a request, so a background line is not stamped with a stale id                                                        | `logger.ts`, tests                  |
 | `subscribeRequestCompletion` | `(logger?) => void` — idempotent; subscribes the emit to the process's HTTP traffic. **This** is what the entry point calls                           | `instrumentation.ts` only           |
 | `routeOf` / `pathOf`         | `(request) => string` — the bounded route pattern, and the concrete path. Pure, and exported because the fallbacks are what need testing              | `subscribeRequestCompletion`, tests |
 
@@ -404,9 +411,19 @@ _previous_ error's id. A log line pointing confidently at the wrong event is wor
 no id, so the value is compared before and after and the failure mode is `undefined` rather than
 wrong.
 
-**Story 7 — the request-completion line.** One `info` line per completed request from
-`onRequestError`'s sibling path in `instrumentation.ts`. Without traffic, an error count cannot be
-read as a rate, and a spike is indistinguishable from a busy Tuesday.
+**Story 7 — the request-completion line.** One line per **routed** request from `onRequestError`'s
+sibling path in `instrumentation.ts`. Without traffic, an error count cannot be read as a rate, and a
+spike is indistinguishable from a busy Tuesday.
+
+**"Routed", not "completed", is an amendment — and the reason is that the denominator was wrong.**
+The subscription hears every HTTP server in the process, so the first implementation counted
+framework asset traffic alongside the app's own. On one dev page load that was ~55 lines to 2. Two
+consequences, and neither is cosmetic: `default-latency` in `docs/policy/operability.md` reads p95
+"from the log line on every request", and a population that is 95% chunk 304s at 1–5 ms puts p95
+around 5 ms permanently, so the page latency the SLO is about never appears in it; and the error
+*rate* this story exists to make readable is diluted by the same factor, so a route failing on every
+single request reads as roughly 2%. `hosting-target` is one Fly machine with no CDN and no
+`assetPrefix`, so this is production behaviour, not a dev-console annoyance.
 
 **The sibling path is `node:diagnostics_channel`, and Build had to establish that** — this spec named
 no mechanism because Next exposes none. `InstrumentationModule` is `{ register?, onRequestError? }`
@@ -906,6 +923,39 @@ the implementation — a policy row edited to match the code stops being able to
 area raises it as a flagged concern rather than anyone having to remember. And the design passage above
 now carries both axes, because recording only the cardinality one is what let this sit unnamed through
 the whole effort.
+
+**What a second retrospective found, and why NFR17 changed** (2026-08-28). The line was emitted for
+every request the *process* handled rather than every request the *app routed*, and the gap between
+those two populations is roughly 30:1. The volume was the visible symptom; the measurements were the
+real defect, and both are written up under story 7 above. Four decisions came out of it, each
+recorded because the reasoning is less obvious than the change:
+
+- **The cut is `routeOf`'s existing answer, not a `/_next/` prefix match.** The router already tells
+  us whether it matched, so the signal is structural and needs no pattern to maintain. A path
+  denylist would be the heuristic [ADR-0006](../../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)
+  argues against, shipped into the one field a drain groups by.
+- **A 404 is unaffected**, because it carries `route: "/_not-found"` — it is a routed request and
+  always was. The `status >= 400` clause is not there for 404s; it is there so an unrouted **failure**
+  (an asset 5xx, a request the router never reached) still leaves a line.
+- **5xx logs at `error`, not `warn`.** The `warn` version was proposed to keep NFR18's denominator
+  still, which is backwards — those lines carry `trace_id`, so they enlarge a denominator of
+  *correlated* lines and loosen the band rather than break it. It also gains coverage: a **handled**
+  5xx logs at `warn` under "thrown is reported, returned is logged", so until now the band could not
+  see it at all. 4xx stays `info`: a 401 or a 422 is the system correctly saying no, and `status` is
+  the field for that distinction.
+- **`request_id` uses `AsyncLocalStorage.enterWith` from the channel subscriber.** `channel.bindStore`
+  is the documented route and does not work — Node publishes `http.server.request.start` with plain
+  `publish()`, so a bound store never activates (measured on v24.11.0). `enterWith` does, and the
+  contamination it is notorious for did not reproduce: 0 violations over 30 concurrent requests, 20
+  keep-alive requests on a single socket, and a background timer that read `null` on all 15 ticks.
+  **Measured against plain `node:http`, so Build re-verifies against a running `next dev`** — Next
+  runs its own request storage and the Sentry OTel context manager is a third `AsyncLocalStorage` in
+  the same process.
+
+The `trace_id` this buys is worth naming: Build already recorded that **a dev-only overlay request
+shared a `trace_id` with the request that triggered it** — a wrong correlation NFR18 cannot detect,
+because that band measures missing ones. A `request_id` minted per channel publish is right where
+that is wrong, and it exists with no DSN, which is every fresh clone and every dev session.
 
 **What remains unverified and must be checked at Build**, because no advisor could read an uninstalled
 package: `sendDefaultPii`'s actual default in 10.70.0, the exact option name for deleting source maps
