@@ -33,7 +33,6 @@ import { SessionsPanel } from "./_components/sessions-panel";
 import {
   ACCOUNT_PAGE_TITLE,
   ACCOUNT_TITLE,
-  accountIs,
   SESSIONS_EXPLANATION,
   SESSIONS_HEADING,
 } from "./_lib/messages";
@@ -57,20 +56,20 @@ export const metadata: Metadata = {
  * can paint before the list resolves.
  */
 async function AccountPanel() {
-  const requestHeaders = await headers();
-
-  const [session, sessions] = await Promise.all([
-    auth().getSession(requestHeaders),
-    auth().listSessions(requestHeaders),
-  ]);
+  const sessions = await auth().listSessions(await headers());
 
   /**
    * The surface table's empty state for this page: **signed out → `/sign-in`**.
    * `listSessions` answers `null` rather than `[]` for "no session", which is
    * what keeps that different from "no other sessions" — the two would otherwise
    * render the same page.
+   *
+   * **One read, not two.** This panel used to `getSession` alongside the list to
+   * render her address under the heading; with the address gone that call
+   * answered nothing the list does not, so it went with it rather than staying
+   * on as a second opinion about whether she is signed in.
    */
-  if (!session || !sessions) redirect("/sign-in");
+  if (!sessions) redirect("/sign-in");
 
   /**
    * **One clock reading for the whole page.** Every relative phrase is formatted
@@ -83,12 +82,18 @@ async function AccountPanel() {
 
   return (
     <Card className="flex w-full flex-col gap-6 p-6 sm:p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl leading-8 font-semibold tracking-tight">
-          {ACCOUNT_TITLE}
-        </h1>
-        <p className="text-muted-foreground text-sm">{accountIs(session.email)}</p>
-      </header>
+      {/*
+        **The heading and nothing under it.** The address used to sit here as a
+        subtitle, and the shell's session menu shows it too — so a signed-in
+        person met it twice on one screen, once as chrome and once as page copy.
+        The menu is the better of the two homes: it is on *every* page, it is
+        where a borrowed-phone check is already made (`SIGNED_IN_AS`), and it is
+        the thing the avatar in the corner is for. Repeating it here said nothing
+        the corner of the same screen was not already saying.
+      */}
+      <h1 className="text-foreground text-2xl leading-8 font-semibold tracking-tight">
+        {ACCOUNT_TITLE}
+      </h1>
 
       <Separator />
 
@@ -116,10 +121,7 @@ async function AccountPanel() {
 function PanelSkeleton() {
   return (
     <Card className="flex w-full flex-col gap-6 p-6 sm:p-8" aria-hidden="true">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-4 w-56" />
-      </div>
+      <Skeleton className="h-8 w-40" />
       <Separator />
       <div className="flex flex-col gap-2">
         <Skeleton className="h-6 w-44" />
