@@ -30,21 +30,23 @@ export const ACCOUNT_TITLE = "Tu cuenta";
 /** The `<title>`, which is read in a tab rather than on the page. */
 export const ACCOUNT_PAGE_TITLE = "Tu cuenta — Recomencemos";
 
-/**
- * Her address, named by **what it is for** rather than restated as a label.
+/*
+ * **There is deliberately no string for her address here any more.**
  *
- * _"Tu cuenta es X"_ was the first draft and it is a caption: it tells her a
- * thing she already knows in a sentence that does no work. What is useful is
- * that this is the address we write to — which is why the magic link arrives
- * where it does, and where every later notification will go. Voice guide Do 1:
- * name what we actually do, present tense, actor visible.
+ * It was `accountIs`, rendered as a subtitle under the heading — first as _"Tu
+ * cuenta es X"_ and then as _"Te escribimos a X"_, which named what the address
+ * is *for* rather than restating it. The second phrasing was the better
+ * sentence and it is still not one this page should carry: the shell's session
+ * menu shows the same address on every page, so a signed-in person met it twice
+ * on this one.
  *
- * `nosotros` is legitimate here because the platform genuinely acts — we send
- * that mail. It is not _te acompañamos_.
+ * The menu keeps it, because it is the surface that answers *whose account am
+ * I in* everywhere rather than here alone (`SIGNED_IN_AS`, DD5's borrowed-phone
+ * check). When #29 adds email change, the address returns to this page as the
+ * **subject of a control** rather than as a caption — that is a different
+ * string with a different job, and it should be written then rather than
+ * revived from here.
  */
-export function accountIs(email: string): string {
-  return `Te escribimos a ${email}`;
-}
 
 export const SESSIONS_HEADING = "Sesiones abiertas";
 
