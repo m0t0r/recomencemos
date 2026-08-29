@@ -38,6 +38,16 @@ export const SIGN_IN = "Entrar";
 export const SIGN_OUT = "Salir";
 
 /**
+ * The way to `/account`.
+ *
+ * The same two words the page titles itself with (`app/account/_lib/messages.ts`
+ * → `ACCOUNT_TITLE`), because link text names its destination
+ * (`docs/policy/voice.md`) and a person who presses this should land on a page
+ * that calls itself what the link called it.
+ */
+export const ACCOUNT = "Tu cuenta";
+
+/**
  * The accessible name of the control that opens the session menu.
  *
  * The visible text inside it is her address, so the accessible name **contains**

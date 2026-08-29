@@ -35,7 +35,7 @@ vi.mock("next/navigation", () => ({ usePathname: pathname }));
 
 import { SignInLink } from "./sign-in-link";
 import { SessionMenu } from "./session-menu";
-import { SIGN_IN, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
+import { ACCOUNT, SIGN_IN, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
 import { SIGN_OUT_FORM_ID } from "./slots";
 
 const EMAIL = "maria.restrepo@gmail.com";
@@ -81,6 +81,23 @@ describe("the signed-in trigger", () => {
     expect(screen.getByRole("menu").textContent).toContain(SIGNED_IN_AS);
 
     expect(screen.getByRole("menuitem", { name: SIGN_OUT })).toBeInTheDocument();
+  });
+
+  /**
+   * **The shell's only navigation, and the one thing #80 deferred.**
+   *
+   * The item announces as a `menuitem` rather than a `link` — that is the ARIA
+   * menu pattern and the primitive's doing, so the role is not what to assert.
+   * The `href` is: it is what a middle-click, a long-press and a person with no
+   * pointer all use, and it is the half that silently rots if the route moves.
+   */
+  it("points at /account", async () => {
+    const user = userEvent.setup();
+    render(<SessionMenu email={EMAIL} />);
+
+    await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
+
+    expect(screen.getByRole("menuitem", { name: ACCOUNT })).toHaveAttribute("href", "/account");
   });
 });
 
