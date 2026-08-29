@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The signed-in half of the shell: who she is, and the way out.
+ * The signed-in half of the shell: who she is, where her account lives, and the
+ * way out.
  *
  * **The trigger is the avatar and nothing else** — chosen at `/prototype` from
  * three variants running on the real route (variant B; the losers are on
@@ -43,10 +44,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/design-system/components/dropdown-menu";
-import { LogOutIcon } from "lucide-react";
+import { LogOutIcon, UserRoundIcon } from "lucide-react";
+import Link from "next/link";
 import { useActionState } from "react";
 import { signOut } from "./actions";
-import { SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
+import { ACCOUNT, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
 import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT, SIGN_OUT_FORM_ID } from "./slots";
 
 /**
@@ -143,6 +145,43 @@ export function SessionMenu({ email }: { email: string }) {
               <p className="text-muted-foreground text-xs">{SIGNED_IN_AS}</p>
               <p className="text-sm font-medium break-all">{email}</p>
             </div>
+
+            <DropdownMenuSeparator />
+
+            {/*
+              **The way to `/account`, and the only navigation the shell offers.**
+
+              #80 shipped without it because the page did not exist yet and the
+              ticket said *link only what exists*; story 12 built it, so this is
+              that deferral closing rather than a new decision.
+
+              **It renders as a `<Link>` and announces as a menu item, which is
+              not the contradiction `sign-in-link.tsx` warns about.** There the
+              objection was `role="button"` stamped onto an `<a>` by a control
+              that had no business doing it. Here `role="menuitem"` is the
+              primitive's own doing and is what the ARIA menu pattern asks for —
+              a person navigating this menu is moving through menu items with
+              arrow keys, not through a list of links. The `href` is real either
+              way, so a middle-click and a long-press still open it in a tab.
+
+              `Link` rather than a bare `<a>`, so the navigation is the client
+              router's and not a fresh document — the shell above it is already
+              painted and has no reason to be fetched again.
+            */}
+            <DropdownMenuItem
+              render={
+                <Link href="/account">
+                  {/*
+                    Decorative, so `aria-hidden` — the same rule as the icon
+                    below, and the reason both rows carry one: a leading icon is
+                    what makes a list of rows scannable, which is exactly what
+                    this menu became the moment it held more than one.
+                  */}
+                  <UserRoundIcon aria-hidden="true" />
+                  {ACCOUNT}
+                </Link>
+              }
+            />
 
             <DropdownMenuSeparator />
 
