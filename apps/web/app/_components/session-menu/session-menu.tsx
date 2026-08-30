@@ -47,18 +47,62 @@ import {
 import { LogOutIcon, UserRoundIcon } from "lucide-react";
 import Link from "next/link";
 import { useActionState } from "react";
-import { signOut } from "./actions";
+import type { signOut } from "./actions";
 import { ACCOUNT, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
 import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT, SIGN_OUT_FORM_ID } from "./slots";
+
+/**
+ * The shape both shells' sign-out actions have.
+ *
+ * **Taken from one of them rather than written out**, because next-safe-action's
+ * `SafeStateActionFn` is not something a hand-rolled structural annotation
+ * satisfies — a narrower parameter type fails contravariantly, and spelling the
+ * wider one out here would be this file restating a vendor type it cannot keep in
+ * agreement. `signOut` and `signOutAdmin` are built identically in `./actions`, so
+ * either names the type and both satisfy it.
+ *
+ * `import type`, so nothing from a `"use server"` module reaches this client
+ * bundle — the import is erased.
+ */
+export type SignOutAction = typeof signOut;
+
+type SignOutResult = Awaited<ReturnType<SignOutAction>>;
 
 /**
  * next-safe-action's own result shape, and `{}` is the library's "nothing has
  * happened yet" — so `idle` is not a state this surface invents and then has to
  * keep in agreement with the library's.
  */
-type SignOutResult = Awaited<ReturnType<typeof signOut>>;
-
 const INITIAL: SignOutResult = {};
+
+export interface SessionMenuProps {
+  readonly email: string;
+  /**
+   * The sign-out action, passed in rather than imported.
+   *
+   * **The two shells end a session at the same place and land in different
+   * ones** — the Wall for a Worker, `/admin/sign-in` for an Admin — and that
+   * destination is the only thing that differs between them. Both actions are
+   * three lines over the one `endSession` body in `lib/end-session.ts`, so the
+   * independent authorization, the revocation and the cookie clearing stay in
+   * one place while the landing does not have to.
+   *
+   * A Server Action reference is an ordinary prop to a Client Component: nothing
+   * here holds an auth client, reads a cookie, or knows Better Auth exists
+   * (ADR-0015).
+   */
+  readonly action: SignOutAction;
+  /**
+   * Where "Tu cuenta" goes, or **absent to omit the row entirely**.
+   *
+   * That absence is the one genuine difference between the two shells' menus.
+   * `/account` is the *Worker's* own Account, under `(site)`'s shell — useful
+   * chrome on the public product, and a row that navigates out of the queue when
+   * it is the Admin reading it. Everything else the menu does is wanted in both
+   * places, which is why this is a prop and not a second component.
+   */
+  readonly accountHref?: string;
+}
 
 /**
  * Her initial, for the avatar.
@@ -72,8 +116,8 @@ function initialOf(email: string): string {
   return [...email][0]?.toLocaleUpperCase("es-CO") ?? "";
 }
 
-export function SessionMenu({ email }: { email: string }) {
-  const [result, formAction, pending] = useActionState(signOut, INITIAL);
+export function SessionMenu({ email, action, accountHref }: SessionMenuProps) {
+  const [result, formAction, pending] = useActionState(action, INITIAL);
 
   /**
    * Only a *returned* refusal reaches here. A success redirects, so this state
@@ -149,11 +193,19 @@ export function SessionMenu({ email }: { email: string }) {
             <DropdownMenuSeparator />
 
             {/*
-              **The way to `/account`, and the only navigation the shell offers.**
+              **The way to `/account`, and the only navigation the shell offers —
+              where a caller asks for it.**
 
               #80 shipped without it because the page did not exist yet and the
               ticket said *link only what exists*; story 12 built it, so this is
               that deferral closing rather than a new decision.
+
+              **Absent for the Admin's shell** (#17), which is the one difference
+              between the two menus and the reason `accountHref` is a prop rather
+              than this being two components. `/account` is the *Worker's* own
+              Account, under `(site)`'s shell; from the queue it is a row that
+              navigates out of the surface being worked. The separator goes with
+              it — a divider above nothing is a rule with one side.
 
               **It renders as a `<Link>` and announces as a menu item, which is
               not the contradiction `sign-in-link.tsx` warns about.** There the
@@ -168,22 +220,26 @@ export function SessionMenu({ email }: { email: string }) {
               router's and not a fresh document — the shell above it is already
               painted and has no reason to be fetched again.
             */}
-            <DropdownMenuItem
-              render={
-                <Link href="/account">
-                  {/*
-                    Decorative, so `aria-hidden` — the same rule as the icon
-                    below, and the reason both rows carry one: a leading icon is
-                    what makes a list of rows scannable, which is exactly what
-                    this menu became the moment it held more than one.
-                  */}
-                  <UserRoundIcon aria-hidden="true" />
-                  {ACCOUNT}
-                </Link>
-              }
-            />
+            {accountHref ? (
+              <>
+                <DropdownMenuItem
+                  render={
+                    <Link href={accountHref}>
+                      {/*
+                        Decorative, so `aria-hidden` — the same rule as the icon
+                        below, and the reason both rows carry one: a leading icon
+                        is what makes a list of rows scannable, which is exactly
+                        what this menu became the moment it held more than one.
+                      */}
+                      <UserRoundIcon aria-hidden="true" />
+                      {ACCOUNT}
+                    </Link>
+                  }
+                />
 
-            <DropdownMenuSeparator />
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
 
             {/*
               The text sits inside the `render` element rather than as the item's

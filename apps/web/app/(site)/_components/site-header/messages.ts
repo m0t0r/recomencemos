@@ -7,15 +7,6 @@
  * **values**, and every identifier around them stays English.
  */
 
-/**
- * The product's name, which is a name and not copy.
- *
- * It is here rather than inlined so the header and any later chrome cannot
- * disagree about capitalisation, and so a voice review finds every rendered
- * string in one place — including the ones that turn out not to be sentences.
- */
-export const PRODUCT_NAME = "Recomencemos";
-
 /** Back to the Wall. Names its destination rather than saying "inicio". */
 export const HOME_LINK_LABEL = "Recomencemos, ir al inicio";
 
