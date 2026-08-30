@@ -13,6 +13,15 @@
  * the point of the object existing.
  */
 
+import {
+  EMPTY_LINK_TEXT,
+  LABEL_WORD_CEILING,
+  NEVER_SAY,
+  sentencesOf,
+  SENTENCE_WORD_CEILING,
+  shoutedWords,
+  wordCount,
+} from "@/testing/voice";
 import { checkYourEmail, SIGN_IN_COPY, SIGN_IN_LABELS } from "./messages";
 
 /**
@@ -31,33 +40,6 @@ const copy = [...Object.entries(SIGN_IN_COPY), ["CHECK_YOUR_EMAIL", CHECK_YOUR_E
 ][];
 const labels = Object.entries(SIGN_IN_LABELS);
 
-/**
- * `CONTEXT.md`'s _Avoid_ lists, plus the voice guide's **Never say**.
- *
- * Every one of these names a person by an event or by a category rather than by
- * a capability, or promises something this platform does not hold.
- */
-const NEVER_SAY = [
-  "damnificad",
-  "víctima",
-  "afectad",
-  "beneficiari",
-  "necesitad",
-  "donación",
-  "donar",
-  "causa",
-  "tu historia",
-  "candidat",
-  "aspirante",
-  "hoja de vida",
-  "vacante",
-  "empleo",
-  "oferta laboral",
-  "empleador",
-  "usuari",
-  "verificado",
-];
-
 describe.each(copy)("%s", (name, value) => {
   it("is not empty", () => {
     expect(value.trim().length).toBeGreaterThan(0);
@@ -65,8 +47,7 @@ describe.each(copy)("%s", (name, value) => {
 
   // Some screen readers spell them out, and it reads as shouting.
   it("has no ALL CAPS word", () => {
-    const shouted = value.split(/\s+/).filter((word) => /^[A-ZÁÉÍÓÚÑ]{2,}$/.test(word));
-    expect(shouted).toEqual([]);
+    expect(shoutedWords(value)).toEqual([]);
   });
 
   // No exclamation marks. The one permitted exception is a success state, and
@@ -81,26 +62,20 @@ describe.each(copy)("%s", (name, value) => {
   });
 
   // Link text names its destination; these are the phrases that refuse to.
-  it.each(["haz clic aquí", "clic aquí", "más información", "aquí."])(
-    "does not say %o",
-    (phrase) => {
-      expect(value.toLowerCase()).not.toContain(phrase);
-    },
-  );
+  it.each(EMPTY_LINK_TEXT)("does not say %o", (phrase) => {
+    expect(value.toLowerCase()).not.toContain(phrase);
+  });
 });
 
 describe("body copy", () => {
   // 20 words or fewer per sentence, not counting the items of a list. Nothing
   // here is a list.
   it.each(copy)("%s keeps every sentence to twenty words", (_name, value) => {
-    const sentences = value
-      .split(/[.]/)
-      .map((sentence) => sentence.trim())
-      .filter(Boolean);
+    const sentences = sentencesOf(value);
 
     expect(sentences.length).toBeGreaterThan(0);
     for (const sentence of sentences) {
-      expect(sentence.split(/\s+/).length).toBeLessThanOrEqual(20);
+      expect(wordCount(sentence)).toBeLessThanOrEqual(SENTENCE_WORD_CEILING);
     }
   });
 });
@@ -108,7 +83,7 @@ describe("body copy", () => {
 describe("labels and buttons", () => {
   // Five words or fewer. Countable, which is the point.
   it.each(labels)("%s is five words or fewer", (_name, value) => {
-    expect(value.split(/\s+/).length).toBeLessThanOrEqual(5);
+    expect(wordCount(value)).toBeLessThanOrEqual(LABEL_WORD_CEILING);
   });
 
   // A button says the verb of its action, not `Enviar` or `Continuar` alone.
