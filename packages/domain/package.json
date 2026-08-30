@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#admin/*": "./src/admin/*.ts",
     "#auth-schema": "./src/auth-schema.ts",
     "#auth/*": "./src/auth/*.ts",
     "#column-types": "./src/column-types.ts",
@@ -20,6 +21,7 @@
     "#user-messages": "./src/user-messages.ts"
   },
   "exports": {
+    "./admin": "./src/admin/index.ts",
     "./auth-handler": "./src/auth/index.ts",
     "./health": "./src/health.ts",
     "./migrate": "./src/migrate/index.ts",

@@ -14,6 +14,7 @@
     "db:reset": "docker compose down --volumes && pnpm db:up",
     "db:migrate": "node --env-file-if-exists=apps/web/.env.local packages/domain/src/migrate/cli.ts",
     "db:generate": "pnpm --filter @repo/domain generate",
+    "admin:grant": "node --env-file-if-exists=apps/web/.env.local packages/domain/src/admin/grant-cli.ts",
     "migrations:check": "node scripts/migration-integrity.mjs",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --check",

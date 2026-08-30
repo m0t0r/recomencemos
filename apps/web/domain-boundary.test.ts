@@ -46,6 +46,17 @@ const WITHHELD = [
   // options object and with it every hook and credential in it.
   "@repo/domain/auth/config",
   "@repo/domain/auth/sign-in-attempt",
+  /**
+   * **#17's, and the important one on this list.** `@repo/domain/admin` publishes
+   * `runAdminAction` and `requireAdminSession`; it publishes the *handlers* to
+   * nobody. That is NFR33's whole mechanism — the `AdminAction` insert lives in the
+   * executor, so an Admin mutation that skipped the audit would have to reach a
+   * handler, and this is what says it cannot. `names` is withheld beside it because
+   * a subpath published for convenience is one more door to keep shut.
+   */
+  "@repo/domain/admin/handlers",
+  "@repo/domain/admin/names",
+  "@repo/domain/admin/actor",
 ];
 
 /** What the app is allowed to reach, and therefore what it must actually reach. */
@@ -55,6 +66,8 @@ const PUBLISHED = [
   // #12's two.
   "@repo/domain/auth-handler",
   "@repo/domain/rate-limit",
+  // #17's one door onto the Admin's actions.
+  "@repo/domain/admin",
 ];
 
 describe("the domain package's export map", () => {

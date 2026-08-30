@@ -67,6 +67,14 @@ export const CEILINGS = {
 export type CeilingedAction = keyof typeof CEILINGS;
 
 /**
+ * The registry's keys, as the array `#schema`'s `CHECK` on `rate_counter.action`
+ * is written from — so the set the application validates against and the set the
+ * engine enforces are one object rather than two spellings (see `inList` in
+ * `#column-types`).
+ */
+export const CEILINGED_ACTIONS = Object.keys(CEILINGS) as readonly CeilingedAction[];
+
+/**
  * How long a settled window's row is kept before {@link chargeCeiling} sweeps
  * it: twice the longest window any ceiling declares, so a row is only deleted
  * when no window that could still be charged can reach it.

@@ -231,6 +231,12 @@ middleware an action opts into by naming its principals. Three rules, all in
 
 **Inside `@repo/domain`, internal imports are `#`-prefixed** — `#config`, `#schema`, `#connection` — declared in the package's `imports` field. This is not style. The package withholds most of its own modules, so a self-reference through `@repo/domain/...` fails for exactly the reason it is supposed to; and a relative `./config.js` specifier resolves under Vite but **not** under plain `node`, which is what `packages/domain/src/migrate/cli.ts` runs as in a Fly `release_command`. The `imports` field is the one form Node, Vite and `tsc` all resolve identically, and a `#` specifier is private to the package that declares it, so it is not a second door into the domain.
 
+**`pnpm admin:grant <email>` is the only way an Admin comes into existence** (#17, runbook §6). DD5
+closes credential sign-up, so no form creates one; `isAdmin` is declared `input: false`, so no request
+body sets the grant on any Better Auth route. It runs over the **direct** connection from a shell, and
+reads the password from stdin so it reaches neither argv nor shell history. The second factor is then
+enrolled at `/admin/sign-in`, which shows the QR and the ten backup codes **once**.
+
 **Migrations are generated, never hand-written.** `pnpm db:generate` writes them from `packages/domain/src/schema.ts`; `pnpm db:migrate` applies them on the direct connection. `.claude/hooks/build-guard.sh` rule J refuses a `Write` or `Edit` to a migration the journal already names — `drizzle-kit` writes through `Bash`, which is exactly the split that rule intends. `packages/domain/drizzle/` is oxfmt-ignored for the `pnpm-workspace.yaml` reason: `drizzle-kit` owns those files and rewrites them in its own style on every generate.
 
 **Config is consumed by extension, not by copying.** `packages/typescript-config/base.json` sets the strict baseline (`strict`, `noUncheckedIndexedAccess`, NodeNext resolution); `nextjs.json` and `react-library.json` extend it and override module resolution per target. Tighten compiler options there so every workspace inherits them — not in individual workspace configs.
@@ -351,6 +357,25 @@ layer at all.
 The guaranteed names — `service`, `env`, `release`, `level`, `time`, `msg`, plus
 `trace_id`/`span_id`/`event_id` and `request_id` where they apply — are a **stability contract**:
 every clone's drain queries bind to them, and no clone can be migrated by us.
+
+**A spec identifier may not appear in any string that leaves the source file — this is a hard rule.**
+`NFR14`, `ADR-0015`, `DD5`, `C43`, `story 7`, `#17`: none of them belongs in a test name, a log
+message, an `AppError.message`, a thrown `Error`, an HTTP response body, an RSC payload, CLI output,
+or anything a person reads on screen. They belong in **comments, doc-comments and commit messages**,
+which is where this repository's traceability lives and where it stays — do not strip them from there.
+
+The line is where the string is read, not what it says. A comment is read beside the code that proves
+it; a log line is read at 3am by an operator who may not hold the spec at all, and a test name is read
+in CI output by someone who does not have it open. `ADR-0005` already makes this argument for field
+names — _the line is its own namespace and names what it carries for itself_ — and this is the same
+rule applied to the message. A citation also goes stale silently: spec numbering is renegotiated at
+Design and the string quoting it is never re-read.
+
+**Say the substance instead.** `"a session that is not an authenticated Admin (NFR14)"` becomes
+`"a session that presented no password and no second factor"`, which is shorter and is the thing the
+reader needed. Where the citation is load-bearing, put it in the comment directly above the string.
+`REVIEW.md`'s **Spec identifiers stay in the source** pass is the blocking version of this and carries
+the per-surface table; the audit behind it is in #93.
 
 ## Things to get right
 
