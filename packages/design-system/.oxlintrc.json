@@ -16,7 +16,11 @@
       }
     },
     {
-      "files": ["src/components/field.tsx", "src/components/item.tsx"],
+      "files": [
+        "src/components/field.tsx",
+        "src/components/item.tsx",
+        "src/components/input-otp.tsx"
+      ],
       "rules": {
         "jsx-a11y/prefer-tag-over-role": "off",
         "react/no-array-index-key": "off"

@@ -184,6 +184,34 @@ client machine) and `_components` holds what it renders. The flat twelve-file `a
 replaced is the shape to avoid, and it is why `/code-review` should flag a route directory growing
 past its two files plus two folders.
 
+**Two groups sit at the top level, and they exist to separate audiences rather than shapes** (#17).
+`app/(site)/` is the public product — the Wall, `/sign-in`, `/account` — and its layout renders
+`SiteHeader`. `app/(admin)/` is the moderation queue and its door, and its layout renders none of
+that chrome: the session menu, the signed-in identity and _salir_ are built for a Worker on a phone,
+and two of their parts would be actively wrong above `/admin`. The **root** layout is therefore
+`<html>`, the fonts and one `<Toaster />`, and nothing else — a nested layout cannot remove a
+parent's chrome, so the only way for `/admin` to have a shell of its own was for the root to stop
+having one. Neither group adds a URL segment.
+
+**`/admin/*` refuses with a real 403, and the mechanism is worth knowing before changing it.** NFR14
+asks for _"403, returned, not a redirect and not a thrown error"_, and the three callers answer it
+differently:
+
+- A **page** calls `requireAdminPage()` from `lib/admin.ts`, which calls `forbidden()` —
+  `experimental.authInterrupts` is on for this and nothing else. It is a framework interrupt of the
+  same class as `redirect()`, so it costs no Sentry event, and it is the only way an App Router page
+  can set a status code.
+- A **Server Action** is built from `adminActionClient`, whose `use()` middleware returns a 403
+  `ClientError` **before** the boundary parse. Written as a first line in each action body it ran
+  _after_ validation, which seam 3 caught.
+- **`/admin` is `export const instant = false`.** That is `[block]` from Cache Components' own menu,
+  chosen because a streamed shell is a **200** already on the wire by the time the gate answers. The
+  queue's sources still stream inside the page.
+
+`/admin/sign-in` is the one route under the prefix that does not call the gate, and it is an
+exemption **by omission** — there is no allowlist, because a second place the boundary is described
+is the first place a later route falls on the wrong side of.
+
 **Every Server Action is built from `apps/web/lib/safe-action.ts`.** That module holds
 `actionClient`, the `handleServerError` bridge from `AppError` to the client envelope,
 `returnActionError` for an expected refusal, and `rateLimit` — NFR26's ceilings as `useValidated`

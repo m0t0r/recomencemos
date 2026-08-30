@@ -59,6 +59,35 @@ const nextConfig: NextConfig = {
     browserToTerminal: true,
   },
 
+  experimental: {
+    /**
+     * **NFR14 asks for a 403 and the App Router has exactly one way to render
+     * one** (#17): `forbidden()` with a `forbidden.tsx`, which this flag turns on.
+     *
+     * The requirement's own words are that the refusal is _"a **403**, returned,
+     * not a redirect and not a thrown error"_, and each third of that is doing
+     * work. Not a redirect, because a redirect tells an unauthenticated caller
+     * that the route exists. Not a thrown error, because C51 makes every refusal
+     * in the UX table a value rather than an `AppError` — a crawler that could
+     * raise one on every `/admin` hit would spend the month's 5,000-event Sentry
+     * allowance in a day.
+     *
+     * `forbidden()` satisfies both. It is a framework **interrupt**, the same
+     * class as `redirect()` — which `sign-in/actions.ts` already documents as "a
+     * navigation and not a swallowed failure" — so it never reaches
+     * `handleServerError` and never becomes an event. What it does produce is a
+     * real 403 status, which is the third of the requirement nothing else here
+     * could deliver: a page cannot set a status code, and a `proxy.ts` doing this
+     * job would put an authorization decision in a layer Next's own docs tell you
+     * not to rely on for shared modules, against the API contract's rule that
+     * every action authorizes independently.
+     *
+     * **The Server Actions do not use it** and do not need it: `returnActionError`
+     * with a 403 `ClientError` is already literally "returned, not thrown".
+     */
+    authInterrupts: true,
+  },
+
   // Note what is *absent*: `serverExternalPackages`. Next's defaults already
   // carry `pino`, `pino-pretty` and `thread-stream`, and supplying an explicit
   // list here replaces those defaults rather than adding to them — so the first
