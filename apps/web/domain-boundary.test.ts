@@ -67,6 +67,14 @@ const WITHHELD = [
    * re-exported from `./consent` anyway.
    */
   "@repo/domain/consent/registry",
+  /**
+   * **The Admin's second factor, as values.** It generates a TOTP secret and ten
+   * backup codes and decrypts both, so there is no version of `apps/web` that has
+   * any business reaching it — the browser-facing half of that flow is one render
+   * of values the domain hands over, and the checking half never leaves the
+   * server. A subpath published for convenience is one more door to keep shut.
+   */
+  "@repo/domain/admin/second-factor",
 ];
 
 /** What the app is allowed to reach, and therefore what it must actually reach. */
