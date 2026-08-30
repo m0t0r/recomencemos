@@ -442,6 +442,15 @@ mig_start() { # name -> a repo with 0000_init already on the default branch
   printf '%s' "$d"
 }
 
+mig_seeded() { # name sql -> a repo whose shipped 0000_init carries that SQL
+  local d
+  d=$(mig_repo "$1")
+  printf '%s\n' "$2" > "$d/drizzle/0000_init.sql"
+  journal 0000_init > "$d/drizzle/meta/_journal.json"
+  mig_ship "$d"
+  printf '%s' "$d"
+}
+
 mig_add() { # dir tag sql-line... -- add a migration on the branch
   local dir="$1" tag="$2"
   shift 2
@@ -554,6 +563,126 @@ D=$(mig_start renamed)
 mig_add "$D" 0001_contract_rename_note 'ALTER TABLE "offer" RENAME COLUMN "note" TO "terms";'
 run_mig "a rename alone, marked"                          0 "^Migration integrity passed" "$D"
 
+section "Migration integrity: a CHECK re-created under its own name is a widening"
+
+# DD2 makes an enum-shaped column `TEXT` with a `CHECK (col IN (...))` so that
+# widening the set is a constraint change — and Postgres offers exactly one way to
+# widen one, which is to drop it and add it back. Before #17 that made every such
+# widening unsatisfiable: rule 3 refused the pair and rule 4 kept the marked
+# migration out of any PR touching a query module, which is every PR that needs the
+# new member.
+#
+# **The carve-out reads two things, and a security review is why it reads the
+# second.** The same migration must add a `CHECK` back under the dropped name, and
+# an *earlier* migration must have declared that name a check. `DROP CONSTRAINT`
+# does not say what kind it removes, so the first condition alone exempted dropping
+# a `UNIQUE` and putting a check back under its name. The fixtures below therefore
+# seed a history: `mig_seeded` ships an `0000_init` that says what the constraint
+# was, which is the fact the gate is now consulting.
+
+CHECK_HISTORY='CREATE TABLE "session" ("sign_in_method" text NOT NULL, CONSTRAINT "session_method_known" CHECK ("sign_in_method" IN ('"'a'"')));'
+UNIQUE_HISTORY='CREATE TABLE "user" ("email" text NOT NULL, CONSTRAINT "user_email_unique" UNIQUE("email"));'
+
+D=$(mig_seeded checkwiden "$CHECK_HISTORY")
+mig_add "$D" 0001_admin_methods \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_method_known";' \
+  'ALTER TABLE "user" ADD COLUMN "is_admin" boolean DEFAULT false NOT NULL;' \
+  'ALTER TABLE "session" ADD CONSTRAINT "session_method_known" CHECK ("sign_in_method" IN ('"'a'"', '"'b'"'));'
+run_mig "a CHECK dropped and re-added under one name"     0 "^Migration integrity passed" "$D"
+
+# The `IF EXISTS` spelling is the one a hand-written migration reaches for, and it
+# must land on the same side as the generated one.
+D=$(mig_seeded checkwidenifexists "$CHECK_HISTORY")
+mig_add "$D" 0001_admin_methods \
+  'ALTER TABLE "session" DROP CONSTRAINT IF EXISTS "session_method_known";' \
+  'ALTER TABLE "session" ADD CONSTRAINT "session_method_known" CHECK ("sign_in_method" IN ('"'a'"'));'
+run_mig "a CHECK re-added after DROP CONSTRAINT IF EXISTS" 0 "^Migration integrity passed" "$D"
+
+# **The case the security review found.** The name was a `UNIQUE`, and putting a
+# check back under it is the removal of a uniqueness guarantee wearing the shape of
+# a widening — on `user.email` that is what stops one person holding two Accounts
+# by capitalising. It must refuse, and it must refuse because the history says the
+# name was never a check.
+D=$(mig_seeded uniquedroppedaschecked "$UNIQUE_HISTORY")
+mig_add "$D" 0001_swap \
+  'ALTER TABLE "user" DROP CONSTRAINT "user_email_unique";' \
+  'ALTER TABLE "user" ADD CONSTRAINT "user_email_unique" CHECK (true);'
+run_mig "a UNIQUE dropped and re-added as a CHECK"        1 "travels alone"               "$D"
+
+# A name no migration has ever declared at all is the same answer for the same
+# reason — the gate fails closed rather than assuming.
+D=$(mig_seeded checkunknownname "$CHECK_HISTORY")
+mig_add "$D" 0001_swap \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_never_declared";' \
+  'ALTER TABLE "session" ADD CONSTRAINT "session_never_declared" CHECK (true);'
+run_mig "a drop of a name the history never declared"     1 "travels alone"               "$D"
+
+# The three cases the carve-out must decline even with a genuine check history,
+# because each is a different act than widening a predicate.
+
+D=$(mig_seeded checkdroponly "$CHECK_HISTORY")
+mig_add "$D" 0001_loosen \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_method_known";' \
+  'ALTER TABLE "user" ADD COLUMN "is_admin" boolean DEFAULT false NOT NULL;'
+run_mig "a CHECK dropped and never added back"            1 "travels alone"               "$D"
+
+D=$(mig_seeded checkothername "$CHECK_HISTORY")
+mig_add "$D" 0001_swap \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_method_known";' \
+  'ALTER TABLE "session" ADD CONSTRAINT "session_other_known" CHECK ("sign_in_method" IN ('"'a'"'));'
+run_mig "a different constraint added in its place"       1 "travels alone"               "$D"
+
+# Re-adding as UNIQUE is not the same act: the drop takes an index with it, and a
+# narrower unique can fail against rows that already exist.
+D=$(mig_seeded checkreaddunique "$CHECK_HISTORY")
+mig_add "$D" 0001_swap \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_method_known";' \
+  'ALTER TABLE "session" ADD CONSTRAINT "session_method_known" UNIQUE ("sign_in_method");'
+run_mig "a constraint re-added as UNIQUE, not CHECK"      1 "travels alone"               "$D"
+
+# **The same bypass wearing a second table**, found reviewing #93. A constraint
+# name is unique per *table* in Postgres, not per schema, and a `CHECK` creates no
+# index to collide with the `UNIQUE` of the same name — so a decoy table declaring
+# `user_email_unique` as a check is legal SQL, and it used to teach the history
+# scan that the name was a predicate. The migration after it then dropped the real
+# uniqueness on `"user"` and put a `CHECK (true)` back, and both of the carve-out's
+# conditions passed. Two migrations rather than one, because a migration may not
+# vouch for itself — that hole was closed first, and this is the way round it.
+D=$(mig_seeded checkdecoytable "$UNIQUE_HISTORY")
+printf '%s\n' 'CREATE TABLE "decoy" ("x" integer, CONSTRAINT "user_email_unique" CHECK (true));' \
+  > "$D/drizzle/0001_decoy.sql"
+printf '%s\n' \
+  'ALTER TABLE "user" DROP CONSTRAINT "user_email_unique";' \
+  'ALTER TABLE "user" ADD CONSTRAINT "user_email_unique" CHECK (true);' \
+  > "$D/drizzle/0002_swap.sql"
+journal 0000_init 0001_decoy 0002_swap > "$D/drizzle/meta/_journal.json"
+run_mig "a decoy CHECK of that name on another table"     1 "travels alone"               "$D"
+
+# The table is read on the re-add side too: putting the check back somewhere else
+# is not re-creating the one that was dropped.
+D=$(mig_seeded checkreaddothertable "$CHECK_HISTORY")
+mig_add "$D" 0001_swap \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_method_known";' \
+  'ALTER TABLE "decoy" ADD CONSTRAINT "session_method_known" CHECK (true);'
+run_mig "a CHECK re-added on a different table"           1 "travels alone"               "$D"
+
+# One `ALTER TABLE` carrying both actions past a comma, which is the spelling that
+# loses its table to `actions` — the pair must still read as a widening, and this
+# is the case that fails if the table is not threaded through the split.
+D=$(mig_seeded checkwidenoneline "$CHECK_HISTORY")
+mig_add "$D" 0001_admin_methods \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_method_known", ADD CONSTRAINT "session_method_known" CHECK ("sign_in_method" IN ('"'a'"', '"'b'"'));'
+run_mig "a CHECK widened by one multi-action ALTER TABLE" 0 "^Migration integrity passed" "$D"
+
+# The carve-out reaches one statement kind and no other: a DROP COLUMN beside a
+# genuine CHECK widening is still a mixture, and still the thing rule 3 is for.
+D=$(mig_seeded checkwidenplusdrop "$CHECK_HISTORY")
+mig_add "$D" 0001_both \
+  'ALTER TABLE "session" DROP CONSTRAINT "session_method_known";' \
+  'ALTER TABLE "session" ADD CONSTRAINT "session_method_known" CHECK ("sign_in_method" IN ('"'a'"'));' \
+  'ALTER TABLE "offer" DROP COLUMN "memo";'
+run_mig "a DROP COLUMN beside a CHECK widening"           1 "travels alone"               "$D"
+
 # The prose cases. Every one of these is text that names a destructive statement
 # without being one, and four false refusals were found the last time these rules
 # were written.
@@ -580,6 +709,22 @@ run_mig "ADD COLUMN ... NOT NULL is not SET NOT NULL"     0 "^Migration integrit
 D=$(mig_start createtype)
 mig_add "$D" 0001_add_status 'CREATE TYPE "offer_status" AS ENUM('"'draft'"', '"'sent'"');' 'ALTER TABLE "offer" ADD COLUMN "status" "offer_status";'
 run_mig "CREATE TYPE is not ALTER COLUMN ... TYPE"        0 "^Migration integrity passed" "$D"
+
+# A quoted identifier now leaves its *name* in the scanned text rather than a bare
+# `ident`, so that rule 3's CHECK carve-out can pair a drop with its re-add. These
+# three are what say the erasure still does its original job: a name cannot become
+# a destructive phrase, whether it is plain, punctuated, or quote-escaped.
+D=$(mig_start identunderscore)
+mig_add "$D" 0001_add_flag 'ALTER TABLE "offer" ADD COLUMN "drop_table" boolean;'
+run_mig "a column whose name is drop_table"               0 "^Migration integrity passed" "$D"
+
+D=$(mig_start identspace)
+mig_add "$D" 0001_add_flag 'ALTER TABLE "offer" ADD COLUMN "drop table" boolean;'
+run_mig "a column whose quoted name holds a space"        0 "^Migration integrity passed" "$D"
+
+D=$(mig_start identrename)
+mig_add "$D" 0001_add_flag 'ALTER TABLE "offer" ADD COLUMN "rename" boolean;'
+run_mig "a column named for a destructive keyword"        0 "^Migration integrity passed" "$D"
 
 section "Migration integrity: contract and code ship separately"
 

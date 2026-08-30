@@ -244,6 +244,7 @@ function stripQuotedAndCommented(sql) {
       const escapes =
         (before === "E" || before === "e") && (i < 2 || !/[A-Za-z0-9_]/.test(beforeThat ?? ""));
       i += 1;
+      const opened = i;
       while (i < sql.length) {
         if (escapes && sql[i] === "\\") {
           i += 2;
@@ -261,7 +262,21 @@ function stripQuotedAndCommented(sql) {
       }
       // A quoted identifier leaves a token behind, so `ALTER COLUMN "x" TYPE`
       // still reads as the three words the pattern is looking for.
-      result += quote === '"' ? " ident " : " literal ";
+      //
+      // **The token carries the identifier's name when the name is a plain one**,
+      // because rule 3's CHECK-widening carve-out has to tell `DROP CONSTRAINT
+      // "a"` followed by `ADD CONSTRAINT "a" CHECK` from the same drop followed by
+      // an unrelated one — and with every name erased to one token those two read
+      // identically. (Found by the case that was supposed to refuse and did not.)
+      //
+      // **Only a bare `[A-Za-z_][A-Za-z0-9_]*` name survives**, which is what
+      // keeps this from reopening what the erasure was for. An identifier holding
+      // a space, a quote or punctuation still collapses to `ident`, so a column
+      // called `"drop table"` cannot smuggle a destructive phrase back into the
+      // scanned text; and a name that *is* bare cannot form one either, since
+      // every pattern in `DESTRUCTIVE` needs whitespace or punctuation between its
+      // words and `ident_` prefixes the token so a leading `\b` cannot land on it.
+      result += quote === '"' ? ` ${identToken(sql.slice(opened, i - 1))} ` : " literal ";
       continue;
     }
     if (sql[i] === "$") {
@@ -278,6 +293,18 @@ function stripQuotedAndCommented(sql) {
     i += 1;
   }
   return result;
+}
+
+/**
+ * What a quoted identifier is replaced by. `ident` alone when the name is
+ * anything other than a plain one, `ident_<name>` when it is.
+ *
+ * A doubled `""` inside a quoted identifier is Postgres's escape for one quote,
+ * so a name containing it is not plain and collapses — no unescaping is needed
+ * and none is done, which is one fewer thing to get subtly wrong.
+ */
+function identToken(name) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? `ident_${name}` : "ident";
 }
 
 function statements(sql) {
@@ -314,6 +341,150 @@ function actions(statement) {
 }
 
 const destructiveIn = (statement) => DESTRUCTIVE.find(([pattern]) => pattern.test(statement))?.[1];
+
+// The one carve-out, and it is written narrowly on purpose.
+//
+// DD2 makes an enum-shaped column `TEXT` with a `CHECK (col IN (...))`
+// "precisely so that widening the set is a constraint change rather than a type
+// alteration" — and Postgres offers exactly one way to widen one: drop it and add
+// it back. `drizzle-kit` therefore renders the *intended* operation as a
+// `DROP CONSTRAINT` beside an `ADD CONSTRAINT`, which rules 3 and 4 between them
+// make unsatisfiable in any pull request that also touches `@repo/domain`'s query
+// modules. Every enum column in this design widens that way — `sign_in_method`
+// on #17, and NFR26's seven remaining ceilings on `rate_counter.action`.
+//
+// **The rules' own reason does not reach it.** Rule 3 refuses a mixture because
+// "the drop has already destroyed the data"; dropping a `CHECK` destroys none,
+// the re-add is in the same migration and the same transaction, and a *narrowing*
+// re-add fails loudly on apply because the engine validates the existing rows.
+//
+// So a `DROP CONSTRAINT "x"` on table `t` is exempt when **both** halves are
+// checks, and both are judged at `t` rather than at `x` alone:
+//
+//   1. the same migration adds a `CHECK` back under that name **on that table**, and
+//   2. `t`.`x` has been introduced as a `CHECK` by an **earlier** migration.
+//
+// **The second condition is the one a security review caught missing**, and
+// without it the paragraph below was false. `DROP CONSTRAINT` does not say what
+// kind of constraint it removes — Postgres drops any of them by name — so matching
+// the re-add alone exempted
+//
+//     ALTER TABLE "user" DROP CONSTRAINT "user_email_unique";
+//     ALTER TABLE "user" ADD CONSTRAINT "user_email_unique" CHECK (true);
+//
+// which removes the uniqueness `auth-schema.ts` calls "what stops one person
+// holding two Accounts by capitalising", unmarked, in a pull request that may also
+// change query modules. That is exactly what rules 3 and 4 exist to stop, let
+// through by the rule written to let a *predicate* widen.
+//
+// **The table is the third condition, and its absence was the same bypass wearing
+// a second table** (review of #93). A constraint name is unique per *table* in
+// Postgres, not per schema, and a `CHECK` creates no index to collide — so
+// `CREATE TABLE "decoy" (…, CONSTRAINT "user_email_unique" CHECK (true))` in one
+// migration is legal, and it used to teach the history scan that the name was a
+// predicate. A second migration in the same pull request could then drop the real
+// `UNIQUE` on `"user"` and re-add a `CHECK (true)`, and both conditions above
+// passed while the thing actually removed was the uniqueness. Keying on
+// `table.name` is what makes "this was a predicate before you widened it" a claim
+// about the constraint that is being dropped rather than about its spelling.
+//
+// Reading the history is what tells a widening from a removal, and it **fails
+// closed** on every axis: a name this scan does not find as a check is not exempt,
+// a statement whose table it cannot read is not exempt, and an unreadable file or
+// an unusual spelling refuses rather than admits.
+//
+// Three things it still deliberately does not cover, each a different act than
+// widening a predicate:
+//
+//   - a bare `DROP CONSTRAINT` with no re-add — that is a removal;
+//   - a drop re-added as `UNIQUE`, `PRIMARY KEY` or `FOREIGN KEY` — those drop an
+//     index or a referential guarantee, and re-adding a narrower one can fail
+//     against rows that already exist;
+//   - every other member of `DESTRUCTIVE`, which is untouched.
+//
+// The names arrive as `IDENT_<NAME>` — `statements` uppercases, and
+// `stripQuotedAndCommented` folds a quoted identifier into that token. A name too
+// unusual to be plain arrives as a bare `IDENT`, which matches no pattern's
+// capture group, so it is never paired and the drop stays destructive.
+const DROPPED_CONSTRAINT = /\bDROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?IDENT_([A-Z0-9_]+)\b/;
+const READDED_CHECK = /\bADD\s+CONSTRAINT\s+IDENT_([A-Z0-9_]+)\s+CHECK\b/;
+
+// Both ways a `CHECK` comes into existence: inline in a `CREATE TABLE`, and as an
+// `ALTER TABLE … ADD`. One pattern covers them, because the `ADD` form contains
+// the inline form's shape.
+const CHECK_INTRODUCED = /\bCONSTRAINT\s+IDENT_([A-Z0-9_]+)\s+CHECK\b/g;
+
+// The table a statement acts on, so a constraint is judged where it lives.
+//
+// `null` when it cannot be read, which every caller treats as "not exempt" — the
+// fail-closed direction. A schema qualifier is dropped because `public.user` and
+// `user` are the same table and a migration may spell it either way; an unusual
+// name arrives as a bare `IDENT` from `stripQuotedAndCommented` and is kept as
+// such, so two differently-spelled unusual names cannot be told apart and neither
+// is ever paired with the other's re-add.
+const TABLE_TARGET =
+  /^(?:ALTER|CREATE)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?(?:ONLY\s+)?(IDENT(?:_[A-Z0-9_]+)?(?:\s*\.\s*IDENT(?:_[A-Z0-9_]+)?)?)/;
+
+function tableOf(statement) {
+  const target = TABLE_TARGET.exec(statement);
+  if (!target) return null;
+  const qualified = target[1].split(".");
+  return qualified[qualified.length - 1].trim();
+}
+
+// One `ALTER TABLE` splits into its actions, and each action keeps the table its
+// parent named — `actions` drops the head from every part after the first, and
+// without the table a `DROP CONSTRAINT` cannot be told from the same name on a
+// different table.
+function splitActions(sql) {
+  return statements(sql).flatMap((statement) => {
+    const table = tableOf(statement);
+    return actions(statement).map((action) => ({ statement: action, table }));
+  });
+}
+
+function checksRecreatedIn(split) {
+  const keys = new Set();
+  for (const { statement, table } of split) {
+    if (!table) continue;
+    const readded = READDED_CHECK.exec(statement);
+    if (readded) keys.add(`${table}.${readded[1]}`);
+  }
+  return keys;
+}
+
+// The constraint names a migration declares as a `CHECK`, folded into the running
+// set **after** that migration has been judged.
+//
+// **Order is the whole of it.** Scanning the entire history at once let the
+// migration under judgement vouch for itself: the exploit case is a `DROP
+// CONSTRAINT "user_email_unique"` beside an `ADD CONSTRAINT "user_email_unique"
+// CHECK`, and that `ADD` is itself a check declaration. Accumulating in journal
+// order means a name counts only if some *earlier* migration made it a check —
+// which is what "this was a predicate before you widened it" actually means.
+function collectChecksDeclared(sql, into) {
+  for (const statement of statements(sql)) {
+    const table = tableOf(statement);
+    if (!table) continue;
+    for (const [, name] of statement.matchAll(CHECK_INTRODUCED)) into.add(`${table}.${name}`);
+  }
+}
+
+// A `DROP CONSTRAINT` is a widening only when the constraint it removes — the
+// name **on that table** — is one an earlier migration declared a check, and the
+// same migration puts a check back under it. Everything else keeps the answer
+// `destructiveIn` gave.
+function destructiveInMigration({ statement, table }, recreatedChecks, checksEverDeclared) {
+  const kind = destructiveIn(statement);
+  if (kind !== "DROP CONSTRAINT") return kind;
+  if (!table) return kind;
+
+  const dropped = DROPPED_CONSTRAINT.exec(statement);
+  if (!dropped) return kind;
+
+  const key = `${table}.${dropped[1]}`;
+  return recreatedChecks.has(key) && checksEverDeclared.has(key) ? undefined : kind;
+}
 
 // `@repo/domain` is found by manifest name rather than by a path, because the
 // package does not exist yet and a hardcoded `packages/domain` would be a rule
@@ -402,8 +573,11 @@ function checkImmutable(root, base, refuse, dir, baseEntries) {
 // drift it was built to stop". Nothing is lost by scoping: a migration is
 // checked at the pull request that introduces it, and is immutable thereafter.
 function checkDestructive(root, refuse, dir, headEntries, added, missing) {
+  // Accumulated in journal order, so a migration is judged against the checks
+  // declared *before* it. See `collectChecksDeclared`.
+  const checksEverDeclared = new Set();
+
   for (const entry of headEntries) {
-    if (!added.has(entry.tag)) continue;
     const path = `${dir}/${entry.tag}.sql`;
     let sql;
     try {
@@ -413,13 +587,26 @@ function checkDestructive(root, refuse, dir, headEntries, added, missing) {
       // could not tell": a journal that renamed a committed tag has no file
       // under the new name either, and reporting that as a gate failure would
       // bury the append-only violation that caused it.
-      missing.push(path);
+      if (added.has(entry.tag)) missing.push(path);
       continue;
     }
-    const parsed = statements(sql)
-      .flatMap(actions)
-      .map((statement) => ({ statement, destructive: destructiveIn(statement) }));
+
+    if (!added.has(entry.tag)) {
+      // Already shipped: it contributes to the history and is not re-judged.
+      collectChecksDeclared(sql, checksEverDeclared);
+      continue;
+    }
+    const split = splitActions(sql);
+    // Both are computed before anything is classified, because whether a drop is
+    // destructive depends on what else this file does **and** on what the history
+    // declared. See `destructiveInMigration`.
+    const recreatedChecks = checksRecreatedIn(split);
+    const parsed = split.map((action) => ({
+      statement: action.statement,
+      destructive: destructiveInMigration(action, recreatedChecks, checksEverDeclared),
+    }));
     const destructive = parsed.filter((s) => s.destructive);
+    collectChecksDeclared(sql, checksEverDeclared);
     if (destructive.length === 0) continue;
 
     const additive = parsed.filter((s) => !s.destructive);
