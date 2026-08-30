@@ -43,3 +43,23 @@ import type * as schema from "#schema";
  * through this type, type-checks under the repo's TypeScript.
  */
 export type DomainDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
+
+/**
+ * The handle a function is given **inside** `db.transaction(...)`, and the one
+ * type that can say "this may only be called from within a transaction".
+ *
+ * **Derived from `DomainDatabase` rather than written out**, because
+ * `PgTransaction`'s three type parameters would have to be spelled twice — once
+ * here and once wherever the driver changes — and the callback's own parameter is
+ * already exactly the type in question. Reading it back off the signature is what
+ * keeps the two drivers seam 2 and production run on from needing separate
+ * spellings.
+ *
+ * **The refusal it buys is structural.** A `PgTransaction` carries `rollback()`
+ * and a plain `PgDatabase` does not, so passing a connection where this is asked
+ * for is a type error rather than a review comment. `recordConsent` in `./consent`
+ * is the first function that needs that: the criterion it satisfies is that a
+ * Consent row is written in the same transaction as the collection it
+ * authorizes, and a signature is the only place that can be enforced.
+ */
+export type DomainTransaction = Parameters<Parameters<DomainDatabase["transaction"]>[0]>[0];

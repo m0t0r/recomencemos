@@ -10,6 +10,7 @@
     "#column-types": "./src/column-types.ts",
     "#config": "./src/config.ts",
     "#connection": "./src/connection.ts",
+    "#consent/*": "./src/consent/*.ts",
     "#database": "./src/database.ts",
     "#migrate": "./src/migrate/index.ts",
     "#rate-limit": "./src/rate-limit.ts",
@@ -23,6 +24,7 @@
   "exports": {
     "./admin": "./src/admin/index.ts",
     "./auth-handler": "./src/auth/index.ts",
+    "./consent": "./src/consent/index.ts",
     "./health": "./src/health.ts",
     "./migrate": "./src/migrate/index.ts",
     "./rate-limit": "./src/rate-limit.ts"
