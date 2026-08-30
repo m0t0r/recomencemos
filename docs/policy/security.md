@@ -15,7 +15,7 @@ An `UNSET` value is raised as a flagged concern naming this file and the key. It
 | `csp-policy`           | **`default-src 'self'; frame-ancestors 'none'; img-src 'self' <image-host> data:; connect-src 'self' <sentry-ingest>; base-uri 'self'; form-action 'self'`, enforced (not report-only)**                                        | The Content-Security-Policy the app ships, or an explicit decision not to ship one                                                                                                                                                                                          |
 | `dependency-policy`    | **CI fails on `high` or above in a direct dependency. No licence allowlist**                                                                                                                                                    | What blocks a release: a CVE severity threshold, a licence allowlist, or neither                                                                                                                                                                                            |
 | `pentest-cadence`      | **None external.** Internally: `security-review` per PR touching auth, the exchange path or an egress; a full `/security-audit` run before the announcement and after major auth or exchange work                               | How often an external party looks, if ever                                                                                                                                                                                                                                  |
-| `secrets-in-url-paths` | **no**                                                                                                                                                                                                                          | Whether any route carries a credential in a path segment — password reset, signed invite, unsubscribe. If yes, the completion line logs it verbatim ([ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)) and the path must be bounded before go-live |
+| `secrets-in-url-paths` | **yes** — one route, `GET /admin/enrol/[token]`. See below                                                                                                                                                                      | Whether any route carries a credential in a path segment — password reset, signed invite, unsubscribe. If yes, the completion line logs it verbatim ([ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)) and the path must be bounded before go-live |
 
 ### The one exception to "no secret in a repo `.env`"
 
@@ -66,10 +66,37 @@ platform collects and publishes personal data about identifiable people. The nam
 tratamiento_ is still outstanding: until a partner organization takes it, the controller is the repo
 owner personally. That gap is tracked by the effort, not by this key.
 
-**`secrets-in-url-paths` is `no`, and it was checked rather than assumed.** Better Auth's magic-link
-plugin verifies at `GET /magic-link/verify` with the token as a **query parameter**, and `pathOf`
-strips query and hash before the request-completion line is written — so
-[ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)'s exposure does not apply
-to it. **The value records the routes that exist today, not a principle.** It flips to `yes` the
-moment any route carries a token in a path segment, and the go-live runbook's §10 is what bounds it
-then.
+**`secrets-in-url-paths` was `no`, checked rather than assumed, and #103 flipped it.** Better Auth's
+magic-link plugin verifies at `GET /magic-link/verify` with the token as a **query parameter**, and
+`pathOf` strips query and hash before the request-completion line is written — so
+[ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)'s exposure never applied to
+it. That is still true of the magic link. **The value records the routes that exist today, not a
+principle**, and one route now carries a token in a path segment.
+
+**The route is `GET /admin/enrol/[token]`**, the Admin's enrolment screen. The spec's API contract,
+the surface brief and the ticket all name that shape, and the query-parameter form — which is what
+keeps this key at `no` — was not taken, so the exposure is accepted rather than avoided. Observed
+rather than predicted: `context.path` on the request-completion line reads
+
+```json
+{
+  "msg": "request complete",
+  "route": "/admin/enrol/[token]",
+  "context": { "path": "/admin/enrol/IGXP5rGQFXIydyv-d0HD1rwAoT4DzR7T" }
+}
+```
+
+**What the exposure actually is, stated rather than waved at.** The token is good for fifteen minutes
+and is spent the moment the terminal confirms; log lines are kept thirty days. So a line read after
+the enrolment finished carries a credential that opens nothing, and the window in which it is live is
+one in which the operator is sitting at the prompt that printed it. The token is also printed to that
+operator's own terminal and never emailed, so the population that can see the log and the population
+that already had the link are close to the same one — on this product, the same person.
+
+**What it is not is nothing**, and two things follow. A drain is a second place a live token exists
+for those fifteen minutes, which is a real widening of where a credential lives. And the value of
+this key is what a reader consults before adding the _next_ token-in-a-path route, where none of the
+mitigating clauses above may hold.
+
+**Go-live runbook §10 carries the bounding step.** Whatever else changes, the enrolment path must not
+reach a third-party drain in the clear before the announcement.

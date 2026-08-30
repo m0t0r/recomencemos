@@ -419,6 +419,10 @@ restated as the last checklist a human reads:
 - [ ] Load test shows NFR2 held at its stated concurrency
 - [ ] `trace_id` correlation proven end to end
 - [ ] Admin backup codes offline, second Admin device working
+- [ ] **The Admin enrolment path is bounded in the drain.** `secrets-in-url-paths` in
+      [`../policy/security.md`](../policy/security.md) is `yes` for `GET /admin/enrol/[token]`, and
+      `context.path` on the request-completion line carries that token verbatim. Confirm the drain
+      either drops or redacts that path before the announcement, and record which
 - [ ] _Aviso_ and _autorización_ live, naming every processor
 - [ ] §11's client-side measurement taken and recorded
 
