@@ -22,6 +22,13 @@
       "when": 1788039492069,
       "tag": "0002_admin_second_factor_and_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788119298416,
+      "tag": "0003_consent_before_collection",
+      "breakpoints": true
     }
   ]
 }

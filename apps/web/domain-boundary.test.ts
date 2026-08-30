@@ -57,6 +57,16 @@ const WITHHELD = [
   "@repo/domain/admin/handlers",
   "@repo/domain/admin/names",
   "@repo/domain/admin/actor",
+  /**
+   * **#14's, and the one that is not a credential.** `@repo/domain/consent`
+   * publishes `hasConsented` and the version registry; `recordConsent` is
+   * reachable only with a transaction handle, which `apps/web` cannot obtain
+   * because `#connection` and `#database` are withheld above. The registry itself
+   * is withheld here for the reason `admin/names` is — a subpath published for
+   * convenience is one more door to keep shut, and everything it holds is
+   * re-exported from `./consent` anyway.
+   */
+  "@repo/domain/consent/registry",
 ];
 
 /** What the app is allowed to reach, and therefore what it must actually reach. */
@@ -68,6 +78,8 @@ const PUBLISHED = [
   "@repo/domain/rate-limit",
   // #17's one door onto the Admin's actions.
   "@repo/domain/admin",
+  // #14's door onto the Consent row.
+  "@repo/domain/consent",
 ];
 
 describe("the domain package's export map", () => {

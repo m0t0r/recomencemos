@@ -174,3 +174,22 @@ export const ADMIN_SECOND_FACTOR_REFUSED =
  */
 export const ADMIN_ENROLMENT_FAILED =
   "No pudimos configurar tu segundo factor. Nada quedó guardado; empieza otra vez.";
+
+/**
+ * The *aviso de privacidad* or the *autorización* changed while she had the form
+ * open, so the consent she is submitting is to text that is no longer the one in
+ * force.
+ *
+ * **It says what happened and what to do, and it does not call it an error.** The
+ * change was ours; she filled in a form correctly and slowly, which is exactly
+ * what a person on a borrowed phone does. Do 3 and Don't 4 in
+ * `docs/policy/voice.md`: the refusal is our rule rather than her mistake, and
+ * the next step is in the same breath.
+ *
+ * **It sends her back to read rather than straight to retry**, which is the whole
+ * point of refusing: a reload that silently re-submitted would record consent to
+ * a document she still has not seen.
+ */
+export const CONSENT_VERSION_STALE =
+  "Cambiamos el aviso de privacidad mientras llenabas el formulario. " +
+  "Vuelve a cargar la página y léelo antes de seguir.";

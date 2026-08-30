@@ -14,6 +14,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   index,
   integer,
@@ -23,7 +24,9 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import { ADMIN_ACTION_NAMES } from "#admin/names";
+import { user } from "#auth-schema";
 import { inList } from "#column-types";
+import { CONSENT_SIDES } from "#consent/registry";
 import { CEILINGED_ACTIONS } from "#rate-limit";
 
 /**
@@ -207,5 +210,110 @@ export const adminAction = pgTable(
      * the reverse.
      */
     check("admin_action_action_known", inList(table.action, ADMIN_ACTION_NAMES)),
+  ],
+);
+/**
+ * **`Consent`** — the *prueba de la autorización*, and the reason story 14 is
+ * ordered before the form it protects.
+ *
+ * Deployment is continuous from the first ticket, so shipping the publishing
+ * form first and the consent second would collect a displaced person's phone
+ * number in production with no *autorización* behind it. The order is the
+ * requirement, and this table is the half of it that survives the session.
+ *
+ * **It records what was consented to and when, per side.** Written for the
+ * Worker at publish and for the Hirer at first Offer send — the second half is
+ * the one the draft missed: the platform collects and then discloses his name,
+ * phone and email too, and he was consenting to nothing.
+ *
+ * **Append-only, and deliberately without a `UNIQUE (account_id, side)`.** A
+ * *reclamo* asks what a person agreed to *at the time*, so a version bump has to
+ * write a second row rather than update the first. An upsert would destroy
+ * exactly the fact the table exists to hold, and it would do it silently.
+ *
+ * **`ON DELETE CASCADE`, with no exception** (C19). The proposal on the table
+ * was that this row survive the purge of the Account it authorizes, reduced to
+ * versions and a hash. It does not: story 13 tells her deletion removes
+ * everything from the platform, and a retained proof row is a record she was told
+ * did not survive. What that costs is stated rather than hidden — the evidence
+ * that we were permitted to hold her data is gone while a Report about her may
+ * still be inside its 24-month window — and the answer to a *reclamo* about a
+ * deleted Account is that the record was deleted at the *titular*'s request,
+ * which is defensible precisely because it is what she was promised.
+ */
+export const consent = pgTable(
+  "consent",
+  {
+    /**
+     * `BIGINT IDENTITY`, for `rate_counter`'s reason: DD2 reserves a UUIDv7 for
+     * ids that reach a URL or a browser, and this one reaches neither. Reading it
+     * as a `BigInt` also makes `JSON.stringify` throw on it, so a key never meant
+     * to cross a boundary cannot be serialised into one by accident.
+     */
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    /** The Account whose data the *autorización* covers. */
+    accountId: text("account_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    /**
+     * Which of the two collections this row authorizes. `TEXT` with a `CHECK`
+     * over the sides registry, per DD2 — widening the set is then a constraint
+     * change rather than a type alteration.
+     */
+    side: text("side").notNull(),
+
+    /**
+     * Which *aviso de privacidad* was in force. The text itself is published at
+     * `/privacy`, which is what makes this column answer a question rather than
+     * merely record that a question was asked.
+     */
+    noticeVersion: text("notice_version").notNull(),
+
+    /** Which *autorización* she actually read. Versioned apart from the notice. */
+    authorizationVersion: text("authorization_version").notNull(),
+
+    /**
+     * **Express consent to international transmission** (C15), and the column is
+     * the evidence rather than a flag a caller sets.
+     *
+     * Every processor this product uses — PlanetScale, Fly, Cloudflare, Google,
+     * Resend, Sentry — is outside Colombia, so each is a *transmisión* requiring
+     * disclosure in the *autorización*. Express authorization is the path that
+     * holds however SIC adequacy is read, which is why it is taken rather than
+     * made to depend on that reading.
+     *
+     * It is always true, and the `CHECK` below is what makes that structural. A
+     * nullable or freely-`false` column would let a later caller write a row that
+     * claims an authorization it does not carry, and nothing downstream could
+     * tell the two apart.
+     */
+    transmissionAcknowledged: boolean("transmission_acknowledged").notNull(),
+
+    /** The *when* half of the criterion. `TIMESTAMPTZ`, like every instant here. */
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * DD2's rule that every foreign key column carries its own index — Postgres
+     * creates none, and an unindexed FK turns NFR17's leaf-first purge into a
+     * sequential scan per parent row. `created_at` rides along because both reads
+     * this table has are per-Account and ordered: the subject-access export, and
+     * the "has this side already consented" check `sendOffer` makes to know an
+     * Offer is his first.
+     */
+    index("consent_account_id_idx").on(table.accountId, table.createdAt),
+
+    /** DD2's rule for an enum-shaped column, written from the registry itself. */
+    check("consent_side_known", inList(table.side, CONSENT_SIDES)),
+
+    /**
+     * A backstop that must never fire, and the one constraint here that is about
+     * meaning rather than shape. See the column comment: a row recording consent
+     * without the transmission acknowledgement is not a weaker row, it is a row
+     * that misrepresents what was authorized.
+     */
+    check("consent_transmission_acknowledged", sql`${table.transmissionAcknowledged}`),
   ],
 );
