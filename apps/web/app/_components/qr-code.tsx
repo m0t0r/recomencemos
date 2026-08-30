@@ -14,12 +14,20 @@
  * in a template". `uqr` hands back a boolean matrix instead, so the modules become
  * ordinary JSX and the rule is not approached, let alone argued with.
  *
- * **No client JavaScript and no image host.** This is a Server Component: the
- * matrix is computed during the render and the markup is what streams. The
- * alternative most guides reach for — an `<img>` at a Google Charts URL — would
- * send the Admin's **TOTP secret to a third party** as a query string, which is
- * the single worst thing this screen could do and which NFR18 and DD16's boundary
- * list both forbid.
+ * **No image host, ever.** The alternative most guides reach for — an `<img>` at
+ * a Google Charts URL — would send the Admin's **TOTP secret to a third party**
+ * as a query string, which is the single worst thing either of this component's
+ * screens could do and which NFR18 and DD16's boundary list both forbid. That
+ * holds wherever it renders.
+ *
+ * **Whether it costs client JavaScript depends on its caller, and it has two.**
+ * On `/admin/enrol/[token]` it renders inside a Server Component, so the matrix
+ * is computed during the render and only markup streams. On `/admin/sign-in` its
+ * caller is `"use client"`, so `uqr` is in that route's client bundle — which is
+ * a property of that surface rather than of this file, and it goes when the
+ * password door does. The comment says so rather than claiming the stronger
+ * thing, because the file moved up here to be shared and a claim that is true of
+ * one caller reads as a claim about the component.
  *
  * **The `d` attribute is not a URL.** DD7's clause about attributes built from
  * user text is about URL-valued ones; this is path geometry computed from a

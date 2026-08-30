@@ -184,14 +184,23 @@ client machine) and `_components` holds what it renders. The flat twelve-file `a
 replaced is the shape to avoid, and it is why `/code-review` should flag a route directory growing
 past its two files plus two folders.
 
-**Two groups sit at the top level, and they exist to separate audiences rather than shapes** (#17).
-`app/(site)/` is the public product — the Wall, `/sign-in`, `/account` — and its layout renders
-`SiteHeader`. `app/(admin)/` is the moderation queue and its door, and its layout renders none of
-that chrome: the session menu, the signed-in identity and _salir_ are built for a Worker on a phone,
-and two of their parts would be actively wrong above `/admin`. The **root** layout is therefore
-`<html>`, the fonts and one `<Toaster />`, and nothing else — a nested layout cannot remove a
-parent's chrome, so the only way for `/admin` to have a shell of its own was for the root to stop
-having one. Neither group adds a URL segment.
+**Three groups sit at the top level, and they exist to separate audiences rather than shapes** (#17,
+#103). `app/(site)/` is the public product — the Wall, `/sign-in`, `/account` — and its layout
+renders `SiteHeader`. `app/(admin)/` is the moderation queue and its door, and its layout renders
+none of that chrome: the session menu, the signed-in identity and _salir_ are built for a Worker on a
+phone, and two of their parts would be actively wrong above `/admin`. The **root** layout is
+therefore `<html>`, the fonts and one `<Toaster />`, and nothing else — a nested layout cannot remove
+a parent's chrome, so the only way for `/admin` to have a shell of its own was for the root to stop
+having one. No group adds a URL segment.
+
+**`app/(token)/` is the third, and it exists because that same sentence applies one level down.** It
+holds the routes under `/admin` that are reached with a **token and no session** — today
+`/admin/enrol/[token]`. They cannot sit in `(admin)`: `AdminHeader` answers "am I signed in, as
+whom, how do I leave", and on a page where no session exists yet all three are meaningless. Worse,
+it renders a wordmark linking to the queue, which tells the holder of a setup link that a queue is
+there and then walks them into a 403 — on a surface whose brief refuses to name `/admin` at all. That
+was observed running, not predicted. A nested layout cannot remove a parent's chrome, so the route
+moved out of the group rather than the group growing a conditional.
 
 **`/admin/*` refuses with a real 403, and the mechanism is worth knowing before changing it.** NFR14
 asks for _"403, returned, not a redirect and not a thrown error"_, and the three callers answer it
@@ -259,11 +268,23 @@ middleware an action opts into by naming its principals. Three rules, all in
 
 **Inside `@repo/domain`, internal imports are `#`-prefixed** — `#config`, `#schema`, `#connection` — declared in the package's `imports` field. This is not style. The package withholds most of its own modules, so a self-reference through `@repo/domain/...` fails for exactly the reason it is supposed to; and a relative `./config.js` specifier resolves under Vite but **not** under plain `node`, which is what `packages/domain/src/migrate/cli.ts` runs as in a Fly `release_command`. The `imports` field is the one form Node, Vite and `tsc` all resolve identically, and a `#` specifier is private to the package that declares it, so it is not a second door into the domain.
 
-**`pnpm admin:grant <email>` is the only way an Admin comes into existence** (#17, runbook §6). DD5
-closes credential sign-up, so no form creates one; `isAdmin` is declared `input: false`, so no request
-body sets the grant on any Better Auth route. It runs over the **direct** connection from a shell, and
-reads the password from stdin so it reaches neither argv nor shell history. The second factor is then
-enrolled at `/admin/sign-in`, which shows the QR and the ten backup codes **once**.
+**An Admin comes into existence from a shell and nowhere else** (#17, #103, runbook §6). No form
+creates one; `isAdmin` is declared `input: false`, so no request body sets the grant on any Better
+Auth route, and neither command below is in `@repo/domain`'s `exports` map. Both run over the
+**direct** connection.
+
+**`pnpm admin:enrol <email>` is the one to use, and the grant is its last step.** It mints a
+single-use setup link and prints it; opening the link shows the TOTP QR, the manual-entry secret and
+the ten backup codes **once**; the six digits from the authenticator are typed back into the prompt,
+which verifies them and only then sets `isAdmin`. That ordering is the security property — an Account
+cannot hold Admin authority until a working authenticator has proved itself, so a half-enrolled Admin
+is unrepresentable and a link opened and abandoned leaves no Admin behind. Running it again is both
+the second-Admin recovery path and the break-glass: it replaces the factor rather than adding one.
+
+**`pnpm admin:grant <email>` is what it replaces, and it is still here only because the password door
+is.** It sets the grant **first** and leaves the second factor to a later sign-in at `/admin/sign-in`,
+which is the window the new command closes. It goes with the password door and Better Auth's
+`twoFactor` plugin in the contract ticket; do not reach for it, and do not copy its shape.
 
 **Migrations are generated, never hand-written.** `pnpm db:generate` writes them from `packages/domain/src/schema.ts`; `pnpm db:migrate` applies them on the direct connection. `.claude/hooks/build-guard.sh` rule J refuses a `Write` or `Edit` to a migration the journal already names — `drizzle-kit` writes through `Bash`, which is exactly the split that rule intends. `packages/domain/drizzle/` is oxfmt-ignored for the `pnpm-workspace.yaml` reason: `drizzle-kit` owns those files and rewrites them in its own style on every generate.
 
