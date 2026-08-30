@@ -269,10 +269,15 @@ factor. Under the design this replaces, that window was the whole of the first s
 
 - [ ] **First Admin enrolled end to end** with the command above — link opened, QR scanned, code
       accepted in the terminal, grant confirmed
-- [ ] **Ten backup codes printed and stored offline** — on paper, and **not in the mailbox that is the
-      other factor**, nor in a manager that holds that mailbox's own credential. They are encrypted at
-      rest with `BETTER_AUTH_SECRET` and nothing in this repository decrypts them, so leaving that
-      screen without them loses them
+- [ ] **Ten backup codes stored where one unlock cannot reach both factors.** The enrolment screen
+      offers a **clipboard button and nothing else** (shape decision, `.impeccable/briefs/admin-enrolment.md`),
+      so the ordinary destination is a password manager rather than paper. That is fine on one
+      condition, and the condition is the whole of C43's rule restated for this mechanism: **the codes
+      must not live in the same vault as the mailbox credential.** The mailbox is the other factor —
+      one master password holding both is one factor wearing two coats. A separate vault, a separate
+      device, or paper all satisfy it; the same vault does not.
+      They are encrypted at rest with `BETTER_AUTH_SECRET` and nothing in this repository decrypts
+      them, so leaving that screen without copying them loses them
 - [ ] **A second Admin account on a separate device**, its own TOTP secret, same person — run the
       command again with the second address. This is the path that recovers the platform in minutes
       rather than hours
