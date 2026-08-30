@@ -78,8 +78,9 @@ const PUBLISHED = [
   "@repo/domain/rate-limit",
   // #17's one door onto the Admin's actions.
   "@repo/domain/admin",
-  // #14's door onto the Consent row.
+  // #14's two: the Consent row, and the subject-access export it has to appear in.
   "@repo/domain/consent",
+  "@repo/domain/export",
 ];
 
 describe("the domain package's export map", () => {
