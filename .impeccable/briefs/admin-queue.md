@@ -19,7 +19,7 @@ Offer a 24-hour delivery band, and `unfreezeHirer` being an Admin action means a
 frozen until this person acts.
 
 Five kinds of pending work — Offers to read, photos to approve, Reports to resolve, Skill requests,
-frozen Hirers — and four signals that are **not** work: one about the platform (publish rate above
+**bounced addresses** — and four signals that are **not** work: one about the platform (publish rate above
 10/hour) and three about a particular profile (a duplicate phone, more than 3 Reports filed in 7 days,
 more than 5 Contact Exchanges with distinct Hirers in 7 days).
 
@@ -35,7 +35,14 @@ the single merged page the spec's contract described.
    buildable, which is the practical reason it won: **one ticket per section**, so story 7 stops being
    one large ticket and becomes five that can land in any order behind a shell that already works.
    Route segments are English per ADR-0012 — `/admin/offers`, `/admin/photos`, `/admin/reports`,
-   `/admin/skills`, `/admin/hirers` — and the sidebar labels are Spanish.
+   `/admin/skills`, `/admin/bounces` — and the sidebar labels are Spanish.
+
+   **The fifth source is bounced addresses, not frozen Hirers**, and the correction is recorded
+   because the first draft of this brief had it wrong. Story 7 names the five as _"unreviewed Offers,
+   unreviewed photos, Reports, Skill requests and bounced addresses"_. `unfreezeHirer` is an Admin
+   action but it is reached **from a Report**, so freezing and unfreezing live inside
+   `/admin/reports` and are not a section of their own. A sixth section would be a spec amendment
+   exactly as a fifth signal is.
 
 2. **`/admin` redirects to `/admin/offers`.** Offers lead because they are the only source with a
    deadline attached: NFR7's band is per Offer, and a Report or a Skill request has no equivalent
