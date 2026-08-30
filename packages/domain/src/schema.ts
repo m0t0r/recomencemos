@@ -24,6 +24,8 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import { ADMIN_ACTION_NAMES } from "#admin/names";
+// Imported as well as re-exported below: the two Admin tables at the foot of
+// this file reference `user.id`, and a re-export creates no local binding.
 import { user } from "#auth-schema";
 import { inList } from "#column-types";
 import { CONSENT_SIDES } from "#consent/registry";
@@ -315,5 +317,142 @@ export const consent = pgTable(
      * that misrepresents what was authorized.
      */
     check("consent_transmission_acknowledged", sql`${table.transmissionAcknowledged}`),
+  ],
+);
+
+/**
+ * **The Admin's second factor** — ours, rather than Better Auth's `two_factor`
+ * beside it, and the difference is not a preference.
+ *
+ * The plugin that owns that other table can only challenge a credential path:
+ * its sign-in interception matches `/sign-in/email`, `/sign-in/username` and
+ * `/sign-in/phone-number` and nothing else. The Admin door has no password to
+ * put on any of those paths, so a factor the plugin holds is a factor the door
+ * can never ask for. DD5 says so as the cause rather than as the symptom, and
+ * this table is what taking the second factor back costs: two encrypted columns
+ * and the code that reads them.
+ *
+ * **Both credential columns are encrypted at rest** with `symmetricEncrypt` from
+ * `better-auth/crypto`, keyed on `BETTER_AUTH_SECRET` — the same primitive and
+ * the same key the plugin used, so the standing rotation hazard is unchanged
+ * rather than newly introduced: rotating that variable invalidates every
+ * enrolled factor, which makes it an operational event with a recovery step and
+ * not routine hygiene. Both belong to C28's `secret` class: no log line, no
+ * Sentry event, no subject-access export.
+ *
+ * **One row per Account, by unique constraint.** Re-enrolment replaces rather
+ * than accumulates, which is what makes runbook §6's break-glass — run the
+ * command again — a complete recovery rather than a second factor competing with
+ * the one that was lost. The constraint is also the index DD2 asks for on every
+ * foreign key column, which is why there is no separate `index()` here.
+ *
+ * **`BIGINT GENERATED ALWAYS AS IDENTITY`**, for `rate_counter`'s reason: DD2
+ * reserves a UUIDv7 for ids that reach a URL or a browser, and this one reaches
+ * neither.
+ */
+export const adminSecondFactor = pgTable(
+  "admin_second_factor",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    /** The TOTP secret, encrypted. Decrypted on the verify path and nowhere else. */
+    secret: text("secret").notNull(),
+
+    /**
+     * The codes that have **not** been used yet, encrypted, as one JSON array.
+     *
+     * Storing the remainder rather than the whole set plus a used-list is what
+     * makes "each code works once" a property of the column instead of a rule a
+     * query has to remember: consuming one is a rewrite of this value with that
+     * member gone, inside the transaction that establishes the session.
+     */
+    backupCodes: text("backup_codes").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("admin_second_factor_user_id_key").on(table.userId)],
+);
+
+/**
+ * **The setup link, and the two values it renders**, held between the moment
+ * `pnpm admin:enrol` prints a link and the moment somebody types six digits back
+ * into the terminal.
+ *
+ * **It exists because the grant is the last step.** The command mints the secret
+ * and the ten codes, shows them once through the browser, and only writes
+ * {@link adminSecondFactor} and sets `isAdmin` once a code has proved the
+ * authenticator works — so a link opened and abandoned leaves no Admin behind and
+ * a half-enrolled Admin is unrepresentable. That ordering needs somewhere to keep
+ * the two values in the meantime, and this is it.
+ *
+ * **The token is hashed at rest**, for the reason C28 gives the magic link: a
+ * single read of a table holding live tokens in the clear is every outstanding
+ * link. The row carries the hash and the browser carries the token.
+ *
+ * **There is no `consumed_at` column, and its absence is the design.** The row
+ * is deleted when the command confirms, so "spent" and "never existed" are the
+ * same answer — which is what the surface needs anyway, since an expired, spent,
+ * unknown or malformed token is all one 404 with no message. It is also what
+ * makes a refresh re-render the same values until the terminal closes the token:
+ * rendering reads, it does not consume, and there is no flag for a render to set.
+ *
+ * **At most one live link per Account, by unique constraint.** Minting deletes
+ * whatever the Account already had, so running the command twice is a person
+ * starting over rather than a person holding two enrolments — but that delete is
+ * a query remembering to check, and the guarantee is the constraint underneath
+ * it. Without the constraint, a second `admin:enrol` racing the first leaves two
+ * live links against one Account, and the abandoned one's codes stay enrollable
+ * by whoever holds that URL.
+ */
+export const adminEnrolment = pgTable(
+  "admin_enrolment",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    /** `sha256` of the token in the printed link. Never the token itself. */
+    tokenHash: text("token_hash").notNull(),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    /** Encrypted, exactly as in {@link adminSecondFactor}, and moved across unchanged. */
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+
+    /**
+     * Short, and short for a different reason than the magic link's fifteen
+     * minutes. That window is sized against a mailbox round trip and the link
+     * scanners that fetch a `GET` on the way; this one is printed to a terminal
+     * that is sitting at a prompt waiting for the person who ran it, so the
+     * window is bounded by one person's attention rather than by delivery.
+     */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * The lookup **is** the constraint: the page reads exactly one row by token
+     * hash, and a second row under one hash is a collision this table must
+     * refuse rather than resolve.
+     */
+    unique("admin_enrolment_token_hash_key").on(table.tokenHash),
+
+    /**
+     * **One live link per Account, said by the engine.** See the class comment:
+     * the delete in `mintAdminEnrolment` is what makes re-running the command
+     * work, and this is what makes "at most one" true whether or not a caller
+     * remembered it.
+     *
+     * It is also DD2's index on a foreign key column — a `UNIQUE` constraint
+     * creates one, which is why there is no separate `index()` here.
+     */
+    unique("admin_enrolment_user_id_key").on(table.userId),
   ],
 );

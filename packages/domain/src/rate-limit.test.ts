@@ -7,8 +7,8 @@
  */
 
 import {
+  CEILING_REFUSALS,
   CEILINGS,
-  ceilingUserMessage,
   principalKey,
   retryAfterFor,
   retryPhrase,
@@ -21,6 +21,29 @@ describe("CEILINGS", () => {
   it("bounds requestMagicLink per address and per IP at NFR26's numbers", () => {
     expect(CEILINGS.requestMagicLink.address).toEqual({ max: 5, windowSeconds: 3600 });
     expect(CEILINGS.requestMagicLink.ip).toEqual({ max: 20, windowSeconds: 3600 });
+  });
+
+  /**
+   * **Per Account, and the assertion is that there is no other scope.** DD5 says
+   * a per-IP bound is not an acceptable substitute here and must not be shipped
+   * as one, so this checks the whole object rather than one key — an `ip` scope
+   * added beside `account` would pass a `toEqual` on `account` alone.
+   */
+  it.each(["verifyAdminTotp", "verifyAdminBackupCode"] as const)(
+    "bounds %s per Account and by nothing else",
+    (action) => {
+      expect(CEILINGS[action]).toEqual({ account: { max: 10, windowSeconds: 900 } });
+    },
+  );
+
+  /**
+   * The two code ceilings count separately, which is the property that lets the
+   * door say a printed code still works while the six-digit path is locked. One
+   * shared counter would make that sentence false.
+   */
+  it("counts the two code ceilings as two actions", () => {
+    expect(Object.keys(CEILINGS)).toContain("verifyAdminTotp");
+    expect(Object.keys(CEILINGS)).toContain("verifyAdminBackupCode");
   });
 });
 
@@ -108,8 +131,8 @@ describe("retryPhrase", () => {
   });
 });
 
-describe("ceilingUserMessage", () => {
-  const message = ceilingUserMessage({ max: 5, windowSeconds: 3600 }, 720);
+describe("CEILING_REFUSALS", () => {
+  const message = CEILING_REFUSALS.requestMagicLink({ max: 5, windowSeconds: 3600 }, 720);
 
   // Do 4 — the product's own evidence, quoted back.
   it("quotes her count back", () => {
@@ -127,25 +150,43 @@ describe("ceilingUserMessage", () => {
     expect(message).toContain("Google");
   });
 
-  // The voice guide's sentence rules, both countable on purpose.
-  it("keeps every sentence under twenty words", () => {
-    const sentences = message.split(".").filter((sentence) => sentence.trim());
+  /**
+   * **The voice rules run over every entry, not over the one that had them
+   * first.** C57 asks that the ceilings be checked as a *list* rather than by
+   * eye, and a refusal written for a new ceiling is exactly the string nobody
+   * re-reads. Driving the table off `CEILING_REFUSALS` itself means a ceiling
+   * added without copy that survives these rules is a red test rather than a
+   * sentence somebody meets on the worst day they have had.
+   */
+  describe.each(Object.entries(CEILING_REFUSALS))("%s", (_action, refusal) => {
+    const refused = refusal({ max: 10, windowSeconds: 900 }, 720);
 
-    expect(sentences.length).toBeGreaterThan(0);
-    for (const sentence of sentences) {
-      expect(sentence.trim().split(/\s+/).length).toBeLessThanOrEqual(20);
-    }
-  });
+    // Do 3 again, over the whole list: a refusal with no next step fails this
+    // rule and NFR20 together.
+    it("says when it reopens", () => {
+      expect(refused).toContain("en 12 minutos");
+    });
 
-  // No exclamation marks, and never in a refusal.
-  it("carries no exclamation mark", () => {
-    expect(message).not.toContain("!");
-    expect(message).not.toContain("¡");
-  });
+    // The voice guide's sentence rules, both countable on purpose.
+    it("keeps every sentence under twenty words", () => {
+      const sentences = refused.split(".").filter((sentence) => sentence.trim());
 
-  // A refusal is our rule, not her mistake. These are the words that would make
-  // it hers.
-  it.each(["inválido", "error", "no puedes", "demasiado"])("does not say %o", (word) => {
-    expect(message.toLowerCase()).not.toContain(word);
+      expect(sentences.length).toBeGreaterThan(0);
+      for (const sentence of sentences) {
+        expect(sentence.trim().split(/\s+/).length).toBeLessThanOrEqual(20);
+      }
+    });
+
+    // No exclamation marks, and never in a refusal.
+    it("carries no exclamation mark", () => {
+      expect(refused).not.toContain("!");
+      expect(refused).not.toContain("¡");
+    });
+
+    // A refusal is our rule, not her mistake. These are the words that would
+    // make it hers.
+    it.each(["inválido", "error", "no puedes", "demasiado"])("does not say %o", (word) => {
+      expect(refused.toLowerCase()).not.toContain(word);
+    });
   });
 });
