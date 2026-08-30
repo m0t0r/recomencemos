@@ -1,6 +1,6 @@
 # Surface brief: `/account`
 
-**Target:** `apps/web/app/account/page.tsx` · **Mode:** Operate · **Ticket:**
+**Target:** `apps/web/app/(site)/account/page.tsx` · **Mode:** Operate · **Ticket:**
 [#13](https://github.com/m0t0r/recomencemos/issues/13) · **Shaped:** 2026-08-28
 
 ## Job and audience

@@ -171,7 +171,7 @@ Workspaces are declared in `pnpm-workspace.yaml` (`apps/*`, `packages/*`) and re
 Next **private folder** (`_`-prefixed, so it is excluded from routing):
 
 ```
-app/(auth)/sign-in/
+app/(site)/(auth)/sign-in/
   page.tsx                        # the route, and nothing else
   actions.ts                      # "use server"; one file, however many actions
   _components/{sign-in-form,google-mark}.tsx

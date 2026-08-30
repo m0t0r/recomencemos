@@ -1,5 +1,9 @@
 /**
- * The shell's Client Components — what a running server cannot show cheaply.
+ * The session menu — what a running server cannot show cheaply.
+ *
+ * **It covers both shells, because there is only one menu.** `(site)` renders it
+ * with an `accountHref` and `(admin)` without one (#17); the cases below drive
+ * both, which is the whole reason the difference is a prop.
  *
  * **What is deliberately not tested here.** The `signOut` Server Action is
  * mocked, because an imported Server Action is not the compiled POST endpoint an
@@ -25,25 +29,27 @@ import userEvent from "@testing-library/user-event";
  * vi.fn()` would read it in its temporal dead zone the moment the mocked module
  * is imported.
  */
-const { signOut, pathname } = vi.hoisted(() => ({
+const { signOut, signOutAdmin } = vi.hoisted(() => ({
   signOut: vi.fn(),
-  pathname: vi.fn(() => "/"),
+  signOutAdmin: vi.fn(),
 }));
 
-vi.mock("./actions", () => ({ signOut }));
-vi.mock("next/navigation", () => ({ usePathname: pathname }));
+vi.mock("./actions", () => ({ signOut, signOutAdmin }));
 
-import { SignInLink } from "./sign-in-link";
 import { SessionMenu } from "./session-menu";
-import { ACCOUNT, SIGN_IN, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
+import { ACCOUNT, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
 import { SIGN_OUT_FORM_ID } from "./slots";
 
 const EMAIL = "maria.restrepo@gmail.com";
 
+/** What `(site)` passes. `(admin)` passes the same minus `accountHref`. */
+const SITE_PROPS = { email: EMAIL, action: signOut, accountHref: "/account" } as const;
+
 beforeEach(() => {
-  signOut.mockReset();
-  signOut.mockResolvedValue({});
-  pathname.mockReturnValue("/");
+  for (const action of [signOut, signOutAdmin]) {
+    action.mockReset();
+    action.mockResolvedValue({});
+  }
 });
 
 describe("the signed-in trigger", () => {
@@ -54,7 +60,7 @@ describe("the signed-in trigger", () => {
    * that must not regress if the visual design changes again.
    */
   it("announces the whole address, which the row does not show", () => {
-    const { container } = render(<SessionMenu email={EMAIL} />);
+    const { container } = render(<SessionMenu {...SITE_PROPS} />);
 
     // The `name` filter *is* the assertion — a role query that finds it has
     // already proved the accessible name. Re-asserting with
@@ -70,7 +76,7 @@ describe("the signed-in trigger", () => {
 
   it("opens a menu holding the untruncated address and the way out", async () => {
     const user = userEvent.setup();
-    render(<SessionMenu email={EMAIL} />);
+    render(<SessionMenu {...SITE_PROPS} />);
 
     await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
 
@@ -93,11 +99,28 @@ describe("the signed-in trigger", () => {
    */
   it("points at /account", async () => {
     const user = userEvent.setup();
-    render(<SessionMenu email={EMAIL} />);
+    render(<SessionMenu {...SITE_PROPS} />);
 
     await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
 
     expect(screen.getByRole("menuitem", { name: ACCOUNT })).toHaveAttribute("href", "/account");
+  });
+
+  /**
+   * **The Admin's shell passes no `accountHref`**, and this is the case that says
+   * the omission is real rather than a prop nobody reads. `/account` is the
+   * Worker's own Account under a different shell; a row that navigated out of the
+   * queue is the one part of this menu that would be wrong above `/admin`.
+   */
+  it("omits the account row entirely when no href is given", async () => {
+    const user = userEvent.setup();
+    render(<SessionMenu email={EMAIL} action={signOutAdmin} />);
+
+    await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
+
+    expect(screen.queryByRole("menuitem", { name: ACCOUNT })).toBeNull();
+    // The way out survives the omission, which is the half that matters.
+    expect(screen.getByRole("menuitem", { name: SIGN_OUT })).toBeInTheDocument();
   });
 });
 
@@ -110,7 +133,7 @@ describe("one form, two triggers", () => {
    */
   it("submits the same form from the menu and from the fallback", async () => {
     const user = userEvent.setup();
-    const { container } = render(<SessionMenu email={EMAIL} />);
+    const { container } = render(<SessionMenu {...SITE_PROPS} />);
 
     // A `<form>` has no role until it has an accessible name, so counting them
     // is a markup question by definition — the second documented escape hatch.
@@ -135,32 +158,13 @@ describe("one form, two triggers", () => {
    * adds its own `$ACTION_*` fields, and those are the framework's.
    */
   it("carries no hidden input of its own", () => {
-    const { container } = render(<SessionMenu email={EMAIL} />);
+    const { container } = render(<SessionMenu {...SITE_PROPS} />);
 
     const ours = [...container.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].filter(
       (input) => !input.name.startsWith("$ACTION"),
     );
 
     expect(ours).toHaveLength(0);
-  });
-});
-
-describe("the signed-out link", () => {
-  it("offers Entrar, pointing at the sign-in surface", () => {
-    render(<SignInLink />);
-
-    expect(screen.getByRole("link", { name: SIGN_IN })).toHaveAttribute("href", "/sign-in");
-  });
-
-  /**
-   * A link to the page you are on is worse than no link, and `/sign-in` is the
-   * one route where the destination and the origin are the same.
-   */
-  it("says nothing on /sign-in itself", () => {
-    pathname.mockReturnValue("/sign-in");
-    render(<SignInLink />);
-
-    expect(screen.queryByRole("link", { name: SIGN_IN })).toBeNull();
   });
 });
 
@@ -172,17 +176,26 @@ describe("the signed-out link", () => {
  * the rule can be broken. Reading the files beats any runtime check here: the
  * failure this catches is an `import`, and an import that is never executed
  * still ships the client bundle it pulls in.
+ *
+ * **It walks all of `app/_components`, not this directory**, because that is where
+ * the shell now is: the menu, its actions, the `<noscript>` rule, `AppHeader` and
+ * `StickyHeader`. A scan scoped to one folder would have stopped covering the
+ * header the moment it moved.
  */
 describe("no auth client reaches the browser", () => {
   it("imports nothing from better-auth anywhere in the shell", () => {
-    const directory = import.meta.dirname;
+    const root = join(import.meta.dirname, "..");
 
-    const sources = readdirSync(directory)
-      .filter((name) => /\.tsx?$/.test(name) && !name.includes(".test."))
-      .map((name) => ({ name, text: readFileSync(join(directory, name), "utf8") }));
+    const sources = readdirSync(root, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+      .filter((entry) => !entry.name.includes(".test."))
+      .map((entry) => ({
+        name: entry.name,
+        text: readFileSync(join(entry.parentPath, entry.name), "utf8"),
+      }));
 
     // The suite is worthless if it read nothing, so the count is asserted too.
-    expect(sources.length).toBeGreaterThanOrEqual(5);
+    expect(sources.length).toBeGreaterThanOrEqual(7);
 
     for (const { name, text } of sources) {
       expect(text, `${name} imports better-auth`).not.toMatch(/from\s+["']better-auth/);

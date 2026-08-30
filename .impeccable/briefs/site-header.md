@@ -1,6 +1,6 @@
 # Surface brief: the signed-in shell
 
-**Target:** `apps/web/app/_components/site-header/` · **Mode:** Operate · **Ticket:**
+**Target:** `apps/web/app/(site)/_components/site-header/` · **Mode:** Operate · **Ticket:**
 [#80](https://github.com/m0t0r/recomencemos/issues/80) · **Shaped:** 2026-08-28
 
 ## Job and audience

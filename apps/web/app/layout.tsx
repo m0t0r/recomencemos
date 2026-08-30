@@ -1,9 +1,22 @@
+/**
+ * The document, and nothing that belongs to a particular audience.
+ *
+ * **The chrome moved down a level with #17**, and the reason is that the Admin's
+ * surfaces are not the Worker's. `SiteHeader` renders the signed-in identity, the
+ * session menu and _salir_ — a shell built for a Worker on a phone — and it used
+ * to sit here, above every route. A nested `app/admin/layout.tsx` cannot remove a
+ * parent's chrome, so the only way for `/admin` to have a shell of its own was for
+ * this file to stop having one: `(site)` carries the public header, `(admin)`
+ * carries the queue's, and what is left here is `<html>`, the fonts, and the toast
+ * region both need.
+ *
+ * Neither group adds a URL segment, so nothing a person can see or link to moved.
+ */
+
 import type { Metadata } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
-import { Suspense } from "react";
 import { Toaster } from "@repo/design-system/components/sonner";
 import { cn } from "@repo/design-system/lib/utils";
-import { SiteHeader, SiteHeaderPlaceholder } from "./_components/site-header/site-header";
 import "@repo/design-system/globals.css";
 
 const fontSans = Inter({
@@ -41,21 +54,12 @@ export default function RootLayout({
       className={cn("font-sans antialiased", fontSans.variable, fontMono.variable)}
     >
       <body>
-        {/*
-          The shell (#80), above every page. It reads the session, which is
-          **dynamic** — no `use cache` anywhere near it, per ADR-0011 and
-          `apps/web/AGENTS.md`, because a cached session read serves one person's
-          identity to the next.
-
-          Cache Components therefore requires a boundary here. `[stream]` from
-          the framework's own menu rather than `[block]`: no page should wait on
-          chrome before it paints, and the fallback holds the header's exact
-          height so nothing moves when the read resolves.
-        */}
-        <Suspense fallback={<SiteHeaderPlaceholder />}>
-          <SiteHeader />
-        </Suspense>
         {children}
+        {/*
+          The toast region stays here rather than moving into `(site)`, because
+          both groups render into it and one `<Toaster />` per group would mean
+          two live regions on a page — which a screen reader announces as two.
+        */}
         <Toaster />
       </body>
     </html>

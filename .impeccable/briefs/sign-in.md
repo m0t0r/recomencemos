@@ -1,6 +1,6 @@
 # Surface brief: `/sign-in`
 
-**Target:** `apps/web/app/sign-in/page.tsx` · **Mode:** Operate · **Ticket:**
+**Target:** `apps/web/app/(site)/(auth)/sign-in/page.tsx` · **Mode:** Operate · **Ticket:**
 [#12](https://github.com/m0t0r/recomencemos/issues/12) · **Shaped:** 2026-08-27
 
 ## Job and audience
