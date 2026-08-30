@@ -57,6 +57,21 @@ const WITHHELD = [
   "@repo/domain/admin/handlers",
   "@repo/domain/admin/names",
   "@repo/domain/admin/actor",
+  /**
+   * **The Admin's enrolment, from the two sides it must not be reachable from.**
+   * `@repo/domain/admin-enrolment` publishes the read the enrolment screen makes
+   * and nothing else; the command that mints a setup link and sets the grant is
+   * here, unresolvable. DD5 makes the grant a thing a person does over the direct
+   * connection from a shell — _"undocumented, it becomes a self-grant endpoint
+   * the first time someone needs it at 2 a.m."_ — and this is one of the two
+   * mechanisms saying so, the other being `isAdmin` declared `input: false`.
+   *
+   * `second-factor` is withheld beside it because it generates and decrypts
+   * credentials, and a subpath published for convenience is one more door to keep
+   * shut.
+   */
+  "@repo/domain/admin/enrol-cli",
+  "@repo/domain/admin/second-factor",
 ];
 
 /** What the app is allowed to reach, and therefore what it must actually reach. */
@@ -68,6 +83,9 @@ const PUBLISHED = [
   "@repo/domain/rate-limit",
   // #17's one door onto the Admin's actions.
   "@repo/domain/admin",
+  // The enrolment screen's one read. It renders three credentials and grants
+  // nothing; the granting half is in `WITHHELD` above.
+  "@repo/domain/admin-enrolment",
 ];
 
 describe("the domain package's export map", () => {

@@ -56,7 +56,7 @@ import {
 } from "../_lib/messages";
 import { enrolAdminCode, signInAdmin, verifyAdminCode } from "../actions";
 import { TOTP_DIGITS } from "../_lib/schema";
-import { QrCode } from "./qr-code";
+import { QrCode } from "@/app/_components/qr-code";
 
 type SignInResult = Awaited<ReturnType<typeof signInAdmin>>;
 type EnrolResult = Awaited<ReturnType<typeof enrolAdminCode>>;

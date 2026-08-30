@@ -25,6 +25,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { eq } from "drizzle-orm";
+import { BACKUP_CODE_COUNT, TOTP_ISSUER } from "#admin/second-factor";
 import {
   readSignInAttempt,
   sessionExpiryFor,
@@ -107,22 +108,17 @@ export const MAGIC_LINK_TTL_MINUTES = 15;
 export const ADMIN_MIN_PASSWORD_LENGTH = 16;
 
 /**
- * What the authenticator app calls this account, in the six-digit list a person
- * scrolls at 6 a.m. looking for the right code.
+ * The issuer label and the number of backup codes now live in
+ * `#admin/second-factor`, with the code that generates them, and are re-exported
+ * here so the plugin below still reads one spelling of each.
  *
- * It is the product's name rather than a hostname on purpose: a person moderating
- * daily reads this label far more often than they read a URL, and `appName`
- * already carries it, so this is one string with one home.
+ * **The move is the direction of travel rather than tidying.** The plugin is
+ * being replaced by the module that owns those two values — it can only
+ * challenge a credential path, so it can never challenge the Admin's door — and
+ * leaving the constants beside its configuration would have made the ticket that
+ * deletes it also the ticket that re-homes them.
  */
-export const TOTP_ISSUER = "Recomencemos";
-
-/**
- * Ten backup codes, which is DD5's first recovery path and the plugin's own
- * default — stated here rather than inherited because runbook §6 asks a human to
- * **print ten codes and store them offline**, and a default that silently became
- * eight would make the runbook wrong with nothing failing.
- */
-export const BACKUP_CODE_COUNT = 10;
+export { BACKUP_CODE_COUNT, TOTP_ISSUER };
 
 /** What a caller must give this package so it can send the one email it sends. */
 export interface MagicLinkRequest {

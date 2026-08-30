@@ -89,7 +89,7 @@ import { citext, inList } from "#column-types";
  * written here, on the session row, by a `databaseHooks.session.create.before`
  * hook that cannot be bypassed by a door that forgets to set it.
  *
- * **The set is now four, and it splits three ways rather than two** (#17):
+ * **The set is now five, and it splits three ways rather than two** (#17):
  *
  * - `magic_link` and `google` are the **passwordless** class. NFR14's first half
  *   is written over the class rather than over its members, and
@@ -102,11 +102,33 @@ import { citext, inList } from "#column-types";
  *   diverts `/sign-in/email` into the 2FA challenge once `twoFactorEnabled` is
  *   true. It carries **no** Admin authority — `requireAdminSession` demands the
  *   member below and not this one.
- * - `password_totp` is the only member NFR14 calls an Admin session.
+ * - `password_totp` and `link_totp` are the two NFR14 calls an Admin session —
+ *   for now. See below.
+ *
+ * **`link_totp` is a member with no producer yet, and that is the expand half of
+ * an expand/contract sequence rather than dead weight.** The Admin door is being
+ * rebuilt passwordless: a single-use emailed link is factor one and a TOTP code
+ * is factor two, and a session established that way is stamped with this member.
+ * The door that mints one arrives next; the contract that removes `password` and
+ * `password_totp` arrives after it. Landing the value here first is what lets
+ * both of those be ordinary pull requests instead of a flag day — the widening
+ * is a constraint change, and a constraint change that has already shipped
+ * refuses nothing.
+ *
+ * `ADMIN_SIGN_IN_METHOD` below still names `password_totp`, so **this member
+ * carries no Admin authority today**. Moving that comparison is the door's
+ * ticket, not this one: an Admin session that could be minted before there is a
+ * door to mint it is authority with nothing standing in front of it.
  *
  * English enum values under ADR-0012, like every other identifier.
  */
-export const SIGN_IN_METHODS = ["magic_link", "google", "password", "password_totp"] as const;
+export const SIGN_IN_METHODS = [
+  "magic_link",
+  "google",
+  "password",
+  "password_totp",
+  "link_totp",
+] as const;
 
 export type SignInMethod = (typeof SIGN_IN_METHODS)[number];
 

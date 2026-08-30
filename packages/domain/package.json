@@ -22,6 +22,7 @@
   },
   "exports": {
     "./admin": "./src/admin/index.ts",
+    "./admin-enrolment": "./src/admin/enrolment.ts",
     "./auth-handler": "./src/auth/index.ts",
     "./health": "./src/health.ts",
     "./migrate": "./src/migrate/index.ts",
@@ -34,6 +35,7 @@
     "generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@better-auth/utils": "0.4.2",
     "@repo/errors": "workspace:*",
     "@repo/observability": "workspace:*",
     "better-auth": "1.7.1",
