@@ -314,10 +314,28 @@ person holding the migration credential can reach a shell and run it under press
 personally is the _responsable del tratamiento_, accepted knowingly. DD8 verified that **RNBD
 registration does not apply** to a _persona natural_. International transmission is the part that does.
 
+- [ ] **`RESPONSIBLE_PARTY_NAME` and `RESPONSIBLE_PARTY_EMAIL` set through `fly secrets`.** The
+      _aviso de privacidad_ names the _responsable_ and the mailbox a _consulta_ or a _reclamo_
+      reaches, and both are deployment configuration rather than committed copy — a legal identity
+      does not belong in a public repository. `responsibleParty()` **refuses the development
+      placeholders under `NODE_ENV=production`**, so `/privacy` fails loudly rather than going live
+      naming nobody. Verify by loading `/privacy` on the deploy and reading the first section
+- [ ] **A mailbox that actually answers.** The address above is the one Ley 1581 obliges a reply on,
+      so it has to be one a person reads — the sending subdomain in §4 publishes no MX record and
+      receives nothing, so it cannot be this
 - [ ] **_Aviso de privacidad_ names every processor** with its country and purpose: PlanetScale, Fly,
-      Cloudflare, Google, Resend, Sentry
+      Cloudflare, Google, Resend, Sentry. The page is at `/privacy` and `PROCESSORS` in
+      `apps/web/app/_lib/consent/processors.ts` is the list
+      ([#14](https://github.com/m0t0r/recomencemos/issues/14)); adding a vendor is a change there
+      plus a version bump in `CONSENT_NOTICE_VERSIONS`. **The box is what a human checks after
+      reading the deployed page**, because the list being in the source is not the same claim as the
+      disclosure being complete and current on the day of the announcement
 - [ ] **_Autorización_ carries express consent to international transmission**, shown at publish and
-      at first Offer send, versioned in the Consent row
+      at first Offer send, versioned in the Consent row. The text, the control and the row ship with
+      #14 — but **no surface renders the control yet**: `/publish`
+      ([#16](https://github.com/m0t0r/recomencemos/issues/16)) and the Offer form
+      ([#24](https://github.com/m0t0r/recomencemos/issues/24)) are what put it in front of a person
+      and write the row. This box cannot be checked until both have landed
 - [ ] **Each vendor's DPA / SCCs downloaded and filed** — deferred from Design at C15, and named there
       as the half a regulator asks for first
 - [ ] Whether SIC's **Circular Externa 005 de 2017** lists these countries as adequate: checked, and
