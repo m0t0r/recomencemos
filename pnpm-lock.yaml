@@ -199,6 +199,9 @@ importers:
 
   packages/domain:
     dependencies:
+      '@better-auth/utils':
+        specifier: 0.4.2
+        version: 0.4.2
       '@repo/errors':
         specifier: workspace:*
         version: link:../errors
