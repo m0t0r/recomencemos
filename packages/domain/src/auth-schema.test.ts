@@ -54,6 +54,13 @@ const TABLES = {
   account: schema.account,
   verification: schema.verification,
   rateLimit: schema.rateLimit,
+  /**
+   * The `twoFactor` plugin's table, added with #17. Its absence was red before
+   * the table was written, which is DD5's rule 2 doing its job:
+   * _"adding a plugin without adding its tables is caught, because its tables
+   * appear in `getSchema()`'s answer and not here"_.
+   */
+  twoFactor: schema.twoFactor,
 } as const;
 
 type Model = keyof typeof TABLES;
@@ -75,8 +82,28 @@ const MODELS = Object.keys(TABLES) as Model[];
  *   the column defaults to `false`, so "absent" and "false" are the same state;
  *   the nullable third state the vendor allows would only ever mean "a bug wrote
  *   nothing".
+ * - `user.isAdmin` — the Admin grant (#17). Declared `required: false` with a
+ *   default because that is the only shape Better Auth's `additionalFields`
+ *   offers for a boolean; the column is `NOT NULL DEFAULT false` because a
+ *   *null* grant is not a third state this design has. `requireAdminSession`
+ *   reads it as `=== true` in any case, so the strictness is belt to the type's
+ *   braces rather than the only thing holding.
+ * - `user.twoFactorEnabled` — Better Auth's own, same shape and same argument:
+ *   the plugin writes a boolean on every path that touches it, and "null" would
+ *   be a row nobody wrote.
+ * - `twoFactor.verified` and `twoFactor.failedVerificationCount` — the plugin
+ *   supplies both on create (`totpData.verified`, and the counter's own
+ *   `incrementOne`), and both are read as numbers and booleans by code that has
+ *   no branch for null. `lockedUntil` is deliberately **not** here: its null *is*
+ *   a state, and it means "not locked".
  */
-const STRICTER_NOT_NULL = new Set<string>(["verification.sharedDevice"]);
+const STRICTER_NOT_NULL = new Set<string>([
+  "verification.sharedDevice",
+  "user.isAdmin",
+  "user.twoFactorEnabled",
+  "twoFactor.verified",
+  "twoFactor.failedVerificationCount",
+]);
 
 /**
  * `getSchema` reports the fields Better Auth writes; `id` is implicit in its
@@ -386,5 +413,82 @@ describe("the configuration DD5 says is not the default", () => {
 
   it("gives the magic link a fifteen-minute life", () => {
     expect(options.plugins[0].options.expiresIn).toBe(15 * 60);
+  });
+});
+
+/**
+ * DD5's remaining rows, which arrived with the Admin (#17). Each is a row of that
+ * table and each would be a security hole rather than a rough edge at its default.
+ */
+describe("the Admin's door", () => {
+  /**
+   * **The one that turns this block from "the Admin's door" into a second public
+   * enrolment path.** Enabling `emailAndPassword` enables `/sign-up/email` with
+   * it, so without this anyone could mint a password account on a product whose
+   * only intended door is a magic link — and `requireEmailVerification`,
+   * `minPasswordLength` and the rest would be describing a surface nobody meant
+   * to ship. The Admin's row comes from runbook §6's manual `UPDATE`.
+   */
+  it("closes credential sign-up, so the password door is not a second front door", () => {
+    expect(options.emailAndPassword?.enabled).toBe(true);
+    expect(options.emailAndPassword?.disableSignUp).toBe(true);
+  });
+
+  it("requires a verified email on the one door that does not prove one", () => {
+    expect(options.emailAndPassword?.requireEmailVerification).toBe(true);
+  });
+
+  // Off by default, so a reset would leave the attacker's session alive — which
+  // is the session the reset was performed to end.
+  it("revokes sessions when the password is reset", () => {
+    expect(options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  it("puts the password floor at sixteen rather than the default eight", () => {
+    expect(options.emailAndPassword?.minPasswordLength).toBe(16);
+  });
+
+  /**
+   * **The absence is the assertion.** An emailed OTP would put the second factor
+   * in the same inbox the magic link already reaches, so a compromised mailbox
+   * would hold both factors and NFR14 would be satisfied on paper by one
+   * credential. Better Auth only offers `otp` as a 2FA method when `sendOTP` is
+   * configured, so leaving it unset is what closes that door — and this is the
+   * test that says so, because "we did not configure it" is otherwise
+   * indistinguishable from "nobody thought about it".
+   */
+  it("offers no emailed second factor, so one mailbox is never both factors", () => {
+    expect(options.plugins[1].options?.otpOptions).toBeUndefined();
+  });
+
+  it("issues the ten backup codes runbook §6 asks a human to print", () => {
+    expect(options.plugins[1].options?.backupCodeOptions?.amount).toBe(10);
+  });
+
+  it("bounds the password door explicitly rather than inheriting 3-per-10s", () => {
+    expect(options.rateLimit?.customRules?.["/sign-in/email"]).toBeDefined();
+  });
+
+  /**
+   * NFR14's mechanism read from the other end: the column exists, it is declared
+   * rather than hand-added, and it is closed to input — so there is no endpoint
+   * anywhere that grants Admin (DD7).
+   */
+  it("declares the Admin grant on the user model, closed to every request body", () => {
+    expect(betterAuthSchema.user?.fields.isAdmin).toMatchObject({ type: "boolean" });
+    expect(options.user?.additionalFields?.isAdmin?.input).toBe(false);
+    expect(getTableColumns(schema.user).isAdmin.name).toBe("is_admin");
+  });
+
+  /**
+   * C44 as a mechanism rather than as a value. `trustDevice` is not a plugin
+   * option at 1.7.1 — it is a body field — so there is nothing on `options` to
+   * assert. What can be asserted is that the option a reader might reach for
+   * instead is absent, so nobody "fixes" this by setting `trustDeviceMaxAge` to a
+   * small number and believing the job is done. The refusal itself is a `before`
+   * middleware, and `admin-door.integration.test.ts` is what proves it fires.
+   */
+  it("configures no trusted-device window, because the field is stripped instead", () => {
+    expect(options.plugins[1].options?.trustDeviceMaxAge).toBeUndefined();
   });
 });

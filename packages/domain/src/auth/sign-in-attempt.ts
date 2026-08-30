@@ -13,8 +13,8 @@ import { type SignInMethod, SIGN_IN_METHODS } from "#auth-schema";
 import { SIGN_IN_FAILED } from "#user-messages";
 
 /**
- * The two Better Auth paths that mint a session in this product, mapped to the
- * value NFR14's `requireAdmin` will read off the session row.
+ * Every Better Auth path that mints a session in this product, mapped to the
+ * value NFR14's `requireAdminSession` reads off the session row.
  *
  * **A path this table does not name mints no session.** `signInMethodForPath`
  * throws rather than defaulting, and `session.signInMethod` is `NOT NULL` with
@@ -23,10 +23,30 @@ import { SIGN_IN_FAILED } from "#user-messages";
  * through password + TOTP, so a door that arrives without declaring itself must
  * not be able to produce a session that merely *looks* like one — and a default
  * of `"magic_link"` here would hand exactly that to the next door somebody adds.
+ *
+ * **Five paths for four methods, and the two that collapse are the point.**
+ * `/two-factor/verify-totp` and `/two-factor/verify-backup-code` both produce a
+ * `password_totp` session, because a backup code **is** the second factor: DD5
+ * makes ten printed codes one of three required recovery paths, and a session
+ * established with one would be worthless if it could not moderate. What matters
+ * to NFR14 is that two factors were presented, not which second one.
+ *
+ * **`/sign-in/email` is here and it is not an Admin session.** Read out of
+ * `better-auth@1.7.1/dist/plugins/two-factor/index.mjs`: the plugin's `after`
+ * hook on that path deletes the session it just created and returns
+ * `twoFactorRedirect` — but **only when `user.twoFactorEnabled` is already
+ * true**. Before enrolment it returns early and the session stands, which is
+ * exactly the window runbook §6 walks: an Admin granted by manual `UPDATE` has to
+ * reach the enrolment surface somehow. So this member exists, it is refused by
+ * `requireAdminSession`, and the surface that accepts it is `/admin/sign-in` and
+ * nothing else.
  */
 const SIGN_IN_PATHS: Readonly<Record<string, SignInMethod>> = {
   "/magic-link/verify": "magic_link",
   "/callback/:id": "google",
+  "/sign-in/email": "password",
+  "/two-factor/verify-totp": "password_totp",
+  "/two-factor/verify-backup-code": "password_totp",
 };
 
 /**
@@ -48,6 +68,32 @@ const SIGN_IN_PATHS: Readonly<Record<string, SignInMethod>> = {
  */
 export const OWN_DEVICE_SESSION_SECONDS = 60 * 60 * 24 * 30;
 export const SHARED_DEVICE_SESSION_SECONDS = 60 * 60 * 8;
+
+/**
+ * NFR13's third lifetime: **Admin 8 hours, no rolling** — and it is not the
+ * shared-device number wearing a different name, even though the two happen to
+ * be equal.
+ *
+ * They answer different questions and will drift the first time either is
+ * revisited. The shared-device figure bounds how long a cybercafé browser stays
+ * signed in; this one bounds how long the account that can take down a profile
+ * and read every exchanged phone number stays signed in **on its owner's own
+ * machine**. Collapsing them into one constant would make a change to either a
+ * silent change to both.
+ *
+ * **It does not depend on the shared-device answer, and that is deliberate.** An
+ * Admin ticking _"este no es mi teléfono"_ gets the same eight hours, because the
+ * ceiling is already the shorter of the two — and an Admin who did not tick it
+ * must not get thirty days. `sessionSecondsFor` therefore takes the method first
+ * and the attempt second.
+ *
+ * The "no rolling" half is already true for every session here:
+ * `disableSessionRefresh` in `#auth/config` refuses every refresh. C44 removes
+ * the other way round it — `trustDevice` would re-establish this session on a
+ * password alone for thirty days, so it is stripped from the request rather than
+ * left to a caller not to pass.
+ */
+export const ADMIN_SESSION_SECONDS = 60 * 60 * 8;
 
 /**
  * What one sign-in attempt carries from the moment she answers the
@@ -111,14 +157,27 @@ export function signInMethodForPath(path: string): SignInMethod {
   });
 }
 
-/** NFR13, as one number. */
-export function sessionSecondsFor(attempt: SignInAttempt): number {
+/**
+ * NFR13, as one number.
+ *
+ * **The method is consulted before the attempt**, so an Admin session is eight
+ * hours whatever she answered to _"este no es mi teléfono"_. Reading the attempt
+ * first would give an Admin who did not tick the box a thirty-day session, which
+ * is the one lifetime NFR13 refuses that account outright.
+ *
+ * A `password` session — the enrolment window — takes the Admin number too. It is
+ * the weaker of the two credential states and giving it the longer life would be
+ * the wrong direction to err in on the one account that can read every phone
+ * number in the system.
+ */
+export function sessionSecondsFor(method: SignInMethod, attempt: SignInAttempt): number {
+  if (method === "password" || method === "password_totp") return ADMIN_SESSION_SECONDS;
   return attempt.sharedDevice ? SHARED_DEVICE_SESSION_SECONDS : OWN_DEVICE_SESSION_SECONDS;
 }
 
 /** When a session minted now should expire. Takes the clock so seam 1 can fix it. */
-export function sessionExpiryFor(attempt: SignInAttempt, now: Date): Date {
-  return new Date(now.getTime() + sessionSecondsFor(attempt) * 1000);
+export function sessionExpiryFor(method: SignInMethod, attempt: SignInAttempt, now: Date): Date {
+  return new Date(now.getTime() + sessionSecondsFor(method, attempt) * 1000);
 }
 
 /**

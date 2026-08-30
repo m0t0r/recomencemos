@@ -15,6 +15,13 @@
       "when": 1787867771850,
       "tag": "0001_auth_tables_and_first_ceiling",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788039492069,
+      "tag": "0002_admin_second_factor_and_audit",
+      "breakpoints": true
     }
   ]
 }

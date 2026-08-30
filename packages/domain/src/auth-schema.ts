@@ -64,7 +64,6 @@
  * convention and invisible to Better Auth.
  */
 
-import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -76,7 +75,7 @@ import {
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
-import { citext } from "#column-types";
+import { citext, inList } from "#column-types";
 
 /**
  * The sign-in methods a session can be established by, and the reason the column
@@ -90,17 +89,50 @@ import { citext } from "#column-types";
  * written here, on the session row, by a `databaseHooks.session.create.before`
  * hook that cannot be bypassed by a door that forgets to set it.
  *
- * **Both members are passwordless**, which is the whole of story 1. The
- * credential door arrives with the Admin (story 7) and adds a third member here
- * plus a row in the `CHECK` — and NFR14's rule is written over the *class* of
- * passwordless doors rather than over the two that exist today, because adding a
- * third is exactly when this gets forgotten.
+ * **The set is now four, and it splits three ways rather than two** (#17):
+ *
+ * - `magic_link` and `google` are the **passwordless** class. NFR14's first half
+ *   is written over the class rather than over its members, and
+ *   {@link PASSWORDLESS_SIGN_IN_METHODS} below is that class as data — so a
+ *   fourth door added later is refused for an Admin account by being added to a
+ *   list, not by somebody remembering a rule.
+ * - `password` is a session that presented **one** factor. It exists for exactly
+ *   one window: an Admin granted by runbook §6's manual `UPDATE` has to reach the
+ *   enrolment surface before a TOTP secret exists, and Better Auth's plugin only
+ *   diverts `/sign-in/email` into the 2FA challenge once `twoFactorEnabled` is
+ *   true. It carries **no** Admin authority — `requireAdminSession` demands the
+ *   member below and not this one.
+ * - `password_totp` is the only member NFR14 calls an Admin session.
  *
  * English enum values under ADR-0012, like every other identifier.
  */
-export const SIGN_IN_METHODS = ["magic_link", "google"] as const;
+export const SIGN_IN_METHODS = ["magic_link", "google", "password", "password_totp"] as const;
 
 export type SignInMethod = (typeof SIGN_IN_METHODS)[number];
+
+/**
+ * The doors that present no second factor, as data.
+ *
+ * **This is NFR14's first half**, and it is a list rather than a condition
+ * because the requirement is written over a *class*: _"every passwordless door —
+ * magic link and Google alike — is refused for an account holding the Admin
+ * grant … because adding a third is exactly when this gets forgotten"_.
+ * `databaseHooks.session.create.before` reads it, which is the one place in this
+ * package a session is born, so a door added without a thought about NFR14 is
+ * refused by default rather than admitted by default.
+ *
+ * `password` is deliberately **not** here. It is not passwordless, and it is not
+ * an Admin session either; the difference is the one `requireAdminSession`
+ * enforces, and conflating the two would close the enrolment window runbook §6
+ * has to walk through.
+ */
+export const PASSWORDLESS_SIGN_IN_METHODS = [
+  "magic_link",
+  "google",
+] as const satisfies readonly SignInMethod[];
+
+/** The one member that satisfies NFR14. Read by `requireAdminSession`. */
+export const ADMIN_SIGN_IN_METHOD = "password_totp" satisfies SignInMethod;
 
 /**
  * **Account** in `CONTEXT.md`'s vocabulary, `user` in Better Auth's.
@@ -134,6 +166,39 @@ export const user = pgTable("user", {
 
   /** Google's avatar URL. Nothing renders it yet; the profile photo is story 2's. */
   image: text("image"),
+
+  /**
+   * **The Admin grant** (#17). `CONTEXT.md` calls Admin a staff Account and the
+   * Core entities section calls it _"the exception — a grant, because it is
+   * conferred rather than earned"_; this column is that grant.
+   *
+   * **`input: false` on the declaration is the load-bearing half.** It means no
+   * request body can set this field through any Better Auth endpoint, on sign-up
+   * or on update — so the grant has no API surface at all and DD7's rule holds
+   * by construction: _"the first Admin grant is a documented manual `UPDATE` —
+   * undocumented, it becomes a self-grant endpoint the first time someone needs
+   * it at 2 a.m."_ Runbook §6 is the documented path.
+   *
+   * Declared through `user.additionalFields` and **never** as a hand-added
+   * column, for the reason `verification.sharedDevice` carries: a hand-added
+   * column on a vendor table is invisible to the schema oracle, so
+   * `auth-schema.test.ts` could not pin it and a regeneration would drop it.
+   */
+  isAdmin: boolean("is_admin").notNull().default(false),
+
+  /**
+   * Better Auth's own column, from the `twoFactor` plugin — **not ours**, which
+   * is why it is spelled the library's way and appears here rather than beside
+   * `isAdmin` in any grouping of this repository's fields.
+   *
+   * **NFR14 exists because this column is not enough.** It is a property of the
+   * *principal*: it stays `true` while a magic-link session on the same Account
+   * presents no second factor at all. `requireAdminSession` therefore reads
+   * `session.signInMethod`, and this column's only readers are Better Auth's own
+   * — the plugin's `after` hook on `/sign-in/email`, which consults it to decide
+   * whether to divert into the 2FA challenge.
+   */
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -183,11 +248,17 @@ export const session = pgTable(
 
     /**
      * DD2's rule for an enum-shaped column: `TEXT` with a `CHECK`, so widening
-     * the set is a constraint change rather than a type alteration. Unlike
-     * `rate_counter.action` this one has members from the first migration,
-     * because both doors exist in the slice that creates the table.
+     * the set is a constraint change rather than a type alteration.
+     *
+     * **The set is written from {@link SIGN_IN_METHODS} rather than restated.**
+     * It was a literal while the set had two members and both arrived in one
+     * migration; #17 adds the two credential members, and a second spelling of
+     * the same set is how a door gets added to the type and refused by the
+     * engine. The registry is the authority and this constraint is the database
+     * refusing what it does not know — the shape `rate_counter.action` will take
+     * when NFR26's other seven ceilings land.
      */
-    check("session_sign_in_method_known", sql`${table.signInMethod} IN ('magic_link', 'google')`),
+    check("session_sign_in_method_known", inList(table.signInMethod, SIGN_IN_METHODS)),
   ],
 );
 
@@ -308,6 +379,74 @@ export const verification = pgTable(
      * row.
      */
     index("verification_identifier_idx").on(table.identifier),
+  ],
+);
+
+/**
+ * **The Admin's second factor**, from Better Auth's `twoFactor` plugin (#17).
+ *
+ * One row per Account with a TOTP secret, which in this product means **one row,
+ * or two** — the Admin, plus the second Admin grant on a separate device that
+ * runbook §6 requires as the recovery path. Nobody else can reach it:
+ * credential sign-up is closed (`emailAndPassword.disableSignUp`) and the plugin
+ * can only enrol a credential account.
+ *
+ * **Everything in it is a credential**, which is why the two columns that hold
+ * one are never read by this repository's code. `secret` and `backupCodes` are
+ * encrypted at rest with `BETTER_AUTH_SECRET` — which is what makes rotating
+ * that variable an operational event with a recovery step rather than routine
+ * hygiene (DD5), and why runbook §6 rehearses the break-glass. They belong to
+ * C28's `secret` class: no log line, no Sentry event, no subject-access export.
+ *
+ * **`lockedUntil` and `failedVerificationCount` are the plugin's own account
+ * lockout**, and they are the reason no NFR26 ceiling sits on TOTP verification.
+ * At 1.7.1 the defaults are ten consecutive failures then fifteen minutes locked,
+ * counted per account across challenges and factors — a stronger bound than a
+ * per-IP counter, because it survives an attacker rotating addresses.
+ */
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+
+    /** The TOTP secret, encrypted. Never read outside Better Auth. */
+    secret: text("secret").notNull(),
+
+    /** Ten single-use recovery codes, encrypted, as one string. */
+    backupCodes: text("backup_codes").notNull(),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    /**
+     * Whether the enrolment was completed by entering a first code.
+     *
+     * `false` between `/two-factor/enable` and the first successful
+     * `/two-factor/verify-totp`, and the plugin refuses a *sign-in* verification
+     * against an unverified row — so a half-finished enrolment cannot become a
+     * second factor nobody holds.
+     */
+    verified: boolean("verified").notNull().default(true),
+
+    failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  },
+  (table) => [
+    /**
+     * Both are Better Auth's own declarations (`dist/plugins/two-factor/schema.mjs`
+     * marks `secret` and `userId` `index: true`), pinned here by
+     * `auth-schema.test.ts` rather than judged.
+     *
+     * The one on `secret` is worth a word because it looks wrong: an index on an
+     * encrypted blob nothing looks up by. It is the library's declaration and
+     * this file's contract is to match the library, so it is carried rather than
+     * improved — dropping it would be this repository disagreeing with the
+     * oracle, which is the thing the pin exists to make visible.
+     */
+    index("two_factor_secret_idx").on(table.secret),
+    index("two_factor_user_id_idx").on(table.userId),
   ],
 );
 

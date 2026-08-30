@@ -244,16 +244,47 @@ directly, §7 has to be reopened before it ships.**
 One Admin moderates everything. Losing the second factor stops every Offer behind NFR7's 24-hour band
 and leaves every reported Hirer frozen, because `unfreezeHirer` is an Admin action.
 
-- [ ] First Admin granted by the documented manual `UPDATE` over the direct connection
+**The first grant is a command, not an `UPDATE`, and #17 is why.** This step read "the documented
+manual `UPDATE` over the direct connection" and that instruction could not be followed: an `UPDATE`
+sets `is_admin` on a row something else created, and DD5 closes credential sign-up
+(`emailAndPassword.disableSignUp`) so nothing does. Nor is there an `INSERT` a person could write —
+`account.password` holds a scrypt hash with Better Auth's own parameters, and a hand-computed one is
+a lockout discovered at the first sign-in.
+
+`pnpm admin:grant` is not an endpoint and cannot become one: `isAdmin` is declared `input: false`, so
+no request body sets the grant on any Better Auth route. It runs from a shell, over the direct
+connection, by whoever already holds the migration credential, and reads the password from stdin — so
+it reaches neither argv nor shell history.
+
+```sh
+pnpm admin:grant <email>            # prompts for a password; 16 characters minimum (DD5)
+```
+
+- [ ] **First Admin granted** with the command above
+- [ ] **Second factor enrolled** at `/admin/sign-in`. The first sign-in after the grant shows the QR
+      and the ten backup codes **once** — Better Auth encrypts both at rest with `BETTER_AUTH_SECRET`
+      and nothing in this repository decrypts them, so leaving that screen without the codes loses them
 - [ ] **Ten backup codes printed and stored offline** — on paper, not in the password manager that
       also holds the password
-- [ ] **A second Admin account on a separate device**, its own TOTP secret, same person. This is the
-      path that recovers the platform in minutes rather than hours
-- [ ] **Break-glass rehearsed once**: the `UPDATE` that disables the second factor, run over the
-      direct connection (#2 in §1), against a scratch database — so the first time it is run is not
-      during the incident
-- [ ] `trustDevice` is **`false`** for the Admin (C44). TOTP on every sign-in; six digits a day is the
-      price of the account that can read every exchanged phone number
+- [ ] **A second Admin account on a separate device**, its own TOTP secret, same person — run the
+      command again with the second address. This is the path that recovers the platform in minutes
+      rather than hours
+- [ ] **Break-glass rehearsed once** against a scratch database, so the first time it is run is not
+      during the incident. The two statements are below; the next sign-in then walks the enrolment
+      step again with a fresh secret and fresh codes
+- [ ] `trustDevice` is **`false`** for the Admin (C44) — TOTP on every sign-in. **It is not a
+      configuration value**, which is worth knowing before looking for one: at `better-auth@1.7.1`
+      `trustDevice` is a field on the body of `/two-factor/verify-*`, so there is nothing in
+      `authOptions` to set, and a `before` middleware strips it from the request instead. Checked by
+      asserting that no `trust-device-*` verification row survives a verification that asked for one
+
+**Break-glass**, over the direct connection (#2 in §1). Verified end to end on #17 against the
+development stack, which is where these two statements come from rather than from recall:
+
+```sql
+UPDATE "user" SET two_factor_enabled = false WHERE email = '<admin>';
+DELETE FROM two_factor WHERE user_id = (SELECT id FROM "user" WHERE email = '<admin>');
+```
 
 ---
 

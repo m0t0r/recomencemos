@@ -98,3 +98,79 @@ export const SESSION_REQUIRED = "Tu sesión ya no está abierta. Entra otra vez 
  */
 export const SIGN_OUT_EVERYWHERE_FAILED =
   "No pudimos cerrar todas las otras sesiones. Revisa la lista e intenta de nuevo.";
+
+/**
+ * A passwordless door refused because the Account holds the Admin grant (NFR14).
+ *
+ * **Only one person can ever read this string**, and that shapes it: it is not a
+ * refusal aimed at a Worker who did nothing wrong, it is a signpost aimed at the
+ * operator who reached for the wrong door out of habit. So it says where the
+ * right door is, which is the whole of what they need.
+ *
+ * **It names no account and asks no question.** Anyone can trigger it by opening
+ * a magic link, so the sentence has to be true and useless in the hands of
+ * someone who is not the Admin — "esta cuenta" says nothing an attacker who
+ * already had the link did not know, and naming the address or the grant would.
+ *
+ * Directness 5 and the refusal is our rule rather than her mistake
+ * (`docs/policy/voice.md`, Do 3 and Don't 4): what happened, and what to do next,
+ * in one breath.
+ */
+export const ADMIN_SIGN_IN_ONLY =
+  "Esta cuenta no entra por aquí. Entra en /admin/sign-in con tu contraseña y tu código.";
+
+/**
+ * `revokeSessions` was asked for an address with no Account.
+ *
+ * Read only by the Admin, who is the one principal permitted to learn that an
+ * address has no Account — the enumeration rule that shapes `/sign-in`'s copy is
+ * about an anonymous caller, and this is the opposite of one.
+ */
+export const ADMIN_ACCOUNT_NOT_FOUND = "No hay ninguna cuenta con ese correo.";
+
+/**
+ * An Admin action that broke on our side.
+ *
+ * **The second sentence is the one that matters**, and it is true by
+ * construction: NFR33 puts the `AdminAction` insert in the same transaction as
+ * the action itself, so a failure rolls back both. The Admin can retry knowing
+ * the queue has not half-moved underneath them.
+ */
+export const ADMIN_ACTION_FAILED = "No pudimos completar la acción. Nada cambió; intenta de nuevo.";
+
+/**
+ * The Admin's password was refused — or the address was, or the address is
+ * unverified. **One sentence for all three**, because a reply that differed would
+ * identify which addresses hold the Admin grant, which is NFR14's own argument for
+ * answering 403 rather than redirecting, one level down.
+ *
+ * It does not say "intenta de nuevo" the way `SIGN_IN_FAILED` does: this is not a
+ * fault on our side, it is a refusal, and Don't 4 is about not calling our rule
+ * her mistake — not about softening a refusal into an invitation to guess again.
+ */
+export const ADMIN_SIGN_IN_REFUSED = "Esos datos no coinciden.";
+
+/**
+ * The second factor was refused: a wrong code, an expired challenge, or an
+ * account locked after ten consecutive failures.
+ *
+ * **The recovery path is in the sentence**, which is the half that earns it. An
+ * Admin who has lost the phone is exactly the person meeting this string, and
+ * DD5's ten printed backup codes are useless if nothing on screen says they work
+ * here (C43: losing the second factor stops every Offer and leaves every reported
+ * Hirer frozen). Do 3 — the refusal says what to do next in the same breath.
+ */
+export const ADMIN_SECOND_FACTOR_REFUSED =
+  "Ese código no sirve. Prueba otra vez, o usa uno de tus códigos de respaldo.";
+
+/**
+ * Enrolling the second factor broke before a secret was stored.
+ *
+ * **"Nada quedó guardado" is the load-bearing half.** A half-finished enrolment is
+ * the C43 failure — an Admin locked out of the platform they moderate — so the one
+ * thing this person needs to know is that the Account is exactly as it was and
+ * starting again is safe. It is true by construction: the secret and the codes are
+ * written in one call, and a failure leaves neither.
+ */
+export const ADMIN_ENROLMENT_FAILED =
+  "No pudimos configurar tu segundo factor. Nada quedó guardado; empieza otra vez.";
