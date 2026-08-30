@@ -239,7 +239,7 @@ directly, §7 has to be reopened before it ships.**
 
 ---
 
-## 6. The Admin, and not being locked out of your own platform (C43, C44, C58)
+## 6. The Admin, and not being locked out of your own platform (C43, C44)
 
 One Admin moderates everything. Losing the second factor stops every Offer behind NFR7's 24-hour band
 and leaves every reported Hirer frozen, because `unfreezeHirer` is an Admin action.
@@ -276,9 +276,11 @@ factor. Under the design this replaces, that window was the whole of the first s
 - [ ] **A second Admin account on a separate device**, its own TOTP secret, same person — run the
       command again with the second address. This is the path that recovers the platform in minutes
       rather than hours
-- [ ] **The second address is at a different mail provider** (C58). The first factor is now email
-      delivery, and §4 says this domain is cold and its deliverability into Colombian inboxes is
-      unmeasured — so two Admin addresses in one mailbox is one failure, not two
+- [ ] **The second address is not in the same mailbox as the first** (C43). The first factor is now a
+      link, so an Admin whose mailbox is unreachable — a provider outage, a locked account, a deleted
+      address — cannot sign in at all. Two Admin addresses in one mailbox is one failure, not two.
+      This is about the **mailbox**, not about deliverability: C58 records that Resend's sending from a
+      cold domain was assessed and accepted
 - [ ] **Break-glass rehearsed once** against a scratch database, so the first time it is run is not
       during the incident. It is the same command; see below
 - [ ] **TOTP on every sign-in, and there is no trusted-device setting to check** (C44). This used to
