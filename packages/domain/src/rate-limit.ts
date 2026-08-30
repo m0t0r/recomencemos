@@ -62,9 +62,58 @@ export const CEILINGS = {
     address: { max: 5, windowSeconds: 60 * 60 },
     ip: { max: 20, windowSeconds: 60 * 60 },
   },
+
+  /**
+   * **The Admin's second factor, bounded per Account** — two actions rather than
+   * one, and the split is the requirement rather than a refinement of it.
+   *
+   * The bound these replace was Better Auth's: ten consecutive failures then
+   * fifteen minutes, counted per account across factors, which went with the
+   * plugin when the Admin door stopped being a credential path. DD5 is explicit
+   * that the replacement is an NFR26 ceiling **scoped to the Account** and that a
+   * per-IP bound is not an acceptable substitute — six digits against an
+   * attacker who can rotate addresses is a matter of hours.
+   *
+   * **Same number, separate counters.** The number is the plugin's own, restated
+   * rather than reconsidered; what is new is that exhausting one does not close
+   * the other. That is what lets the door tell somebody who has mistyped six
+   * digits ten times that a printed code still works — a sentence that is only
+   * worth saying because it is true, and it is only true because these are two
+   * rows.
+   *
+   * **Nothing charges them yet, and that is deliberate.** The door that reads a
+   * code arrives in its own ticket; the enrolment that creates a factor to check
+   * against arrives here. Both values have to exist in the `CHECK` on
+   * `rate_counter.action` before the first charge, and that constraint is
+   * generated from this registry — so a ceiling declared here is how the
+   * migration gets written, and a literal in the constraint would be the second
+   * spelling of this set that `inList` exists to prevent.
+   */
+  verifyAdminTotp: {
+    account: { max: 10, windowSeconds: 15 * 60 },
+  },
+  verifyAdminBackupCode: {
+    account: { max: 10, windowSeconds: 15 * 60 },
+  },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
+
+/**
+ * The ceiling one action declares for one scope, or nothing.
+ *
+ * **A function rather than `CEILINGS[action][scope]`**, because the registry's
+ * entries stopped having the same shape the moment a second ceiling was charged
+ * against something other than an address: indexing the union of
+ * `{ address, ip }` and `{ account }` by a `CeilingScope` is an error, correctly.
+ * Widening to the type the registry already `satisfies` is what answers it, and
+ * doing that here means one widening in this module rather than one at every
+ * reader.
+ */
+export function ceilingFor(action: CeilingedAction, scope: CeilingScope): Ceiling | undefined {
+  const scopes: Partial<Record<CeilingScope, Ceiling>> = CEILINGS[action];
+  return scopes[scope];
+}
 
 /**
  * The registry's keys, as the array `#schema`'s `CHECK` on `rate_counter.action`
@@ -95,11 +144,15 @@ export const RATE_COUNTER_RETENTION_SECONDS =
 /**
  * Who a ceiling is charged against.
  *
- * `address` rather than `account` for this first one, because
+ * `address` rather than `account` for the first one, because
  * `requestMagicLink` is charged **before** an Account exists — which is also why
  * `rate_counter.principal` is a `TEXT` key and not a foreign key.
+ *
+ * `account` arrives with the Admin's second factor, where it is the whole point:
+ * DD5 rebuilds the plugin's per-account lockout as a ceiling and says in as many
+ * words that a per-IP bound is not a substitute for it.
  */
-export type CeilingScope = "address" | "ip";
+export type CeilingScope = "address" | "ip" | "account";
 
 export interface CeilingPrincipal {
   readonly scope: CeilingScope;
@@ -182,22 +235,52 @@ export function retryPhrase(retryAfter: number): string {
 }
 
 /**
- * The one string a person reads when a ceiling refuses her.
+ * The one string a person reads when a ceiling refuses her, **per action**.
  *
  * Refusal tone, per the voice guide's matrix: Optimism 3→4, Energy 2→1, Warmth 5
- * unchanged — _"the refusal is our rule, never her mistake"_. Three sentences,
- * each under twenty words: what our rule is with her count in it, when it
- * changes, and the door that is still open. The last one is the spec's own
- * requirement for this surface — _"the Google door is still there"_ — and it is
- * why a rate-limited sign-in is not a dead end.
+ * unchanged — _"the refusal is our rule, never her mistake"_. Each is at most
+ * three sentences, each under twenty words: what our rule is with her count in
+ * it, when it changes, and — where there is one — the door that is still open.
+ *
+ * **It is a `Record` over the action union rather than one sentence for every
+ * ceiling**, and it stopped being one sentence the moment a second ceiling
+ * existed. `requestMagicLink`'s copy names links and offers Google; rendering
+ * that to an Admin who mistyped a code would be a refusal about something that
+ * did not happen, which is the failure Don't 4 is about. The `Record` is what
+ * makes the next ceiling's copy a compile error rather than a silently borrowed
+ * sentence — the same mechanism `ADMIN_ACTION_HANDLERS` uses over its own
+ * registry.
  */
-export function ceilingUserMessage(ceiling: Ceiling, retryAfter: number): string {
-  return (
+export const CEILING_REFUSALS: Record<
+  CeilingedAction,
+  (ceiling: Ceiling, retryAfter: number) => string
+> = {
+  /**
+   * The last sentence is the spec's own requirement for this surface — _"the
+   * Google door is still there"_ — and it is why a rate-limited sign-in is not a
+   * dead end.
+   */
+  requestMagicLink: (ceiling, retryAfter) =>
     `Pediste ${ceiling.max} enlaces en una hora, que es el máximo. ` +
     `Puedes pedir otro ${retryPhrase(retryAfter)}. ` +
-    "Mientras tanto, puedes entrar con Google."
-  );
-}
+    "Mientras tanto, puedes entrar con Google.",
+
+  /**
+   * **Two sentences, not three, because there is no third door to name yet.**
+   * The one worth naming is that a backup code still works — it is true, and it
+   * is true precisely because these two ceilings count separately — but the
+   * surface that would say it does not exist, and copy written here for a screen
+   * nobody has built is copy nobody has read against a layout. The door's ticket
+   * owns that sentence.
+   */
+  verifyAdminTotp: (ceiling, retryAfter) =>
+    `Escribiste ${ceiling.max} códigos incorrectos, que es el máximo. ` +
+    `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}.`,
+
+  verifyAdminBackupCode: (ceiling, retryAfter) =>
+    `Escribiste ${ceiling.max} códigos de respaldo incorrectos, que es el máximo. ` +
+    `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}.`,
+};
 
 /**
  * Charge one ceiling and say whether the action may proceed.
@@ -215,7 +298,7 @@ export async function chargeCeiling(
   action: CeilingedAction,
   now: Date = new Date(),
 ): Promise<CeilingOutcome> {
-  const ceiling = CEILINGS[action][principal.scope];
+  const ceiling = ceilingFor(action, principal.scope);
 
   // An action charged against a scope it declares no ceiling for is not
   // "unlimited", it is a caller asking the wrong question. Allowing is the only
@@ -272,7 +355,7 @@ export async function chargeCeiling(
       message:
         `The ${action} ceiling refused a request: ${count} charges against a ${principal.scope} ` +
         `principal in a ${ceiling.windowSeconds}s window, over the ceiling of ${ceiling.max}.`,
-      userMessage: ceilingUserMessage(ceiling, retryAfter),
+      userMessage: CEILING_REFUSALS[action](ceiling, retryAfter),
       /**
        * **Counts and enum values only — and deliberately no principal at all.**
        *
