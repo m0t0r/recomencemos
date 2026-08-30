@@ -119,8 +119,12 @@ mechanism — losing it costs a button press, not the session.
 - **No "welcome back", no name, no avatar, no session chrome.** There is no session yet, which is the
   entire point of the screen.
 - **No attempt counter, no strength meter, no six separate digit boxes.** The split-box pattern is
-  the reflex here and it is wrong twice over: it cannot hold an alphanumeric backup code, and it
-  breaks paste.
+  the reflex here and it is wrong twice over: it cannot hold an eight-character hyphenated backup
+  code, and a fixed slot count makes the one-field decision above unimplementable.
+  **`input-otp` is in the registry and is deliberately not used**, which is worth stating because the
+  registry-equivalents review pass exists to catch the opposite mistake. It is the right component
+  for a screen that accepts only a TOTP code; this screen accepts either code in one field, and that
+  is the decision it cannot express.
 - **No "resend link" and no "back to sign in".** Both are routes onward from a page whose refusals
   are supposed to be dead ends.
 - **No page-load choreography.** Someone is entering a task.
