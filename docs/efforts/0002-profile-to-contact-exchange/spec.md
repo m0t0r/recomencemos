@@ -3261,7 +3261,7 @@ the work, and several steps cannot be taken until the infrastructure they config
 | 4         | Publish DNS, verify SPF/DKIM/DMARC with `dig`, warm the domain from the first deploy, hold a fallback subdomain, stage the announcement, measure into Colombian inboxes                                                                          | C45               |
 | 5         | 1 GB machine, enforced CSP, uptime probe at 60 s / 2 failures, machine bands to `needs-triage`                                                                                                                                                   | C34, C6, C33, C10 |
 | 5b        | Create the Trigger.dev project, set the shared secret in both places, deploy four schedules, prove each endpoint rejects an unsigned call and is idempotent, point Sentry's cron monitor at the digest                                           | DD10              |
-| 6         | Enrol the first Admin end to end, print backup codes offline, enrol a second Admin device, rehearse break-glass. _Amended 2026-08-30 with #96: "grant, then enrol" is now one command that grants **last**, and the break-glass is re-enrolment_ | C43, C44, C58     |
+| 6         | Enrol the first Admin end to end, print backup codes offline, enrol a second Admin device, rehearse break-glass. _Amended 2026-08-30 with #96: "grant, then enrol" is now one command that grants **last**, and the break-glass is re-enrolment_ | C43, C44          |
 | 7         | Name every processor in the _aviso_, take express transmission consent, file each DPA, check Circular 005                                                                                                                                        | C15               |
 | 8         | Required status checks, dependency audit, `gh-stack`, one rehearsed rollback                                                                                                                                                                     | C7, C16, NFR25    |
 | 9         | Wire `/security-review` per PR; run `/security-audit` once before the announcement                                                                                                                                                               | C8                |
@@ -3392,7 +3392,7 @@ infrastructure rather than in the application**, which is the fact that decided 
 
 ### Appended with the passwordless Admin door (2026-08-30, #96)
 
-- [ ] **C58** — **The Admin's first factor is now email delivery, on a domain C45 says may not
+- [x] **C58** — **The Admin's first factor is now email delivery, on a domain C45 says may not
       deliver.** Under the design this amendment replaces, the Admin held a password and could sign in
       with the mail path completely down. Now the first factor is a link to a mailbox, sent through
       Resend on a sending domain that C45 describes as cold, capped at 50–100 sends a day in week one,
@@ -3414,6 +3414,18 @@ infrastructure rather than in the application**, which is the fact that decided 
       opens, which is exactly what DD7 warns about. (d) **Accept it**, on the grounds that the
       break-glass is re-enrolment and the operator holds the migration credential anyway.
       **Owner:** Security owner (with On-call lead).
+      **Answer: (d), accepted.** The Security owner's judgement is that Resend delivers reliably from a
+      cold domain and that this does not warrant a mitigation of its own. Recorded as a decision rather
+      than as an omission, so that a future delivery incident is read against a position somebody took
+      and not against a gap nobody saw.
+      **What the acceptance does not cover, and is handled elsewhere.** The residual risk is not
+      Resend's sending quality — it is the Admin's **mailbox** being unreachable for a reason that has
+      nothing to do with the sender: a provider outage, a locked account, a deleted address. That is a
+      C43 failure and C43's second Admin already answers it, on one condition worth stating: **the two
+      Admin addresses are not in the same mailbox.** That line stays in runbook §6 as a C43 step, where
+      it costs nothing and covers a failure this acceptance does not reach.
+      **What would reopen this:** a delivery failure or a warm-up throttle observed against the Admin
+      link specifically. `magic_link.requested` already carries the correlator that would show it.
 
 ### What was not verified, and should be before Build
 
