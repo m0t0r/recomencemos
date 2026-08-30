@@ -1,7 +1,8 @@
 # Surface brief: `/sign-in`
 
 **Target:** `apps/web/app/(site)/(auth)/sign-in/page.tsx` · **Mode:** Operate · **Ticket:**
-[#12](https://github.com/m0t0r/recomencemos/issues/12) · **Shaped:** 2026-08-27
+[#12](https://github.com/m0t0r/recomencemos/issues/12) · **Shaped:** 2026-08-27 · **Amended:**
+2026-08-30 ([#96](https://github.com/m0t0r/recomencemos/issues/96))
 
 ## Job and audience
 
@@ -44,7 +45,34 @@ The spec's six plus `rate limited`, and the two this surface adds from the ticke
 | `google_failed` | Arrives back as `?error=`. The email door is still offered — never a dead end.                                                                           |
 | `link_consumed` | Arrives back as `?error=INVALID_TOKEN`. Offers an immediate resend, and is **not** written as an error: a scanner opening her link first is our problem. |
 
+| `signed_in` | **Never rendered.** A request carrying a live session is redirected before this page draws — to its `returnPath` when `safeReturnPath` accepts it, else `/`. Amended with #96. |
+
 `empty` and `permission denied` are `n/a` on this surface, per the spec's own table.
+
+## Amended 2026-08-30 with #96 — one door, two outcomes, and a guard
+
+**This surface is now the Admin's door too, and nothing about it may show that.** The Admin's
+password door at `/admin/sign-in` is deleted; the Admin asks for a link from this form like anybody
+else. If the address holds the Admin grant the email carries an Admin link, which lands on a
+token-gated route and demands a TOTP code before any session exists; otherwise it carries the
+ordinary magic link. See [`admin-door.md`](admin-door.md).
+
+Three consequences for this brief, and the first two are anti-goals:
+
+1. **The copy, the shape, the status and the timing are identical in both cases.** No second field,
+   no "are you an operator?" affordance, no different confirmation. The `sent` state already says
+   "check your email" **whether or not the address exists**, because the honest reply and the
+   enumeration-safe reply are the same one — that property now also carries "and whether or not this
+   is the Admin's address", which is a stronger thing for it to carry and needs no new mechanism.
+2. **Nothing on this page ever mentions `/admin`.** Not in copy, not in a link, not in a comment that
+   could reach a rendered string. A door that advertises the other door undoes the reason the other
+   door has no page of its own.
+3. **A live session is redirected rather than shown the form.** The state table gains `signed_in`
+   above. It is a redirect and not a message, because there is nothing to tell somebody about a
+   problem they do not have; the target is `returnPath` when safe and `/` otherwise, reusing
+   `safeReturnPath` rather than a second rule. It applies to every session equally — an Admin session
+   is not sent to `/admin`, because this page has no business knowing what kind of session it turned
+   away.
 
 ## Interaction and layout
 
