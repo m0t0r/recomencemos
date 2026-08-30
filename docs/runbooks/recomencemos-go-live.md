@@ -239,52 +239,65 @@ directly, §7 has to be reopened before it ships.**
 
 ---
 
-## 6. The Admin, and not being locked out of your own platform (C43, C44)
+## 6. The Admin, and not being locked out of your own platform (C43, C44, C58)
 
 One Admin moderates everything. Losing the second factor stops every Offer behind NFR7's 24-hour band
 and leaves every reported Hirer frozen, because `unfreezeHirer` is an Admin action.
 
-**The first grant is a command, not an `UPDATE`, and #17 is why.** This step read "the documented
-manual `UPDATE` over the direct connection" and that instruction could not be followed: an `UPDATE`
-sets `is_admin` on a row something else created, and DD5 closes credential sign-up
-(`emailAndPassword.disableSignUp`) so nothing does. Nor is there an `INSERT` a person could write —
-`account.password` holds a scrypt hash with Better Auth's own parameters, and a hand-computed one is
-a lockout discovered at the first sign-in.
+**Rewritten 2026-08-30 with #96: the Admin door has no password.** This section used to grant an
+Account with a 16-character password and then send a person to `/admin/sign-in` to enrol a second
+factor. Both halves are gone — the password, and the route. The two factors are now a **single-use
+emailed link** and a **TOTP code**, and the argument is in the spec at DD5, _The Admin door is
+passwordless_.
 
-`pnpm admin:grant` is not an endpoint and cannot become one: `isAdmin` is declared `input: false`, so
-no request body sets the grant on any Better Auth route. It runs from a shell, over the direct
-connection, by whoever already holds the migration credential, and reads the password from stdin — so
-it reaches neither argv nor shell history.
+**Enrolment is one command, and it grants last.** `pnpm admin:enrol` is not an endpoint and cannot
+become one: `isAdmin` is declared `input: false`, so no request body sets the grant on any route. It
+runs from a shell, over the **direct** connection, by whoever already holds the migration credential.
 
 ```sh
-pnpm admin:grant <email>            # prompts for a password; 16 characters minimum (DD5)
+pnpm admin:enrol <email>
 ```
 
-- [ ] **First Admin granted** with the command above
-- [ ] **Second factor enrolled** at `/admin/sign-in`. The first sign-in after the grant shows the QR
-      and the ten backup codes **once** — Better Auth encrypts both at rest with `BETTER_AUTH_SECRET`
-      and nothing in this repository decrypts them, so leaving that screen without the codes loses them
-- [ ] **Ten backup codes printed and stored offline** — on paper, not in the password manager that
-      also holds the password
+It prints a **one-time setup link** and then waits. Open the link in a browser; the page shows the
+TOTP QR and the ten backup codes, **once**. Scan the QR, then type the six digits **back into the
+terminal**. The command verifies them against the stored secret and only then sets the grant.
+
+**The ordering is the safety property, not a convenience.** The grant is the last step, so an Account
+cannot hold Admin authority until a working authenticator has proved itself — a link opened and
+abandoned leaves no Admin behind, and there is no window in which a granted Account has no second
+factor. Under the design this replaces, that window was the whole of the first sign-in.
+
+- [ ] **First Admin enrolled end to end** with the command above — link opened, QR scanned, code
+      accepted in the terminal, grant confirmed
+- [ ] **Ten backup codes printed and stored offline** — on paper, and **not in the mailbox that is the
+      other factor**, nor in a manager that holds that mailbox's own credential. They are encrypted at
+      rest with `BETTER_AUTH_SECRET` and nothing in this repository decrypts them, so leaving that
+      screen without them loses them
 - [ ] **A second Admin account on a separate device**, its own TOTP secret, same person — run the
       command again with the second address. This is the path that recovers the platform in minutes
       rather than hours
+- [ ] **The second address is at a different mail provider** (C58). The first factor is now email
+      delivery, and §4 says this domain is cold and its deliverability into Colombian inboxes is
+      unmeasured — so two Admin addresses in one mailbox is one failure, not two
 - [ ] **Break-glass rehearsed once** against a scratch database, so the first time it is run is not
-      during the incident. The two statements are below; the next sign-in then walks the enrolment
-      step again with a fresh secret and fresh codes
-- [ ] `trustDevice` is **`false`** for the Admin (C44) — TOTP on every sign-in. **It is not a
-      configuration value**, which is worth knowing before looking for one: at `better-auth@1.7.1`
-      `trustDevice` is a field on the body of `/two-factor/verify-*`, so there is nothing in
-      `authOptions` to set, and a `before` middleware strips it from the request instead. Checked by
-      asserting that no `trust-device-*` verification row survives a verification that asked for one
+      during the incident. It is the same command; see below
+- [ ] **TOTP on every sign-in, and there is no trusted-device setting to check** (C44). This used to
+      be a `trustDevice` field to strip from a request body. Better Auth's `twoFactor` plugin is not
+      used at all now, so there is nothing to disable and nothing to assert about it — the door has no
+      path through it that skips the code
 
-**Break-glass**, over the direct connection (#2 in §1). Verified end to end on #17 against the
-development stack, which is where these two statements come from rather than from recall:
+**Break-glass is re-enrolment**, over the direct connection (#2 in §1):
 
-```sql
-UPDATE "user" SET two_factor_enabled = false WHERE email = '<admin>';
-DELETE FROM two_factor WHERE user_id = (SELECT id FROM "user" WHERE email = '<admin>');
+```sh
+pnpm admin:enrol <admin-address>    # the same command; issues a fresh secret and fresh codes
 ```
+
+**There is no "disable the second factor" statement any more, and that is deliberate.** The old
+break-glass was `UPDATE "user" SET two_factor_enabled = false`, which left a door open on a password
+alone. With no password, disabling the second factor would leave an account with **no** door rather
+than a weaker one, so the only useful recovery is to enrol a new authenticator — which is what the
+command does. Rehearse it against a scratch database anyway: what is being rehearsed is that the
+person holding the migration credential can reach a shell and run it under pressure.
 
 ---
 
