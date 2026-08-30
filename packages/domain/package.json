@@ -24,6 +24,7 @@
   },
   "exports": {
     "./admin": "./src/admin/index.ts",
+    "./admin-enrolment": "./src/admin/enrolment-read.ts",
     "./auth-handler": "./src/auth/index.ts",
     "./consent": "./src/consent/index.ts",
     "./export": "./src/export.ts",

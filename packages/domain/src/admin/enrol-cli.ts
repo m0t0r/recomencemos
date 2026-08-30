@@ -1,0 +1,215 @@
+/**
+ * Runbook §6, as one command that grants **last**.
+ *
+ * ```sh
+ * pnpm admin:enrol ana@example.co
+ * ```
+ *
+ * It prints a single-use setup link and waits. Opening the link shows the TOTP
+ * QR and the ten backup codes, once; the six digits from the authenticator are
+ * typed **back into this prompt**, which verifies them over the direct connection
+ * and only then sets the grant.
+ *
+ * **What it replaces, and why the replacement is a different shape.**
+ * `pnpm admin:grant` set `is_admin` first and left the second factor to a later
+ * sign-in — so between those two acts there was a granted Account with one
+ * factor, and that window was the whole of the first sign-in. Inverting the order
+ * closes it: an Account cannot hold Admin authority until a working authenticator
+ * has proved itself, and a link opened and abandoned leaves no Admin behind.
+ *
+ * **It is not an endpoint and cannot become one**, which is DD7's rule —
+ * _"undocumented, it becomes a self-grant endpoint the first time someone needs
+ * it at 2 a.m."_ Three things hold that: `isAdmin` is declared `input: false`, so
+ * no request body sets the grant on any route; this module is absent from the
+ * package's `exports` map, so `apps/web` cannot resolve it; and it runs on the
+ * **direct** connection, by somebody who already holds the migration credential.
+ *
+ * **Nothing here is emailed.** The link is printed to the terminal of the person
+ * who ran the command, which is why the token's window is measured against their
+ * attention rather than against a mailbox.
+ *
+ * Run by `node` directly under Node 24's native type stripping, and writing
+ * through `process.stdout` rather than the logger — both for the reasons
+ * `migrate/cli.ts` records: this repo has no `tsx`, and `@repo/observability`
+ * reaches `@sentry/nextjs`, which is CommonJS and does not bind its named exports
+ * under plain Node's ESM loader. It is also the right channel here for a second
+ * reason: **every value this command prints is a credential**, and a credential
+ * belongs on the operator's screen and in no drain.
+ */
+
+import { createInterface, type Interface } from "node:readline/promises";
+import {
+  ADMIN_SETUP_TOKEN_TTL_MINUTES,
+  completeAdminEnrolment,
+  mintAdminEnrolment,
+} from "#admin/enrolment";
+import { authSecret, BASE_URL_VARIABLE } from "#auth/config";
+import { directConfig } from "#config";
+import * as schema from "#schema";
+
+/** Where the printed link points. The same variable every other absolute URL uses. */
+function enrolmentUrl(token: string): string {
+  const baseUrl = process.env[BASE_URL_VARIABLE]?.trim();
+
+  if (!baseUrl) {
+    throw new Error(
+      `${BASE_URL_VARIABLE} is unset, so there is no origin to print a setup link against. ` +
+        "Locally: `cp apps/web/.env.example apps/web/.env.local`.",
+    );
+  }
+
+  return new URL(`/admin/enrol/${token}`, baseUrl).toString();
+}
+
+/**
+ * The prompt, and the two ways it can stop having anything to read.
+ *
+ * **One interface for the whole exchange, and that is a fix rather than a
+ * preference.** The first version opened and closed a `readline` per prompt,
+ * which works exactly once: closing it ends `process.stdin`, so the retry's
+ * second prompt never resolved and the command died on an unsettled top-level
+ * await. Observed by piping three codes at it, not predicted.
+ *
+ * **And input can end on its own**, which is what happens the moment this is
+ * driven by a pipe rather than by a person — `printf '…' | pnpm admin:enrol …`
+ * is a real way to run it, and `readline` closes when its input stream ends.
+ * `question()` on a closed interface throws `ERR_USE_AFTER_CLOSE`; that is not
+ * an error worth a stack trace, it is "there is nobody there to ask", so it
+ * comes back as `undefined` and the caller stops asking.
+ *
+ * **Echoed, unlike `admin:grant`'s password prompt, and the difference is the
+ * point.** A TOTP code is good for thirty seconds and is worthless the moment it
+ * is used, so hiding it buys nothing and costs the person the ability to see
+ * that they typed it correctly — which on a six-digit code is the whole
+ * interaction.
+ */
+function promptForCode(rl: Interface, prompt: string): Promise<string | undefined> {
+  return rl.question(prompt).then(
+    (answer) => answer.trim(),
+    () => undefined,
+  );
+}
+
+async function main(): Promise<void> {
+  const email = process.argv[2]?.trim();
+
+  if (!email) {
+    process.stderr.write("usage: pnpm admin:enrol <email>\n");
+    process.exitCode = 2;
+    return;
+  }
+
+  const key = authSecret(process.env);
+
+  /**
+   * **The direct connection, not the pooled one**, which is the runbook's own
+   * wording and the right credential: this is an out-of-band administrative act,
+   * not a request path, and it should not be reaching for the pool a Worker's
+   * sign-in shares.
+   */
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  const { Pool } = await import("pg");
+  const pool = new Pool(directConfig());
+  const db = drizzle(pool, { schema });
+
+  try {
+    const { token } = await mintAdminEnrolment(db, { email, key });
+
+    process.stdout.write(
+      `\nOpen this link to set up the authenticator. It works for ` +
+        `${ADMIN_SETUP_TOKEN_TTL_MINUTES} minutes and shows the ten backup codes once:\n\n` +
+        `  ${enrolmentUrl(token)}\n\n` +
+        "Scan the QR, keep the codes somewhere the mailbox's password does not open,\n" +
+        "then type the six digits here.\n\n",
+    );
+
+    /**
+     * **Up to three attempts against the same enrolment.** The domain leaves it
+     * open on a wrong code precisely so the digits can be retried; reading once
+     * and exiting would throw that open enrolment away and re-mint on the next
+     * run — a fresh secret, a fresh QR to scan, ten fresh codes to keep — for a
+     * fat-fingered digit.
+     *
+     * **There is no ceiling behind this loop, and it does not need one.** The
+     * bound belongs to the door, where an attacker can reach it; here the limits
+     * are the person at the keyboard and the token's own window. Three is enough
+     * for a mistype and for a phone whose clock ticked over mid-typing.
+     *
+     * `undefined` from the prompt means the input ended — a pipe rather than a
+     * person — and there is nothing left to ask, so the loop stops and the
+     * refusal below is what gets printed.
+     */
+    let outcome: Awaited<ReturnType<typeof completeAdminEnrolment>> = {
+      ok: false,
+      reason: "wrong_code",
+    };
+
+    /**
+     * **Opened here rather than beside the pool, which is where it was and where
+     * it did not work.** `readline` starts consuming its input the moment it
+     * exists, and the two database round trips between the pool and this point
+     * are long enough for a piped stdin to be read and ended before the first
+     * `question()` — so the prompt resolved to nothing. Creating it at the
+     * moment it is first asked to read keeps `printf '…' | pnpm admin:enrol …`
+     * working, and keeping it across the loop is what lets a person retry.
+     */
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (attempt > 1) {
+        process.stdout.write("\nThat code did not match. The link is still open.\n");
+      }
+
+      const prompt =
+        attempt === 1
+          ? "Code from the authenticator: "
+          : `Code from the authenticator (attempt ${attempt} of 3): `;
+
+      // Sequential by nature: each prompt waits for the person, and the next
+      // attempt is against the same enrolment the last one left open.
+      // oxlint-disable-next-line no-await-in-loop
+      const code = await promptForCode(rl, prompt);
+      if (code === undefined) break;
+
+      // oxlint-disable-next-line no-await-in-loop
+      outcome = await completeAdminEnrolment(db, { token, code, key });
+      if (outcome.ok || outcome.reason !== "wrong_code") break;
+    }
+
+    // Nothing below this line reads, so the interface is done. Closing it here
+    // rather than in the `finally` keeps its lifetime the length of the one
+    // exchange it exists for.
+    rl.close();
+
+    if (!outcome.ok) {
+      /**
+       * **One message for both refusals**, which is not enumeration-safety
+       * theatre — there is no adversary at this prompt — but the honest thing to
+       * say: the person is at a terminal they own, and a spent window and a run
+       * of wrong codes are both answered by running the command again. Nothing
+       * has been granted either way, and saying so is the whole reassurance
+       * needed.
+       */
+      process.stderr.write(
+        "\nThat did not verify, so nothing was granted and no second factor was stored.\n" +
+          "Run the command again for a fresh link.\n",
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    // The second Admin is the recovery path that takes minutes rather than
+    // hours (C43), and the mailbox condition is runbook §6's — both cited here,
+    // in a comment, and neither in the sentence itself.
+    process.stdout.write(
+      `\nAdmin granted: ${outcome.accountId}\n` +
+        "The authenticator is enrolled and the setup link is closed.\n" +
+        "Run this command again for a second Admin on a separate device. Keep that address\n" +
+        "out of this one's mailbox: one mailbox holding both is one failure, not two.\n",
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
+await main();
