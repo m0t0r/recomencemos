@@ -937,9 +937,10 @@ ident_one() { # name filename content -> prints the tree
 }
 
 # Exit code *and* a line of output, for the reason run_audit gives.
-run_ident() { # name expect-exit expect-grep root
+run_ident() { # name expect-exit expect-grep root [extra arguments]
   local name="$1" expect="$2" want="$3" dir="$4" out code
-  out=$(node "$IDENT" --root "$dir" 2>&1)
+  shift 4
+  out=$(node "$IDENT" --root "$dir" "$@" 2>&1)
   code=$?
   if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE "$want"; then
     pass=$((pass+1)); sec_pass=$((sec_pass+1))
@@ -1062,6 +1063,48 @@ const m = "the floor is NFR8";
 EOF
 run_ident "division is not the start of a pattern" 1 "^BLOCKING .*NFR8" "$D"
 
+# A pattern in an arrow-function body is the context this reader lost first, and
+# these three are why losing it matters rather than being untidy: read as
+# division, the body is tokenised as code, and a `/*`, a `//` or a backtick in it
+# then runs past every string in the rest of the file. The middle one used to
+# report a clean tree.
+D=$(ident_dir arrowslash)
+cat > "$D/a.ts" <<'EOF'
+const f = (s) => /[//]/.test(s);
+const m = "the floor is NFR8";
+EOF
+run_ident "a pattern holding // after an arrow"  1 "^BLOCKING .*NFR8" "$D"
+
+D=$(ident_dir arrowcomment)
+cat > "$D/a.ts" <<'EOF'
+const f = (s) => /[/*]/.test(s);
+const m = "the floor is NFR8";
+EOF
+run_ident "a pattern holding /* after an arrow"  1 "^BLOCKING .*NFR8" "$D"
+
+D=$(ident_dir arrowtick)
+cat > "$D/a.ts" <<'EOF'
+const f = (s) => /`/.test(s);
+const m = "the floor is NFR8";
+EOF
+run_ident "a pattern holding a backtick after an arrow" 1 "^BLOCKING .*NFR8" "$D"
+
+D=$(ident_dir greaterthan)
+cat > "$D/a.ts" <<'EOF'
+const bigger = (a, b) => a > b / 2;
+const m = "the level floor";
+EOF
+run_ident "a bare greater-than still divides"    0 "$CLEAN" "$D"
+
+D=$(ident_dir jsxarrow)
+cat > "$D/a.tsx" <<'EOF'
+export function Panel({ items }) {
+  return <ul>{items.map((i) => <li key={i}>{i}</li>)}</ul>;
+}
+const m = "the floor is NFR8";
+EOF
+run_ident "an arrow inside JSX does not lose the tags" 1 "^BLOCKING .*NFR8" "$D"
+
 D=$(ident_dir extensions)
 printf '%s\n' 'const m = "the floor is NFR8";' > "$D/a.tsx"
 printf '%s\n' 'const m = "the floor is NFR8";' > "$D/b.mjs"
@@ -1100,16 +1143,8 @@ run_ident "a root that does not exist"   2 "could not run" "$ROOT/ident/absent"
 D=$(ident_dir notadir)
 printf '%s\n' 'const m = 1;' > "$D/a.ts"
 run_ident "a root that is a file"        2 "could not run" "$D/a.ts"
-
-out=$(node "$IDENT" --root "$ROOT" --wat 2>&1); code=$?
-section "Spec identifiers: an argument it does not know"
-if [ "$code" = 2 ] && printf '%s' "$out" | grep -q "could not run"; then
-  pass=$((pass+1)); sec_pass=$((sec_pass+1))
-  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit %s\n' "an unknown argument" "$code"
-else
-  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
-  printf '  FAIL %-51s -> exit %s (want 2)\n' "an unknown argument" "$code"
-fi
+run_ident "an argument it does not know" 2 "could not run" "$(ident_dir unknownarg)" --wat
+run_ident "a flag with no value"         2 "could not run" "$(ident_dir novalue)" --root
 
 flush_section
 echo

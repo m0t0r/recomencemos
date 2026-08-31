@@ -33,7 +33,8 @@ const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs",
 
 // `.agents` and `.claude` hold vendored skills, which ship real JavaScript that
 // is not ours to edit — the root `.oxlintrc.json` skips them for the same
-// reason. The rest are build output and dependencies.
+// reason, and `//#spec-identifiers` negates them out of its `inputs` so the two
+// statements of this set agree. The rest are build output and dependencies.
 const SKIPPED_DIRECTORIES = new Set([
   ".agents",
   ".claude",
@@ -119,17 +120,26 @@ function sourceFiles(root) {
 }
 
 /**
- * The character before a `/` decides whether it opens a regular expression or
+ * The token before a `/` decides whether it opens a regular expression or
  * divides. The set below is deliberately the *operator* half rather than the
- * complement of it, so an unrecognised context reads as division and the `/` is
- * one ordinary character rather than the start of a span that swallows the
- * strings after it.
+ * complement of it: an unrecognised context reads as division, which is the
+ * cheaper mistake — the `/` becomes one ordinary character instead of the start
+ * of a span.
  *
- * `<` is absent on purpose, and it is the case that matters in a `.tsx` file:
- * every closing JSX tag is a `<` followed by a `/`, and reading those as regular
- * expressions would skip whatever sits between one tag and the next.
+ * **Cheaper, not free, and the two entries below are what that cost bought.**
+ * Reading a real regular expression as division tokenises its body as code, and
+ * a body holding `//`, `/*` or a backtick then opens a comment or a template
+ * that runs past every string after it. `/[/*]/` inside an arrow function
+ * blinded this gate for a whole file until `=>` was added here.
+ *
+ * `<` and a bare `>` are absent on purpose, and it is the case that matters in a
+ * `.tsx` file: every closing JSX tag is `<` then `/`, and every opening one ends
+ * in `>` with JSX text after it. `=>` is safe because no JSX `>` is preceded by
+ * an `=` — an attribute's value is quoted or braced.
+ *
+ * `""` is the start of the input, where nothing precedes the `/` at all.
  */
-const REGEX_MAY_FOLLOW = new Set([..."(,=:[!&|?{};+-*%~^", "\n"]);
+const REGEX_MAY_FOLLOW = new Set([..."(,=:[!&|?{};+-*%~^", "=>", ""]);
 const REGEX_MAY_FOLLOW_KEYWORDS = new Set([
   "await",
   "case",
@@ -166,7 +176,7 @@ export function stringLiterals(source) {
   const stack = [{ kind: "code", braces: 0 }];
   let line = 1;
   let lineStart = 0;
-  let previous = "\n"; // the last character that was neither space nor comment
+  let previous = ""; // the last token that was neither whitespace nor comment
   let previousWord = "";
 
   const at = (index) => ({ line, column: index - lineStart + 1 });
@@ -322,7 +332,10 @@ export function stringLiterals(source) {
       continue;
     }
 
-    previous = character;
+    // `=>` is the one operator read as two characters, because it is the one
+    // whose second character means something different on its own: a bare `>`
+    // closes a JSX tag, and an arrow opens a function body.
+    previous = character === ">" && source[i - 1] === "=" ? "=>" : character;
     previousWord = "";
     i += 1;
   }

@@ -70,7 +70,7 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
   - **The database arrives as a `test.extend` fixture, not as hooks.** Import `test` from `#testing/fixtures` in an `*.integration.test.ts` and destructure `{ database }`; the restore-and-close lifecycle is the fixture's. Three files used to open with the identical `let database` / `beforeEach` / `afterEach`. The fixture lives in `#testing/fixtures` and **not** in `#testing/database` on purpose: `global-setup.ts` imports the latter for `SNAPSHOT_PATH`, and a `test.extend` at that module's top level aborts the run with _"Vitest failed to find the current suite"_ because `globalSetup` runs with no suite. The globals stay — this replaces `describe`/`it`/`expect` with nothing.
   - `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows.
 - `web:test` — `vitest run`, **happy-dom**, the design system's config copied per the paragraph below, plus `vitest.setup.ts`. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`. Its setup file registers **`toMatchSchema`** from `apps/web/testing/matchers.ts` — a custom matcher taking a **Standard Schema** rather than a Zod schema, so nothing in a test has an opinion about the validation library. Reach for a matcher over a helper when the assertion's failure message is the thing worth owning: `expect(x).toBe(true)` on a `safeParse` result reports `false is not true` and names neither the rule nor the value.
-- `//#test:gates` — `gate-test.sh`, the 171 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the three gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and all three scripts.
+- `//#test:gates` — `gate-test.sh`, the 177 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the three gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and all three scripts.
   - The **dependency audit** (`scripts/audit-direct.mjs`), thirteen cases. Five exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0.
   - **Migration integrity** (`scripts/migration-integrity.mjs`), fifty-seven cases across NFR30's four counts — an append-only journal, immutable shipped migrations, destructive statements travelling alone under a `contract` marker, and a marked migration never sharing a pull request with `@repo/domain`'s query modules. Its fixtures are real git repositories, because the gate's whole frame is `git merge-base <base branch> HEAD` and there is nothing left to mock that would still be the thing under test. Ten of the fifty-seven are a section of their own — holes `/code-review` found in the first draft, four of which passed green while checking nothing. Read them before touching the SQL scan: an escaped quote that swallowed the rest of the file, and an `ALTER TABLE` whose comma-separated actions hid a `DROP` beside an `ADD`. **`run_mig` unsets `GITHUB_BASE_REF` for every case**, and that is load-bearing: CI sets it on a `pull_request` event, the gate reads it ahead of `origin/HEAD`, and a fixture is a different repository with no such ref — thirty-five cases went red on the first CI run for exactly that.
 
@@ -96,13 +96,21 @@ CHECK` back **on `t`**, and an earlier migration already declared `t`.`x` a `CHE
   deliberately narrow — a bare drop, a re-add under another name, a re-add on another table, and a
   re-add as `UNIQUE` all still refuse, and twenty `gate-test.sh` cases say so.
 
-  The **spec-identifier gate** (`scripts/spec-identifiers.mjs`), thirty-seven cases. It is the one
+  The **spec-identifier gate** (`scripts/spec-identifiers.mjs`), forty-three cases. It is the one
   gate here that has to read a language rather than a file format, and every case that is not a
   citation is about that: comments are the record and are never read, so a continuation line of a
   block comment and a `{/* … */}` in JSX both pass, while a closing JSX tag, an apostrophe in JSX
-  text and a regular expression holding a quote are the three ways a naive reader would skip past
+  text and a regular expression holding a quote are three of the ways a naive reader would skip past
   the strings that follow and report a clean tree. Its refusals are its own section, because a check
   that cannot reach an answer must not be read as one that found nothing.
+
+  **Four of the forty-three are `=>`, and they are the ones to read before touching the reader.**
+  Its rule is that an unrecognised context before a `/` reads as division, because that is the
+  cheaper mistake — but cheaper is not free: a real pattern read as division has its body tokenised
+  as code, and `/[/*]/` in an arrow function then opens a block comment that runs to the end of the
+  file. The gate reported that file clean, and `/code-review` found it. `<` and a bare `>` are still
+  absent from the set, because every closing JSX tag is `<` then `/` and every opening one ends in
+  `>`; `=>` is the one operator read as two characters, since no JSX `>` is preceded by an `=`.
 
 - `//#spec-identifiers` — that same gate, run against **this** repository rather than a fixture,
   which is the `migrations:check` split below for the same reason. It is not `cache: false`: unlike

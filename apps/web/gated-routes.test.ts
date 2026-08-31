@@ -48,7 +48,7 @@ describe("every gated route carries X-Robots-Tag", () => {
     expect(sources).toContain(`${prefix}/:path*`);
   });
 
-  it("names every route the requirement lists and nothing else", async () => {
+  it("names the six gated prefixes and nothing else", async () => {
     // Verbatim from NFR8, retyped rather than imported, so a change to the
     // source list fails here instead of silently agreeing with itself.
     expect(GATED_ROUTE_PREFIXES.toSorted()).toEqual([
