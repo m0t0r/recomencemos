@@ -84,10 +84,10 @@ case "$path" in
     # rule exits 2 for exactly this condition, and the two halves disagreeing on
     # what "cannot tell" means is how a migration slips past the one that blocks.
     if ! journalled=$(jq -r --arg t "$tag" 'any(.entries[]?; .tag == $t)' "$journal" 2>&1); then
-      deny "$journal is there but could not be read, so this write cannot be checked against it: $journalled. A migration the journal already names must not be hand-edited (NFR30, DD13), and a guard that cannot tell must not guess. Fix the journal first."
+      deny "$journal is there but could not be read, so this write cannot be checked against it: $journalled. A migration the journal already names must not be hand-edited, and a guard that cannot tell must not guess. Fix the journal first."
     fi
     [ "$journalled" = "true" ] &&
-      deny "'$tag' is already in $journal, so Drizzle considers it applied: production will not re-run it, and PGlite replays it from scratch into every test run. Editing it here makes the test seam test a schema production does not have — and go green doing it (NFR30, DD13). Write a new migration instead: \`pnpm exec drizzle-kit generate\`, which writes through Bash and is not what this rule refuses. A destructive one takes \`--name contract_<what_it_drops>\`."
+      deny "'$tag' is already in $journal, so Drizzle considers it applied: production will not re-run it, and PGlite replays it from scratch into every test run. Editing it here makes the test seam test a schema production does not have — and go green doing it. Write a new migration instead: \`pnpm exec drizzle-kit generate\`, which writes through Bash and is not what this rule refuses. A destructive one takes \`--name contract_<what_it_drops>\`."
   fi
   ;;
 esac

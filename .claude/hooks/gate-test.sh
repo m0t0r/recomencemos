@@ -1129,6 +1129,114 @@ run_ident "a three-digit hex colour"  0 "$CLEAN"          "$(ident_one colour3 a
 run_ident "a reference inside a sentence" 1 "^BLOCKING .*#17" "$(ident_one sentence a.ts 'const m = "the shape #17 introduced";')"
 run_ident "a subpath import specifier" 0 "$CLEAN"         "$(ident_one subpath a.ts 'import { auth } from "#lib/auth";')"
 
+# The shell half. A `.sh` file is read by a second tokeniser, because shell
+# quoting is not JavaScript quoting: `'…'` takes no escapes, `"…"` interpolates,
+# `$'…'` is a third form, a `#` opens a comment only at a word boundary, and a
+# heredoc body is data rather than a message the script writes.
+
+section "Spec identifiers: a shell script is read too"
+run_ident "a single-quoted string"   1 "^BLOCKING .*NFR8" "$(ident_one shsingle a.sh "say 'the floor is NFR8'")"
+run_ident "a double-quoted string"   1 "^BLOCKING .*NFR8" "$(ident_one shdouble a.sh 'say "the floor is NFR8"')"
+run_ident "a shell script carrying none of them" 0 "$CLEAN" "$(ident_one shnone a.sh 'say "the level floor"')"
+
+D=$(ident_dir shansi)
+cat > "$D/a.sh" <<'FIXTURE'
+printf $'the floor is NFR8\n'
+FIXTURE
+run_ident "an ANSI-C quoted string"           1 "^BLOCKING .*NFR8" "$D"
+
+# A heredoc body is data, exactly as `gate-lib.sh` reads it for the neighbouring
+# problem: a payload at a delimiter the script names, not a line it writes. This
+# suite's own fixtures are why that distinction has to hold.
+D=$(ident_dir shheredoc)
+cat > "$D/a.sh" <<'FIXTURE'
+cat > fixture.ts <<EOF
+const m = "the floor is NFR8";
+EOF
+FIXTURE
+run_ident "a heredoc body is data"            0 "$CLEAN" "$D"
+
+D=$(ident_dir shheredocquoted)
+cat > "$D/a.sh" <<'FIXTURE'
+cat > fixture.ts <<'EOF'
+const m = "the floor is NFR8";
+EOF
+FIXTURE
+run_ident "a quoted heredoc delimiter"        0 "$CLEAN" "$D"
+
+D=$(ident_dir shheredoctab)
+printf 'cat <<-EOF\n\tNFR8 in an indented body is data.\n\tEOF\nsay "the level floor"\n' > "$D/a.sh"
+run_ident "a tab-stripping heredoc"           0 "$CLEAN" "$D"
+
+run_ident "a here-string is not a heredoc" 1 "^BLOCKING .*NFR8" \
+  "$(ident_one shherestring a.sh 'grep -q floor <<<"the floor is NFR8"')"
+
+section "Spec identifiers: a shell comment is the record"
+D=$(ident_dir shcomment)
+cat > "$D/a.sh" <<'FIXTURE'
+# The floor is NFR8, cited here rather than in the line below.
+say "the level floor"
+FIXTURE
+run_ident "a comment above the string"        0 "$CLEAN" "$D"
+
+run_ident "a trailing comment after a command" 0 "$CLEAN" \
+  "$(ident_one shtrailing a.sh 'say "the level floor"  # the floor is NFR8')"
+run_ident "a hash inside a string is not a comment" 1 "^BLOCKING .*#17" \
+  "$(ident_one shhash a.sh 'say "eight of them, and #17 added the ninth"')"
+run_ident "an argument count does not open a comment" 1 "^BLOCKING .*NFR8" \
+  "$(ident_one shargc a.sh '[ $# -gt 0 ] && say "the floor is NFR8"')"
+
+section "Spec identifiers: the ways the shell reader must not fail open"
+# An apostrophe in a comment is the shell's version of one in JSX text: read as
+# an opening quote, it swallows every string in the rest of the file.
+D=$(ident_dir shapostrophe)
+cat > "$D/a.sh" <<'FIXTURE'
+# Don't stop reading here.
+say "the floor is NFR8"
+FIXTURE
+run_ident "an apostrophe in a comment"        1 "a.sh:2:" "$D"
+
+# The terminator ends the heredoc rather than the read: the body is skipped and
+# the file resumes.
+D=$(ident_dir shheredocresume)
+cat > "$D/a.sh" <<'FIXTURE'
+cat <<'EOF'
+NFR8 in a heredoc body is data.
+EOF
+say "the floor is NFR9"
+FIXTURE
+run_ident "a heredoc terminator ends the body" 1 "^BLOCKING .*NFR9" "$D"
+
+D=$(ident_dir shsubst)
+cat > "$D/a.sh" <<'FIXTURE'
+say "$(printf %s 'the floor is NFR8')"
+FIXTURE
+run_ident "a command substitution's body is code" 1 "^BLOCKING .*NFR8" "$D"
+
+run_ident "an identifier-shaped variable"     0 "$CLEAN" \
+  "$(ident_one shvar a.sh 'say "$NFR8 holds"')"
+run_ident "the same variable, braced"         0 "$CLEAN" \
+  "$(ident_one shbraced a.sh 'say "${NFR8} holds"')"
+run_ident "an escaped quote inside a double-quoted string" 1 "^BLOCKING .*NFR8" \
+  "$(ident_one shescape a.sh 'say "she said \"the floor is NFR8\""')"
+
+D=$(ident_dir shsinglehash)
+cat > "$D/a.sh" <<'FIXTURE'
+say 'a # and a " inside single quotes'
+say "the floor is NFR8"
+FIXTURE
+run_ident "a hash and a quote inside single quotes" 1 "^BLOCKING .*NFR8" "$D"
+
+# The tree walk still skips `.agents/` and `.claude/`, and for shell that skip
+# earns a second reason: THIS file's fixtures are the citations the gate refuses,
+# so it cannot be subject to itself. Every other hook can be, and this is where
+# it happens -- `//#test:gates` already declares `.claude/hooks/**` as an input,
+# so editing a deny message re-runs this case.
+D=$(ident_dir hooks)
+cp "$HOOKS"/*.sh "$D/"
+rm -f "$D/gate-test.sh"
+run_ident "the hooks this repository owns"    0 "$CLEAN" "$D"
+
 section "Spec identifiers: the report, and the refusals"
 D=$(ident_dir report)
 cat > "$D/b.ts" <<'EOF'
