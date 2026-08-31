@@ -1432,7 +1432,7 @@ describe("what a truncated line keeps of the line's own context", () => {
   });
 });
 
-// #70 and #41.
+// The two exposures this closes are #70 and #41.
 describe("values JSON.stringify refuses", () => {
   /**
    * The exposure this closes, stated as the caller sees it.
@@ -1622,7 +1622,8 @@ function nestedContext(depth: number): Record<string, unknown> {
   return value;
 }
 
-// #41.
+// The bound, the marker and the byte-identical comparison across two depths are
+// all #41's.
 describe("a deeply nested context is bounded, marked, and platform-independent", () => {
   it("stops at the depth bound and says so, rather than stubbing silently", () => {
     const { logger, lines } = harness();

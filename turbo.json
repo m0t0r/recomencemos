@@ -48,7 +48,7 @@
       "outputs": []
     },
     "//#spec-identifiers": {
-      "inputs": ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
+      "inputs": ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}", "!.agents/**", "!.claude/**"],
       "outputs": []
     },
     "//#migrations:check": {

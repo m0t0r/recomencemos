@@ -463,8 +463,8 @@ describe("the Admin's door", () => {
     expect(options.plugins[1].options?.otpOptions).toBeUndefined();
   });
 
-  // Ten is the count the go-live runbook's Admin section asks a human to print.
-  it("issues ten backup codes", () => {
+  // The count is the go-live runbook's, in its Admin section.
+  it("issues ten backup codes, which is the count a human is asked to print", () => {
     expect(options.plugins[1].options?.backupCodeOptions?.amount).toBe(10);
   });
 
