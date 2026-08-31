@@ -305,10 +305,17 @@ cannot hold Admin authority until a working authenticator has proved itself, so 
 is unrepresentable and a link opened and abandoned leaves no Admin behind. Running it again is both
 the second-Admin recovery path and the break-glass: it replaces the factor rather than adding one.
 
-**`pnpm admin:grant <email>` is what it replaces, and it is still here only because the password door
-is.** It sets the grant **first** and leaves the second factor to a later sign-in at `/admin/sign-in`,
-which is the window the new command closes. It goes with the password door and Better Auth's
-`twoFactor` plugin in the contract ticket; do not reach for it, and do not copy its shape.
+**There is more than one Admin, and no code or copy may assume otherwise.** Enrol at least two — the
+recovery path that costs nobody a printed backup code is another Admin who can still sign in — and
+write every string and comment for "an Admin" rather than "the Admin".
+
+**`pnpm admin:grant <email>` is what it replaces, and it now refuses.** It set the grant **first** and
+left the second factor to a later sign-in at `/admin/sign-in` — the window `admin:enrol` closes. With
+the passwordless door in place that sign-in answers **403**, and the passwordless one asks for a code
+against a second factor this command never enrols, so its successful path produced an Account locked
+out of every way in. It prints that and exits `2`. The file, the script and the `emailAndPassword`
+configuration behind it go together in the contract ticket that drops the columns; do not reach for
+it, and do not copy its shape.
 
 **Migrations are generated, never hand-written.** `pnpm db:generate` writes them from `packages/domain/src/schema.ts`; `pnpm db:migrate` applies them on the direct connection. `.claude/hooks/build-guard.sh` rule J refuses a `Write` or `Edit` to a migration the journal already names — `drizzle-kit` writes through `Bash`, which is exactly the split that rule intends. `packages/domain/drizzle/` is oxfmt-ignored for the `pnpm-workspace.yaml` reason: `drizzle-kit` owns those files and rewrites them in its own style on every generate.
 

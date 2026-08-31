@@ -266,17 +266,30 @@ export const CEILING_REFUSALS: Record<
     "Mientras tanto, puedes entrar con Google.",
 
   /**
-   * **Two sentences, not three, because there is no third door to name yet.**
-   * The one worth naming is that a backup code still works — it is true, and it
-   * is true precisely because these two ceilings count separately — but the
-   * surface that would say it does not exist, and copy written here for a screen
-   * nobody has built is copy nobody has read against a layout. The door's ticket
-   * owns that sentence.
+   * **The third sentence arrived with the door**, which is where it was left
+   * when this entry was written with two. It names the way through rather than
+   * a second door, and it is true precisely because these two ceilings count
+   * separately: exhausting the six digits leaves the ten printed codes
+   * untouched, so an Admin locked out of the authenticator is not locked out of
+   * the platform.
+   *
+   * **It says "de respaldo", which is the name she has already met.** The
+   * enrolment screen headed them _"Tus códigos de respaldo"_ and gave her a copy
+   * button rather than a print one, so a lockout that told her to find something
+   * "impreso" would name a thing nobody asked her to make — and would be the one
+   * word in this product that only its authors can resolve.
    */
   verifyAdminTotp: (ceiling, retryAfter) =>
     `Escribiste ${ceiling.max} códigos incorrectos, que es el máximo. ` +
-    `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}.`,
+    `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
+    "Si guardaste un código de respaldo, ese sí funciona.",
 
+  /**
+   * **Two sentences, and the third is deliberately absent here.** Its mirror
+   * image would send the reader back to the authenticator, which is where she
+   * already failed — someone typing printed codes is someone whose phone is
+   * gone. Naming a door she cannot reach is Don't 4, so this one stops at when.
+   */
   verifyAdminBackupCode: (ceiling, retryAfter) =>
     `Escribiste ${ceiling.max} códigos de respaldo incorrectos, que es el máximo. ` +
     `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}.`,

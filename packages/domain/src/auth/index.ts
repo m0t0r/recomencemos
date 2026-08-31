@@ -30,6 +30,7 @@
 
 import { AppError } from "@repo/errors/app-error";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import {
   type AuthDependencies,
   type AuthOptions,
@@ -37,6 +38,7 @@ import {
   googleSignInAvailable,
   MAGIC_LINK_TTL_MINUTES,
 } from "#auth/config";
+import { ADMIN_CODE_RATE_LIMITED_CODE } from "#auth/admin-door";
 import { safeReturnPath } from "#auth/return-path";
 import type { DomainDatabase } from "#database";
 import { type AccountSession, listAccountSessions } from "#auth/sessions";
@@ -166,17 +168,22 @@ export type SignOutEverywhereOutcome =
 /**
  * The narrow interface `apps/web` holds.
  *
- * Deliberately ten named methods rather than the Better Auth instance: a route
- * handler, a session read, one call per door in, three ways out, and the Admin's
- * three steps. Anything a later story needs is a method added here on purpose,
+ * Deliberately eleven named methods rather than the Better Auth instance: a
+ * route handler, a session read, one call per door in, three ways out, and the
+ * Admin's doors. Anything a later story needs is a method added here on purpose,
  * which is a review conversation, rather than a capability that arrived because
  * the whole library was in scope.
  *
- * **The Admin's door is three methods and not one**, for the reason the three
- * exits are three: each is a separate act by a person — typing a password, then
- * reading six digits off a phone, and once ever, scanning a QR. Collapsing them
- * into a `signIn({ password, code? })` would make "sign in with one factor" a
- * reachable call, and NFR14 is precisely the requirement that it must not be.
+ * **The Admin's door is one method here and that is not the same as one
+ * factor.** Her first factor is the ordinary magic link, so it is
+ * `requestMagicLink` above and Better Auth's own verify endpoint — no method of
+ * ours spends it, because there is nothing of ours to spend. What is left is the
+ * second factor, below, which is the only call that can produce a session
+ * `requireAdminSession` admits.
+ *
+ * **The credential door's three methods are still here and mint nothing NFR14
+ * accepts.** They belong to the page that is deleted in the slice after this
+ * one, together with Better Auth's `twoFactor` plugin and the columns behind it.
  *
  * **The three exits are three methods, not one with a flag**, and that is the
  * shape to keep. `signOut` (#80) ends *this* session; `signOutEverywhere` (#13)
@@ -286,7 +293,32 @@ export interface AuthHandler {
    * rather than a form on the internet.
    */
   readonly enrolSecondFactor: (input: EnrolSecondFactorInput) => Promise<EnrolSecondFactorOutcome>;
+
+  /**
+   * **The Admin's second factor: six digits, or one printed code.**
+   *
+   * **One method for both**, and unlike the credential door's version there is
+   * no `kind` — the shape of what was typed picks the factor. The surface asks
+   * for "your code" and does not make her classify her own credential, which is
+   * also the only way a person whose phone is gone can use the same field.
+   *
+   * The challenge travels in `headers`, like every other cookie: this method
+   * takes no Account id, because a caller that could name the Account it wanted
+   * a session for would be the door.
+   */
+  readonly verifyAdminSignInCode: (input: AdminCodeInput) => Promise<AdminCodeSignInOutcome>;
 }
+
+export interface AdminCodeInput {
+  /** Six digits, or one backup code. Trimmed by the door, not by the caller's schema. */
+  readonly code: string;
+  /** Carries the challenge cookie. Without it this call refuses, whatever the code. */
+  readonly headers: Headers;
+}
+
+export type AdminCodeSignInOutcome =
+  | { readonly ok: true; readonly setCookie: readonly string[] }
+  | { readonly ok: false; readonly error: AppError };
 
 export interface PasswordSignInInput {
   readonly email: string;
@@ -783,6 +815,41 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
       }
     },
 
+    async verifyAdminSignInCode({ code, headers }) {
+      try {
+        const { auth } = await resolve();
+
+        /**
+         * `returnHeaders` is what makes this callable from a Server Action at
+         * all — the session cookie is written onto the endpoint's response, and
+         * without asking for it the session row exists and no browser holds it.
+         */
+        const { headers: responseHeaders } = await auth.api.verifyAdminSignInCode({
+          body: { code },
+          headers,
+          returnHeaders: true,
+        });
+
+        return { ok: true, setCookie: responseHeaders.getSetCookie() };
+      } catch (cause) {
+        /**
+         * **Only the endpoint's own refusal becomes a returned error.** Anything
+         * else is a fault — the database unreachable, or the endpoint's own
+         * `throw` for an Account that vanished mid-request — and CLAUDE.md's
+         * "thrown is reported; returned is logged" makes that the difference
+         * between one Sentry event and none.
+         *
+         * A bare `catch` here swallowed both into `admin_code_refused`, so the
+         * one failure worth paging on rendered to the Admin as a wrong code and
+         * left nothing behind. The credential door's two refusals above still
+         * catch broadly; they go with the door.
+         */
+        if (!(cause instanceof APIError)) throw cause;
+
+        return { ok: false, error: adminCodeRefusal(cause) };
+      }
+    },
+
     async listSessions(headers) {
       const current = await currentSession(headers);
       if (!current) return null;
@@ -939,6 +1006,51 @@ function passwordDoorRefusal(cause: unknown): AppError {
     userMessage: ADMIN_SIGN_IN_REFUSED,
     // No address and no password. There is nothing here that is not either a
     // credential or the identifier this refusal exists not to disclose (NFR18).
+    context: {},
+    cause,
+  });
+}
+
+/**
+ * What the Admin is told when the passwordless door refuses her code.
+ *
+ * **Two outcomes and no third**, which is the whole of what this door may
+ * disclose. A wrong code, a challenge that has expired, a challenge that was
+ * never signed by us, a grant that has been taken away and an Account with no
+ * second factor are one sentence; the ceiling is the other, and it is separate
+ * only because a person who is locked out for fifteen minutes needs to be told
+ * so rather than left retyping a code that cannot work.
+ *
+ * **The ceiling's sentence comes back over the wire rather than being rebuilt
+ * here**, because it carries her count and her wait — `CEILING_REFUSALS` built
+ * it with the numbers the charge actually returned, and a copy assembled a
+ * second time from this side would be a second place those numbers live.
+ *
+ * The operator half names neither, for the reason the reply does not: this
+ * function cannot see which it was without asking the endpoint to tell it, and
+ * an endpoint that told it would be an endpoint that could tell anyone.
+ */
+function adminCodeRefusal(cause: unknown): AppError {
+  const body = (cause as { body?: { code?: unknown; message?: unknown } } | null)?.body;
+  const limited = body?.code === ADMIN_CODE_RATE_LIMITED_CODE;
+
+  return new AppError({
+    code: limited ? "admin_code_rate_limited" : "admin_code_refused",
+    status: limited ? 429 : 401,
+    message: limited
+      ? "The Admin door refused a code because the Account has spent one of its two ceilings. " +
+        "Which ceiling and how much of it is left are on the door's own warn line; this one is " +
+        "the surface's half."
+      : "The Admin door refused a code. Whether it was the six digits, a printed code, an " +
+        "expired challenge, a challenge this product never signed, or an Account that no " +
+        "longer holds the grant is not distinguished — a reply that differed would be a way " +
+        "to ask this endpoint questions about an Account nobody signed in to.",
+    userMessage:
+      limited && typeof body?.message === "string" ? body.message : ADMIN_SECOND_FACTOR_REFUSED,
+    // No code, no challenge, no Account id. The code is a credential for the
+    // seconds it is live and the challenge is the whole of factor one (NFR18,
+    // C28); the door's own line carries the Account id, which is where an
+    // operator correlating this pair looks.
     context: {},
     cause,
   });

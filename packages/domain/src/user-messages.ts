@@ -102,22 +102,39 @@ export const SIGN_OUT_EVERYWHERE_FAILED =
 /**
  * A passwordless door refused because the Account holds the Admin grant (NFR14).
  *
- * **Only one person can ever read this string**, and that shapes it: it is not a
- * refusal aimed at a Worker who did nothing wrong, it is a signpost aimed at the
- * operator who reached for the wrong door out of habit. So it says where the
- * right door is, which is the whole of what they need.
+ * **Only an operator can ever read this string**, and that shapes it: it is not
+ * a refusal aimed at a Worker who did nothing wrong, it is a signpost aimed at
+ * someone who reached for the wrong door out of habit. So it says what to do
+ * instead, which is the whole of what they need.
  *
- * **It names no account and asks no question.** Anyone can trigger it by opening
- * a magic link, so the sentence has to be true and useless in the hands of
- * someone who is not the Admin — "esta cuenta" says nothing an attacker who
- * already had the link did not know, and naming the address or the grant would.
+ * It says "an operator" and not "the operator" deliberately — this product has
+ * more than one Admin, so nothing here may be written as though the reader were
+ * a particular person.
+ *
+ * **It names no route, and it stopped naming one when the Admin's door stopped
+ * having a page.** It used to send the reader to `/admin/sign-in` with a
+ * password; there is no such page and no such password. What it points at now is
+ * the form the reader is already looking at — the Admin asks for a link there
+ * like anybody else, and the link that arrives is the one that works.
+ *
+ * **It names no door either, and that is the second draft rather than the
+ * first.** It said _"no entra con Google"_ while the rule refused only the two
+ * passwordless doors; the rule is now every door that is not the Admin's, so the
+ * same sentence is read by someone who typed a password. One sentence for every
+ * refused door is also what stops the difference between them being the
+ * disclosure.
+ *
+ * **It names no account and asks no question.** The sentence has to be true and
+ * useless in the hands of someone who is not the Admin — _"esta cuenta"_ says
+ * nothing that whoever provoked it did not already know, and naming the address
+ * or the grant would.
  *
  * Directness 5 and the refusal is our rule rather than her mistake
  * (`docs/policy/voice.md`, Do 3 and Don't 4): what happened, and what to do next,
  * in one breath.
  */
 export const ADMIN_SIGN_IN_ONLY =
-  "Esta cuenta no entra por aquí. Entra en /admin/sign-in con tu contraseña y tu código.";
+  "Esta cuenta no entra por aquí. Pide un enlace con tu correo y entra con él.";
 
 /**
  * `revokeSessions` was asked for an address with no Account.

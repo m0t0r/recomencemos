@@ -7,15 +7,15 @@
  * field values is one Better Auth actually produces.
  */
 
-import { SIGN_IN_METHODS, type SignInMethod } from "#auth-schema";
+import { ADMIN_SIGN_IN_METHOD, SIGN_IN_METHODS, type SignInMethod } from "#auth-schema";
 import { type AdminCandidateSession, requireAdminSession } from "#admin/actor";
 
 function session(over: Partial<AdminCandidateSession> = {}): AdminCandidateSession {
-  return { accountId: "account-1", signInMethod: "password_totp", isAdmin: true, ...over };
+  return { accountId: "account-1", signInMethod: ADMIN_SIGN_IN_METHOD, isAdmin: true, ...over };
 }
 
 describe("requireAdminSession", () => {
-  it("admits a session that presented password and TOTP on an Admin Account", () => {
+  it("admits a session that presented a link and a code on an Admin Account", () => {
     expect(requireAdminSession(session())).toEqual({ accountId: "account-1" });
   });
 
@@ -34,13 +34,19 @@ describe("requireAdminSession", () => {
     expect(requireAdminSession(session({ signInMethod: "google" }))).toBeNull();
   });
 
-  /**
-   * The bootstrap window. An Admin granted by runbook §6's `UPDATE` holds one of
-   * these until enrolment finishes, and it must reach the enrolment surface and
-   * nothing else.
-   */
   it("refuses an Admin who presented a password and no second factor", () => {
     expect(requireAdminSession(session({ signInMethod: "password" }))).toBeNull();
+  });
+
+  /**
+   * **The credential door, refused whole.** It was the Admin's door and its
+   * two-factor session was the one this gate admitted; the grant moved to the
+   * passwordless door with the ticket that built it, and the page it belonged to
+   * goes with the ticket after. Until then it stands and opens nothing, which is
+   * the state this case pins.
+   */
+  it("refuses a session from the credential door, both factors and all", () => {
+    expect(requireAdminSession(session({ signInMethod: "password_totp" }))).toBeNull();
   });
 
   it("refuses a two-factor session on an Account holding no grant", () => {
@@ -58,7 +64,7 @@ describe("requireAdminSession", () => {
       (method: SignInMethod) => requireAdminSession(session({ signInMethod: method })) !== null,
     );
 
-    expect(admitted).toEqual(["password_totp"]);
+    expect(admitted).toEqual(["link_totp"]);
   });
 
   /**
@@ -67,7 +73,7 @@ describe("requireAdminSession", () => {
    * read back off a driver, and "unrecognised" must fall on the refusing side
    * rather than through a gap.
    */
-  it.each(["", "admin", "PASSWORD_TOTP", "password_totp "])(
+  it.each(["", "admin", "LINK_TOTP", "link_totp "])(
     "refuses the unrecognised method %o",
     (signInMethod) => {
       expect(requireAdminSession(session({ signInMethod }))).toBeNull();
