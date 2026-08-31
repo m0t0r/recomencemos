@@ -283,11 +283,11 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
 });
 
 /**
- * The requirements that are the reason this file is written by hand, asserted
- * over every table rather than over the two columns that prompted them — so a
- * table added later cannot quietly take the generator's shape.
+ * DD2's rules: the reason this file is written by hand, asserted over every
+ * table rather than over the two columns that prompted them — so a table added
+ * later cannot quietly take the generator's shape.
  */
-describe("the places DD2 requires more than the pg generator can emit", () => {
+describe("the places the schema rules require more than the pg generator can emit", () => {
   it.each(MODELS)("stores every instant on %s as timestamptz", (model) => {
     const naive: string[] = [];
 
@@ -311,7 +311,8 @@ describe("the places DD2 requires more than the pg generator can emit", () => {
   });
 });
 
-describe("the two additional fields DD5 declares", () => {
+// The two are declared by DD5.
+describe("the two fields this product adds to the vendor's tables", () => {
   // Never a hand-added column: a hand-added column on a vendor table is
   // invisible to the schema generator, and this is the assertion that says the
   // declaration and the column are the same thing.
@@ -344,7 +345,8 @@ describe("the two additional fields DD5 declares", () => {
   });
 });
 
-describe("the configuration DD5 says is not the default", () => {
+// Every setting here is one DD5 moves off the vendor's default.
+describe("the configuration that is deliberately not the vendor's default", () => {
   it("keeps the session cookie cache off, so revocation does not lag", () => {
     expect(options.session?.cookieCache?.enabled).toBe(false);
   });
@@ -461,7 +463,8 @@ describe("the Admin's door", () => {
     expect(options.plugins[1].options?.otpOptions).toBeUndefined();
   });
 
-  it("issues the ten backup codes runbook §6 asks a human to print", () => {
+  // Ten is the count the go-live runbook's Admin section asks a human to print.
+  it("issues ten backup codes", () => {
     expect(options.plugins[1].options?.backupCodeOptions?.amount).toBe(10);
   });
 

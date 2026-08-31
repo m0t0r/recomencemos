@@ -129,7 +129,8 @@ function flyEnvKeys(): string[] {
     .filter((key): key is string => Boolean(key));
 }
 
-describe("NFR24 — every variable is declared, and no runtime credential is", () => {
+// NFR24, both halves of it.
+describe("every variable is declared on a turbo task, and no runtime credential is", () => {
   it.each(RUNTIME_CREDENTIALS)("%s appears in no turbo task", (credential) => {
     const declarations = declaredEnvKeys().filter(({ key }) => key === credential);
 

@@ -53,7 +53,7 @@ async function postMagicLink(
 }
 
 describe("the direct /sign-in/magic-link door", () => {
-  test("allows NFR26's five per address and refuses the sixth with a 429", async ({ database }) => {
+  test("allows five per address and refuses the sixth with a 429", async ({ database }) => {
     const { auth, links } = signInStack(database);
 
     for (let sent = 0; sent < CEILINGS.requestMagicLink.address.max; sent += 1) {

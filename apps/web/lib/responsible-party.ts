@@ -100,8 +100,8 @@ function unset(variable: string, problem: string): AppError {
     status: 503,
     message:
       `${variable} ${problem}, so the privacy notice cannot name the person legally ` +
-      "answerable for this data. Set it with `fly secrets`; see " +
-      "docs/runbooks/recomencemos-go-live.md §7.",
+      "answerable for this data. Set it with `fly secrets`; the legal section of " +
+      "docs/runbooks/recomencemos-go-live.md says who that person is and how they are named.",
     userMessage: NOTICE_UNAVAILABLE,
     context: { variable },
   });

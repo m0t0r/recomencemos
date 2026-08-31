@@ -60,7 +60,7 @@ Testing Decisions seam 2) and CI starts no database service, so `install`, `lint
 `test` and `build` all pass on a machine with no Docker at all. Do not add a database service to a
 test or to CI — the moment either needs one, seam 2's argument has been lost.
 
-**The test runner is Vitest.** `pnpm test` runs `turbo run test test:gates migrations:check`, which is six suites plus one live gate:
+**The test runner is Vitest.** `pnpm test` runs `turbo run test test:gates spec-identifiers migrations:check`, which is six suites plus two live gates:
 
 - `@repo/design-system:test` — `vitest run`, **happy-dom**, React Testing Library. Config in `vitest.config.mts`, cleanup between tests in `vitest.setup.ts`.
 - `@repo/errors:test` — `vitest run`, **Node default environment**, no plugin and no setup file. The prior art for a Node package here: a `vitest.config.mts` carrying `resolve.tsconfigPaths`, `globals`, and an `include` glob, and nothing else.
@@ -70,7 +70,7 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
   - **The database arrives as a `test.extend` fixture, not as hooks.** Import `test` from `#testing/fixtures` in an `*.integration.test.ts` and destructure `{ database }`; the restore-and-close lifecycle is the fixture's. Three files used to open with the identical `let database` / `beforeEach` / `afterEach`. The fixture lives in `#testing/fixtures` and **not** in `#testing/database` on purpose: `global-setup.ts` imports the latter for `SNAPSHOT_PATH`, and a `test.extend` at that module's top level aborts the run with _"Vitest failed to find the current suite"_ because `globalSetup` runs with no suite. The globals stay — this replaces `describe`/`it`/`expect` with nothing.
   - `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows.
 - `web:test` — `vitest run`, **happy-dom**, the design system's config copied per the paragraph below, plus `vitest.setup.ts`. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`. Its setup file registers **`toMatchSchema`** from `apps/web/testing/matchers.ts` — a custom matcher taking a **Standard Schema** rather than a Zod schema, so nothing in a test has an opinion about the validation library. Reach for a matcher over a helper when the assertion's failure message is the thing worth owning: `expect(x).toBe(true)` on a `safeParse` result reports `false is not true` and names neither the rule nor the value.
-- `//#test:gates` — `gate-test.sh`, the 134 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the two gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and both scripts.
+- `//#test:gates` — `gate-test.sh`, the 171 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the three gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and all three scripts.
   - The **dependency audit** (`scripts/audit-direct.mjs`), thirteen cases. Five exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0.
   - **Migration integrity** (`scripts/migration-integrity.mjs`), fifty-seven cases across NFR30's four counts — an append-only journal, immutable shipped migrations, destructive statements travelling alone under a `contract` marker, and a marked migration never sharing a pull request with `@repo/domain`'s query modules. Its fixtures are real git repositories, because the gate's whole frame is `git merge-base <base branch> HEAD` and there is nothing left to mock that would still be the thing under test. Ten of the fifty-seven are a section of their own — holes `/code-review` found in the first draft, four of which passed green while checking nothing. Read them before touching the SQL scan: an escaped quote that swallowed the rest of the file, and an `ALTER TABLE` whose comma-separated actions hid a `DROP` beside an `ADD`. **`run_mig` unsets `GITHUB_BASE_REF` for every case**, and that is load-bearing: CI sets it on a `pull_request` event, the gate reads it ahead of `origin/HEAD`, and a fixture is a different repository with no such ref — thirty-five cases went red on the first CI run for exactly that.
 
@@ -96,7 +96,23 @@ CHECK` back **on `t`**, and an earlier migration already declared `t`.`x` a `CHE
   deliberately narrow — a bare drop, a re-add under another name, a re-add on another table, and a
   re-add as `UNIQUE` all still refuse, and twenty `gate-test.sh` cases say so.
 
-- `//#migrations:check` — the same migration gate, run against **this** repository rather than a fixture. It is `cache: false` on purpose and it is not a case inside `gate-test.sh`: that suite is cached on `.claude/hooks/**` plus the two scripts, and this answer also depends on git history and on migration files none of those inputs cover, so a cached replay would report a pass nothing had checked. CI's `test` job therefore checks out with `fetch-depth: 0` **and points `origin/HEAD` at the default branch the webhook payload names** — a shallow clone has no merge base, and a checkout with no `refs/remotes/origin/HEAD` has no default branch to take one against; the gate refuses to call "I could not compare" a pass on either count. `GITHUB_BASE_REF` covers the `pull_request` event only, so the `push` run on `dev` is what needs the second half.
+  The **spec-identifier gate** (`scripts/spec-identifiers.mjs`), thirty-seven cases. It is the one
+  gate here that has to read a language rather than a file format, and every case that is not a
+  citation is about that: comments are the record and are never read, so a continuation line of a
+  block comment and a `{/* … */}` in JSX both pass, while a closing JSX tag, an apostrophe in JSX
+  text and a regular expression holding a quote are the three ways a naive reader would skip past
+  the strings that follow and report a clean tree. Its refusals are its own section, because a check
+  that cannot reach an answer must not be read as one that found nothing.
+
+- `//#spec-identifiers` — that same gate, run against **this** repository rather than a fixture,
+  which is the `migrations:check` split below for the same reason. It is not `cache: false`: unlike
+  the migration gate its answer depends only on the source files themselves, so its `inputs` name the
+  source globs and a cache hit is a real one. `REVIEW.md`'s **Spec identifiers stay in the source**
+  pass is what it makes red rather than reviewed, and that pass says what a reviewer still has to
+  judge — whether the string that replaced a citation says the substance, and whether a comment lost
+  one. It reads no shell; [#127](https://github.com/m0t0r/recomencemos/issues/127) is that half.
+
+- `//#migrations:check` — the same migration gate, run against **this** repository rather than a fixture. It is `cache: false` on purpose and it is not a case inside `gate-test.sh`: that suite is cached on `.claude/hooks/**` plus the three scripts, and this answer also depends on git history and on migration files none of those inputs cover, so a cached replay would report a pass nothing had checked. CI's `test` job therefore checks out with `fetch-depth: 0` **and points `origin/HEAD` at the default branch the webhook payload names** — a shallow clone has no merge base, and a checkout with no `refs/remotes/origin/HEAD` has no default branch to take one against; the gate refuses to call "I could not compare" a pass on either count. `GITHUB_BASE_REF` covers the `pull_request` event only, so the `push` run on `dev` is what needs the second half.
 
 All three package suites follow the same three rules. Tests sit **beside their source** — `src/**/*.test.{ts,tsx}` in the design system, `src/**/*.test.ts` in a package with no JSX — so `check-types` covers them (the tsconfig `include` is `src`). Every workspace with tests sets `"types": ["vitest/globals"]` in its tsconfig. And:
 
@@ -425,6 +441,13 @@ Design and the string quoting it is never re-read.
 reader needed. Where the citation is load-bearing, put it in the comment directly above the string.
 `REVIEW.md`'s **Spec identifiers stay in the source** pass is the blocking version of this and carries
 the per-surface table; the audit behind it is in #93.
+
+**`pnpm spec-identifiers` is the machine half, and it runs inside `pnpm test`.** It tokenises every
+JavaScript, TypeScript and JSX file, reads only the string literals, and names the file, the line and
+the string. What it cannot judge is whether the sentence that replaced a citation says the substance
+or merely got shorter — and it never reads a comment, so it is equally silent about one stripped from
+there. It reads no shell either; [#127](https://github.com/m0t0r/recomencemos/issues/127) is that
+half.
 
 ## Things to get right
 

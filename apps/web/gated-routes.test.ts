@@ -24,7 +24,7 @@ async function configuredHeaders() {
   return headers ?? [];
 }
 
-describe("NFR8 — every gated route carries X-Robots-Tag", () => {
+describe("every gated route carries X-Robots-Tag", () => {
   for (const source of gatedRouteSources()) {
     it(`configures ${source}`, async () => {
       const entry = (await configuredHeaders()).find((rule) => rule.source === source);
@@ -48,9 +48,9 @@ describe("NFR8 — every gated route carries X-Robots-Tag", () => {
     expect(sources).toContain(`${prefix}/:path*`);
   });
 
-  it("names every route NFR8 lists and nothing else", async () => {
-    // Verbatim from the requirement, retyped rather than imported, so a change
-    // to the source list fails here instead of silently agreeing with itself.
+  it("names every route the requirement lists and nothing else", async () => {
+    // Verbatim from NFR8, retyped rather than imported, so a change to the
+    // source list fails here instead of silently agreeing with itself.
     expect(GATED_ROUTE_PREFIXES.toSorted()).toEqual([
       "/account",
       "/admin",

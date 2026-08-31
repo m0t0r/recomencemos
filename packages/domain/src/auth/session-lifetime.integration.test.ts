@@ -42,9 +42,8 @@ function secondsUntil(expiresAt: Date): number {
 }
 
 describe("a shared-device sign-in", () => {
-  test("gets an eight-hour row, which is NFR13's half that is actually true", async ({
-    database,
-  }) => {
+  // The eight hours are the half of NFR13 the database actually enforces.
+  test("gets an eight-hour row", async ({ database }) => {
     const stack = signInStack(database);
     await signIn(stack, "worker@example.co", { sharedDevice: true });
 
@@ -118,7 +117,8 @@ describe("a shared-device sign-in", () => {
 });
 
 describe("an own-device sign-in", () => {
-  test("gets the thirty-day row NFR13 promises", async ({ database }) => {
+  // Thirty days is what NFR13 promises an own device.
+  test("gets a thirty-day row", async ({ database }) => {
     const stack = signInStack(database);
     await signIn(stack, "worker@example.co", { sharedDevice: false });
 

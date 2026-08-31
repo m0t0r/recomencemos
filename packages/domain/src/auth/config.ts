@@ -166,6 +166,9 @@ export interface AuthDependencies {
   readonly env?: AuthEnv;
 }
 
+// Every variable this reads is a runtime credential, which is NFR24's reason
+// for it reaching no turbo task: `.env*` is a `build` input, so declaring one
+// on a task would hash it into the cache key.
 function required(env: AuthEnv, variable: string): string {
   const value = env[variable]?.trim();
   if (value) return value;
@@ -176,7 +179,7 @@ function required(env: AuthEnv, variable: string): string {
     message:
       `${variable} is unset or empty, so authentication cannot be configured. ` +
       "Locally: `cp apps/web/.env.example apps/web/.env.local`. In production it comes " +
-      "from `fly secrets` (NFR24 — it reaches no turbo task).",
+      "from `fly secrets`, and it reaches no turbo task.",
     userMessage: SIGN_IN_FAILED,
     context: { variable },
   });

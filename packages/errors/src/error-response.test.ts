@@ -31,7 +31,9 @@ function countSentinels(serialised: string): number {
   return SENTINELS.filter((sentinel) => serialised.includes(sentinel)).length;
 }
 
-describe("NFR15 — the audience split, counted", () => {
+// NFR15, counted rather than described: no operator-facing value reaches either
+// egress, and each body carries exactly the three keys its whitelist names.
+describe("what the operator sees and what the browser sees, counted", () => {
   it("puts 0 sentinels and exactly 3 keys on the Route Handler body", () => {
     const { body } = toErrorResponse(sentinelledError());
 

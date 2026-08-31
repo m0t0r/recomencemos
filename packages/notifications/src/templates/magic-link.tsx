@@ -36,6 +36,10 @@ const ALLOWED_URL_PROTOCOLS: ReadonlySet<string> = new Set(["http:", "https:"]);
  *
  * Exported because every future template with a link uses it, and because a rule
  * enforced in one template is a rule the second template forgets.
+ *
+ * Both refusals below are DD14, cited here rather than in either `message`: an
+ * operator reading one of those lines at 3am may not hold the spec, and what
+ * they need is the substance rather than the pointer.
  */
 export function safeUrl(url: string, field: string): string {
   let parsed: URL;
@@ -49,7 +53,7 @@ export function safeUrl(url: string, field: string): string {
       message:
         `An email template was given a ${field} that is not a URL, so no href can be built ` +
         "from it. Every URL in every template is built from server-owned values — " +
-        "the app origin, a route constant, an entity id (DD14).",
+        "the app origin, a route constant, an entity id.",
       userMessage: SEND_FAILED,
       context: { field },
     });
@@ -62,7 +66,7 @@ export function safeUrl(url: string, field: string): string {
       message:
         `An email template was given a ${field} with protocol "${parsed.protocol}", which is ` +
         "not http: or https:. React escapes element content, not attributes, so this is the " +
-        "one injection an email template still admits (DD14).",
+        "one injection an email template still admits.",
       userMessage: SEND_FAILED,
       context: { field, protocol: parsed.protocol },
     });

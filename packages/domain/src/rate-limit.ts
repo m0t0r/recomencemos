@@ -328,7 +328,7 @@ export async function chargeCeiling(
 
   // `RETURNING` on an upsert that matched or inserted always yields one row, so
   // no row means the statement did something this code does not model. Failing
-  // closed is the rule; a missing row is not permission.
+  // closed is the rule (NFR26); a missing row is not permission.
   const count = row?.count;
   if (count === undefined) {
     throw new AppError({
@@ -336,7 +336,7 @@ export async function chargeCeiling(
       status: 503,
       message:
         `Charging the ${action} ceiling returned no row, so the count is unknown and the ` +
-        "action must not proceed. NFR26's counter fails closed.",
+        "action must not proceed. This counter fails closed.",
       userMessage: SERVICE_UNAVAILABLE,
       context: { action, scope: principal.scope },
     });

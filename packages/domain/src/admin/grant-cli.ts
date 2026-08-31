@@ -193,10 +193,11 @@ async function main(): Promise<void> {
 
     if (!granted) throw new Error(`the Account for ${email} was not created`);
 
+    // The runbook's Admin section is what asks a human to print them.
     process.stdout.write(
       `\nAdmin granted: ${granted.id}\n` +
         "Sign in at /admin/sign-in. The first sign-in shows the QR and ten backup codes, once —\n" +
-        "print them and store them offline before leaving that screen (runbook §6).\n",
+        "print them and store them offline before leaving that screen.\n",
     );
   } finally {
     await pool.end();

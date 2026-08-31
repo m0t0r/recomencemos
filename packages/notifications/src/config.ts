@@ -106,7 +106,8 @@ function required(env: NotificationsEnv, variable: string): string {
     status: 503,
     message:
       `${variable} is unset or empty, so no notification can be sent. ` +
-      "In production it comes from `fly secrets`; see docs/runbooks/recomencemos-go-live.md §1.",
+      "In production it comes from `fly secrets`; the credentials section of " +
+      "docs/runbooks/recomencemos-go-live.md says which one and where it is set.",
     userMessage: SEND_FAILED,
     context: { variable },
   });
