@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./ambient-request-id": "./src/ambient-request-id.ts",
     "./app-error": "./src/app-error.ts",
     "./error-response": "./src/error-response.ts",
     "./redaction": "./src/redaction.ts"

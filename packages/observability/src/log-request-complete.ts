@@ -1,11 +1,16 @@
 /**
- * The one place a *completed* request becomes a log line — the denominator.
+ * The one place a **routed** request becomes a log line — the denominator.
  *
  * `log-request-error.ts` is this module's sibling: that one is emitted when a
- * request fails, this one when a request finishes at all. Without this line an
- * error count cannot be read as a **rate**, so a spike is indistinguishable from
- * a busy Tuesday, and a deploy that broke every route reads as silence rather
- * than as a status distribution.
+ * request fails, this one when a request the app routed finishes at all. Without
+ * this line an error count cannot be read as a **rate**, so a spike is
+ * indistinguishable from a busy Tuesday, and a deploy that broke every route
+ * reads as silence rather than as a status distribution.
+ *
+ * "Routed" rather than "completed" is the whole of
+ * {@link shouldEmitCompletionLine}, and it is there because a denominator
+ * counting the framework's own asset traffic measures the wrong population — see
+ * that function for the three numbers it broke.
  *
  * ## NFR18 — the correlation-loss band
  *
@@ -31,7 +36,14 @@
  * a unit test. The band is the only thing that can catch that residue.
  */
 
+import { setAmbientRequestIdReader } from "@repo/errors/ambient-request-id";
 import { logger as defaultLogger } from "@repo/observability/logger";
+import {
+  currentRequestId,
+  enterRequestContext,
+  newRequestId,
+  runInRequestContext,
+} from "@repo/observability/request-context";
 import { assertServerOnly } from "@repo/observability/server-only";
 import { subscribe } from "node:diagnostics_channel";
 import type { Logger } from "pino";
@@ -45,6 +57,8 @@ assertServerOnly("log-request-complete");
  * to them and no clone can be migrated by us.
  */
 export interface RequestCompletionFields {
+  /** The HTTP method, so a per-route status distribution can separate a read from a write. */
+  method: string;
   /**
    * The matched route pattern, never the URL — the same meaning `route` carries
    * on an error line, so the two join. `routeOf` is what produces it, and it is
@@ -74,6 +88,7 @@ export interface RequestCompletionFields {
 /** What `routeOf` needs of a request, so it can be tested without importing Next. */
 export interface CompletedRequest {
   url?: string;
+  method?: string;
 }
 
 /**
@@ -93,6 +108,18 @@ const UNKNOWN_ROUTE = "unknown";
  */
 const UNKNOWN_STATUS = 0;
 const UNOBSERVED_DURATION_MS = 0;
+
+/**
+ * Lowercase, so it cannot be mistaken for a method — every real one is
+ * uppercase. Unreachable through `node:http`, which always sets `method`.
+ */
+const UNKNOWN_METHOD = "unknown";
+
+/** The floor of the HTTP error range: at or above it, a request failed. */
+const HTTP_ERROR_STATUS = 400;
+
+/** At or above it, the *server* failed, which is the only case that logs at `error`. */
+const HTTP_SERVER_ERROR_STATUS = 500;
 
 const QUERY_OR_HASH = /[?#]/;
 
@@ -152,8 +179,12 @@ function matchedPattern(request: CompletedRequest): string | undefined {
  * **The strip stops at the query, and the path itself is returned whole — so a
  * credential carried in a *segment* survives it.** `/reset-password/<token>`,
  * `/i/<token>/accept`, and an unsubscribe link are the conventional shapes, and
- * every one of them reaches `context.path` in full, on every request. That is
- * deliberate and is the decision, not the oversight it looks like: this is where
+ * every one of them reaches `context.path` in full, on every line this module
+ * emits. The rule in {@link shouldEmitCompletionLine} narrows *how many* paths
+ * that is — an unrouted success now leaves no line at all — and narrows nothing
+ * about the exposure: a tokened route is a routed request, which is the
+ * population that always emits. That is deliberate and is the decision, not the
+ * oversight it looks like: this is where
  * a project bounds the path, and
  * `docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md` is why the
  * template does not. Answer `secrets-in-url-paths` in `docs/policy/security.md`
@@ -179,6 +210,10 @@ function pathnameOf(url: string | undefined): string {
  * own contract exists to prevent. The concrete path is not lost; it travels
  * under `context.path`, where free-form detail belongs.
  *
+ * **`"unknown"` is also the emission rule's input**, which is why that rule
+ * needs no pattern of its own: this answer already is the router's, so
+ * {@link shouldEmitCompletionLine} reads it rather than matching on a path.
+ *
  * Never throws. This runs on the response-finish path of every request the
  * server handles, so a throw here would be a logging bug that takes out request
  * handling.
@@ -196,28 +231,87 @@ export function pathOf(request: CompletedRequest): string {
 }
 
 /**
+ * Whether a completed request belongs on the line at all.
+ *
+ * **The measurements are what this exists for, and the volume is only the
+ * symptom.** The subscription hears every HTTP server in the process rather than
+ * the app's router, so before this rule one dev page load emitted 2 routed lines
+ * to roughly 55 unrouted ones — Turbopack chunks, HMR, a favicon, every one of
+ * them a 304 at 1–5 ms. Three things follow, and none is cosmetic. p95 read off
+ * this line sat at chunk latency permanently, so the page latency the objective
+ * is about never appeared in it. The error *rate* this line exists to be the
+ * denominator of was diluted about 30:1, so a route failing on every single
+ * request read as roughly 2%. And `route: "unknown"` became one bucket holding
+ * 96% of traffic, which makes grouping by it say almost nothing.
+ *
+ * That is production behaviour, not a dev-console annoyance: the deployment
+ * target is one machine with no CDN and no `assetPrefix`, so Node serves the
+ * static chunks there too.
+ *
+ * **The cut is `routeOf`'s existing answer, not a `/_next/` prefix match.** The
+ * router already tells us whether it matched, so the signal is structural and
+ * there is no pattern to keep up to date. A path denylist would be exactly the
+ * heuristic `docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md`
+ * argues against, shipped into the one field a drain groups by.
+ *
+ * **The `status >= 400` clause is not there for 404s.** A 404 is routed — Next's
+ * per-request meta matches a real pattern for it — so it emits either way. The
+ * clause is there so an unrouted *failure* still leaves a line: an asset 5xx, or
+ * a request the router never reached.
+ */
+export function shouldEmitCompletionLine(route: string, status: number): boolean {
+  return route !== UNKNOWN_ROUTE || status >= HTTP_ERROR_STATUS;
+}
+
+/**
  * `logger` is a defaulted parameter rather than mutable module state — the same
  * injection point `logRequestError` uses, and the effort's one concession to
  * testability. Production calls this with one argument and never learns the seam
  * is there.
  *
- * `trace_id` is deliberately **not** a parameter. The active span is still
- * resolvable on the response-finish path, so the logger's own mixin contributes
- * `trace_id` and `span_id` exactly as it does to every other line. Passing it
+ * Neither correlator is a parameter, and for the same reason. The active span is
+ * still resolvable on the response-finish path and the request store is
+ * re-entered around this call, so the logger's own mixin contributes `trace_id`,
+ * `span_id` and `request_id` exactly as it does to every other line. Passing one
  * explicitly would give this one line a second, divergent way of correlating.
+ *
+ * **The level is read off `status` rather than passed**, so the two cannot
+ * disagree — a completion line that says `error` about a 200 is a line an
+ * operator learns to stop trusting. A 5xx is the server failing and logs at
+ * `error`; everything else, 4xx included, logs at `info`, because a 401 or a 422
+ * is the system correctly saying no and `status` is already the field that says
+ * which. The `warn` version of this was proposed to keep the correlation band's
+ * denominator still and is backwards: these lines carry `trace_id`, so they
+ * enlarge a denominator of *correlated* lines and loosen the band rather than
+ * break it — and it gains coverage, because a **handled** 5xx logs at `warn`
+ * under "thrown is reported, returned is logged" and the band could not see it
+ * at all.
  */
 export function logRequestComplete(
   fields: RequestCompletionFields,
   logger: Logger = defaultLogger,
 ): void {
-  logger.info(fields, "request complete");
+  const level = fields.status >= HTTP_SERVER_ERROR_STATUS ? "error" : "info";
+
+  logger[level](fields, "request complete");
 }
 
 /**
+ * What the start of a request knows and its finish needs.
+ *
  * Keyed by the request object itself, so a dropped connection cannot leak an
  * entry — nothing has to remember to clean up after an aborted request.
+ *
+ * `requestId` is held here as well as in the async store, and that is not
+ * belt-and-braces: see {@link subscribeRequestCompletion} for the keep-alive
+ * case where the store in scope at `finish` belongs to a *different* request.
  */
-const requestStartedAt = new WeakMap<object, number>();
+interface RequestStart {
+  startedAt: number;
+  requestId: string;
+}
+
+const requestStart = new WeakMap<object, RequestStart>();
 
 /**
  * The guard lives on `globalThis`, not in module scope, because a re-evaluated
@@ -229,6 +323,13 @@ const SUBSCRIBED = Symbol.for("repo.observability.requestCompletionSubscribed");
 
 /**
  * Subscribe the completion line to the process's HTTP traffic. Idempotent.
+ *
+ * It hears every HTTP server in the process, which is why the emit is filtered
+ * by {@link shouldEmitCompletionLine} rather than unconditional — and why the
+ * `request_id` this mints is per **publish** rather than per span: it exists
+ * with no DSN, which is every fresh clone and every dev session, and it is
+ * correct in the one case a `trace_id` was observed to be wrong (a dev-only
+ * overlay request sharing one with the request that triggered it).
  *
  * **Why `diagnostics_channel` and not a span.** Next 16 exposes exactly two
  * instrumentation hooks — `register` and `onRequestError` — and neither fires on
@@ -262,10 +363,28 @@ export function subscribeRequestCompletion(logger: Logger = defaultLogger): void
 
   flags[SUBSCRIBED] = true;
 
+  // **Here rather than at module scope**, because this is the one function that
+  // knows requests are being tracked at all — before it runs there is no store to
+  // read and adoption would have nothing to adopt. It is what makes an `AppError`
+  // raised inside a request carry that request's id, so its `warn`/`error` line
+  // and this completion line join, and so a user quoting one reference number
+  // gets every line the request emitted rather than one of them.
+  setAmbientRequestIdReader(currentRequestId);
+
   subscribe("http.server.request.start", (message) => {
     const { request } = message as { request?: object };
 
-    if (request !== undefined) requestStartedAt.set(request, performance.now());
+    if (request === undefined) return;
+
+    const requestId = newRequestId();
+
+    requestStart.set(request, { startedAt: performance.now(), requestId });
+
+    // `enterWith` rather than `run`, because a channel subscriber is handed a
+    // message and returns — there is no continuation to wrap. It is what makes
+    // `request_id` reach every line the handler itself emits, which is the half
+    // of this that `trace_id` cannot do with no DSN configured.
+    enterRequestContext(requestId);
   });
 
   subscribe("http.server.response.finish", (message) => {
@@ -276,25 +395,42 @@ export function subscribeRequestCompletion(logger: Logger = defaultLogger): void
 
     if (request === undefined || response === undefined) return;
 
-    const startedAt = requestStartedAt.get(request);
+    const started = requestStart.get(request);
 
-    requestStartedAt.delete(request);
+    requestStart.delete(request);
 
-    // `startedAt` is absent only for a request already in flight when the
+    const route = routeOf(request);
+    const status = response.statusCode ?? UNKNOWN_STATUS;
+
+    if (!shouldEmitCompletionLine(route, status)) return;
+
+    // `started` is absent only for a request already in flight when the
     // subscription was made. `register()` completes before the server accepts
     // its first request, so that window does not exist in practice — the
-    // fallback keeps the line rather than swallowing it.
-    logRequestComplete(
-      {
-        route: routeOf(request),
-        context: { path: pathOf(request) },
-        status: response.statusCode ?? UNKNOWN_STATUS,
-        duration_ms:
-          startedAt === undefined
-            ? UNOBSERVED_DURATION_MS
-            : Math.round(performance.now() - startedAt),
-      },
-      logger,
-    );
+    // fallbacks keep the line rather than swallowing it, and a line with no
+    // `request_id` is honest where a freshly minted one would be a lie.
+    const emit = () =>
+      logRequestComplete(
+        {
+          method: request.method ?? UNKNOWN_METHOD,
+          route,
+          context: { path: pathOf(request) },
+          status,
+          duration_ms:
+            started === undefined
+              ? UNOBSERVED_DURATION_MS
+              : Math.round(performance.now() - started.startedAt),
+        },
+        logger,
+      );
+
+    // **Re-entering the store is correctness, not caution.** `enterWith` mutates
+    // the *current* execution context, and on a keep-alive socket every request
+    // shares one — so request N+1's start can overwrite the context request N's
+    // `finish` would otherwise read, and the completion line would carry the
+    // wrong id. Keying off the request object is what makes that impossible, and
+    // it is why the id is held in the `WeakMap` rather than only in the store.
+    if (started === undefined) emit();
+    else runInRequestContext(started.requestId, emit);
   });
 }

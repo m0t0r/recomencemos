@@ -3,6 +3,8 @@
  * operator may read and the single string permitted to reach a browser.
  */
 
+import { readAmbientRequestId } from "@repo/errors/ambient-request-id";
+
 /**
  * Identity is a **registered** symbol rather than a prototype check, because
  * Next.js compiles the server and the client graph as separate realms and
@@ -129,16 +131,30 @@ export interface AppErrorOptions {
 }
 
 /**
+ * The current request's identifier where a server has registered one, and a
+ * freshly minted id otherwise.
+ *
+ * **Adoption comes first, and that is the point of it** — see
+ * `ambient-request-id.ts`. Minting per error rather than per request meant two
+ * failures in one request handed a user two different reference numbers, and
+ * neither matched the `request_id` on that request's completion line. Nothing an
+ * inbound header can reach is involved: there is still no constructor option, and
+ * the only value adopted is one the server minted on its own process.
+ *
+ * The fallback is unchanged, and so is why it degrades rather than throws.
  * `crypto.randomUUID` is absent in a browser outside a secure context, and this
  * package is isomorphic — so a Client Component constructing an `AppError` over
  * plain HTTP would throw on the one code path that exists to report failure.
  *
- * It degrades to an empty string rather than throwing, and rather than reaching
- * for a weaker generator: an id minted in a browser is not a *server* request id
- * and correlates with nothing, so inventing one would be worse than admitting
- * there isn't one.
+ * It degrades to an empty string rather than reaching for a weaker generator: an
+ * id minted in a browser is not a *server* request id and correlates with
+ * nothing, so inventing one would be worse than admitting there isn't one.
  */
 function mintRequestId(): string {
+  const ambient = readAmbientRequestId(MAX_REQUEST_ID_LENGTH);
+
+  if (ambient !== undefined) return ambient;
+
   return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : "";
 }
 
