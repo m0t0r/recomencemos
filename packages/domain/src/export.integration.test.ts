@@ -181,9 +181,6 @@ const EXCLUDED: Record<string, string> = {
   // The Admin grant is `internal`: a fact about how this platform is staffed
   // rather than about the person the export is for.
   "user.isAdmin": "internal — how the platform is staffed, not who she is",
-  // Better Auth's own column, and a property of a credential rather than of a
-  // person. There is exactly one Account it is true of.
-  "user.twoFactorEnabled": "a property of a credential, not of the person",
   // Moves on every write and answers nothing a *titular* asked; `registeredAt`,
   // from `createdAt`, is the date she would actually want.
   "user.updatedAt": "bookkeeping, superseded by registeredAt",

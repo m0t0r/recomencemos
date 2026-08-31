@@ -3,9 +3,10 @@
  *
  * **The requirement is that authentication is a property of the *session*.** An
  * Account holding the Admin grant is not an authenticated Admin; a session that
- * presented password **and** TOTP is. Better Auth cannot express that — it records
- * 2FA on the user (`twoFactorEnabled`) and its 2FA flow guards only the credential
- * path — so the two facts are read off the session row this package writes at
+ * presented a single-use emailed link **and** a code from the authenticator is.
+ * A second factor recorded against the *Account* cannot express that — it stays
+ * true while a magic-link session on the same Account presents no second factor
+ * at all — so the two facts are read off the session row this package writes at
  * creation and off the `user` row the grant lives on, and both are checked here.
  *
  * **The check is a pure function over a session, and that is deliberate.** It

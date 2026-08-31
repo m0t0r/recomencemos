@@ -9,7 +9,7 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
-import { type SignInMethod, SIGN_IN_METHODS } from "#auth-schema";
+import { ADMIN_SIGN_IN_METHOD, type SignInMethod, SIGN_IN_METHODS } from "#auth-schema";
 import { SIGN_IN_FAILED } from "#user-messages";
 
 /**
@@ -39,29 +39,26 @@ export const ADMIN_SECOND_FACTOR_PATH = "/second-factor/verify";
  * throws rather than defaulting, and `session.signInMethod` is `NOT NULL` with
  * no database default, so the failure is loud at both levels. That is the
  * correct direction to fail: NFR14 says an Admin session is one established
- * through password + TOTP, so a door that arrives without declaring itself must
- * not be able to produce a session that merely *looks* like one — and a default
+ * through an emailed link and a code, so a door that arrives without declaring
+ * itself must not be able to produce a session that merely *looks* like one — and a default
  * of `"magic_link"` here would hand exactly that to the next door somebody adds.
  *
- * **Five paths for four methods, and the two that collapse are the point.**
- * `/two-factor/verify-totp` and `/two-factor/verify-backup-code` both produce a
- * `password_totp` session, because a backup code **is** the second factor: DD5
- * makes ten printed codes one of three required recovery paths, and a session
- * established with one would be worthless if it could not moderate. What matters
- * to NFR14 is that two factors were presented, not which second one.
+ * **Three paths for three methods, one door each.** There were five, because the
+ * `twoFactor` plugin served `/two-factor/verify-totp` and
+ * `/two-factor/verify-backup-code` and both collapsed onto one method — a backup
+ * code *is* the second factor, and what matters is that two factors were
+ * presented rather than which second one. That property did not go away with the
+ * plugin; it moved into the one endpoint below, whose single `code` field takes
+ * six digits or one printed code and tells them apart by shape.
  *
- * **`/sign-in/email` is here and it is not an Admin session.** Read out of
- * `better-auth@1.7.1/dist/plugins/two-factor/index.mjs`: the plugin's `after`
- * hook on that path deletes the session it just created and returns
- * `twoFactorRedirect` — but **only when `user.twoFactorEnabled` is already
- * true**. Before enrolment it returns early and the session stands. That was the
- * enrolment window the credential door needed; the passwordless door has no such
- * window, because enrolment happens over the direct connection before the grant
- * exists at all. The member survives until the contract half of DD5 removes the
- * door, and `requireAdminSession` has never accepted it.
+ * **`/sign-in/email` was here too, and it was never an Admin session.** It
+ * existed for the window in which an Admin granted by a manual `UPDATE` had to
+ * reach enrolment before a TOTP secret existed. Enrolment happens over the direct
+ * connection now, before the grant is set at all, so there is no window and no
+ * credential door to have one.
  *
- * **The last row is this product's own endpoint, and it is the only one.** Every
- * other path here belongs to Better Auth; `/second-factor/verify` is
+ * **The last row is this product's own endpoint, and it is the only one.** The
+ * other two belong to Better Auth; `/second-factor/verify` is
  * `#auth/admin-door`'s, and it is the sole producer of the one method NFR14
  * accepts. That is the whole of what makes "an Admin session presented two
  * factors" true — there is exactly one way to write the value, and it is behind
@@ -70,9 +67,6 @@ export const ADMIN_SECOND_FACTOR_PATH = "/second-factor/verify";
 const SIGN_IN_PATHS: Readonly<Record<string, SignInMethod>> = {
   "/magic-link/verify": "magic_link",
   "/callback/:id": "google",
-  "/sign-in/email": "password",
-  "/two-factor/verify-totp": "password_totp",
-  "/two-factor/verify-backup-code": "password_totp",
   [ADMIN_SECOND_FACTOR_PATH]: "link_totp",
 };
 
@@ -115,10 +109,10 @@ export const SHARED_DEVICE_SESSION_SECONDS = 60 * 60 * 8;
  * and the attempt second.
  *
  * The "no rolling" half is already true for every session here:
- * `disableSessionRefresh` in `#auth/config` refuses every refresh. C44 removes
- * the other way round it — `trustDevice` would re-establish this session on a
- * password alone for thirty days, so it is stripped from the request rather than
- * left to a caller not to pass.
+ * `disableSessionRefresh` in `#auth/config` refuses every refresh. The other way
+ * round it was a trusted device, which would have re-established this session on
+ * one factor for thirty days; the plugin that offered it is gone, so there is no
+ * longer a field to strip or a caller to trust not to pass one.
  */
 export const ADMIN_SESSION_SECONDS = 60 * 60 * 8;
 
@@ -185,23 +179,6 @@ export function signInMethodForPath(path: string): SignInMethod {
 }
 
 /**
- * Every method that takes NFR13's Admin lifetime, as data.
- *
- * **Written over the class rather than over the member that matters today**:
- * `link_totp` is the
- * one door that carries Admin authority now, and the two credential members are
- * still reachable until DD5's contract half removes them. A session from any of
- * the three is eight hours; a door added later without a thought about NFR13
- * would have to be added here to get the longer one, which is the right way for
- * that mistake to be made.
- */
-const ADMIN_LIFETIME_METHODS = [
-  "password",
-  "password_totp",
-  "link_totp",
-] as const satisfies readonly SignInMethod[];
-
-/**
  * NFR13, as one number.
  *
  * **The method is consulted before the attempt**, so an Admin session is eight
@@ -209,13 +186,15 @@ const ADMIN_LIFETIME_METHODS = [
  * first would give an Admin who did not tick the box a thirty-day session, which
  * is the one lifetime NFR13 refuses that account outright.
  *
- * A `password` session — the enrolment window the credential door needed — takes
- * the Admin number too. It is the weaker of the two credential states and giving
- * it the longer life would be the wrong direction to err in on the one account
- * that can read every phone number in the system.
+ * **It is the same comparison the refusal at session creation makes**, against
+ * {@link ADMIN_SIGN_IN_METHOD} rather than against a list. There was a list here
+ * — three members, two of them credential sessions from the door DD5's contract
+ * half removed — and it is now the complement of one member for the reason that
+ * rule is: a door added later gets the ordinary lifetime and is refused for an
+ * Admin, rather than inheriting either by omission.
  */
 export function sessionSecondsFor(method: SignInMethod, attempt: SignInAttempt): number {
-  if ((ADMIN_LIFETIME_METHODS as readonly string[]).includes(method)) return ADMIN_SESSION_SECONDS;
+  if (method === ADMIN_SIGN_IN_METHOD) return ADMIN_SESSION_SECONDS;
   return attempt.sharedDevice ? SHARED_DEVICE_SESSION_SECONDS : OWN_DEVICE_SESSION_SECONDS;
 }
 

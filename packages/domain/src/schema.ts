@@ -44,7 +44,6 @@ export {
   session,
   SIGN_IN_METHODS,
   type SignInMethod,
-  twoFactor,
   user,
   verification,
 } from "#auth-schema";

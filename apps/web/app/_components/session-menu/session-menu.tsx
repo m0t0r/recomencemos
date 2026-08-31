@@ -81,7 +81,7 @@ export interface SessionMenuProps {
    * The sign-out action, passed in rather than imported.
    *
    * **The two shells end a session at the same place and land in different
-   * ones** — the Wall for a Worker, `/admin/sign-in` for an Admin — and that
+   * ones** — the Wall for a Worker, `/sign-in` for an Admin — and that
    * destination is the only thing that differs between them. Both actions are
    * three lines over the one `endSession` body in `lib/end-session.ts`, so the
    * independent authorization, the revocation and the cookie clearing stay in

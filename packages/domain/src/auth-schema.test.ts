@@ -14,6 +14,7 @@ import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
+import { ADMIN_SECOND_FACTOR_PATH as SECOND_FACTOR_PATH } from "#auth/sign-in-attempt";
 import { authOptions } from "#auth/config";
 import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
@@ -47,20 +48,23 @@ const options = authOptions({
 
 const betterAuthSchema = getSchema(options);
 
-/** Better Auth's model name → the Drizzle table this package exports for it. */
+/**
+ * Better Auth's model name → the Drizzle table this package exports for it.
+ *
+ * **DD5's rule 2 runs in both directions, and this map is where both are read.**
+ * Forwards it is _"adding a plugin without adding its tables is caught, because
+ * its tables appear in `getSchema()`'s answer and not here"_ — which is how the
+ * `twoFactor` entry that used to sit below `rateLimit` came to be written. It is
+ * gone with the plugin, and backwards is why that is safe to notice: a row left
+ * here for a model the oracle no longer reports is red in exactly the same way
+ * the missing one was.
+ */
 const TABLES = {
   user: schema.user,
   session: schema.session,
   account: schema.account,
   verification: schema.verification,
   rateLimit: schema.rateLimit,
-  /**
-   * The `twoFactor` plugin's table, added with #17. Its absence was red before
-   * the table was written, which is DD5's rule 2 doing its job:
-   * _"adding a plugin without adding its tables is caught, because its tables
-   * appear in `getSchema()`'s answer and not here"_.
-   */
-  twoFactor: schema.twoFactor,
 } as const;
 
 type Model = keyof typeof TABLES;
@@ -88,22 +92,13 @@ const MODELS = Object.keys(TABLES) as Model[];
  *   *null* grant is not a third state this design has. `requireAdminSession`
  *   reads it as `=== true` in any case, so the strictness is belt to the type's
  *   braces rather than the only thing holding.
- * - `user.twoFactorEnabled` — Better Auth's own, same shape and same argument:
- *   the plugin writes a boolean on every path that touches it, and "null" would
- *   be a row nobody wrote.
- * - `twoFactor.verified` and `twoFactor.failedVerificationCount` — the plugin
- *   supplies both on create (`totpData.verified`, and the counter's own
- *   `incrementOne`), and both are read as numbers and booleans by code that has
- *   no branch for null. `lockedUntil` is deliberately **not** here: its null *is*
- *   a state, and it means "not locked".
+ *
+ * There were three more entries, all belonging to the `twoFactor` plugin —
+ * `user.twoFactorEnabled`, `twoFactor.verified` and
+ * `twoFactor.failedVerificationCount`. They went with it. A deviation outliving
+ * the column it describes is exactly what a set read by a check cannot have.
  */
-const STRICTER_NOT_NULL = new Set<string>([
-  "verification.sharedDevice",
-  "user.isAdmin",
-  "user.twoFactorEnabled",
-  "twoFactor.verified",
-  "twoFactor.failedVerificationCount",
-]);
+const STRICTER_NOT_NULL = new Set<string>(["verification.sharedDevice", "user.isAdmin"]);
 
 /**
  * `getSchema` reports the fields Better Auth writes; `id` is implicit in its
@@ -327,7 +322,7 @@ describe("the two fields this product adds to the vendor's tables", () => {
   });
 
   // NFR14: Admin authentication is a property of the session, and this is the
-  // column `requireAdmin` will read instead of `twoFactorEnabled`.
+  // column `requireAdmin` reads rather than any flag on the Account.
   it("declares signInMethod on the session model", () => {
     expect(betterAuthSchema.session?.fields.signInMethod).toMatchObject({ type: "string" });
     expect(getTableColumns(schema.session).signInMethod.notNull).toBe(true);
@@ -419,57 +414,80 @@ describe("the configuration that is deliberately not the vendor's default", () =
 });
 
 /**
- * DD5's remaining rows, which arrived with the Admin (#17). Each is a row of that
- * table and each would be a security hole rather than a rough edge at its default.
+ * DD5's remaining rows, which arrived with the Admin (#17) and are now an
+ * **absence**: there is no `emailAndPassword` block and no `twoFactor` plugin.
+ *
+ * **An absence is only an assertion if something reads it**, which is why this
+ * block did not shrink to nothing when the door was deleted. Five settings used
+ * to be pinned here — `enabled`, `disableSignUp`, `requireEmailVerification`,
+ * `revokeSessionsOnPasswordReset` and a sixteen-character floor — and every one
+ * of them existed to make a credential door safe. A later change re-enabling that
+ * door would re-open `/sign-up/email` on a product whose only intended door is a
+ * link, and would do it with all five of those guards gone rather than merely
+ * unset. So the guards' absence is asserted where the guards were.
  */
 describe("the Admin's door", () => {
   /**
-   * **The one that turns this block from "the Admin's door" into a second public
-   * enrolment path.** Enabling `emailAndPassword` enables `/sign-up/email` with
-   * it, so without this anyone could mint a password account on a product whose
-   * only intended door is a magic link — and `requireEmailVerification`,
-   * `minPasswordLength` and the rest would be describing a surface nobody meant
-   * to ship. The Admin's row comes from runbook §6's manual `UPDATE`.
+   * Every path this configuration's plugins serve, in declaration order. Read off
+   * the options rather than off a built instance, so this block stays where the
+   * rest of the file is: a pure read of what `authOptions` returns.
    */
-  it("closes credential sign-up, so the password door is not a second front door", () => {
-    expect(options.emailAndPassword?.enabled).toBe(true);
-    expect(options.emailAndPassword?.disableSignUp).toBe(true);
+  function pluginPaths(): string[] {
+    return options.plugins.flatMap((plugin) =>
+      Object.values(plugin.endpoints ?? {}).map((endpoint) => endpoint.path),
+    );
+  }
+
+  /**
+   * **The credential door and every setting that made it survivable, in one
+   * assertion.** Better Auth enables `/sign-up/email` alongside `/sign-in/email`,
+   * so this is not only "the Admin has no password" — it is "there is no second
+   * public enrolment path", which is the property `disableSignUp` used to hold.
+   */
+  it("configures no credential door at all", () => {
+    expect(options.emailAndPassword).toBeUndefined();
   });
 
-  it("requires a verified email on the one door that does not prove one", () => {
-    expect(options.emailAndPassword?.requireEmailVerification).toBe(true);
-  });
-
-  // Off by default, so a reset would leave the attacker's session alive — which
-  // is the session the reset was performed to end.
-  it("revokes sessions when the password is reset", () => {
-    expect(options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
-  });
-
-  it("puts the password floor at sixteen rather than the default eight", () => {
-    expect(options.emailAndPassword?.minPasswordLength).toBe(16);
+  /**
+   * **The plugin is gone and the door it could never reach is what replaced it.**
+   * Its sign-in interception matches `/sign-in/email`, `/sign-in/username` and
+   * `/sign-in/phone-number` and nothing else, so a passwordless first factor was
+   * always outside it. Asserting the tuple's length is what stops a later plugin
+   * being added back beside `adminDoor` without a reader noticing.
+   */
+  it("installs the magic link and the Admin door, and no second-factor plugin", () => {
+    expect(options.plugins).toHaveLength(2);
+    expect(options.plugins[1].id).toBe("recomencemos-admin-door");
   });
 
   /**
    * **The absence is the assertion.** An emailed OTP would put the second factor
    * in the same inbox the magic link already reaches, so a compromised mailbox
    * would hold both factors and NFR14 would be satisfied on paper by one
-   * credential. Better Auth only offers `otp` as a 2FA method when `sendOTP` is
-   * configured, so leaving it unset is what closes that door — and this is the
-   * test that says so, because "we did not configure it" is otherwise
-   * indistinguishable from "nobody thought about it".
+   * credential. The plugin that offered `otpOptions` is gone; what replaced it is
+   * `#admin/second-factor`, which implements TOTP and ten printed codes and has
+   * no email path to configure. This is the test that says the mailbox is factor
+   * one and is never also factor two.
    */
   it("offers no emailed second factor, so one mailbox is never both factors", () => {
-    expect(options.plugins[1].options?.otpOptions).toBeUndefined();
+    expect(pluginPaths()).toEqual([
+      "/sign-in/magic-link",
+      "/magic-link/verify",
+      SECOND_FACTOR_PATH,
+    ]);
   });
 
-  // The count is the go-live runbook's, in its Admin section.
-  it("issues ten backup codes, which is the count a human is asked to print", () => {
-    expect(options.plugins[1].options?.backupCodeOptions?.amount).toBe(10);
-  });
-
-  it("bounds the password door explicitly rather than inheriting 3-per-10s", () => {
-    expect(options.rateLimit?.customRules?.["/sign-in/email"]).toBeDefined();
+  /**
+   * **`/sign-in/email` had a bound of its own and no longer needs one.** The
+   * remaining two rules are the magic link's, and the Admin door's own endpoint
+   * is bounded per Account by `CEILINGS` rather than per IP here — a second
+   * number in this map would be one nobody could keep in agreement with those.
+   */
+  it("bounds only the doors that still exist", () => {
+    expect(Object.keys(options.rateLimit?.customRules ?? {}).toSorted()).toEqual([
+      "/magic-link/verify",
+      "/sign-in/magic-link",
+    ]);
   });
 
   /**
@@ -484,14 +502,18 @@ describe("the Admin's door", () => {
   });
 
   /**
-   * C44 as a mechanism rather than as a value. `trustDevice` is not a plugin
-   * option at 1.7.1 — it is a body field — so there is nothing on `options` to
-   * assert. What can be asserted is that the option a reader might reach for
-   * instead is absent, so nobody "fixes" this by setting `trustDeviceMaxAge` to a
-   * small number and believing the job is done. The refusal itself is a `before`
-   * middleware, and `admin-door.integration.test.ts` is what proves it fires.
+   * C44, and it is now true by construction rather than by mechanism.
+   * `trustDevice` was a body field on the plugin's two verify endpoints — passing
+   * `true` wrote a signed cookie plus a verification row that skipped the second
+   * factor for thirty days, against NFR13's eight non-rolling hours. It was
+   * stripped from the request by a `before` middleware, because "disabled
+   * outright" was not something the plugin's options could express.
+   *
+   * The plugin is gone, and this asserts that nothing came back with it: no
+   * endpoint under `/two-factor/` exists to carry the field, so there is nothing
+   * left to strip and no window to re-open by forgetting to.
    */
-  it("configures no trusted-device window, because the field is stripped instead", () => {
-    expect(options.plugins[1].options?.trustDeviceMaxAge).toBeUndefined();
+  it("exposes no endpoint that could carry a trusted-device flag", () => {
+    expect(pluginPaths().filter((path) => path.startsWith("/two-factor"))).toEqual([]);
   });
 });

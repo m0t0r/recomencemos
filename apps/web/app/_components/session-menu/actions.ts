@@ -35,14 +35,19 @@ const SIGNED_OUT_PATH = "/";
 /**
  * Where a signed-out Admin lands, and it is **not** the Wall.
  *
- * `/admin/sign-in` is the door they came through and the one they will come back
- * through; dropping them on the public product instead would answer "I have
- * finished moderating" with a different product entirely. It discloses nothing —
- * this path is only reachable by somebody who was authenticated a moment ago,
- * which is the difference between it and the link `forbidden.tsx` deliberately
- * does not offer.
+ * The public sign-in form is the first step of the door they came through and the
+ * one they will come back through — an Admin asks for a link there like anybody
+ * else, and what differs is only what consuming it grants. Dropping them on the
+ * Wall instead would answer "I have finished moderating" with a different product
+ * entirely.
+ *
+ * **It was `/admin/sign-in` until that route was deleted**, and the substitution
+ * is not a downgrade: the form here is where the Admin's first factor is
+ * requested, so this is the same "back to the door" it always meant. It also
+ * discloses less than the route it replaces did — this is the page every signed-out
+ * person can already reach, so landing on it says nothing about who just left.
  */
-const ADMIN_SIGNED_OUT_PATH = "/admin/sign-in";
+const ADMIN_SIGNED_OUT_PATH = "/sign-in";
 
 export const signOut = actionClient.stateAction(async () => endSession(SIGNED_OUT_PATH));
 
@@ -50,11 +55,10 @@ export const signOut = actionClient.stateAction(async () => endSession(SIGNED_OU
  * **`actionClient` and not `adminActionClient`**, which is the one thing here
  * worth a second look. Every *other* action under `/admin` is built from the
  * client that refuses a caller who is not an authenticated Admin — but that gate
- * demands a `password_totp` session, and the two states this button most needs to
- * work in are the ones that do not have one: an Admin part-way through the door
- * holding a `password` session, and an Admin whose session has just expired.
- * Refusing _Salir_ to either would leave a person holding a session they are being
- * told they may not end.
+ * demands the one session method the Admin door mints, and the state this button
+ * most needs to work in does not have it: an Admin whose session has just
+ * expired. Refusing _Salir_ there would leave a person holding a session they are
+ * being told they may not end.
  *
  * It is not a hole, because ending your own session is not an Admin capability —
  * `endSession` reads the caller's own session and revokes that one, so the worst

@@ -18,9 +18,6 @@ describe("signInMethodForPath", () => {
   it.each([
     ["/magic-link/verify", "magic_link"],
     ["/callback/:id", "google"],
-    ["/sign-in/email", "password"],
-    ["/two-factor/verify-totp", "password_totp"],
-    ["/two-factor/verify-backup-code", "password_totp"],
     [ADMIN_SECOND_FACTOR_PATH, "link_totp"],
   ] as const)("names %s as %s", (path, method) => {
     expect(signInMethodForPath(path)).toBe(method);
@@ -47,27 +44,29 @@ describe("signInMethodForPath", () => {
    * ship authority behind a door nobody reviewed.
    */
   it("mints an Admin session from one path and no other", () => {
-    const producers = [
-      "/magic-link/verify",
-      "/callback/:id",
-      "/sign-in/email",
-      "/two-factor/verify-totp",
-      "/two-factor/verify-backup-code",
-      ADMIN_SECOND_FACTOR_PATH,
-    ].filter((path) => signInMethodForPath(path) === ADMIN_SIGN_IN_METHOD);
+    const producers = ["/magic-link/verify", "/callback/:id", ADMIN_SECOND_FACTOR_PATH].filter(
+      (path) => signInMethodForPath(path) === ADMIN_SIGN_IN_METHOD,
+    );
 
     expect(producers).toEqual([ADMIN_SECOND_FACTOR_PATH]);
   });
 
   /**
-   * The credential door mints no Admin session at all any more — neither its
-   * one-factor member nor its two-factor one, which is what makes the page it
-   * belongs to dead weight rather than a second way in.
+   * **The credential door's three paths are not merely refused an Admin session —
+   * they are refused a session.** They named `password` and `password_totp` while
+   * the door stood; the contract half of DD5 removed the door, the two members and
+   * these rows together, so the table no longer knows the paths at all and the
+   * throw above is what they meet.
+   *
+   * That is a stronger statement than the one it replaces, and it is the reason
+   * this case survived the deletion rather than going with it: re-enabling
+   * `emailAndPassword` would put `/sign-in/email` back on the wire, and this says
+   * that a session behind it does not quietly acquire a method.
    */
   it.each(["/sign-in/email", "/two-factor/verify-totp", "/two-factor/verify-backup-code"] as const)(
-    "does not call a session from %s an Admin session",
+    "mints no session at all from %s",
     (path) => {
-      expect(signInMethodForPath(path)).not.toBe(ADMIN_SIGN_IN_METHOD);
+      expect(() => signInMethodForPath(path)).toThrow();
     },
   );
 
@@ -125,15 +124,14 @@ describe("session lifetime", () => {
    * account that can read every phone number in the system a thirty-day session —
    * the one lifetime NFR13 refuses it outright.
    */
-  it.each(["password", "password_totp", "link_totp"] as const)(
-    "holds a %s session to eight hours even on her own device",
-    (method) => {
-      expect(sessionSecondsFor(method, { sharedDevice: false })).toBe(ADMIN_SESSION_SECONDS);
-      expect(sessionSecondsFor(method, { sharedDevice: false })).not.toBe(
-        OWN_DEVICE_SESSION_SECONDS,
-      );
-    },
-  );
+  it("holds an Admin session to eight hours even on her own device", () => {
+    expect(sessionSecondsFor(ADMIN_SIGN_IN_METHOD, { sharedDevice: false })).toBe(
+      ADMIN_SESSION_SECONDS,
+    );
+    expect(sessionSecondsFor(ADMIN_SIGN_IN_METHOD, { sharedDevice: false })).not.toBe(
+      OWN_DEVICE_SESSION_SECONDS,
+    );
+  });
 
   it("computes the expiry from the clock it is given", () => {
     const now = new Date("2026-08-27T12:00:00.000Z");
@@ -144,7 +142,7 @@ describe("session lifetime", () => {
     expect(sessionExpiryFor("magic_link", { sharedDevice: false }, now).toISOString()).toBe(
       "2026-09-26T12:00:00.000Z",
     );
-    expect(sessionExpiryFor("password_totp", { sharedDevice: false }, now).toISOString()).toBe(
+    expect(sessionExpiryFor(ADMIN_SIGN_IN_METHOD, { sharedDevice: false }, now).toISOString()).toBe(
       "2026-08-27T20:00:00.000Z",
     );
   });
@@ -162,17 +160,23 @@ describe("session lifetime", () => {
  * credential door minted a real session on an Admin's own Account. Written as a
  * complement, a door added later cannot fall through — it is refused for not
  * being one string.
+ *
+ * **The two members that motivated it are gone and the complement is what
+ * survives them.** Nothing here names a door: this reads whatever
+ * `SIGN_IN_METHODS` holds, so the assertion is about the shape of the rule rather
+ * than about the doors that happen to exist today.
  */
 describe("the doors an Admin-granted Account is refused at", () => {
   const refused = SIGN_IN_METHODS.filter((method) => method !== ADMIN_SIGN_IN_METHOD);
 
   it("is every door but the Admin's, with none left outside the rule", () => {
-    expect([...refused].toSorted()).toEqual(["google", "magic_link", "password", "password_totp"]);
+    expect([...refused].toSorted()).toEqual(["google", "magic_link"]);
   });
 
-  it("includes the credential doors, which the narrower rule let through", () => {
-    expect(refused).toContain("password");
-    expect(refused).toContain("password_totp");
+  it("admits exactly one, and it is the one the door mints", () => {
+    expect(SIGN_IN_METHODS.filter((method) => method === ADMIN_SIGN_IN_METHOD)).toEqual([
+      ADMIN_SIGN_IN_METHOD,
+    ]);
   });
 });
 

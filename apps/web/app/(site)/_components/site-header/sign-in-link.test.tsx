@@ -2,10 +2,11 @@
  * The site shell's signed-out half.
  *
  * **It is the site shell's and not the session menu's**, which is why it has a
- * file of its own since #17: `(admin)` renders no sign-in link at all — a person
- * on `/admin/sign-in` is already looking at the door, and a link to the *public*
- * door would be the wrong one. The menu below the signed-in branch is shared; this
- * is not, and the split of the tests follows the split of the components.
+ * file of its own since #17: `(admin)` renders no sign-in link at all. The one
+ * state that shell paints signed-out in is its 403, and a refusal that offered a
+ * way onward would be a sign saying the door is this way on a page any anonymous
+ * caller can reach. The menu below the signed-in branch is shared; this is not,
+ * and the split of the tests follows the split of the components.
  */
 
 import { readFileSync, readdirSync } from "node:fs";

@@ -20,13 +20,13 @@
  * screens could do and which NFR18 and DD16's boundary list both forbid. That
  * holds wherever it renders.
  *
- * **Whether it costs client JavaScript depends on its caller, and it has two.**
- * On `/admin/enrol/[token]` it renders inside a Server Component, so the matrix
- * is computed during the render and only markup streams. On `/admin/sign-in` its
- * caller is `"use client"`, so `uqr` is in that route's client bundle — which is
- * a property of that surface rather than of this file, and it goes when the
- * password door does. The comment says so rather than claiming the stronger
- * thing, because the file moved up here to be shared and a claim that is true of
+ * **Whether it costs client JavaScript depends on its caller.** On
+ * `/admin/enrol/[token]`, its only caller now, it renders inside a Server
+ * Component, so the matrix is computed during the render and only markup streams.
+ * It had a second caller on `/admin/sign-in` whose enrolment step was
+ * `"use client"`, which put `uqr` in that route's client bundle; that route is
+ * deleted and the bundle cost went with it. The comment is phrased as a property
+ * of the caller rather than of this file, because a claim that is true of
  * one caller reads as a claim about the component.
  *
  * **The `d` attribute is not a URL.** DD7's clause about attributes built from

@@ -26,14 +26,14 @@ export const ADMIN_TITLE = "Fila";
  * The refusal, for a page and for an action alike.
  *
  * **One sentence for every caller it can meet** — signed out, a Worker, an Admin
- * on a magic-link session, an Admin who typed a password and no code. NFR14
- * answers 403 rather than redirecting so that an unauthenticated caller does not
- * learn the route is worth attacking; four different sentences would hand that
- * back by letting a caller work out which of the four they are.
+ * on a magic-link session, an Admin whose session has expired. NFR14 answers 403
+ * rather than redirecting so that an unauthenticated caller does not learn the
+ * route is worth attacking; a sentence per case would hand that back by letting a
+ * caller work out which one they are.
  *
- * It offers no route onward, and that is the same decision: a link to
- * `/admin/sign-in` on a page anyone can reach is a sign saying the door is here.
- * The Admin knows where the door is.
+ * It offers no route onward, and that is the same decision: a way onward on a page
+ * anyone can reach is a sign saying the door is here. The Admin knows where the
+ * door is.
  */
 export const ADMIN_SESSION_REQUIRED = "No tienes acceso a esta página.";
 

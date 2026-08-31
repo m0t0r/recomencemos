@@ -241,9 +241,13 @@ differently:
   chosen because a streamed shell is a **200** already on the wire by the time the gate answers. The
   queue's sources still stream inside the page.
 
-`/admin/sign-in` is the one route under the prefix that does not call the gate, and it is an
-exemption **by omission** — there is no allowlist, because a second place the boundary is described
-is the first place a later route falls on the wrong side of.
+**Every route under `(admin)` calls the gate, and there is no allowlist to keep in agreement with
+that.** `/admin/sign-in` was the one exemption and it was an exemption _by omission_ — a page that
+simply did not make the call. It is deleted, and the shape it demonstrated is the one to keep: the
+gate is a function each surface invokes, not a `proxy.ts` matching `/admin/:path*` with a carve-out,
+because a carve-out is a second place the boundary is described and the first place a later route
+falls on the wrong side of. `app/(token)/` is how a token-reached route stays outside the group
+rather than becoming a hole inside it.
 
 **Every Server Action is built from `apps/web/lib/safe-action.ts`.** That module holds
 `actionClient`, the `handleServerError` bridge from `AppError` to the client envelope,
@@ -311,13 +315,12 @@ the second-Admin recovery path and the break-glass: it replaces the factor rathe
 recovery path that costs nobody a printed backup code is another Admin who can still sign in — and
 write every string and comment for "an Admin" rather than "the Admin".
 
-**`pnpm admin:grant <email>` is what it replaces, and it now refuses.** It set the grant **first** and
-left the second factor to a later sign-in at `/admin/sign-in` — the window `admin:enrol` closes. With
-the passwordless door in place that sign-in answers **403**, and the passwordless one asks for a code
-against a second factor this command never enrols, so its successful path produced an Account locked
-out of every way in. It prints that and exits `2`. The file, the script and the `emailAndPassword`
-configuration behind it go together in the contract ticket that drops the columns; do not reach for
-it, and do not copy its shape.
+**`pnpm admin:grant` was what it replaced, and it is gone.** It set the grant **first** and left the
+second factor to a later sign-in at `/admin/sign-in` — the window `admin:enrol` closes — so its
+successful path produced an Account holding Admin authority with nothing in front of it. It stood for
+one slice as a command that printed a refusal and exited `2`, and the file, the script, the route,
+the `emailAndPassword` configuration and the `twoFactor` plugin went together in the contract half of
+DD5. There is one way to make an Admin, and it is the paragraph above.
 
 **Migrations are generated, never hand-written.** `pnpm db:generate` writes them from `packages/domain/src/schema.ts`; `pnpm db:migrate` applies them on the direct connection. `.claude/hooks/build-guard.sh` rule J refuses a `Write` or `Edit` to a migration the journal already names — `drizzle-kit` writes through `Bash`, which is exactly the split that rule intends. `packages/domain/drizzle/` is oxfmt-ignored for the `pnpm-workspace.yaml` reason: `drizzle-kit` owns those files and rewrites them in its own style on every generate.
 

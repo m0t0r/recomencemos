@@ -24,12 +24,13 @@ import {
   SIGN_IN_CHALLENGE_COOKIE,
 } from "#admin/challenge";
 import { ADMIN_CODE_REFUSED_CODE } from "#auth/admin-door";
+import { authOptions } from "#auth/config";
 import { createAuthHandler } from "#auth/index";
 import { ADMIN_SESSION_SECONDS } from "#auth/sign-in-attempt";
 import * as schema from "#schema";
 import { type AuthStack, BASE_URL, enrolledAdmin, signInStack } from "#testing/auth-stack";
 import { test, type TestDatabase } from "#testing/fixtures";
-import { ADMIN_SECOND_FACTOR_REFUSED } from "#user-messages";
+import { ADMIN_SECOND_FACTOR_REFUSED, ADMIN_SIGN_IN_ONLY } from "#user-messages";
 
 /** The same value `signInStack` configures, because the door decrypts with it. */
 const KEY = "a-secret-long-enough-for-the-configuration-to-build";
@@ -526,5 +527,121 @@ describe("the method apps/web holds", () => {
       "session_token",
     );
     expect((await sessionFor(database, accountId))?.signInMethod).toBe("link_totp");
+  });
+});
+/**
+ * **The refusal at every door that is not this one**, which is NFR14's first half
+ * and the branch nothing else in this repository executes.
+ *
+ * `magic_link` is diverted into the challenge and `link_totp` is admitted; every
+ * remaining member reaches one unbranched `throw`, and after DD5's contract half
+ * `google` is the only member left that reaches it. That matters more than it
+ * reads: the credential door's own suite used to cover this statement, and it
+ * declined to drive Google on the grounds that _"`password` and `password_totp`
+ * execute the same statement this case executes"_ — an argument that expired the
+ * moment those two members were deleted. `/code-review` found the hole that left.
+ *
+ * **It drives the configured hook rather than the endpoint**, and that is the one
+ * decision here worth defending. Reaching this through a real `/callback/:id`
+ * would mean configuring a social provider and standing up a token exchange, which
+ * `#testing/auth-stack` deliberately refuses because it adds an outbound leg no
+ * test has business having. What is called instead is
+ * `databaseHooks.session.create.before` **off the shipped options object**, with a
+ * real database behind it — the same function, reached the way Better Auth reaches
+ * it, with the same arguments. The half it cannot prove is that Better Auth calls
+ * it at all; "gives a granted Account a challenge and no session" above proves
+ * that, through the same hook on the other branch.
+ */
+const GOOGLE_CALLBACK = "/callback/:id";
+
+const spyLogger = () => ({ info: vi.fn(), warn: vi.fn() });
+
+describe("a door that is not the Admin door, on a granted Account", () => {
+  /** The shipped hook, over a real database, with a logger the test can read. */
+  function beforeSessionCreate(
+    database: TestDatabase,
+    logger: ReturnType<typeof spyLogger> = spyLogger(),
+  ) {
+    const options = authOptions({
+      db: database.db,
+      sendMagicLink: async () => {},
+      logger,
+      env: { BETTER_AUTH_SECRET: KEY, BETTER_AUTH_URL: BASE_URL },
+    });
+
+    const hook = options.databaseHooks?.session?.create?.before;
+    if (!hook) throw new Error("the options carry no session-create hook");
+
+    return { hook, logger };
+  }
+
+  /** What Better Auth hands the hook, narrowed to the two fields it reads. */
+  const arriving = (accountId: string) =>
+    [{ userId: accountId }, { path: GOOGLE_CALLBACK }] as [never, never];
+
+  /**
+   * **A real 403 with a legible body, and not an `AppError`.** The first version
+   * of this refusal threw an `AppError` and the endpoint answered **500** — read
+   * out of a running server rather than predicted, because the magic-link verify
+   * endpoint calls `createSession` outside its own `try`. Asserting the status
+   * here is what keeps that finding from being re-lost.
+   */
+  test("refuses the session outright, with the status the requirement asks for", async ({
+    database,
+  }) => {
+    const { accountId } = await enrolledAdmin(database, { email: ANA, key: KEY });
+    const { hook } = beforeSessionCreate(database);
+
+    await expect(hook(...arriving(accountId))).rejects.toMatchObject({ status: 403 });
+  });
+
+  /**
+   * The sentence is the one every refused door says. It names no door and no
+   * account, because it is reachable by anybody who can reach that door at all.
+   */
+  test("says the one thing every refused door says", async ({ database }) => {
+    const { accountId } = await enrolledAdmin(database, { email: ANA, key: KEY });
+    const { hook } = beforeSessionCreate(database);
+
+    await expect(hook(...arriving(accountId))).rejects.toMatchObject({
+      body: { message: ADMIN_SIGN_IN_ONLY },
+    });
+  });
+
+  /**
+   * **The operator half, which no test covered before this one.** The refusal is
+   * returned to the caller as one sentence that says nothing; the line is where
+   * "somebody tried, on this Account, through this door" is recorded. It carries
+   * the id and the door and **no address** — this fires on a path whose whole
+   * design is that it discloses which addresses exist to nobody.
+   */
+  test("records which Account and which door, and no address", async ({ database }) => {
+    const { accountId } = await enrolledAdmin(database, { email: ANA, key: KEY });
+    const { hook, logger } = beforeSessionCreate(database);
+
+    await expect(hook(...arriving(accountId))).rejects.toBeDefined();
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn.mock.calls[0]?.[0]).toEqual({
+      event: "admin.non_admin_door_refused",
+      account_id: accountId,
+      sign_in_method: "google",
+    });
+    expect(JSON.stringify(logger.warn.mock.calls[0])).not.toContain(ANA);
+  });
+
+  /**
+   * The same door on an Account holding no grant is untouched, which is what
+   * confines the rule to the Accounts it is about. The hook stamps the row it was
+   * given and returns it, rather than throwing.
+   */
+  test("leaves an Account holding no grant alone at the same door", async ({ database }) => {
+    const accountId = await ordinaryAccount(database);
+    const { hook, logger } = beforeSessionCreate(database);
+
+    expect(await hook(...arriving(accountId))).toMatchObject({
+      data: { signInMethod: "google" },
+    });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

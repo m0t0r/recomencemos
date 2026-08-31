@@ -9,12 +9,18 @@
  * a session cookie cache that makes every revocation in NFR13 and NFR15 lag by
  * its TTL.
  *
- * **The Admin's door landed with [#17](https://github.com/m0t0r/recomencemos/issues/17)**,
- * which is what `emailAndPassword` and the `twoFactor` plugin below are. What is
- * still deliberately absent, because it belongs to a later story rather than
- * because it was forgotten: `user.changeEmail` (story 12) and `user.deleteUser`
- * (story 13). Each is a row of DD5's table and each arrives with the surface that
- * uses it.
+ * **The Admin's door is `adminDoor` below and nothing else** (#17, then #104 and
+ * the contract half that followed it). There was an `emailAndPassword` block here
+ * and a `twoFactor` plugin beside it, and DD5's configuration table now records
+ * their **absence**: four settings whose only job was to make a credential door
+ * safe that one person opened, and a plugin whose sign-in interception matches
+ * `/sign-in/email`, `/sign-in/username` and `/sign-in/phone-number` and therefore
+ * could never have challenged a passwordless first factor at all.
+ *
+ * What is still deliberately absent, because it belongs to a later story rather
+ * than because it was forgotten: `user.changeEmail` (story 12) and
+ * `user.deleteUser` (story 13). Each is a row of DD5's table and each arrives
+ * with the surface that uses it.
  */
 
 import { createHash } from "node:crypto";
@@ -23,7 +29,6 @@ import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
-import { twoFactor } from "better-auth/plugins/two-factor";
 import { eq } from "drizzle-orm";
 import {
   ADMIN_CHALLENGE_TTL_SECONDS,
@@ -33,7 +38,6 @@ import {
   SIGN_IN_CHALLENGE_COOKIE_ATTRIBUTES,
   signSignInChallenge,
 } from "#admin/challenge";
-import { BACKUP_CODE_COUNT, TOTP_ISSUER } from "#admin/second-factor";
 import { adminDoor } from "#auth/admin-door";
 import {
   readSignInAttempt,
@@ -63,11 +67,7 @@ import { ADMIN_SIGN_IN_ONLY, SIGN_IN_FAILED } from "#user-messages";
  * brought it in satisfies both.
  */
 export type AuthOptions = BetterAuthOptions & {
-  plugins: [
-    ReturnType<typeof magicLink>,
-    ReturnType<typeof twoFactor>,
-    ReturnType<typeof adminDoor>,
-  ];
+  plugins: [ReturnType<typeof magicLink>, ReturnType<typeof adminDoor>];
 };
 
 /** Read as a plain record, so seam 1 can hand it one. Matches `#config`'s shape. */
@@ -106,32 +106,6 @@ export const DEVELOPMENT_SECRET = "development-only-secret-do-not-deploy-3f9a2c"
  * password to fall back on.
  */
 export const MAGIC_LINK_TTL_MINUTES = 15;
-
-/**
- * DD5's floor for the one password in this system, and it is **16** rather than
- * Better Auth's default of 8.
- *
- * _"for the accounts that can read every phone number"_ — that is the whole
- * argument. The Admin's password is not one credential among thousands where a
- * floor trades security against sign-up completion; it is the single credential
- * guarding the accounts that can take down a profile, unfreeze a Hirer, and read
- * every exchanged contact detail in the system. There is no completion rate to
- * protect, because exactly one person ever types it.
- */
-export const ADMIN_MIN_PASSWORD_LENGTH = 16;
-
-/**
- * The issuer label and the number of backup codes now live in
- * `#admin/second-factor`, with the code that generates them, and are re-exported
- * here so the plugin below still reads one spelling of each.
- *
- * **The move is the direction of travel rather than tidying.** The plugin is
- * being replaced by the module that owns those two values — it can only
- * challenge a credential path, so it can never challenge the Admin's door — and
- * leaving the constants beside its configuration would have made the ticket that
- * deletes it also the ticket that re-homes them.
- */
-export { BACKUP_CODE_COUNT, TOTP_ISSUER };
 
 /** What a caller must give this package so it can send the one email it sends. */
 export interface MagicLinkRequest {
@@ -407,40 +381,6 @@ export function authOptions({
     },
 
     /**
-     * **The credential door, and it exists for one account.**
-     *
-     * Four of DD5's rows, and `disableSignUp` is the fifth thing that makes the
-     * other four mean what they say. Enabling `emailAndPassword` in Better Auth
-     * enables `/sign-up/email` with it, so without that flag this block would not
-     * be "the Admin's door" — it would be a second public enrolment path onto a
-     * product whose only intended door is a magic link, on which anyone could
-     * mint a password account. The Admin's row is created by runbook §6's manual
-     * `UPDATE`, not by a form.
-     */
-    emailAndPassword: {
-      enabled: true,
-      disableSignUp: true,
-
-      /**
-       * DD5: _"Admin only; the credential account is the one worth it"_. The
-       * magic-link door proves the address by construction — opening a link sent
-       * to it *is* the proof — and this is the one door where that proof is
-       * absent.
-       */
-      requireEmailVerification: true,
-
-      /**
-       * **Off by default, so a reset would leave the attacker's session alive**
-       * (DD5). A password reset is what a person does *because* they think
-       * someone else is in the account; leaving that someone's session open is
-       * the failure the act was meant to end.
-       */
-      revokeSessionsOnPasswordReset: true,
-
-      minPasswordLength: ADMIN_MIN_PASSWORD_LENGTH,
-    },
-
-    /**
      * The shared-device answer, carried where the round trip cannot lose it.
      * Declared here rather than added as a column by hand, which is DD5's rule
      * and the reason `auth-schema.test.ts` can check the two against each other.
@@ -546,38 +486,6 @@ export function authOptions({
       }),
 
       /**
-       * **The Admin's second factor** (NFR14, DD5, C43, C44).
-       *
-       * Deliberately configured in four places and left alone everywhere else:
-       *
-       * - **`issuer`**, so the authenticator app names the product rather than a
-       *   hostname.
-       * - **`otpOptions` absent.** Email and SMS second factors are not offered,
-       *   and the absence is the decision: an emailed OTP would put the second
-       *   factor in the same inbox the magic link already reaches, so a
-       *   compromised inbox would hold both factors and NFR14 would be satisfied
-       *   on paper by one credential. TOTP and ten printed backup codes are DD5's
-       *   two, and they are independent of the mailbox.
-       * - **`backupCodeOptions.amount`**, stated rather than inherited because
-       *   runbook §6 tells a human to print ten.
-       * - **`accountLockout` left at its defaults**, which is a decision: ten
-       *   consecutive failures then fifteen minutes, counted **per account across
-       *   challenges and factors**. That is a stronger bound than any NFR26
-       *   ceiling could give this path, because it survives an attacker rotating
-       *   IPs and addresses — which is why no `CEILINGS` row is added for TOTP.
-       *
-       * **`trustDevice` is not a setting, and C44 reads as though it were.** At
-       * 1.7.1 it is a *body field* on `/two-factor/verify-*`, so "trusted devices
-       * are disabled outright" cannot be expressed here at all. It is enforced in
-       * `beforeSignIn` below, by stripping the field from the request — a
-       * mechanism rather than a rule about what callers must remember not to send.
-       */
-      twoFactor({
-        issuer: TOTP_ISSUER,
-        backupCodeOptions: { amount: BACKUP_CODE_COUNT },
-      }),
-
-      /**
        * **The Admin's door** (NFR14, DD5). One endpoint, which mints the only
        * `link_totp` session this product can produce — see `#auth/admin-door`
        * for why it is a plugin rather than a function called from a Server
@@ -600,39 +508,19 @@ export function authOptions({
       customRules: {
         /**
          * Explicit rather than inherited. The default for a sensitive endpoint
-         * is 3 per 10 seconds, which would leave the one credential in this
-         * system on a number nobody chose. These mirror `CEILINGS` in
-         * `./rate-limit` — the Server Action's per-address bound is the real
-         * one; this is the same bound on the door that bypasses it.
+         * is 3 per 10 seconds, which would leave the only way into this product
+         * on a number nobody chose. These mirror `CEILINGS` in `./rate-limit` —
+         * the Server Action's per-address bound is the real one; this is the
+         * same bound on the door that bypasses it.
+         *
+         * **`/second-factor/verify` is not here, and its absence is a decision.**
+         * The Admin door's own endpoint is bounded per *Account* by two `CEILINGS`
+         * rows counted separately, which is a stronger bound than a per-IP number
+         * because it survives an attacker rotating addresses. A second bound here
+         * would be a number nobody could keep in agreement with those two.
          */
         "/sign-in/magic-link": { window: 60 * 60, max: 20 },
         "/magic-link/verify": { window: 60 * 60, max: 40 },
-
-        /**
-         * **The Admin's password door, and the one path here with no NFR26
-         * ceiling behind it** (#17).
-         *
-         * NFR26's `CEILINGS` registry bounds the actions this product defines,
-         * and every member of it is an action a *Worker or Hirer* takes — there
-         * is no row for an Admin sign-in and adding one would mean a
-         * `rate_counter.action` constraint change for a path Better Auth's own
-         * limiter already sees. So this is where the bound lives.
-         *
-         * **Ten per hour, against a sixteen-character floor.** The number is not
-         * doing the heavy lifting and should not pretend to: with
-         * `minPasswordLength` at 16 the search space is what defends the
-         * password, and this bounds the *noise* rather than the cryptography. It
-         * is a handful of accounts, each signing in about once a day, so ten
-         * leaves room for a mistyped password and a fresh browser without
-         * leaving room for a script.
-         *
-         * `/two-factor/*` is **not** listed, and that is deliberate rather than
-         * an omission: the plugin declares its own 3-per-10-seconds rule over
-         * that prefix, and its per-account lockout is the bound that actually
-         * matters there. Restating either here would be a second number nobody
-         * could keep in agreement with the library's.
-         */
-        "/sign-in/email": { window: 60 * 60, max: 10 },
       },
     },
 
@@ -920,38 +808,27 @@ const NO_PROVIDER_TOKENS = {
  * address is indistinguishable from every other it is an oracle. The Admin
  * divert was written this way once; it lives in `sendMagicLink` above now, and
  * the comment there records what it cost.
+ *
+ * **C44 needed a fourth case here and no longer does, which is the plugin's
+ * deletion paying out.** `trustDevice` was a field on the body of
+ * `/two-factor/verify-totp` and `/two-factor/verify-backup-code`: passing `true`
+ * wrote a signed cookie plus a verification row that skipped the second factor
+ * for thirty days, against the eight non-rolling hours NFR13 gives an account
+ * that can take down a profile and read every phone number in the system. It was
+ * stripped from the request on the way in, because "disabled outright" was not
+ * something the plugin's options could express. Both endpoints went with the
+ * plugin; the Admin door has one endpoint of its own whose body schema is a
+ * single `code`, so there is no field to strip and no case to write.
  */
 async function beforeSignIn(
   // oxlint-disable-next-line no-explicit-any -- Better Auth's middleware context
-  // is structurally typed per endpoint; the four paths below read four different
-  // shapes off it, and narrowing them here would restate the library's own types.
+  // is structurally typed per endpoint; the three paths below read three
+  // different shapes off it, and narrowing them here would restate the library's
+  // own types.
   ctx: any,
   db: DomainDatabase,
 ): Promise<{ context: Record<string, unknown> } | undefined> {
   const path: string = ctx.path ?? "";
-
-  /**
-   * **C44, enforced rather than agreed: trusted devices are off for the Admin.**
-   *
-   * DD5 reads as though `trustDevice: false` were a plugin option. It is not — at
-   * 1.7.1 it is a field on the body of `/two-factor/verify-totp` and
-   * `/two-factor/verify-backup-code`, and passing `true` writes a signed cookie
-   * plus a verification row that skip the second factor for `trustDeviceMaxAge`,
-   * **thirty days** by default. NFR13 gives this account an eight-hour
-   * non-rolling session precisely because it can take down a profile and read
-   * every phone number in the system; a trusted device means those eight-hour
-   * sessions are re-established on a password alone all month, which is C44's
-   * whole finding.
-   *
-   * The only expression of "disabled outright" available is therefore to remove
-   * the field from the request. It is done here, on the way in, rather than by
-   * this package's own callers omitting it — because a rule that lives in what
-   * callers remember not to send is not a mechanism, and `/api/auth/*` is a door
-   * a caller reaches without going through any of them.
-   */
-  if (path === "/two-factor/verify-totp" || path === "/two-factor/verify-backup-code") {
-    if (ctx.body && typeof ctx.body === "object") delete ctx.body.trustDevice;
-  }
 
   switch (path) {
     /**

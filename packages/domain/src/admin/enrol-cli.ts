@@ -11,7 +11,8 @@
  * and only then sets the grant.
  *
  * **What it replaces, and why the replacement is a different shape.**
- * `pnpm admin:grant` set `is_admin` first and left the second factor to a later
+ * `pnpm admin:grant`, deleted with the password door it depended on, set
+ * `is_admin` first and left the second factor to a later
  * sign-in — so between those two acts there was a granted Account with one
  * factor, and that window was the whole of the first sign-in. Inverting the order
  * closes it: an Account cannot hold Admin authority until a working authenticator

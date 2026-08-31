@@ -156,18 +156,6 @@ export const ADMIN_ACCOUNT_NOT_FOUND = "No hay ninguna cuenta con ese correo.";
 export const ADMIN_ACTION_FAILED = "No pudimos completar la acción. Nada cambió; intenta de nuevo.";
 
 /**
- * The Admin's password was refused — or the address was, or the address is
- * unverified. **One sentence for all three**, because a reply that differed would
- * identify which addresses hold the Admin grant, which is NFR14's own argument for
- * answering 403 rather than redirecting, one level down.
- *
- * It does not say "intenta de nuevo" the way `SIGN_IN_FAILED` does: this is not a
- * fault on our side, it is a refusal, and Don't 4 is about not calling our rule
- * her mistake — not about softening a refusal into an invitation to guess again.
- */
-export const ADMIN_SIGN_IN_REFUSED = "Esos datos no coinciden.";
-
-/**
  * The second factor was refused: a wrong code, an expired challenge, or an
  * account locked after ten consecutive failures.
  *
@@ -179,18 +167,6 @@ export const ADMIN_SIGN_IN_REFUSED = "Esos datos no coinciden.";
  */
 export const ADMIN_SECOND_FACTOR_REFUSED =
   "Ese código no sirve. Prueba otra vez, o usa uno de tus códigos de respaldo.";
-
-/**
- * Enrolling the second factor broke before a secret was stored.
- *
- * **"Nada quedó guardado" is the load-bearing half.** A half-finished enrolment is
- * the C43 failure — an Admin locked out of the platform they moderate — so the one
- * thing this person needs to know is that the Account is exactly as it was and
- * starting again is safe. It is true by construction: the secret and the codes are
- * written in one call, and a failure leaves neither.
- */
-export const ADMIN_ENROLMENT_FAILED =
-  "No pudimos configurar tu segundo factor. Nada quedó guardado; empieza otra vez.";
 
 /**
  * The *aviso de privacidad* or the *autorización* changed while she had the form
