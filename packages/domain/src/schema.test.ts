@@ -176,8 +176,23 @@ describe("isolation between restores", () => {
   });
 });
 
+/**
+ * The tables a migration deliberately fills, and the only ones exempt from the
+ * check below.
+ *
+ * **Reference data is not a fixture, and the distinction is the whole point of
+ * naming it here rather than loosening the assertion.** `skill` holds the closed
+ * vocabulary, seeded by an idempotent migration (DD12) precisely so that seam 2
+ * and production cannot hold different lists — so rows there are part of the
+ * schema in the way a `CHECK` is. Every other table starting non-empty is still
+ * somebody's fixture leaking into every test file, which is what this check
+ * exists to catch, and adding a name to this list is a decision rather than a
+ * fix.
+ */
+const SEEDED = new Set(["skill"]);
+
 describe("the snapshot the schema is built from", () => {
-  it("carries no data of its own, so a fixture cannot be inherited by accident", async () => {
+  it("carries no data of its own beyond what a migration seeds", async () => {
     const { rows } = await database.client.query<{ relname: string }>(
       `SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = 'public' AND c.relkind = 'r'`,
@@ -194,10 +209,18 @@ describe("the snapshot the schema is built from", () => {
         const { rows: result } = await database.client.query<{ count: string }>(
           `SELECT count(*)::text AS count FROM "${relname}"`,
         );
-        return [relname, Number(result[0]?.count)];
+        return { relname, count: Number(result[0]?.count) };
       }),
     );
 
-    expect(counted).toEqual(rows.map(({ relname }) => [relname, 0]));
+    expect(counted.filter(({ relname }) => !SEEDED.has(relname))).toEqual(
+      rows
+        .filter(({ relname }) => !SEEDED.has(relname))
+        .map(({ relname }) => ({ relname, count: 0 })),
+    );
+
+    // The exemption is not a hole: a seeded table that arrived empty would mean
+    // the seed had stopped applying, and this is where that is noticed.
+    expect(counted.filter(({ relname, count }) => SEEDED.has(relname) && count === 0)).toEqual([]);
   });
 });

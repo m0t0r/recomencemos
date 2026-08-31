@@ -17,6 +17,7 @@
     "#rate-limit": "./src/rate-limit.ts",
     "#schema": "./src/schema.ts",
     "#server-only": "./src/server-only.ts",
+    "#skills": "./src/skills/index.ts",
     "#testing/auth-stack": "./src/testing/auth-stack.ts",
     "#testing/database": "./src/testing/database.ts",
     "#testing/fixtures": "./src/testing/fixtures.ts",
@@ -30,7 +31,8 @@
     "./export": "./src/export.ts",
     "./health": "./src/health.ts",
     "./migrate": "./src/migrate/index.ts",
-    "./rate-limit": "./src/rate-limit.ts"
+    "./rate-limit": "./src/rate-limit.ts",
+    "./skills": "./src/skills/index.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",

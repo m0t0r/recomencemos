@@ -113,6 +113,9 @@ const PUBLISHED = [
   // The enrolment screen's one read. It renders three credentials and grants
   // nothing; the granting half is in `WITHHELD` above.
   "@repo/domain/admin-enrolment",
+  // #15's reads over the closed Skill vocabulary. The seed is a migration, so
+  // this subpath publishes no way to write one.
+  "@repo/domain/skills",
 ];
 
 describe("the domain package's export map", () => {
