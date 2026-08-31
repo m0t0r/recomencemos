@@ -80,7 +80,7 @@ string. `pnpm test` runs it as the `//#spec-identifiers` task, CI runs it inside
 JavaScript's. All three quoting forms are read — `'…'` takes no escapes, `"…"` interpolates, `$'…'`
 has escapes of its own — while a `#` opens a comment only at a word boundary, so `$#` and `foo#bar`
 are ordinary text and a comment is still never read. A heredoc body is data at a delimiter the script
-names and is skipped whole. And `"$NFR8 holds"` names a variable rather than citing anything, exactly
+names and is skipped whole, while a `${MSG:-a default}` is a word the shell prints and so is read. And `"$NFR8 holds"` names a variable rather than citing anything, exactly
 as `${NFR8}` does inside a template literal.
 
 Two things a reviewer still has to do, because no check can:

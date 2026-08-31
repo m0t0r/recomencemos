@@ -408,11 +408,38 @@ export function shellStringLiterals(source) {
     if (text.length > 0) literals.push({ ...position, text });
   };
 
-  // Past a `${ … }`, which is a name and its modifiers rather than a script.
-  const skipBraces = (index) => {
-    let depth = 0;
-    let j = index;
-    while (j < source.length) {
+  // Past a `${ … }`, reading the **word** most of its forms carry. This is not
+  // a script, so it is not recursed into — but it is not only a name either:
+  // `${MSG:-a default}`, `${VAR#prefix}` and `${VAR//a/b}` all put text on
+  // screen, and `plan-to-design-gate.sh` writes one into the middle of a refusal
+  // a person reads. Skipping the expansion whole, which this reader did first,
+  // lost every one of them. So the name and its subscript are stepped over and
+  // whatever follows is read as a literal — operator characters included, since
+  // no citation is shaped like one.
+  //
+  // `${#items[@]}` and `${!ref}` open with an operator instead of a name, and
+  // what follows *is* the name, so those two carry no word at all.
+  const readBraceExpansion = (index) => {
+    let j = index + 1;
+    const prefixed = source[j] === "#" || source[j] === "!";
+    if (prefixed) j += 1;
+    if (/[A-Za-z_]/.test(source[j] ?? "")) {
+      while (j < source.length && /\w/.test(source[j])) j += 1;
+    } else if (/\d/.test(source[j] ?? "")) {
+      while (j < source.length && /\d/.test(source[j])) j += 1;
+    } else if (j < source.length && source[j] !== "}") {
+      // One of the special parameters — `@`, `*`, `?`, `$`, `!`, `-`, `#`.
+      j += 1;
+    }
+    if (source[j] === "[") {
+      while (j < source.length && source[j] !== "]") j += 1;
+      j += 1;
+    }
+
+    const wordStart = j;
+    const position = at(wordStart);
+    let depth = 1;
+    while (j < source.length && depth > 0) {
       const c = source[j];
       if (c === "\\") {
         j += 2;
@@ -422,11 +449,45 @@ export function shellStringLiterals(source) {
       if (c === "{") depth += 1;
       else if (c === "}") {
         depth -= 1;
+        if (depth === 0) break;
+      }
+      j += 1;
+    }
+    if (!prefixed) emit(position, wordStart, Math.min(j, source.length));
+    return j < source.length ? j + 1 : j;
+  };
+
+  // Past a `$(( … ))` or a `(( … ))`. Arithmetic holds no string, and — the
+  // reason this exists — its `<<` is a shift rather than a heredoc marker.
+  // `n=$(( 1 << 2 ))` announced a heredoc terminated by `2` and swallowed every
+  // line after it.
+  const skipArithmetic = (index) => {
+    let depth = 0;
+    let j = index;
+    while (j < source.length) {
+      const c = source[j];
+      if (c === "\n") newline(j);
+      if (c === "(") depth += 1;
+      else if (c === ")") {
+        depth -= 1;
         if (depth === 0) return j + 1;
       }
       j += 1;
     }
     return j;
+  };
+
+  // A `'…'` and a `$'…'` differ in one thing: the first takes no escapes at
+  // all, which is why an apostrophe cannot be escaped out of it.
+  const readSingleQuoted = (start, escapes) => {
+    const position = at(start);
+    let j = start;
+    while (j < source.length && source[j] !== "'") {
+      if (source[j] === "\n") newline(j);
+      j += escapes && source[j] === "\\" ? 2 : 1;
+    }
+    emit(position, start, Math.min(j, source.length));
+    return source[j] === "'" ? j + 1 : j;
   };
 
   // Past the bodies of every heredoc the line just read announced. An
@@ -481,11 +542,13 @@ export function shellStringLiterals(source) {
       } else if (c === "`") {
         stack.push({ kind: "backtick", parens: 0 });
         i += 1;
+      } else if (c === "$" && source[i + 1] === "(" && source[i + 2] === "(") {
+        i = skipArithmetic(i + 1);
       } else if (c === "$" && source[i + 1] === "(") {
         stack.push({ kind: "substitution", parens: 0 });
         i += 2;
       } else if (c === "$" && source[i + 1] === "{") {
-        i = skipBraces(i + 1);
+        i = readBraceExpansion(i + 1);
       } else if (c === "$") {
         i += 1;
         while (i < source.length && /\w/.test(source[i])) i += 1;
@@ -514,15 +577,7 @@ export function shellStringLiterals(source) {
     }
 
     if (character === "'") {
-      const start = i + 1;
-      const position = at(start);
-      i += 1;
-      while (i < source.length && source[i] !== "'") {
-        if (source[i] === "\n") newline(i);
-        i += 1;
-      }
-      emit(position, start, Math.min(i, source.length));
-      if (source[i] === "'") i += 1;
+      i = readSingleQuoted(i + 1, false);
       wordBoundary = false;
       continue;
     }
@@ -544,28 +599,28 @@ export function shellStringLiterals(source) {
     if (character === "$") {
       const next = source[i + 1];
       if (next === "'") {
-        const start = i + 2;
-        const position = at(start);
-        i += 2;
-        while (i < source.length && source[i] !== "'") {
-          if (source[i] === "\n") newline(i);
-          i += source[i] === "\\" ? 2 : 1;
-        }
-        emit(position, start, Math.min(i, source.length));
-        if (source[i] === "'") i += 1;
+        i = readSingleQuoted(i + 2, true);
       } else if (next === '"') {
         stack.push({ kind: "dquote", parens: 0 });
         i += 2;
+      } else if (next === "(" && source[i + 2] === "(") {
+        i = skipArithmetic(i + 1);
       } else if (next === "(") {
         stack.push({ kind: "substitution", parens: 0 });
         i += 2;
       } else if (next === "{") {
-        i = skipBraces(i + 1);
+        i = readBraceExpansion(i + 1);
       } else {
         i += 1;
         while (i < source.length && /\w/.test(source[i])) i += 1;
       }
       wordBoundary = false;
+      continue;
+    }
+
+    if (character === "(" && source[i + 1] === "(" && wordBoundary) {
+      i = skipArithmetic(i);
+      wordBoundary = true;
       continue;
     }
 
@@ -583,7 +638,12 @@ export function shellStringLiterals(source) {
       while (source[j] === " " || source[j] === "\t") j += 1;
       const start = j;
       while (j < source.length && !/[\s;&|<>()]/.test(source[j])) j += 1;
-      const term = source.slice(start, j).replace(/[^A-Za-z0-9_]/g, "");
+      // Quote removal, and nothing else — which is exactly what a shell does
+      // to the marker. Dropping every non-word character instead (as
+      // `gate-lib.sh` does for its own, coarser purpose) turns `<<END-OF-MSG`
+      // into `ENDOFMSG`, which no terminator line matches, so the body runs to
+      // the end of the file and the file reports clean.
+      const term = source.slice(start, j).replace(/['"\\]/g, "");
       if (term !== "") pending.push({ term, stripTabs });
       i = j;
       wordBoundary = true;
