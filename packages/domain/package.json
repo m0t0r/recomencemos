@@ -39,16 +39,16 @@
     "generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@better-auth/utils": "0.4.2",
+    "@better-auth/utils": "0.5.0",
     "@repo/errors": "workspace:*",
     "@repo/observability": "workspace:*",
-    "better-auth": "1.7.1",
+    "better-auth": "1.7.2",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.23.0",
     "server-only": "^0.0.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.7",
+    "@electric-sql/pglite": "0.5.8",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.23.1",
