@@ -70,7 +70,7 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
   - **The database arrives as a `test.extend` fixture, not as hooks.** Import `test` from `#testing/fixtures` in an `*.integration.test.ts` and destructure `{ database }`; the restore-and-close lifecycle is the fixture's. Three files used to open with the identical `let database` / `beforeEach` / `afterEach`. The fixture lives in `#testing/fixtures` and **not** in `#testing/database` on purpose: `global-setup.ts` imports the latter for `SNAPSHOT_PATH`, and a `test.extend` at that module's top level aborts the run with _"Vitest failed to find the current suite"_ because `globalSetup` runs with no suite. The globals stay — this replaces `describe`/`it`/`expect` with nothing.
   - `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows.
 - `web:test` — `vitest run`, **happy-dom**, the design system's config copied per the paragraph below, plus `vitest.setup.ts`. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`. Its setup file registers **`toMatchSchema`** from `apps/web/testing/matchers.ts` — a custom matcher taking a **Standard Schema** rather than a Zod schema, so nothing in a test has an opinion about the validation library. Reach for a matcher over a helper when the assertion's failure message is the thing worth owning: `expect(x).toBe(true)` on a `safeParse` result reports `false is not true` and names neither the rule nor the value.
-- `//#test:gates` — `gate-test.sh`, the 177 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the three gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and all three scripts.
+- `//#test:gates` — `gate-test.sh`, the 206 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the three gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and all three scripts.
   - The **dependency audit** (`scripts/audit-direct.mjs`), thirteen cases. Five exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0.
   - **Migration integrity** (`scripts/migration-integrity.mjs`), fifty-seven cases across NFR30's four counts — an append-only journal, immutable shipped migrations, destructive statements travelling alone under a `contract` marker, and a marked migration never sharing a pull request with `@repo/domain`'s query modules. Its fixtures are real git repositories, because the gate's whole frame is `git merge-base <base branch> HEAD` and there is nothing left to mock that would still be the thing under test. Ten of the fifty-seven are a section of their own — holes `/code-review` found in the first draft, four of which passed green while checking nothing. Read them before touching the SQL scan: an escaped quote that swallowed the rest of the file, and an `ALTER TABLE` whose comma-separated actions hid a `DROP` beside an `ADD`. **`run_mig` unsets `GITHUB_BASE_REF` for every case**, and that is load-bearing: CI sets it on a `pull_request` event, the gate reads it ahead of `origin/HEAD`, and a fixture is a different repository with no such ref — thirty-five cases went red on the first CI run for exactly that.
 
@@ -96,7 +96,7 @@ CHECK` back **on `t`**, and an earlier migration already declared `t`.`x` a `CHE
   deliberately narrow — a bare drop, a re-add under another name, a re-add on another table, and a
   re-add as `UNIQUE` all still refuse, and twenty `gate-test.sh` cases say so.
 
-  The **spec-identifier gate** (`scripts/spec-identifiers.mjs`), forty-three cases. It is the one
+  The **spec-identifier gate** (`scripts/spec-identifiers.mjs`), seventy-two cases. It is the one
   gate here that has to read a language rather than a file format, and every case that is not a
   citation is about that: comments are the record and are never read, so a continuation line of a
   block comment and a `{/* … */}` in JSX both pass, while a closing JSX tag, an apostrophe in JSX
@@ -104,7 +104,7 @@ CHECK` back **on `t`**, and an earlier migration already declared `t`.`x` a `CHE
   the strings that follow and report a clean tree. Its refusals are its own section, because a check
   that cannot reach an answer must not be read as one that found nothing.
 
-  **Four of the forty-three are `=>`, and they are the ones to read before touching the reader.**
+  **Four of the seventy-two are `=>`, and they are the ones to read before touching the reader.**
   Its rule is that an unrecognised context before a `/` reads as division, because that is the
   cheaper mistake — but cheaper is not free: a real pattern read as division has its body tokenised
   as code, and `/[/*]/` in an arrow function then opens a block comment that runs to the end of the
@@ -118,9 +118,9 @@ CHECK` back **on `t`**, and an earlier migration already declared `t`.`x` a `CHE
   source globs and a cache hit is a real one. `REVIEW.md`'s **Spec identifiers stay in the source**
   pass is what it makes red rather than reviewed, and that pass says what a reviewer still has to
   judge — whether the string that replaced a citation says the substance, and whether a comment lost
-  one. It reads shell too, through a second tokeniser; the one file outside its walk that would
-  otherwise be in it is `gate-test.sh` itself, whose fixtures are the citations it refuses, so that
-  suite runs the gate over the hooks beside it.
+  one. It reads shell too, through a second tokeniser. Its walk skips `.agents/` and `.claude/`, so
+  vendored skills are unread and so is `gate-test.sh` itself, whose fixtures are the citations it
+  refuses — which is why that suite runs the gate over the hooks beside it instead.
 
 - `//#migrations:check` — the same migration gate, run against **this** repository rather than a fixture. It is `cache: false` on purpose and it is not a case inside `gate-test.sh`: that suite is cached on `.claude/hooks/**` plus the three scripts, and this answer also depends on git history and on migration files none of those inputs cover, so a cached replay would report a pass nothing had checked. CI's `test` job therefore checks out with `fetch-depth: 0` **and points `origin/HEAD` at the default branch the webhook payload names** — a shallow clone has no merge base, and a checkout with no `refs/remotes/origin/HEAD` has no default branch to take one against; the gate refuses to call "I could not compare" a pass on either count. `GITHUB_BASE_REF` covers the `pull_request` event only, so the `push` run on `dev` is what needs the second half.
 
@@ -485,7 +485,9 @@ stripped from there.
 **Shell is read by a tokeniser of its own**, because its quoting is not JavaScript's: `'…'` takes no
 escapes, `$'…'` is a third quoting form, a `#` opens a comment only at a word boundary — so `$#` and
 `foo#bar` are text, not comments — and a heredoc body is data at a delimiter the script names, skipped
-whole the way `gate-lib.sh`'s `strip_heredocs` skips it for the neighbouring problem. `"$NFR8 holds"`
+whole the way `gate-lib.sh`'s `strip_heredocs` skips it for the neighbouring problem. A
+`${MSG:-a default}` is not skipped: that word is text the shell prints, and this repo already
+writes one into the middle of a refusal a person reads. `"$NFR8 holds"`
 names a variable and carries no citation, exactly as `${NFR8}` does in a template literal. The walk
 still skips `.agents/` and `.claude/`, and for shell that skip earns a second reason:
 `gate-test.sh` drives this gate and its fixtures are the citations it refuses, so it cannot be subject

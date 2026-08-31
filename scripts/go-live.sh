@@ -378,7 +378,7 @@ pause "Press Enter to begin."
 evidence_init
 
 # ══════════════════════════════════════════════════════════════════════════
-# 1 — Credentials: eight, and where each lives
+# 1 — Credentials: eight, and where each lives (C5, C43, DD10)
 # ══════════════════════════════════════════════════════════════════════════
 
 section "1 — Credentials: eight, and where each of them lives"
@@ -487,10 +487,13 @@ fi
 fly_secret BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET"
 
 printf '\n'
+# The count of seven is this ticket's first acceptance criterion; the runbook's
+# table has eight rows, the eighth added by DD10 after that criterion was
+# written. The wizard prints no table, so the lines below name the runbook's.
 say "The shared job secret is the eighth, and it belongs to the scheduler in 5b."
-note "An older count says seven credentials; the table above says eight. The eighth"
-note "arrived with the scheduler, after that count was written, and is offered here"
-note "so 5b is not left holding a credential nobody set — skip it if you prefer."
+note "This ticket's own summary says seven credentials; the runbook's table has"
+note "eight. The eighth arrived later, with the scheduler, and is offered here so"
+note "5b is not left holding a credential nobody set — skip it if you prefer."
 if confirm "Set the shared job secret now as well?"; then
   if command -v openssl >/dev/null 2>&1; then
     JOB_SHARED_SECRET=$(openssl rand -base64 32)
@@ -545,12 +548,14 @@ attest "Every grep hit above is a declaration, never a value" ||
   SKIPPED+=("section 1 — a grep hit was a value. Rotate it before anything else")
 
 # ══════════════════════════════════════════════════════════════════════════
-# 2 — Database
+# 2 — Database (C35, C17, C23)
 # ══════════════════════════════════════════════════════════════════════════
 
 section "2 — Database: the connection limit, the extensions, retention, one restore"
 
 # ── Stage 8: the connection limit ─────────────────────────────────────────
+# The cap of 10 per machine is DD2's, and effort 0002 could not verify the
+# plan's limit against it at Design.
 stage "Postgres: the connection limit, against the pool cap the app opens"
 say "This is the one number nobody could verify before the account existed."
 note "It must sit ABOVE the pool cap of 10 connections per machine the app opens."
@@ -573,6 +578,7 @@ attest "The plan's limit sits above 10 per machine" ||
   SKIPPED+=("section 2 — limit at or below the pool cap of 10. The cap changes, or the plan does")
 
 # ── Stage 9: the two extensions ───────────────────────────────────────────
+# Accent-insensitive search is NFR21; the unique email is citext's.
 stage "Postgres: citext and pg_trgm"
 say "Search that ignores accents, and the case-insensitive unique email, need these."
 if command -v psql >/dev/null 2>&1 && [[ -n "${DIRECT_DATABASE_URL:-}" ]]; then
@@ -597,6 +603,7 @@ fi
 # ── Stage 10: backup retention ────────────────────────────────────────────
 stage "Backups: retention set to 7 days, and not a day fewer"
 say "7 days matches retention-backups in docs/policy/."
+# The copy that promises seven days is story 13's.
 warn "The deletion copy a Worker reads promises exactly this number."
 note "The vendor setting and that sentence must agree, or the deletion copy lies."
 open_url "https://app.planetscale.com"
@@ -650,12 +657,15 @@ attest "Both stores were restored together, not the database alone" ||
   SKIPPED+=("section 2 — the rehearsal covered the database only. R2 is the other half")
 
 # ══════════════════════════════════════════════════════════════════════════
-# 3 — Object storage
+# 3 — Object storage (DD6)
 # ══════════════════════════════════════════════════════════════════════════
 
 section "3 — Object storage: the bucket, the quarantine prefix, transformations"
 
 # ── Stage 12: the bucket, and a quarantine prefix that is really closed ───
+# NFR6 is the rule these three lines state: 0 unmoderated photo OBJECTS
+# retrievable by an unauthenticated request, which is reachability rather than
+# routing (DD6).
 stage "R2: the bucket, and a quarantine prefix that is not publicly readable"
 say "What has to be unreachable is the STORED OBJECT, not merely the page."
 warn "A pending photo at a readable URL that nothing links to defeats the rule"
@@ -715,7 +725,7 @@ ask IMAGE_HOST "The image host that will appear in the CSP's img-src (section 5)
 [[ -n "$IMAGE_HOST" ]] && write_env IMAGE_HOST "$IMAGE_HOST"
 
 # ══════════════════════════════════════════════════════════════════════════
-# 4 — Sending domain. The one with a lead time.
+# 4 — Sending domain. The one with a lead time (C45).
 # ══════════════════════════════════════════════════════════════════════════
 
 section "4 — Sending domain: the step whose lead time is measured in weeks"
@@ -808,11 +818,14 @@ attest "A staged announcement plan is written down somewhere durable" ||
 stage "Deliverability: into real Colombian inboxes, by eye"
 warn "This is the check most likely to be ticked without being done."
 note "Section 4 says exactly that, and says its failure is silent: sends are"
+# The share of sign-in links that get used is NFR27, which replaced a
+# bounce-rate indicator for exactly this reason.
 note "ACCEPTED, not bounced. The share of sign-in links that get used is the only"
 note "thing that would reveal it, after the window has closed."
 printf '\n'
 step "Send to a live gmail.com account. Open it. Inbox or spam?"
 step "Send to a live hotmail.com account. Open it. Inbox or spam?"
+# Not gating the announcement on placement was decided knowingly at C45.
 note "This does NOT gate the announcement — that was decided knowingly."
 GMAIL_RESULT=""
 HOTMAIL_RESULT=""
@@ -824,7 +837,7 @@ record "hotmail.com placement" "$HOTMAIL_RESULT"
 [[ "$HOTMAIL_RESULT" == "inbox" ]] || SKIPPED+=("section 4 — hotmail placement was '$HOTMAIL_RESULT'")
 
 # ══════════════════════════════════════════════════════════════════════════
-# 5 — Application configuration
+# 5 — Application configuration (C34, C6, C33, C10)
 #
 # FIVE rows, not four. The ticket's fifth acceptance criterion abbreviates this
 # section to "a 1 GB Fly machine, an enforced CSP, an uptime probe ... and
@@ -895,6 +908,8 @@ else
 fi
 
 # ── Stage 22: the digest, which is the human half of alert-destination ────
+# The depths and the age of the oldest are NFR7's two halves; the digest that
+# carries them daily is C10.
 stage "Daily digest at 08:00 America/Bogota"
 say "The queue depths, and the age of the oldest item, once a day."
 note "alert-destination has two halves: human-queue bands reach a person through"
@@ -913,6 +928,7 @@ fi
 
 # ── Stage 23: machine bands reach a human, through triage ─────────────────
 stage "Machine bands open a needs-triage issue from CI"
+# ADR-0001 fixes the destination.
 say "The destination is fixed: a finding reaches planning only through triage."
 note "A breach that arrives as a chat message is a breach nobody owns."
 if [[ -f .github/workflows/needs-triage.yml ]]; then
@@ -998,7 +1014,7 @@ if (( ${#FLY_SET[@]} )); then
 fi
 printf '\n'
 note "The transcript is at $EVIDENCE — a command and its output for every check."
-note "Paste it on the ticket. A criterion ticked with no evidence is a claim."
+note "Paste it on the go-live ticket. A criterion ticked with no evidence is a claim."
 if (( ${#DEFERRED[@]} )); then
   printf '\n'
   warn "${#DEFERRED[@]} row(s) deferred because nothing is deployed yet."

@@ -1237,6 +1237,70 @@ cp "$HOOKS"/*.sh "$D/"
 rm -f "$D/gate-test.sh"
 run_ident "the hooks this repository owns"    0 "$CLEAN" "$D"
 
+# Four holes /code-review found in the first draft of this reader, and every one
+# of them failed OPEN: the file was reported clean. They are the shell half of
+# what the `=>` cases above are for the JavaScript one, so they are grouped
+# rather than scattered.
+section "Spec identifiers: the four holes the shell reader failed open on"
+
+# A `${ … }` is not only a name. Skipping it whole lost every word form, and the
+# repo already writes user-facing text into one: `plan-to-design-gate.sh` puts a
+# `${status:-unset}` in the middle of a refusal a person reads.
+run_ident "a default in a parameter expansion" 1 "^BLOCKING .*NFR8" \
+  "$(ident_one shdefault a.sh 'say "${MSG:-refused, the floor is NFR8}"')"
+run_ident "an error word in a parameter expansion" 1 "^BLOCKING .*NFR8" \
+  "$(ident_one sherrword a.sh ': "${MSG:?the floor is NFR8}"')"
+run_ident "a pattern substitution's replacement" 1 "^BLOCKING .*NFR8" \
+  "$(ident_one shpatsub a.sh 'say "${MSG//floor/the floor is NFR8}"')"
+run_ident "a length is an operator, not a word" 0 "$CLEAN" \
+  "$(ident_one shlength a.sh 'say "${#items[@]} of them, at the level floor"')"
+
+# A heredoc marker takes quote removal and nothing else. Dropping every
+# non-word character turned this delimiter into one no line matches, so the body
+# ran to the end of the file and took every string with it.
+D=$(ident_dir shheredochyphen)
+cat > "$D/a.sh" <<'FIXTURE'
+cat <<END-OF-MSG
+body line
+END-OF-MSG
+say "the floor is NFR8"
+FIXTURE
+run_ident "a hyphenated heredoc delimiter"    1 "^BLOCKING .*NFR8" "$D"
+
+D=$(ident_dir shheredocdotted)
+cat > "$D/a.sh" <<'FIXTURE'
+cat <<EOF.1
+body line
+EOF.1
+say "the floor is NFR8"
+FIXTURE
+run_ident "a dotted heredoc delimiter"        1 "^BLOCKING .*NFR8" "$D"
+
+D=$(ident_dir shheredocbackslash)
+cat > "$D/a.sh" <<'FIXTURE'
+cat <<\EOF
+body line
+EOF
+say "the floor is NFR8"
+FIXTURE
+run_ident "a backslash-quoted heredoc delimiter" 1 "^BLOCKING .*NFR8" "$D"
+
+# `<<` in arithmetic is a shift. Read as a heredoc marker it announced a body
+# terminated by `2`, and swallowed the rest of the file.
+D=$(ident_dir shshift)
+cat > "$D/a.sh" <<'FIXTURE'
+n=$(( 1 << 2 ))
+say "the floor is NFR8, and n is $n"
+FIXTURE
+run_ident "a shift inside arithmetic"         1 "^BLOCKING .*NFR8" "$D"
+
+D=$(ident_dir shshiftbare)
+cat > "$D/a.sh" <<'FIXTURE'
+(( n = 1 << 2 ))
+say "the floor is NFR8"
+FIXTURE
+run_ident "a shift inside a bare arithmetic command" 1 "^BLOCKING .*NFR8" "$D"
+
 section "Spec identifiers: the report, and the refusals"
 D=$(ident_dir report)
 cat > "$D/b.ts" <<'EOF'
