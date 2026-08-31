@@ -53,7 +53,8 @@ describe("the engine seam 2 runs against", () => {
     expect(installed).toContain("pg_trgm"); // NFR21's Spanish search
   });
 
-  it("does not have `unaccent`, which DD4 deliberately does not use", async () => {
+  // DD4 normalises accents in the application instead.
+  it("does not have `unaccent`, which this product deliberately does not use", async () => {
     // Normalising in the application removes a divergence risk rather than
     // testing around one. An `unaccent` that appeared here would mean somebody
     // reached for it, and the local engine would then be ahead of PlanetScale.
@@ -98,7 +99,8 @@ describe("the committed migrations", () => {
     ]);
   });
 
-  it("made every column NOT NULL, which is DD2's first per-table rule", async () => {
+  // Every column NOT NULL is DD2's first per-table rule.
+  it("made every column NOT NULL", async () => {
     const { rows } = await database.client.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns
        WHERE table_name = 'rate_counter' AND is_nullable = 'YES'`,

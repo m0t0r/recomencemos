@@ -24,7 +24,9 @@ describe("the two connections", () => {
     expect(() => directConfig({ [POOLED_URL_VARIABLE]: POOLED })).toThrow();
   });
 
-  it("caps the pooled connection at DD2's ten per machine, opening none until asked", () => {
+  // Ten per machine is DD2's cap, and the go-live runbook checks the database's
+  // own connection limit sits above it.
+  it("caps the pooled connection at ten per machine, opening none until asked", () => {
     expect(poolConfig(BOTH).max).toBe(POOL_MAX);
     expect(POOL_MAX).toBe(10);
     expect(poolConfig(BOTH).min).toBe(POOL_MIN);

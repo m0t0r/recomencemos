@@ -24,7 +24,8 @@ function harness() {
 const DSN = "https://examplePublicKey@o0.ingest.sentry.io/0";
 
 describe("logStartupNotice", () => {
-  it("emits exactly one line when there is no DSN — NFR2's count", () => {
+  // One line is NFR2's count.
+  it("emits exactly one line when there is no DSN", () => {
     const { logger, lines } = harness();
 
     logStartupNotice({ NODE_ENV: "development" }, logger);
@@ -84,7 +85,8 @@ describe("logStartupNotice", () => {
     expect(lines()).toHaveLength(0);
   });
 
-  it("stays at one line when both gaps are open — NFR2 counts lines, not notices", () => {
+  // NFR2 counts lines, not notices.
+  it("stays at one line when both gaps are open", () => {
     const { logger, lines } = harness();
 
     logStartupNotice({ NODE_ENV: "production" }, logger);

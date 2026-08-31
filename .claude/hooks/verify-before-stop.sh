@@ -69,8 +69,8 @@ $out"
 # a drift risk CLAUDE.md names for CI in the same words -- so anything added to
 # the root `test` script has to be added here too, or a session can report done
 # with the new gate red. `migrations:check` is the live half of NFR30.
-out=$(pnpm exec turbo run check-types test test:gates migrations:check --output-logs=errors-only 2>&1) ||
-  block "\`check-types\`, \`test\`, \`test:gates\`, or \`migrations:check\` fails, so this change is not done.
+out=$(pnpm exec turbo run check-types test test:gates spec-identifiers migrations:check --output-logs=errors-only 2>&1) ||
+  block "\`check-types\`, \`test\`, \`test:gates\`, \`spec-identifiers\`, or \`migrations:check\` fails, so this change is not done.
 
 $out"
 

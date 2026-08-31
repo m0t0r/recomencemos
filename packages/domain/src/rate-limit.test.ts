@@ -18,7 +18,7 @@ import {
 describe("CEILINGS", () => {
   // NFR26 states both halves in one sentence, and either alone leaves the
   // obvious way round it.
-  it("bounds requestMagicLink per address and per IP at NFR26's numbers", () => {
+  it("bounds requestMagicLink at five per address and twenty per IP in an hour", () => {
     expect(CEILINGS.requestMagicLink.address).toEqual({ max: 5, windowSeconds: 3600 });
     expect(CEILINGS.requestMagicLink.ip).toEqual({ max: 20, windowSeconds: 3600 });
   });

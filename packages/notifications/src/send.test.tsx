@@ -103,7 +103,7 @@ describe("the kill switch", () => {
   // DD11 closes the `info` event vocabulary at fourteen (C40), and a fifteenth
   // is a spec amendment rather than a Build-time judgment call. A refusal is not
   // a safety-relevant transition, so it must not arrive as one.
-  it("does not add an `event` to DD11's closed info vocabulary", async () => {
+  it("adds no `event` to the closed info vocabulary", async () => {
     const logger = recordingLogger();
     const notifier = createNotifier({
       transport: delivers(),

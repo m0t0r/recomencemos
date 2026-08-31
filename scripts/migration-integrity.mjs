@@ -636,10 +636,11 @@ function checkContractShipsSeparately(root, files, refuse, changed, addedTags) {
     .filter((file) => file.startsWith(source))
     .filter((file) => isQueryModule(file.slice(source.length)));
   if (offenders.length === 0) return;
+  // The five-minute rollback this protects is NFR25's.
   refuse(
     "contract and code ship separately",
     `${marked.join(", ")} shares this pull request with ${offenders.join(", ")}`,
-    `Rolling the code back would leave a schema the old build does not understand, which is where NFR25's five minutes stops being true. Ship the code that stops using the column, deploy, then drop it. Everything under ${source} counts except tests, \`schema\`, \`migrate\`, \`policy\` and \`projections\`.`,
+    `Rolling the code back would leave a schema the old build does not understand, which is where the five-minute rollback stops being true. Ship the code that stops using the column, deploy, then drop it. Everything under ${source} counts except tests, \`schema\`, \`migrate\`, \`policy\` and \`projections\`.`,
   );
 }
 

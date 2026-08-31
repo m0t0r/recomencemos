@@ -56,7 +56,7 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(outcome.allowed).toBe(true);
   });
 
-  test("allows exactly NFR26's five in an hour and refuses the sixth", async ({ database }) => {
+  test("allows exactly five in an hour and refuses the sixth", async ({ database }) => {
     expect((await chargeRepeatedly(database, CEILINGS.requestMagicLink.address.max)).allowed).toBe(
       true,
     );
@@ -145,7 +145,7 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(byIp.allowed).toBe(true);
   });
 
-  test("gives the IP scope NFR26's higher bound", async ({ database }) => {
+  test("gives the IP scope its own, higher bound", async ({ database }) => {
     const ip = { scope: "ip", id: "190.0.2.10" } as const;
 
     for (let charge = 0; charge < CEILINGS.requestMagicLink.ip.max; charge += 1) {
@@ -193,7 +193,8 @@ describe("chargeCeiling, against the committed migrations", () => {
   });
 });
 
-describe("what a refusal carries (NFR26, C39)", () => {
+// NFR26 sets the ceilings; C39 is why a refusal is returned rather than thrown.
+describe("what a refusal carries", () => {
   test("returns the refusal rather than throwing it", async ({ database }) => {
     // The whole reason: a thrown refusal on every crawler request spends the
     // month's 5,000-event Sentry allowance in a day.

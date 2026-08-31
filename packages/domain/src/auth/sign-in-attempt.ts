@@ -148,8 +148,8 @@ export function signInMethodForPath(path: string): SignInMethod {
     status: 500,
     message:
       `A session was about to be created from "${path}", which is not one of this ` +
-      `product's sign-in doors (${SIGN_IN_METHODS.join(", ")}). NFR14 makes Admin ` +
-      "authentication a property of the session, so a session whose method is unknown " +
+      `product's sign-in doors (${SIGN_IN_METHODS.join(", ")}). Admin authentication ` +
+      "is a property of the session here, so a session whose method is unknown " +
       "must not be minted. Add the path to SIGN_IN_PATHS and the method to " +
       "SIGN_IN_METHODS and the session table's CHECK, together.",
     userMessage: SIGN_IN_FAILED,

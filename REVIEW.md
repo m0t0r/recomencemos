@@ -70,10 +70,23 @@ The audit that produced this rule (#93): **0** identifiers were reaching an HTTP
 rendered Spanish string — `projectClientError` copies `userMessage` only, so the operator-facing
 `message` is structurally unable to reach a client. Every breach was in a test name or a log line.
 
-**Not yet mechanised, and that is a known gap.** The right shape is a table-driven repo-shape test in
-the manner of `apps/web/gated-routes.test.ts` and `domain-boundary.test.ts`, scanning test names and
-message strings so the rule is red rather than reviewed. It lands with the repo-wide sweep of the
-pre-existing sites, because a check that cannot be green cannot be turned on.
+**It is mechanised, so this pass is a reading rather than a search.** `pnpm spec-identifiers` runs
+`scripts/spec-identifiers.mjs` over every JavaScript, TypeScript and JSX file in the repository and
+exits non-zero on a citation in a string, naming the file, the line, the column and the string.
+`pnpm test` runs it as the `//#spec-identifiers` task, CI runs it inside the `test` job, and
+`verify-before-stop.sh` will not let a session report done with it red.
+
+Two things a reviewer still has to do, because no check can:
+
+- **Judge the replacement.** The gate refuses `NFR14`; it cannot tell whether what replaced it says
+  the substance or merely got shorter and vaguer. A test name that lost its citation and its meaning
+  together is a regression the gate reports as a pass.
+- **Watch the comments.** The gate never reads a comment, so it is equally silent when a citation is
+  stripped from one. Nothing is to be removed from a comment, a doc-comment or a `docs/` file.
+
+It reads no shell, and there are citations in `scripts/go-live.sh`'s terminal output and in
+`.claude/hooks/build-guard.sh`'s refusal messages that are breaches of the rule the gate cannot see —
+[#127](https://github.com/m0t0r/recomencemos/issues/127).
 
 ## Under stacked PRs
 

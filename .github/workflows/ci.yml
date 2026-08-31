@@ -74,8 +74,8 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm check-types
 
-  # `pnpm test` is `turbo run test test:gates migrations:check`, so the stage-hook
-  # suite is inside this job rather than beside it -- which is what
+  # `pnpm test` is `turbo run test test:gates spec-identifiers migrations:check`, so
+  # the stage-hook suite is inside this job rather than beside it -- which is what
   # `required-checks` means by "test (including test:gates)".
   #
   # `fetch-depth: 0` because `migrations:check` frames every one of its answers on

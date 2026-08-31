@@ -68,7 +68,8 @@ const throwingReport = client({
 });
 
 describe("reportRequestError", () => {
-  it("emits exactly one line — NFR3's count, and the whole quota argument", () => {
+  // One line is NFR3's count, and the whole quota argument rests on it.
+  it("emits exactly one line for a reported error", () => {
     const { logger, lines } = harness();
 
     reportRequestError(

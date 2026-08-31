@@ -87,7 +87,8 @@ describe("signing out", () => {
    * precisely when a test like this earns its place: if the two ever collapse
    * into one method with a flag, this goes red.
    */
-  test("leaves her other session open, because ending every one is #13's", async ({ database }) => {
+  // Ending every session is `signOutEverywhere`'s job (#13), not this one's.
+  test("leaves her other session open", async ({ database }) => {
     const stack = signInStack(database);
     const { auth } = stack;
 

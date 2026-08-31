@@ -68,7 +68,8 @@ describe("signInMethodForPath", () => {
   });
 });
 
-describe("session lifetime (NFR13)", () => {
+// The two numbers are NFR13's.
+describe("session lifetime", () => {
   it("gives her own device thirty days", () => {
     expect(sessionSecondsFor("magic_link", { sharedDevice: false })).toBe(
       OWN_DEVICE_SESSION_SECONDS,

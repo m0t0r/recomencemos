@@ -139,7 +139,8 @@ describe("base fields", () => {
   });
 });
 
-describe("the level floor (NFR8)", () => {
+// The floor is NFR8.
+describe("the level floor", () => {
   it("defaults to info in production", () => {
     expect(createLoggerOptions({ NODE_ENV: "production" }).level).toBe("info");
   });
@@ -170,7 +171,8 @@ describe("the level floor (NFR8)", () => {
   });
 });
 
-describe("the format switch (NFR9)", () => {
+// The switch is NFR9.
+describe("the format switch", () => {
   it("is pretty in development and JSON in production", () => {
     expect(resolveLogFormat({ NODE_ENV: "development" })).toBe("pretty");
     expect(resolveLogFormat({ NODE_ENV: "production" })).toBe("json");
@@ -203,7 +205,8 @@ describe("the format switch (NFR9)", () => {
   });
 });
 
-describe("redaction (NFR10, the log-line egress)", () => {
+// NFR10's three-egress parity; this is the log-line third of it.
+describe("redaction, the log-line egress", () => {
   it("replaces every shipped key name under context, to a nesting depth of 4", () => {
     const { logger, raw, lines } = harness();
 
@@ -241,7 +244,8 @@ describe("redaction (NFR10, the log-line egress)", () => {
     }
   });
 
-  it("reaches the post-serialisation shape an incident actually produces (DD3)", () => {
+  // DD3 is the shape being reached.
+  it("reaches the post-serialisation shape an incident actually produces", () => {
     const { logger, raw } = harness();
     const cause = new Error("ECONNREFUSED");
     Object.assign(cause, { config: { headers: { authorization: SECRET } } });
@@ -351,7 +355,8 @@ describe("the error serialiser", () => {
   });
 });
 
-describe("the line bound (NFR16)", () => {
+// The bound is NFR16.
+describe("the line bound", () => {
   function oversized() {
     const { logger, raw, lines } = harness({ NEXT_PUBLIC_RELEASE: "abc123" });
     logger.info({ context: { blob: "x".repeat(20_000) } }, "too big");
@@ -742,7 +747,8 @@ function foldedRunsIn(stack: string): number[] {
   return [...stack.matchAll(COLLAPSE_MARKER)].map((match) => Number(match[1]));
 }
 
-describe("collapsing framework frames (ADR-0004)", () => {
+// ADR-0004 fixes the trim.
+describe("collapsing framework frames", () => {
   it("folds each run of consecutive framework frames into one marker naming its length", () => {
     const { stack } = emit(
       withFrames(new AppError({ code: "measured", message: "operator detail" }), MEASURED_REQUEST),
@@ -1418,15 +1424,16 @@ describe("what a truncated line keeps of the line's own context", () => {
     // pino's fallback is unreachable and the outcome is a property of the input.
     //
     // What the input now produces is a bounded, marked line, asserted in full by
-    // "a deeply nested context is bounded, marked, and platform-independent
-    // (#41)" below — including the byte-identical comparison across two depths
+    // "a deeply nested context is bounded, marked, and platform-independent"
+    // below (#41) — including the byte-identical comparison across two depths
     // that is the cross-platform claim itself. This case keeps the narrower
     // guarantee it is named for.
     expect(lines()[0]).toMatchObject({ elided: true });
   });
 });
 
-describe("values JSON.stringify refuses (#70, #41)", () => {
+// #70 and #41.
+describe("values JSON.stringify refuses", () => {
   /**
    * The exposure this closes, stated as the caller sees it.
    *
@@ -1615,7 +1622,8 @@ function nestedContext(depth: number): Record<string, unknown> {
   return value;
 }
 
-describe("a deeply nested context is bounded, marked, and platform-independent (#41)", () => {
+// #41.
+describe("a deeply nested context is bounded, marked, and platform-independent", () => {
   it("stops at the depth bound and says so, rather than stubbing silently", () => {
     const { logger, lines } = harness();
 
