@@ -1,0 +1,2 @@
+ALTER TABLE "session" DROP CONSTRAINT "session_sign_in_method_known";--> statement-breakpoint
+ALTER TABLE "session" ADD CONSTRAINT "session_sign_in_method_known" CHECK ("session"."sign_in_method" IN ('magic_link', 'google', 'link_totp'));

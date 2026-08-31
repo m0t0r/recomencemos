@@ -36,6 +36,20 @@
       "when": 1788124681965,
       "tag": "0004_admin_enrolment_and_code_ceilings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788197640386,
+      "tag": "0005_contract_drop_the_password_door",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788197649266,
+      "tag": "0006_contract_narrow_sign_in_method",
+      "breakpoints": true
     }
   ]
 }
