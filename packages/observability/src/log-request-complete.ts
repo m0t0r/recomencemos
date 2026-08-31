@@ -36,13 +36,12 @@
  * a unit test. The band is the only thing that can catch that residue.
  */
 
-import { setAmbientRequestIdReader } from "@repo/errors/ambient-request-id";
 import { logger as defaultLogger } from "@repo/observability/logger";
 import {
-  currentRequestId,
-  enterRequestContext,
-  newRequestId,
-  runInRequestContext,
+  beginRequest,
+  endRequest,
+  publishRequestIdToErrors,
+  runInRequestOf,
 } from "@repo/observability/request-context";
 import { assertServerOnly } from "@repo/observability/server-only";
 import { subscribe } from "node:diagnostics_channel";
@@ -297,21 +296,14 @@ export function logRequestComplete(
 }
 
 /**
- * What the start of a request knows and its finish needs.
+ * When a request started, so its finish can say how long it took. The line's own
+ * concern, and the only per-request state this module keeps — what the request is
+ * *called* belongs to `request-context.ts`, which owns that from mint to publish.
  *
  * Keyed by the request object itself, so a dropped connection cannot leak an
  * entry — nothing has to remember to clean up after an aborted request.
- *
- * `requestId` is held here as well as in the async store, and that is not
- * belt-and-braces: see {@link subscribeRequestCompletion} for the keep-alive
- * case where the store in scope at `finish` belongs to a *different* request.
  */
-interface RequestStart {
-  startedAt: number;
-  requestId: string;
-}
-
-const requestStart = new WeakMap<object, RequestStart>();
+const requestStartedAt = new WeakMap<object, number>();
 
 /**
  * The guard lives on `globalThis`, not in module scope, because a re-evaluated
@@ -325,11 +317,16 @@ const SUBSCRIBED = Symbol.for("repo.observability.requestCompletionSubscribed");
  * Subscribe the completion line to the process's HTTP traffic. Idempotent.
  *
  * It hears every HTTP server in the process, which is why the emit is filtered
- * by {@link shouldEmitCompletionLine} rather than unconditional — and why the
- * `request_id` this mints is per **publish** rather than per span: it exists
- * with no DSN, which is every fresh clone and every dev session, and it is
- * correct in the one case a `trace_id` was observed to be wrong (a dev-only
- * overlay request sharing one with the request that triggered it).
+ * by {@link shouldEmitCompletionLine} rather than unconditional.
+ *
+ * It is also where the **request identifier's** life begins and ends, though not
+ * where any of it is implemented: this is the one function that knows requests
+ * are being tracked at all, so it is what tells `request-context.ts` a request has
+ * started and what asks it to publish the id to `@repo/errors`. Per channel
+ * publish rather than per span, which is what makes the id exist with no DSN —
+ * every fresh clone and every dev session — and correct in the one case a
+ * `trace_id` was observed to be wrong (a dev-only overlay request sharing one
+ * with the request that triggered it).
  *
  * **Why `diagnostics_channel` and not a span.** Next 16 exposes exactly two
  * instrumentation hooks — `register` and `onRequestError` — and neither fires on
@@ -365,26 +362,17 @@ export function subscribeRequestCompletion(logger: Logger = defaultLogger): void
 
   // **Here rather than at module scope**, because this is the one function that
   // knows requests are being tracked at all — before it runs there is no store to
-  // read and adoption would have nothing to adopt. It is what makes an `AppError`
-  // raised inside a request carry that request's id, so its `warn`/`error` line
-  // and this completion line join, and so a user quoting one reference number
-  // gets every line the request emitted rather than one of them.
-  setAmbientRequestIdReader(currentRequestId);
+  // read and adoption would have nothing to adopt. What it does, and why a value
+  // crosses to `@repo/errors` where a module may not, is `request-context.ts`'s.
+  publishRequestIdToErrors();
 
   subscribe("http.server.request.start", (message) => {
     const { request } = message as { request?: object };
 
     if (request === undefined) return;
 
-    const requestId = newRequestId();
-
-    requestStart.set(request, { startedAt: performance.now(), requestId });
-
-    // `enterWith` rather than `run`, because a channel subscriber is handed a
-    // message and returns — there is no continuation to wrap. It is what makes
-    // `request_id` reach every line the handler itself emits, which is the half
-    // of this that `trace_id` cannot do with no DSN configured.
-    enterRequestContext(requestId);
+    requestStartedAt.set(request, performance.now());
+    beginRequest(request);
   });
 
   subscribe("http.server.response.finish", (message) => {
@@ -395,42 +383,43 @@ export function subscribeRequestCompletion(logger: Logger = defaultLogger): void
 
     if (request === undefined || response === undefined) return;
 
-    const started = requestStart.get(request);
+    const startedAt = requestStartedAt.get(request);
 
-    requestStart.delete(request);
+    requestStartedAt.delete(request);
 
     const route = routeOf(request);
     const status = response.statusCode ?? UNKNOWN_STATUS;
 
-    if (!shouldEmitCompletionLine(route, status)) return;
-
-    // `started` is absent only for a request already in flight when the
-    // subscription was made. `register()` completes before the server accepts
-    // its first request, so that window does not exist in practice — the
-    // fallbacks keep the line rather than swallowing it, and a line with no
-    // `request_id` is honest where a freshly minted one would be a lie.
-    const emit = () =>
-      logRequestComplete(
-        {
-          method: request.method ?? UNKNOWN_METHOD,
-          route,
-          context: { path: pathOf(request) },
-          status,
-          duration_ms:
-            started === undefined
-              ? UNOBSERVED_DURATION_MS
-              : Math.round(performance.now() - started.startedAt),
-        },
-        logger,
+    // `startedAt` is absent only for a request already in flight when the
+    // subscription was made. `register()` completes before the server accepts its
+    // first request, so that window does not exist in practice — the fallback
+    // keeps the line rather than swallowing it.
+    //
+    // `runInRequestOf` rather than emitting straight into whatever context this
+    // event runs in: on a keep-alive socket that context may belong to a later
+    // request on the same connection. It is `request-context.ts`'s to explain.
+    if (shouldEmitCompletionLine(route, status)) {
+      runInRequestOf(request, () =>
+        logRequestComplete(
+          {
+            method: request.method ?? UNKNOWN_METHOD,
+            route,
+            context: { path: pathOf(request) },
+            status,
+            duration_ms:
+              startedAt === undefined
+                ? UNOBSERVED_DURATION_MS
+                : Math.round(performance.now() - startedAt),
+          },
+          logger,
+        ),
       );
+    }
 
-    // **Re-entering the store is correctness, not caution.** `enterWith` mutates
-    // the *current* execution context, and on a keep-alive socket every request
-    // shares one — so request N+1's start can overwrite the context request N's
-    // `finish` would otherwise read, and the completion line would carry the
-    // wrong id. Keying off the request object is what makes that impossible, and
-    // it is why the id is held in the `WeakMap` rather than only in the store.
-    if (started === undefined) emit();
-    else runInRequestContext(started.requestId, emit);
+    // Unconditional, and paired with the `requestStartedAt.delete` above: the
+    // request has ended whether or not it earned a line, and most no longer do.
+    // An early return here instead would leave the majority path holding its
+    // entry until the collector next ran.
+    endRequest(request);
   });
 }

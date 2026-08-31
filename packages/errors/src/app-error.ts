@@ -167,11 +167,18 @@ export class AppError extends Error {
   readonly context: AppErrorContext;
 
   /**
-   * Generated here with `crypto.randomUUID()` and deliberately **not** a
-   * constructor option, so there is no parameter an inbound header could be
-   * threaded into. That closes the log-injection path into the pretty
-   * development stream an agent reads. Correlating one diagnostic with another
-   * is `trace_id`'s job, not this field's.
+   * The **request's** identifier, not this error's — adopted from the server's
+   * request store where one is in flight, and minted here otherwise. See
+   * {@link mintRequestId} and `ambient-request-id.ts`; two failures in one
+   * request quote one reference number, and the error line joins that request's
+   * completion line.
+   *
+   * Deliberately **not** a constructor option, so there is no parameter an
+   * inbound header could be threaded into, and the one value it can adopt is one
+   * the server minted on its own process and revalidated on the way in. That
+   * closes the log-injection path into the pretty development stream an agent
+   * reads. Correlating one diagnostic with another is `trace_id`'s job, not this
+   * field's.
    */
   readonly requestId: string;
 

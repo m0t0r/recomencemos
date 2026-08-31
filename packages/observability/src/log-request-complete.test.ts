@@ -8,7 +8,7 @@ import {
 } from "@repo/observability/log-request-complete";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { createLoggerOptions, type TraceContextReader } from "@repo/observability/logger-options";
-import { readRequestContext } from "@repo/observability/request-context";
+import { readRequestContext, runInRequestOf } from "@repo/observability/request-context";
 import pino from "pino";
 import { Agent, createServer, get, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -373,6 +373,28 @@ describe("subscribeRequestCompletion", () => {
     expect(emitted.at(-1)).toMatchObject({ status: 500, level: "error", context: { path: "/b" } });
   });
 
+  /**
+   * The forget is on the finish path unconditionally, not inside the branch that
+   * emits — and the unrouted case is the one that matters, because it is now most
+   * of the traffic. Nothing leaks either way (the entry is keyed weakly by the
+   * request), but holding it until the collector runs is waste with no upside.
+   */
+  describe("forgets the request once it has finished", () => {
+    it.each([
+      ["one that produced a line", "/kept", 200, "/kept"],
+      ["one that produced none", "/_next/static/chunks/x.js", 200, undefined],
+    ])("%s", async (_name, path, status, matched) => {
+      let captured: IncomingMessage | undefined;
+
+      await completeOneRequest(path, status as number, matched as string | undefined, (request) => {
+        captured = request;
+      });
+
+      expect(captured).toBeDefined();
+      expect(runInRequestOf(captured as IncomingMessage, () => readRequestContext())).toEqual({});
+    });
+  });
+
   it("is idempotent — a second call does not double the lines", async () => {
     subscribeRequestCompletion(logger);
 
@@ -383,6 +405,13 @@ describe("subscribeRequestCompletion", () => {
     expect(completionLines(lines).length - before).toBe(1);
   });
 });
+
+/**
+ * The shape the one mint site produces. Asserted rather than "some 36 characters"
+ * because a weaker pattern would also admit the empty-ish fallbacks this module
+ * has for a request it never saw start.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
  * `request_id` is the correlator that exists with no DSN, which is every fresh
@@ -399,7 +428,7 @@ describe("the completion line and the request_id mixin", () => {
   it("carries a request_id, which no caller passed", async () => {
     await completeOneRequest("/r", 200, "/r");
 
-    expect(completionLines(lines).at(-1)?.["request_id"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(completionLines(lines).at(-1)?.["request_id"]).toMatch(UUID);
   });
 
   it("gives the handler's own line the same id as the completion line", async () => {
@@ -439,7 +468,7 @@ describe("the completion line and the request_id mixin", () => {
 
     const errorLine = lines().findLast((line) => line["msg"] === "request error");
 
-    expect(raised?.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(raised?.requestId).toMatch(UUID);
     expect(errorLine?.["request_id"]).toBe(raised?.requestId);
     expect(completionLines(lines).at(-1)?.["request_id"]).toBe(raised?.requestId);
   });

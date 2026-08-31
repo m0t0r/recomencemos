@@ -36,9 +36,11 @@ own only when there is none.** The field becomes per-request rather than per-err
 name says.
 
 The registration crosses as a **value through a `globalThis` slot**, not as an import:
-`packages/errors/src/ambient-request-id.ts` owns the slot and the validation;
-`@repo/observability`'s `subscribeRequestCompletion` is the only registrar, and it registers
-`currentRequestId` — a read of the same `AsyncLocalStorage` the mixin reads.
+`packages/errors/src/ambient-request-id.ts` owns the slot and the validation, and
+`@repo/observability`'s `request-context.ts` is the only registrar — it owns the identifier's whole
+life, from minting it through publishing it, and `publishRequestIdToErrors` is the last of those
+moments. `subscribeRequestCompletion` calls that once, because it is the one function that knows
+requests are being tracked at all; it does not itself name `@repo/errors`.
 
 ## Why that shape and not an obvious one
 
@@ -50,9 +52,12 @@ Three constraints meet, and no other shape satisfies all three.
   through a slot adds no module and no dependency.
 - **`AppError` has no `requestId` constructor option, and the absence is the log-injection
   mitigation** — an id taken from an inbound header lets an attacker write newlines and forged fields
-  into the pretty stdout stream an agent reads and acts on. **That mitigation is unchanged.** The only
-  value adoptable is one the server minted on its own process; nothing a request body carries can
-  reach the slot.
+  into the pretty stdout stream an agent reads and acts on. **That mitigation is unchanged**, and it
+  is no longer the only thing standing there. The absent parameter is an argument about _who can
+  reach the field_, which says nothing about a registrar that is itself compromised or merely wrong,
+  so the read also bounds what a value may **contain**: `[A-Za-z0-9_-]` only, which admits a UUID, a
+  ULID, a nanoid or a load balancer's id and none of the characters that would let a value break out
+  of the line it is written on. Length alone would have admitted a newline.
 - **A parameter would have to be threaded through every construction site**, and the sites that
   matter most are the ones nobody will edit — a `throw new AppError` deep in a query module, written
   before any of this existed.
@@ -69,10 +74,12 @@ while the store it reads is still live.
   requests.
 - **One more thing can be wrong at a distance.** A registrar that returns a bad value would put it on
   every error in the process. Every failure mode therefore costs the _adoption_ rather than the
-  error: a missing reader, a throwing reader, a non-string, an empty string, and a value past
-  `MAX_REQUEST_ID_LENGTH` all fall back to a fresh mint. The
-  `a reader that cannot be trusted` block in `packages/errors/src/ambient-request-id.test.ts` is those
-  five plus the value exactly at the bound, which is adopted. This runs inside the constructor of the
+  error: a missing reader, a throwing reader, a non-string, an empty string, a value past
+  `MAX_REQUEST_ID_LENGTH`, and a value carrying anything outside `[A-Za-z0-9_-]` all fall back to a
+  fresh mint. The `a reader that cannot be trusted` block in
+  `packages/errors/src/ambient-request-id.test.ts` is each of those, plus the values that _are_
+  adopted — one exactly at the bound, and a ULID, a nanoid and a hyphenated id, so the rule is pinned
+  as bounding the characters rather than dictating the format. This runs inside the constructor of the
   type that exists to report failure, so a throw here would turn one failure into two and the second
   would have no `AppError` to describe it.
 - **A global slot is action at a distance**, and that is the honest name for it. It is bounded by
