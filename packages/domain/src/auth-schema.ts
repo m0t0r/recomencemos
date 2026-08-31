@@ -91,34 +91,26 @@ import { citext, inList } from "#column-types";
  *
  * **The set is now five, and it splits three ways rather than two** (#17):
  *
- * - `magic_link` and `google` are the **passwordless** class. NFR14's first half
- *   is written over the class rather than over its members, and
- *   {@link PASSWORDLESS_SIGN_IN_METHODS} below is that class as data — so a
- *   fourth door added later is refused for an Admin account by being added to a
- *   list, not by somebody remembering a rule.
- * - `password` is a session that presented **one** factor. It exists for exactly
- *   one window: an Admin granted by runbook §6's manual `UPDATE` has to reach the
- *   enrolment surface before a TOTP secret exists, and Better Auth's plugin only
- *   diverts `/sign-in/email` into the 2FA challenge once `twoFactorEnabled` is
- *   true. It carries **no** Admin authority — `requireAdminSession` demands the
- *   member below and not this one.
- * - `password_totp` and `link_totp` are the two NFR14 calls an Admin session —
- *   for now. See below.
+ * - `magic_link` and `google` are the two doors every Account uses. Neither may
+ *   ever create a session on an Account holding the Admin grant.
+ * - `password` is a session that presented **one** factor. It existed for one
+ *   window — an Admin granted by a manual `UPDATE` had to reach the enrolment
+ *   surface before a TOTP secret existed — and that window is closed: enrolment
+ *   now happens over the direct connection before the grant is set at all.
+ * - `link_totp` is the one NFR14 calls an Admin session. A single-use emailed
+ *   link is factor one and a code from the authenticator is factor two, and only
+ *   the endpoint that checks the second in the presence of a live challenge from
+ *   the first produces this member.
+ * - `password_totp` **was** that member and is now a value with no producer, which
+ *   is the mirror image of what `link_totp` was one slice ago. It stays until the
+ *   contract half of DD5 drops it along with the credential door and Better Auth's
+ *   `twoFactor` table; removing it here would be a `CHECK` narrowing against rows
+ *   that already carry it.
  *
- * **`link_totp` is a member with no producer yet, and that is the expand half of
- * an expand/contract sequence rather than dead weight.** The Admin door is being
- * rebuilt passwordless: a single-use emailed link is factor one and a TOTP code
- * is factor two, and a session established that way is stamped with this member.
- * The door that mints one arrives next; the contract that removes `password` and
- * `password_totp` arrives after it. Landing the value here first is what lets
- * both of those be ordinary pull requests instead of a flag day — the widening
- * is a constraint change, and a constraint change that has already shipped
- * refuses nothing.
- *
- * `ADMIN_SIGN_IN_METHOD` below still names `password_totp`, so **this member
- * carries no Admin authority today**. Moving that comparison is the door's
- * ticket, not this one: an Admin session that could be minted before there is a
- * door to mint it is authority with nothing standing in front of it.
+ * **The two moved in that order on purpose.** The value shipped first, with
+ * nothing minting it and no authority attached; the door that mints it and the
+ * comparison below moved together, so an Admin session was never representable
+ * before there was a door standing in front of it.
  *
  * English enum values under ADR-0012, like every other identifier.
  */
@@ -133,28 +125,22 @@ export const SIGN_IN_METHODS = [
 export type SignInMethod = (typeof SIGN_IN_METHODS)[number];
 
 /**
- * The doors that present no second factor, as data.
+ * The one member that satisfies NFR14. Read by `requireAdminSession`, and read
+ * by `databaseHooks.session.create.before` as the thing every other door is
+ * refused for **not** being.
  *
- * **This is NFR14's first half**, and it is a list rather than a condition
- * because the requirement is written over a *class*: _"every passwordless door —
- * magic link and Google alike — is refused for an account holding the Admin
- * grant … because adding a third is exactly when this gets forgotten"_.
- * `databaseHooks.session.create.before` reads it, which is the one place in this
- * package a session is born, so a door added without a thought about NFR14 is
- * refused by default rather than admitted by default.
+ * **There was a `PASSWORDLESS_SIGN_IN_METHODS` list here and its deletion is the
+ * point.** NFR14's first half used to be membership of that class, which made
+ * the rule a list of the doors that were wrong — so `password` and
+ * `password_totp` sat outside it and were allowed on an Admin Account by
+ * omission. The amended requirement is written over _"every door that is **not**
+ * the Admin door"_, and the complement of one member needs no list: a door added
+ * later is refused because it is not this string, rather than admitted until
+ * somebody remembers to add it somewhere.
  *
- * `password` is deliberately **not** here. It is not passwordless, and it is not
- * an Admin session either; the difference is the one `requireAdminSession`
- * enforces, and conflating the two would close the enrolment window runbook §6
- * has to walk through.
+ * **One string and not a list**, so there is no way to accidentally accept two.
  */
-export const PASSWORDLESS_SIGN_IN_METHODS = [
-  "magic_link",
-  "google",
-] as const satisfies readonly SignInMethod[];
-
-/** The one member that satisfies NFR14. Read by `requireAdminSession`. */
-export const ADMIN_SIGN_IN_METHOD = "password_totp" satisfies SignInMethod;
+export const ADMIN_SIGN_IN_METHOD = "link_totp" satisfies SignInMethod;
 
 /**
  * **Account** in `CONTEXT.md`'s vocabulary, `user` in Better Auth's.

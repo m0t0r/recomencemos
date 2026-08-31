@@ -1,6 +1,7 @@
 import { isAppError } from "@repo/errors/app-error";
-import { ADMIN_SIGN_IN_METHOD, PASSWORDLESS_SIGN_IN_METHODS } from "#auth-schema";
+import { ADMIN_SIGN_IN_METHOD, SIGN_IN_METHODS } from "#auth-schema";
 import {
+  ADMIN_SECOND_FACTOR_PATH,
   ADMIN_SESSION_SECONDS,
   NO_SIGN_IN_ATTEMPT,
   OWN_DEVICE_SESSION_SECONDS,
@@ -20,6 +21,7 @@ describe("signInMethodForPath", () => {
     ["/sign-in/email", "password"],
     ["/two-factor/verify-totp", "password_totp"],
     ["/two-factor/verify-backup-code", "password_totp"],
+    [ADMIN_SECOND_FACTOR_PATH, "link_totp"],
   ] as const)("names %s as %s", (path, method) => {
     expect(signInMethodForPath(path)).toBe(method);
   });
@@ -29,19 +31,45 @@ describe("signInMethodForPath", () => {
    * a session established with one has to be able to moderate — losing the TOTP
    * device otherwise leaves every reported Hirer frozen (C43). What NFR14 asks
    * is that two factors were presented, not which second one.
+   *
+   * **Both codes go through one path now**, which is what the door's single field
+   * is: the shape of what was typed picks the factor, so there is no second
+   * endpoint for the two to agree with each other about.
    */
   it("treats a backup code as the second factor, exactly as TOTP is", () => {
-    expect(signInMethodForPath("/two-factor/verify-backup-code")).toBe(ADMIN_SIGN_IN_METHOD);
+    expect(signInMethodForPath(ADMIN_SECOND_FACTOR_PATH)).toBe(ADMIN_SIGN_IN_METHOD);
   });
 
   /**
-   * The password-only session is the enrolment window and nothing more. If this
-   * ever equalled {@link ADMIN_SIGN_IN_METHOD}, an Admin would hold full
-   * authority having typed a password and no code — which is NFR14 inverted.
+   * **Exactly one path mints the method NFR14 accepts.** This is the assertion
+   * that carries "an Admin session presented two factors": a second producer
+   * added without a thought about the requirement would fail here rather than
+   * ship authority behind a door nobody reviewed.
    */
-  it("does not call a password-only session an Admin session", () => {
-    expect(signInMethodForPath("/sign-in/email")).not.toBe(ADMIN_SIGN_IN_METHOD);
+  it("mints an Admin session from one path and no other", () => {
+    const producers = [
+      "/magic-link/verify",
+      "/callback/:id",
+      "/sign-in/email",
+      "/two-factor/verify-totp",
+      "/two-factor/verify-backup-code",
+      ADMIN_SECOND_FACTOR_PATH,
+    ].filter((path) => signInMethodForPath(path) === ADMIN_SIGN_IN_METHOD);
+
+    expect(producers).toEqual([ADMIN_SECOND_FACTOR_PATH]);
   });
+
+  /**
+   * The credential door mints no Admin session at all any more — neither its
+   * one-factor member nor its two-factor one, which is what makes the page it
+   * belongs to dead weight rather than a second way in.
+   */
+  it.each(["/sign-in/email", "/two-factor/verify-totp", "/two-factor/verify-backup-code"] as const)(
+    "does not call a session from %s an Admin session",
+    (path) => {
+      expect(signInMethodForPath(path)).not.toBe(ADMIN_SIGN_IN_METHOD);
+    },
+  );
 
   // NFR14 is the reason this throws instead of defaulting: Admin authentication
   // is a property of the session, so a door that has not declared itself must
@@ -85,7 +113,9 @@ describe("session lifetime", () => {
   });
 
   it("gives an Admin eight hours", () => {
-    expect(sessionSecondsFor("password_totp", { sharedDevice: false })).toBe(ADMIN_SESSION_SECONDS);
+    expect(sessionSecondsFor(ADMIN_SIGN_IN_METHOD, { sharedDevice: false })).toBe(
+      ADMIN_SESSION_SECONDS,
+    );
     expect(ADMIN_SESSION_SECONDS).toBe(60 * 60 * 8);
   });
 
@@ -95,7 +125,7 @@ describe("session lifetime", () => {
    * account that can read every phone number in the system a thirty-day session —
    * the one lifetime NFR13 refuses it outright.
    */
-  it.each(["password", "password_totp"] as const)(
+  it.each(["password", "password_totp", "link_totp"] as const)(
     "holds a %s session to eight hours even on her own device",
     (method) => {
       expect(sessionSecondsFor(method, { sharedDevice: false })).toBe(ADMIN_SESSION_SECONDS);
@@ -121,19 +151,28 @@ describe("session lifetime", () => {
 });
 
 /**
- * NFR14's rule is written over the **class** of passwordless doors, so the class
- * itself is worth pinning: a door added to `SIGN_IN_METHODS` without a thought
- * about which side of this line it falls on is the failure the requirement names.
+ * **The class every door but one falls into.** NFR14's rule is written over
+ * _"every door that is not the Admin door"_, and this is that sentence as a
+ * test: exactly one member is admitted and the other four are refused, whatever
+ * `SIGN_IN_METHODS` grows to hold.
+ *
+ * It replaces a `PASSWORDLESS_SIGN_IN_METHODS` list that used to be pinned here,
+ * and the replacement is the finding rather than a tidy-up: a list of the doors
+ * that are wrong left `password` and `password_totp` outside it, so the
+ * credential door minted a real session on an Admin's own Account. Written as a
+ * complement, a door added later cannot fall through — it is refused for not
+ * being one string.
  */
-describe("the passwordless class", () => {
-  it("holds exactly the two doors that present no second factor", () => {
-    expect([...PASSWORDLESS_SIGN_IN_METHODS].toSorted()).toEqual(["google", "magic_link"]);
+describe("the doors an Admin-granted Account is refused at", () => {
+  const refused = SIGN_IN_METHODS.filter((method) => method !== ADMIN_SIGN_IN_METHOD);
+
+  it("is every door but the Admin's, with none left outside the rule", () => {
+    expect([...refused].toSorted()).toEqual(["google", "magic_link", "password", "password_totp"]);
   });
 
-  it("does not hold the credential doors", () => {
-    const passwordless: readonly string[] = PASSWORDLESS_SIGN_IN_METHODS;
-    expect(passwordless).not.toContain("password");
-    expect(passwordless).not.toContain(ADMIN_SIGN_IN_METHOD);
+  it("includes the credential doors, which the narrower rule let through", () => {
+    expect(refused).toContain("password");
+    expect(refused).toContain("password_totp");
   });
 });
 

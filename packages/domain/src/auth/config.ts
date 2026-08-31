@@ -25,7 +25,16 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { eq } from "drizzle-orm";
+import {
+  ADMIN_CHALLENGE_TTL_SECONDS,
+  SECOND_FACTOR_ROUTE,
+  secureCookies,
+  SIGN_IN_CHALLENGE_COOKIE,
+  SIGN_IN_CHALLENGE_COOKIE_ATTRIBUTES,
+  signSignInChallenge,
+} from "#admin/challenge";
 import { BACKUP_CODE_COUNT, TOTP_ISSUER } from "#admin/second-factor";
+import { adminDoor } from "#auth/admin-door";
 import {
   readSignInAttempt,
   sessionExpiryFor,
@@ -54,7 +63,11 @@ import { ADMIN_SIGN_IN_ONLY, SIGN_IN_FAILED } from "#user-messages";
  * brought it in satisfies both.
  */
 export type AuthOptions = BetterAuthOptions & {
-  plugins: [ReturnType<typeof magicLink>, ReturnType<typeof twoFactor>];
+  plugins: [
+    ReturnType<typeof magicLink>,
+    ReturnType<typeof twoFactor>,
+    ReturnType<typeof adminDoor>,
+  ];
 };
 
 /** Read as a plain record, so seam 1 can hand it one. Matches `#config`'s shape. */
@@ -98,10 +111,10 @@ export const MAGIC_LINK_TTL_MINUTES = 15;
  * DD5's floor for the one password in this system, and it is **16** rather than
  * Better Auth's default of 8.
  *
- * _"for the one account that can read every phone number"_ — that is the whole
+ * _"for the accounts that can read every phone number"_ — that is the whole
  * argument. The Admin's password is not one credential among thousands where a
  * floor trades security against sign-up completion; it is the single credential
- * guarding the account that can take down a profile, unfreeze a Hirer, and read
+ * guarding the accounts that can take down a profile, unfreeze a Hirer, and read
  * every exchanged contact detail in the system. There is no completion rate to
  * protect, because exactly one person ever types it.
  */
@@ -244,6 +257,12 @@ export function googleSignInAvailable(env: AuthEnv = process.env): boolean {
  * classifies Verification `secret`; this is what that classification costs to
  * honour, which is one hash.
  *
+ * **It is one hash for one kind of token again.** It moved out to a leaf module
+ * for a while, because the Admin door had a second link table that hashed its
+ * own token the same way and the two files could not import each other. That
+ * table is gone — the Admin's first factor is this very link — so there is one
+ * token, one rule, and no cycle to break.
+ *
  * Exported because the `before` hook that reads a row back has to hash the token
  * the same way, and two spellings of one hash is a bug that presents as "the
  * shared-device box does nothing".
@@ -268,9 +287,17 @@ export function authOptions({
 }: AuthDependencies & { db: DomainDatabase }): AuthOptions {
   const google = googleCredentials(env);
 
+  /**
+   * Read once. It is the origin Better Auth is configured with, the origin it
+   * trusts, and the base the Admin link is built against — and three separate
+   * reads of one variable is three chances for them to stop being the same
+   * origin.
+   */
+  const baseUrl = required(env, BASE_URL_VARIABLE);
+
   return {
     appName: "Recomencemos",
-    baseURL: required(env, BASE_URL_VARIABLE),
+    baseURL: baseUrl,
     secret: authSecret(env),
 
     database: drizzleAdapter(db, { provider: "pg", schema }),
@@ -287,7 +314,7 @@ export function authOptions({
      * guards *our* post-sign-in redirect. DD5 says both are needed and names the
      * confusion between them.
      */
-    trustedOrigins: [new URL(required(env, BASE_URL_VARIABLE)).origin],
+    trustedOrigins: [new URL(baseUrl).origin],
 
     /**
      * **`session.expiresIn` is one number and NFR13 needs two**, so this is the
@@ -477,6 +504,17 @@ export function authOptions({
           const attempt = readSignInAttempt(ctx);
           const signInAttemptId = attempt.signInAttemptId ?? crypto.randomUUID();
 
+          /**
+           * **One URL, for every address.** An Account holding the Admin grant
+           * is sent the same link as everybody else and it is spent the same
+           * way; what differs is that consuming it produces a challenge instead
+           * of a session, which is decided at session creation and not here.
+           *
+           * The alternative was a second link to a route of its own, and it put
+           * `/admin/continue/<token>` in the mail body — the admin surface named
+           * in the one place this design cannot control. What is in the mailbox
+           * now discloses nothing, because there is nothing in it to differ.
+           */
           await sendMagicLink({
             email,
             url,
@@ -489,6 +527,12 @@ export function authOptions({
            * is what lets a completion rate be measured without NFR18 being
            * touched. `magic_link.requested` is already one of DD11's closed
            * fourteen, so nothing here widens that vocabulary.
+           *
+           * **It pairs with `magic_link.consumed` for every Account, the Admin's
+           * included**, which is the half a second link mechanism could not
+           * deliver: her link had no verification row, so her `requested` could
+           * never be followed by a `consumed` and NFR27's funnel counted a
+           * request that was structurally unable to complete.
            */
           logger.info(
             {
@@ -532,6 +576,14 @@ export function authOptions({
         issuer: TOTP_ISSUER,
         backupCodeOptions: { amount: BACKUP_CODE_COUNT },
       }),
+
+      /**
+       * **The Admin's door** (NFR14, DD5). One endpoint, which mints the only
+       * `link_totp` session this product can produce — see `#auth/admin-door`
+       * for why it is a plugin rather than a function called from a Server
+       * Action, and `#admin/door` for everything it decides.
+       */
+      adminDoor({ db, key: authSecret(env), logger, secure: secureCookies(baseUrl) }),
     ],
 
     rateLimit: {
@@ -570,7 +622,7 @@ export function authOptions({
          * doing the heavy lifting and should not pretend to: with
          * `minPasswordLength` at 16 the search space is what defends the
          * password, and this bounds the *noise* rather than the cryptography. It
-         * is one account and one person, who signs in about once a day, so ten
+         * is a handful of accounts, each signing in about once a day, so ten
          * leaves room for a mistyped password and a fresh browser without
          * leaving room for a script.
          *
@@ -648,7 +700,12 @@ export function authOptions({
             const attempt = readSignInAttempt(context);
             const method = signInMethodForPath(path ?? "");
 
-            await refusePasswordlessAdmin(db, logger, session.userId, method);
+            await refuseDoorThatIsNotTheAdminDoor(
+              { db, logger, key: authSecret(env), secure: secureCookies(baseUrl) },
+              context,
+              session.userId,
+              method,
+            );
 
             return {
               data: {
@@ -686,19 +743,31 @@ export function authOptions({
 }
 
 /**
- * **NFR14's first half**: every passwordless door is refused for an account
- * holding the Admin grant.
+ * **NFR14's first half**: every door that is not the Admin door is refused for an
+ * account holding the Admin grant.
  *
  * Three things about the shape are load-bearing, and all three were alternatives
  * that looked simpler.
  *
- * **It is written over the class, not over its members.** The requirement says so
- * in as many words — _"the rule is written over the **class** of passwordless
- * doors rather than over the two that exist today, because adding a third is
- * exactly when this gets forgotten"_ — so the test is membership of
- * {@link PASSWORDLESS_SIGN_IN_METHODS}, and a fourth door refuses an Admin from
- * the moment it is added to that list. `signInMethodForPath` already throws for a
- * door that is on no list at all, so there is no third state to fall through.
+ * **It is written over the class, not over its members — and the class is the
+ * complement of one member.** The requirement widened with the amendment that
+ * made the Admin door passwordless: it was _"every passwordless door"_ while a
+ * password door existed, and it is now _"every door that is **not** the Admin
+ * door"_. So the test is inequality against {@link ADMIN_SIGN_IN_METHOD} rather
+ * than membership of a list of the doors that happen to be wrong today, which
+ * is what makes a door added later refused by **default** instead of admitted
+ * until somebody remembers to add it somewhere. `signInMethodForPath` already
+ * throws for a door on no list at all, so there is no third state to fall
+ * through.
+ *
+ * **It refuses the credential doors too, and that is the amendment rather than
+ * an oversight corrected.** They are not passwordless, so the narrower rule let
+ * them through — an Admin could sign in with her password and hold a real
+ * session on her own Account: no Admin authority, but her account page, her
+ * session list and _salir de todas partes_. The door itself goes with the
+ * surface in the slice after this one; until then it is refused here, which is
+ * the difference between a door that is dead and a door that still opens
+ * something.
  *
  * **It runs at session creation and not at the door.** Refusing inside
  * `beforeSignIn` at `/sign-in/magic-link` is the obvious place and it is the
@@ -715,10 +784,12 @@ export function authOptions({
  * `user` row and this hook has the row's id, so nothing has to thread it through
  * four middleware hops where one of them could drop it.
  *
- * A `password` session is not refused: it presents one factor rather than none,
- * it is the enrolment window runbook §6 walks, and it carries no Admin authority
- * because `requireAdminSession` demands `password_totp` and not merely
- * "not passwordless".
+ * **There is no exemption left to remember.** The old rule had one — a
+ * `password` session was outside the passwordless class and therefore silently
+ * allowed — and it was load-bearing while the credential door was how an Admin
+ * reached enrolment. Enrolment happens over the direct connection now, before
+ * the grant exists at all, so there is no window to keep open and nothing this
+ * rule has to make an exception for.
  *
  * **It throws Better Auth's `APIError` rather than an `AppError`, and that is a
  * runtime finding rather than a preference.** The first version threw an
@@ -735,13 +806,24 @@ export function authOptions({
  * carrying the id and the door. That is the same split every returned refusal in
  * this repository makes — one `warn` line, no Sentry event.
  */
-async function refusePasswordlessAdmin(
-  db: DomainDatabase,
-  logger: AuthLogger,
+async function refuseDoorThatIsNotTheAdminDoor(
+  {
+    db,
+    logger,
+    key,
+    secure,
+  }: {
+    readonly db: DomainDatabase;
+    readonly logger: AuthLogger;
+    readonly key: string;
+    readonly secure: boolean;
+  },
+  // oxlint-disable-next-line no-explicit-any -- the endpoint context, as above.
+  context: any,
   userId: string,
   method: schema.SignInMethod,
 ): Promise<void> {
-  if (!(schema.PASSWORDLESS_SIGN_IN_METHODS as readonly string[]).includes(method)) return;
+  if (method === schema.ADMIN_SIGN_IN_METHOD) return;
 
   const [account] = await db
     .select({ isAdmin: schema.user.isAdmin })
@@ -752,14 +834,54 @@ async function refusePasswordlessAdmin(
   if (!account?.isAdmin) return;
 
   /**
+   * **The magic link is factor one, so it is diverted rather than refused.**
+   * Every other door is a dead end for this Account and answers 403; this one is
+   * halfway through the Admin door, and the difference between the two is the
+   * whole of what makes the product's single sign-in form work for her.
+   *
+   * By the time this runs the token is already spent — `/magic-link/verify`
+   * calls `consumeVerificationValue` **before** `createSession` — so the link is
+   * single-use without this package implementing single-use. What is left to do
+   * is say which Account got this far, which is exactly what the challenge is.
+   *
+   * **The cookie is set and then the redirect is thrown**, in that order,
+   * because a thrown redirect leaves the endpoint immediately. Both travel on
+   * the same response: better-call accumulates `Set-Cookie` on the context's
+   * response headers, and the redirect carries them.
+   */
+  if (method === "magic_link") {
+    /**
+     * **Nothing is logged here, and that is the unification paying out.** The
+     * `after` hook on this path emits `magic_link.consumed` already, and it runs
+     * on a thrown redirect — measured, because it is the kind of thing that is
+     * easy to assume either way. So a granted Account's link produces the same
+     * one line, with the same `sign_in_attempt_id` and `shared_device`, as every
+     * other Account's, and NFR27's pair closes for her without a field or an
+     * event of her own.
+     *
+     * A line was written here first and it was a **second** `consumed` for the
+     * same link, which would have counted her twice in the numerator of the
+     * ratio it exists to measure.
+     */
+    context.setCookie(SIGN_IN_CHALLENGE_COOKIE, signSignInChallenge(userId, key), {
+      ...SIGN_IN_CHALLENGE_COOKIE_ATTRIBUTES,
+      maxAge: ADMIN_CHALLENGE_TTL_SECONDS,
+      secure,
+    });
+
+    throw context.redirect(SECOND_FACTOR_ROUTE);
+  }
+
+  /**
    * The account id and the door, and no address — this fires on a path whose
    * whole design is that it says nothing about which addresses exist (NFR18).
    * `snake_case` on the line, whatever the source calls it (ADR-0005).
    */
   logger.warn(
-    { event: "admin.passwordless_door_refused", account_id: userId, sign_in_method: method },
-    "A session was about to be created for an Admin-granted Account through a door that " +
-      "presents no second factor. The Admin signs in at /admin/sign-in.",
+    { event: "admin.non_admin_door_refused", account_id: userId, sign_in_method: method },
+    "A session was about to be created for an Admin-granted Account through a door other than " +
+      "the one that pairs a single-use emailed link with a code from an authenticator. The " +
+      "sign_in_method on this line is the door that was refused.",
   );
 
   throw new APIError(403, { code: "ADMIN_SIGN_IN_ONLY", message: ADMIN_SIGN_IN_ONLY });
@@ -783,6 +905,21 @@ const NO_PROVIDER_TOKENS = {
  * context — so this is how a value crosses from a middleware to a database hook
  * with no module-level mutable state and nothing shared between concurrent
  * requests.
+ */
+/**
+ * **What this hook may answer, and the one shape it must never use.**
+ *
+ * `{ context }` is merged into the endpoint context and the endpoint then runs.
+ * **Anything else short-circuits and becomes the response** — `runBeforeHooks`
+ * in `better-auth@1.7.2/dist/api/dispatch.mjs` returns a hook's object verbatim
+ * unless it carries a `context` key — which means the endpoint's body schema,
+ * its `use` middlewares and its `requireHeaders` are all skipped.
+ *
+ * So a short-circuit here is not a shortcut, it is an exemption from every gate
+ * the endpoint declares, and on a door whose whole requirement is that one
+ * address is indistinguishable from every other it is an oracle. The Admin
+ * divert was written this way once; it lives in `sendMagicLink` above now, and
+ * the comment there records what it cost.
  */
 async function beforeSignIn(
   // oxlint-disable-next-line no-explicit-any -- Better Auth's middleware context

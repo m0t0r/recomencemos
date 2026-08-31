@@ -40,7 +40,6 @@ import { CEILINGED_ACTIONS } from "#rate-limit";
 export {
   account,
   ADMIN_SIGN_IN_METHOD,
-  PASSWORDLESS_SIGN_IN_METHODS,
   rateLimit,
   session,
   SIGN_IN_METHODS,

@@ -13,6 +13,25 @@ import { type SignInMethod, SIGN_IN_METHODS } from "#auth-schema";
 import { SIGN_IN_FAILED } from "#user-messages";
 
 /**
+ * The Admin door's endpoint path — declared here rather than beside the endpoint
+ * that serves it, and the placement is load-bearing rather than tidy.
+ *
+ * {@link SIGN_IN_PATHS} below is keyed by it, and `#auth/admin-door` is where the
+ * endpoint is built. Declaring it there and importing it here made this module
+ * depend on the endpoint, which depends on `#admin/door`, which depends on
+ * `#auth/config`, which depends on this module — and an ESM cycle resolved in
+ * that order evaluates this file while the constant is still in its temporal
+ * dead zone. The map then keyed itself by the string `"undefined"` and
+ * `signInMethodForPath` threw for the one door it had just been taught, which is
+ * how this comment came to be written.
+ *
+ * Here it is a leaf. The endpoint imports its own path from the table that
+ * decides what a session made through it is called, which is also the right way
+ * round to read.
+ */
+export const ADMIN_SECOND_FACTOR_PATH = "/second-factor/verify";
+
+/**
  * Every Better Auth path that mints a session in this product, mapped to the
  * value NFR14's `requireAdminSession` reads off the session row.
  *
@@ -35,11 +54,18 @@ import { SIGN_IN_FAILED } from "#user-messages";
  * `better-auth@1.7.1/dist/plugins/two-factor/index.mjs`: the plugin's `after`
  * hook on that path deletes the session it just created and returns
  * `twoFactorRedirect` — but **only when `user.twoFactorEnabled` is already
- * true**. Before enrolment it returns early and the session stands, which is
- * exactly the window runbook §6 walks: an Admin granted by manual `UPDATE` has to
- * reach the enrolment surface somehow. So this member exists, it is refused by
- * `requireAdminSession`, and the surface that accepts it is `/admin/sign-in` and
- * nothing else.
+ * true**. Before enrolment it returns early and the session stands. That was the
+ * enrolment window the credential door needed; the passwordless door has no such
+ * window, because enrolment happens over the direct connection before the grant
+ * exists at all. The member survives until the contract half of DD5 removes the
+ * door, and `requireAdminSession` has never accepted it.
+ *
+ * **The last row is this product's own endpoint, and it is the only one.** Every
+ * other path here belongs to Better Auth; `/second-factor/verify` is
+ * `#auth/admin-door`'s, and it is the sole producer of the one method NFR14
+ * accepts. That is the whole of what makes "an Admin session presented two
+ * factors" true — there is exactly one way to write the value, and it is behind
+ * a live challenge from a single-use link plus a code from the authenticator.
  */
 const SIGN_IN_PATHS: Readonly<Record<string, SignInMethod>> = {
   "/magic-link/verify": "magic_link",
@@ -47,6 +73,7 @@ const SIGN_IN_PATHS: Readonly<Record<string, SignInMethod>> = {
   "/sign-in/email": "password",
   "/two-factor/verify-totp": "password_totp",
   "/two-factor/verify-backup-code": "password_totp",
+  [ADMIN_SECOND_FACTOR_PATH]: "link_totp",
 };
 
 /**
@@ -76,7 +103,7 @@ export const SHARED_DEVICE_SESSION_SECONDS = 60 * 60 * 8;
  *
  * They answer different questions and will drift the first time either is
  * revisited. The shared-device figure bounds how long a cybercafé browser stays
- * signed in; this one bounds how long the account that can take down a profile
+ * signed in; this one bounds how long an account that can take down a profile
  * and read every exchanged phone number stays signed in **on its owner's own
  * machine**. Collapsing them into one constant would make a change to either a
  * silent change to both.
@@ -158,6 +185,23 @@ export function signInMethodForPath(path: string): SignInMethod {
 }
 
 /**
+ * Every method that takes NFR13's Admin lifetime, as data.
+ *
+ * **Written over the class rather than over the member that matters today**:
+ * `link_totp` is the
+ * one door that carries Admin authority now, and the two credential members are
+ * still reachable until DD5's contract half removes them. A session from any of
+ * the three is eight hours; a door added later without a thought about NFR13
+ * would have to be added here to get the longer one, which is the right way for
+ * that mistake to be made.
+ */
+const ADMIN_LIFETIME_METHODS = [
+  "password",
+  "password_totp",
+  "link_totp",
+] as const satisfies readonly SignInMethod[];
+
+/**
  * NFR13, as one number.
  *
  * **The method is consulted before the attempt**, so an Admin session is eight
@@ -165,13 +209,13 @@ export function signInMethodForPath(path: string): SignInMethod {
  * first would give an Admin who did not tick the box a thirty-day session, which
  * is the one lifetime NFR13 refuses that account outright.
  *
- * A `password` session — the enrolment window — takes the Admin number too. It is
- * the weaker of the two credential states and giving it the longer life would be
- * the wrong direction to err in on the one account that can read every phone
- * number in the system.
+ * A `password` session — the enrolment window the credential door needed — takes
+ * the Admin number too. It is the weaker of the two credential states and giving
+ * it the longer life would be the wrong direction to err in on the one account
+ * that can read every phone number in the system.
  */
 export function sessionSecondsFor(method: SignInMethod, attempt: SignInAttempt): number {
-  if (method === "password" || method === "password_totp") return ADMIN_SESSION_SECONDS;
+  if ((ADMIN_LIFETIME_METHODS as readonly string[]).includes(method)) return ADMIN_SESSION_SECONDS;
   return attempt.sharedDevice ? SHARED_DEVICE_SESSION_SECONDS : OWN_DEVICE_SESSION_SECONDS;
 }
 

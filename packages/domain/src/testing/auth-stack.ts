@@ -14,9 +14,12 @@
  * module, not a copied prologue.
  */
 
+import { base32 } from "@better-auth/utils/base32";
+import { createOTP } from "@better-auth/utils/otp";
 import { betterAuth } from "better-auth";
 import { eq } from "drizzle-orm";
-import { ADMIN_MIN_PASSWORD_LENGTH, authOptions } from "#auth/config";
+import { completeAdminEnrolment, mintAdminEnrolment, readAdminEnrolment } from "#admin/enrolment";
+import { ADMIN_MIN_PASSWORD_LENGTH, type AuthLogger, authOptions } from "#auth/config";
 import * as schema from "#schema";
 import type { TestDatabase } from "#testing/database";
 
@@ -35,7 +38,15 @@ export interface AuthStack {
  * the magic-link door, and configuring a social provider would add an outbound
  * leg a test has no business having.
  */
-export function signInStack(database: TestDatabase): AuthStack {
+export function signInStack(
+  database: TestDatabase,
+  /**
+   * A logger, for the one suite that asserts on lines rather than on rows.
+   * Silent by default, because every other caller is testing a row and a `pino`
+   * line in the middle of it is noise.
+   */
+  logger: Partial<AuthLogger> = {},
+): AuthStack {
   const links: { url: string }[] = [];
 
   const auth = betterAuth(
@@ -44,7 +55,7 @@ export function signInStack(database: TestDatabase): AuthStack {
       sendMagicLink: async ({ url }) => {
         links.push({ url });
       },
-      logger: { info: () => {}, warn: () => {} },
+      logger: { info: () => {}, warn: () => {}, ...logger },
       env: {
         BETTER_AUTH_SECRET: "a-secret-long-enough-for-the-configuration-to-build",
         BETTER_AUTH_URL: BASE_URL,
@@ -261,4 +272,49 @@ function base32Decode(input: string): string {
   // Better Auth's secret is `generateRandomString(32)`, so the decoded bytes are
   // the ASCII of that string and this round-trips exactly.
   return new TextDecoder().decode(Uint8Array.from(bytes));
+}
+
+/**
+ * An Account that has been all the way through `pnpm admin:enrol`: the grant, a
+ * second factor, and the two credentials in the clear so a test can produce a
+ * code the door will accept.
+ *
+ * **It walks the real enrolment rather than writing three rows**, which is the
+ * same argument {@link grantedAdmin} makes one paragraph up and a stronger one
+ * here: the stored secret and codes are ciphertext under `BETTER_AUTH_SECRET`,
+ * and a fixture that wrote its own would be encrypting with its own idea of the
+ * format. Reading the plaintext off the *enrolment screen's* values is also the
+ * only place either exists in the clear, which is the property DD5 relies on.
+ *
+ * The key is the caller's, because the door decrypts with the same one and a
+ * test that used two would fail for a reason that is not about the door.
+ */
+export async function enrolledAdmin(
+  database: TestDatabase,
+  { email, key, now = new Date() }: { email: string; key: string; now?: Date },
+): Promise<{ accountId: string; secret: string; backupCodes: readonly string[] }> {
+  const { token } = await mintAdminEnrolment(database.db, { email, key, now });
+
+  const rendered = await readAdminEnrolment(database.db, { token, key, now });
+
+  /**
+   * `throw` rather than `expect(...).not.toBeNull()`, because a fixture has to
+   * **narrow** and an assertion does not: the version that asserted went on to
+   * cast the same value three times, which is the shape that survives a change
+   * making it genuinely null.
+   */
+  if (!rendered) throw new Error("the enrolment screen rendered nothing");
+
+  const secret = new TextDecoder().decode(base32.decode(rendered.manualSecret));
+
+  const outcome = await completeAdminEnrolment(database.db, {
+    token,
+    code: await createOTP(secret).totp(),
+    key,
+    now,
+  });
+
+  if (!outcome.ok) throw new Error("the enrolment refused the code it had just issued");
+
+  return { accountId: outcome.accountId, secret, backupCodes: rendered.backupCodes };
 }

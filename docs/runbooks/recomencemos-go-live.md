@@ -241,8 +241,11 @@ directly, §7 has to be reopened before it ships.**
 
 ## 6. The Admin, and not being locked out of your own platform (C43, C44)
 
-One Admin moderates everything. Losing the second factor stops every Offer behind NFR7's 24-hour band
-and leaves every reported Hirer frozen, because `unfreezeHirer` is an Admin action.
+A small number of Admins moderate everything — at least two, so that one losing a phone is an
+inconvenience rather than an outage. Losing every second factor at once stops every Offer behind
+NFR7's 24-hour band and leaves every reported Hirer frozen, because `unfreezeHirer` is an Admin
+action. Enrol the second Admin at the same time as the first: the recovery path that needs no printed
+code is another Admin who can still sign in.
 
 **Rewritten 2026-08-30 with #96: the Admin door has no password.** This section used to grant an
 Account with a 16-character password and then send a person to `/admin/sign-in` to enrol a second
