@@ -5,10 +5,12 @@
  * `next.config.ts` is what makes both available — the argument for choosing it
  * over a redirect, a thrown `AppError` and a `proxy.ts` is written at that option.
  *
- * **It is one screen for four different callers**, and offers no route onward. A
- * link to `/admin/sign-in` here would be a sign saying the door is this way, on a
- * page an anonymous caller can reach — which is precisely what answering 403
- * rather than redirecting exists to avoid. The Admin knows where the door is.
+ * **It is one screen for every caller it can meet**, and offers no route onward.
+ * There is no admin door to link to any more — an Admin asks for a link at the
+ * public sign-in form like anybody else — and pointing *there* would be no better:
+ * on a page an anonymous caller can reach, a way onward is a sign saying the door
+ * is this way, which is precisely what answering 403 rather than redirecting
+ * exists to avoid. The Admin knows where the door is.
  *
  * It is inside `(admin)`, so it covers `/admin` and `/admin/*` and nothing else:
  * `forbidden()` resolves to the nearest boundary, and the public surfaces do not

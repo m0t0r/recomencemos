@@ -15,12 +15,12 @@
  * **There is no `better-auth/react` mock any more, and its absence is the
  * point.** This file used to stub `createAuthClient` because the Google door was
  * a browser call. Both doors are Server Actions now, so the browser holds no
- * auth client to stub — see "no auth client reaches the browser" below, which
- * asserts that rather than leaving it to be noticed.
+ * auth client to stub. The sweep that asserts that rather than leaving it to be
+ * noticed used to sit at the foot of this file, rooted at this surface; it is
+ * `apps/web/auth-client-boundary.test.ts` now, rooted at `app/`, because the
+ * second copy of it died with the surface it was nested inside.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -359,56 +359,4 @@ describe("the form before hydration", () => {
     expect(google.getAttribute("type")).toBe("submit");
     expect(google.closest("form")).toBeTruthy();
   });
-});
-
-/**
- * **The regression guard for the whole server-side rework.**
- *
- * Asserting this by rendering is not possible — a browser bundle is a build
- * artefact and this suite is not a build. So it is asserted over the source of
- * everything on this surface's client path, which is the thing a person would
- * actually change by accident: reaching for `createAuthClient` because it is the
- * shape every Better Auth tutorial shows.
- *
- * The failure this prevents is not subtle in production and is invisible in
- * review: one `better-auth/react` import puts the auth client, `@better-fetch`,
- * `nanostores` and `defu` back into the bundle a Worker downloads on a metered
- * connection, and NFR3's budget is measured on `/` and `/publish` rather than
- * here — so nothing else would report it.
- */
-/** Every source file on this surface's client path, tests excluded. */
-function sourcesUnder(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) return sourcesUnder(path);
-    return /\.tsx?$/.test(entry.name) && !entry.name.includes(".test.") ? [path] : [];
-  });
-}
-
-/**
- * **Comments are stripped before matching, and that is not a convenience.** The
- * first version of the guard below failed on `actions.ts`, whose doc comment
- * explains that the door "was `createAuthClient().signIn.social(...)` from a
- * Client Component" — prose about the thing being banned, read as the thing
- * itself. It is the same false-positive class `gate-lib.sh` strips heredocs for:
- * a rule that refuses the sentence documenting it teaches everyone to stop
- * writing the sentence.
- */
-function code(source: string): string {
-  return source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
-}
-
-describe("no auth client reaches the browser", () => {
-  const root = join(import.meta.dirname, "..");
-  it.each(sourcesUnder(root).map((path) => [path.slice(root.length + 1), path]))(
-    "%s imports no auth client",
-    (_name, path) => {
-      const source = code(readFileSync(path, "utf8"));
-
-      // `actions.ts` legitimately reaches `lib/auth`, which is server-only. What
-      // must never appear anywhere on this surface is the *browser* client.
-      expect(source).not.toMatch(/from\s+["']better-auth\/react["']/);
-      expect(source).not.toMatch(/createAuthClient/);
-    },
-  );
 });

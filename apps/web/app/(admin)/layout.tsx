@@ -38,8 +38,8 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
         level down, and the two are not in tension: the page blocks because its
         **status code** depends on the gate, and a streamed 200 shell would answer
         before the gate did. Chrome carries no status and refuses nobody, so
-        blocking on it would make `/admin/sign-in` — a fully static page — wait on
-        a session read to paint a header that will be empty.
+        blocking on it would make the 403 — a page with nothing to read from the
+        database — wait on a session read to paint a header that will be empty.
       */}
       <Suspense fallback={<AdminHeaderPlaceholder />}>
         <AdminHeader />

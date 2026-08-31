@@ -32,8 +32,8 @@ export function AdminHeader() {
         **No `accountHref` and no `signedOut`.** `/account` is the Worker's own
         Account under a different shell, so from the queue it is a row that
         navigates out of the surface being worked. And the one state this renders
-        signed-out in is `/admin/sign-in`, where the reader is already looking at
-        a door — the site's *Entrar* would point at the public one.
+        signed-out in is the group's 403, which deliberately offers no way onward
+        — the site's *Entrar* in the chrome above it would put one back.
       */
     />
   );

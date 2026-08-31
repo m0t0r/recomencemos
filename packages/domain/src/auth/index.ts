@@ -44,9 +44,7 @@ import type { DomainDatabase } from "#database";
 import { type AccountSession, listAccountSessions } from "#auth/sessions";
 import { SHARED_DEVICE_HEADER } from "#auth/sign-in-attempt";
 import {
-  ADMIN_ENROLMENT_FAILED,
   ADMIN_SECOND_FACTOR_REFUSED,
-  ADMIN_SIGN_IN_REFUSED,
   SESSION_REQUIRED,
   SIGN_IN_FAILED,
   SIGN_OUT_EVERYWHERE_FAILED,
@@ -181,10 +179,6 @@ export type SignOutEverywhereOutcome =
  * second factor, below, which is the only call that can produce a session
  * `requireAdminSession` admits.
  *
- * **The credential door's three methods are still here and mint nothing NFR14
- * accepts.** They belong to the page that is deleted in the slice after this
- * one, together with Better Auth's `twoFactor` plugin and the columns behind it.
- *
  * **The three exits are three methods, not one with a flag**, and that is the
  * shape to keep. `signOut` (#80) ends *this* session; `signOutEverywhere` (#13)
  * ends every *other* one; `listSessions` is what makes the second an informed
@@ -264,37 +258,6 @@ export interface AuthHandler {
   readonly signOutEverywhere: (headers: Headers) => Promise<SignOutEverywhereOutcome>;
 
   /**
-   * The Admin's first factor (#17).
-   *
-   * **It never returns a usable Admin session and it cannot**, which is the point
-   * of {@link AdminSignInStage}: either a 2FA challenge is in flight, or the
-   * account has no second factor yet and holds a `password` session
-   * `requireAdminSession` refuses. The second factor is a separate call because it
-   * is a separate act by a person reading six digits off a phone.
-   */
-  readonly signInWithPassword: (input: PasswordSignInInput) => Promise<PasswordSignInOutcome>;
-
-  /**
-   * The Admin's second factor — TOTP, or one of the ten printed backup codes.
-   *
-   * **One method for both**, because DD5 makes the codes a *required* recovery
-   * path rather than a lesser one: losing the TOTP device otherwise leaves every
-   * reported Hirer frozen (C43). Both produce a `password_totp` session, because
-   * what NFR14 asks is that two factors were presented.
-   */
-  readonly verifySecondFactor: (input: SecondFactorInput) => Promise<SecondFactorOutcome>;
-
-  /**
-   * Enrol a TOTP secret, and hand back the two things that exist exactly once.
-   *
-   * Reachable only from the `enrolment` stage above, so it cannot be used to
-   * re-enrol an Admin who already has a second factor — that is a break-glass
-   * `UPDATE` in runbook §6, which is a deliberate act by someone at a database
-   * rather than a form on the internet.
-   */
-  readonly enrolSecondFactor: (input: EnrolSecondFactorInput) => Promise<EnrolSecondFactorOutcome>;
-
-  /**
    * **The Admin's second factor: six digits, or one printed code.**
    *
    * **One method for both**, and unlike the credential door's version there is
@@ -318,60 +281,6 @@ export interface AdminCodeInput {
 
 export type AdminCodeSignInOutcome =
   | { readonly ok: true; readonly setCookie: readonly string[] }
-  | { readonly ok: false; readonly error: AppError };
-
-export interface PasswordSignInInput {
-  readonly email: string;
-  readonly password: string;
-  readonly headers: Headers;
-}
-
-/**
- * **`setCookie` is the half a caller must not drop**, exactly as it is for
- * `startGoogleSignIn` and `signOut`. Better Auth writes the 2FA challenge cookie
- * onto the response of a call this package makes internally, and a Server Action
- * does not return that to the browser on its own — so a caller that renders the
- * code field without writing these gets `INVALID_TWO_FACTOR_COOKIE` from the very
- * next request, which reads to the Admin as "my code is wrong".
- */
-export type PasswordSignInOutcome =
-  | { readonly ok: true; readonly stage: AdminSignInStage; readonly setCookie: readonly string[] }
-  | { readonly ok: false; readonly error: AppError };
-
-export interface SecondFactorInput {
-  /** Six digits, or one backup code. Trimmed by the caller's schema, not here. */
-  readonly code: string;
-  /** Which door the code came from. The surface knows; this package does not guess. */
-  readonly kind: "totp" | "backup_code";
-  readonly headers: Headers;
-}
-
-export type SecondFactorOutcome =
-  | { readonly ok: true; readonly setCookie: readonly string[] }
-  | { readonly ok: false; readonly error: AppError };
-
-export interface EnrolSecondFactorInput {
-  /** Re-confirmed, because enrolling a second factor is a credential-changing act. */
-  readonly password: string;
-  readonly headers: Headers;
-}
-
-/**
- * The two values that are shown once and never again.
- *
- * **Neither is stored anywhere this repository can read them back.** Better Auth
- * encrypts both at rest with `BETTER_AUTH_SECRET`, and nothing here decrypts them
- * — so a surface that fails to render the backup codes has lost them, and runbook
- * §6's "print ten codes and store them offline" is a step with no second chance.
- * That is why the enrolment surface shows them before it asks for the first code.
- */
-export type EnrolSecondFactorOutcome =
-  | {
-      readonly ok: true;
-      /** `otpauth://…`, for the QR. Server-owned; never built from typed input. */
-      readonly totpUri: string;
-      readonly backupCodes: readonly string[];
-    }
   | { readonly ok: false; readonly error: AppError };
 
 /**
@@ -400,29 +309,6 @@ export interface AuthSession {
    */
   readonly isAdmin: boolean;
 }
-
-/**
- * Where the Admin's password sign-in got to, which is not the same question as
- * whether it succeeded.
- *
- * **Both outcomes are a correct password and neither is a session yet**, and the
- * split is Better Auth's rather than ours. Read out of
- * `dist/plugins/two-factor/index.mjs` at 1.7.1: the plugin's `after` hook on
- * `/sign-in/email` deletes the session the credential handler just created and
- * answers `twoFactorRedirect` — but only when `user.twoFactorEnabled` is already
- * true. Before enrolment it returns early and the session stands.
- *
- * - `two_factor` — the ordinary path. A short-lived challenge cookie is set and
- *   the code is what completes the sign-in.
- * - `enrolment` — the bootstrap window runbook §6 walks. An Admin granted by
- *   manual `UPDATE` holds a `password` session, which carries no Admin authority
- *   (`requireAdminSession` refuses it) and can reach exactly one thing: the
- *   enrolment step on `/admin/sign-in`.
- *
- * A surface that treated the second as success would put an unenrolled Admin
- * into the queue on one factor, which is NFR14 defeated at its first use.
- */
-export type AdminSignInStage = "two_factor" | "enrolment";
 
 /**
  * Build the handler.
@@ -716,105 +602,6 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
       }
     },
 
-    async signInWithPassword({ email, password, headers }) {
-      try {
-        const { auth } = await resolve();
-
-        const { headers: responseHeaders, response } = await auth.api.signInEmail({
-          body: { email, password },
-          headers,
-          returnHeaders: true,
-        });
-
-        /**
-         * **The presence of `twoFactorRedirect` is what tells the two stages
-         * apart**, and it is read rather than inferred from the session — the
-         * plugin's hook has already deleted the session by the time this returns,
-         * so "is there a session" answers `no` in both branches.
-         */
-        const stage: AdminSignInStage =
-          response && typeof response === "object" && "twoFactorRedirect" in response
-            ? "two_factor"
-            : "enrolment";
-
-        return { ok: true, stage, setCookie: responseHeaders.getSetCookie() };
-      } catch (cause) {
-        return { ok: false, error: passwordDoorRefusal(cause) };
-      }
-    },
-
-    async verifySecondFactor({ code, kind, headers }) {
-      try {
-        const { auth } = await resolve();
-
-        /**
-         * `trustDevice` is deliberately not passed — and, because "not passed" is
-         * a thing a later edit can undo, `#auth/config`'s `before` middleware
-         * strips the field from the body of both these paths regardless. C44:
-         * a trusted device re-establishes an Admin session on a password alone
-         * for thirty days, against NFR13's eight non-rolling hours.
-         */
-        const { headers: responseHeaders } =
-          kind === "totp"
-            ? await auth.api.verifyTOTP({ body: { code }, headers, returnHeaders: true })
-            : await auth.api.verifyBackupCode({ body: { code }, headers, returnHeaders: true });
-
-        return { ok: true, setCookie: responseHeaders.getSetCookie() };
-      } catch (cause) {
-        return { ok: false, error: secondFactorRefusal(cause, kind) };
-      }
-    },
-
-    async enrolSecondFactor({ password, headers }) {
-      try {
-        const { auth } = await resolve();
-
-        const response = await auth.api.enableTwoFactor({ body: { password }, headers });
-
-        /**
-         * `enableTwoFactor` has two branches and only one of them is ours: with
-         * `method: "otp"` it answers `{ method: "otp" }` and no secret. This
-         * product configures no `otpOptions` — an emailed second factor would sit
-         * in the same inbox the magic link reaches — so a response without a
-         * `totpURI` is a configuration fault rather than a branch to handle, and
-         * failing loudly beats rendering a QR of `undefined`.
-         */
-        if (!("totpURI" in response) || typeof response.totpURI !== "string") {
-          throw new Error(
-            "enableTwoFactor returned no TOTP URI; the totp method is not configured",
-          );
-        }
-
-        return {
-          ok: true,
-          totpUri: response.totpURI,
-          backupCodes: response.backupCodes ?? [],
-        };
-      } catch (cause) {
-        return {
-          ok: false,
-          error: new AppError({
-            code: "admin_totp_enrolment_failed",
-            status: 502,
-            message:
-              "Enrolling the Admin's second factor failed. No secret was stored and no backup " +
-              "codes were issued, so the Account is exactly as it was and the enrolment can be " +
-              "retried — which matters because a partial enrolment would be an Admin locked out " +
-              "of their own platform.",
-            userMessage: ADMIN_ENROLMENT_FAILED,
-            // "An Admin locked out of their own platform" is C43, cited here
-            // rather than in the message: a log line names what it carries for
-            // itself and is read by someone who may not hold the spec.
-            //
-            // No password, no secret, no codes — every value in this call is a
-            // credential (NFR18, C28).
-            context: {},
-            cause,
-          }),
-        };
-      }
-    },
-
     async verifyAdminSignInCode({ code, headers }) {
       try {
         const { auth } = await resolve();
@@ -981,37 +768,6 @@ export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
  */
 
 /**
- * What the Admin is told when the password door refuses.
- *
- * **One sentence for every refusal it can produce**, and that is a decision
- * rather than a shortcut. Better Auth distinguishes an unknown address, a wrong
- * password and an unverified email; rendering that distinction would let anyone
- * who can reach `/admin/sign-in` learn which addresses hold an Admin grant, which
- * is the first thing worth knowing before attacking this product — and it is the
- * same argument NFR14 makes for answering **403** rather than redirecting.
- *
- * The operator half keeps the detail, because `message` reaches the log line and
- * an operator locked out by an unverified address needs to know that is what
- * happened.
- */
-function passwordDoorRefusal(cause: unknown): AppError {
-  return new AppError({
-    code: "admin_password_sign_in_refused",
-    status: 401,
-    message:
-      "The Admin password door refused a sign-in. Better Auth distinguishes an unknown " +
-      "address, a wrong password and an unverified email; the surface does not, because a " +
-      "reply that differed would identify which addresses hold the Admin grant. This cause " +
-      "chain carries which one it was.",
-    userMessage: ADMIN_SIGN_IN_REFUSED,
-    // No address and no password. There is nothing here that is not either a
-    // credential or the identifier this refusal exists not to disclose (NFR18).
-    context: {},
-    cause,
-  });
-}
-
-/**
  * What the Admin is told when the passwordless door refuses her code.
  *
  * **Two outcomes and no third**, which is the whole of what this door may
@@ -1052,35 +808,6 @@ function adminCodeRefusal(cause: unknown): AppError {
     // C28); the door's own line carries the Account id, which is where an
     // operator correlating this pair looks.
     context: {},
-    cause,
-  });
-}
-
-/**
- * What the Admin is told when the second factor refuses.
- *
- * **The lockout is not distinguished either, and that one is worth arguing.** The
- * plugin locks an account after ten consecutive failures for fifteen minutes, and
- * a person who has just mistyped a code twice would genuinely be helped by being
- * told which of the two they are in. It is still one sentence, because the same
- * string is reachable by anyone holding a stolen password — telling them that ten
- * more attempts costs them fifteen minutes is telling them how to pace a script.
- * What the Admin has instead is the recovery path in the same breath: the backup
- * codes, which runbook §6 put on paper for exactly this.
- */
-function secondFactorRefusal(cause: unknown, kind: "totp" | "backup_code"): AppError {
-  return new AppError({
-    code: "admin_second_factor_refused",
-    status: 401,
-    message:
-      `The Admin second factor (${kind}) refused. Better Auth distinguishes an invalid code, ` +
-      "an expired challenge cookie and an account locked after ten consecutive failures; the " +
-      "surface says one thing, because pacing information is what an attacker holding the " +
-      "password would use the difference for.",
-    userMessage: ADMIN_SECOND_FACTOR_REFUSED,
-    // The door, which is an enum value, and nothing else: the code itself is a
-    // credential for the seconds it is live (NFR18, C28).
-    context: { second_factor: kind },
     cause,
   });
 }

@@ -17,8 +17,9 @@
  *
  * **What it deliberately does not decide** is anything a shell should differ on.
  * A caller says where home is; a caller says whether a signed-out person is
- * offered a door. `(admin)` offers none, because a person on `/admin/sign-in` is
- * already looking at one and the site's door is the wrong one.
+ * offered a door. `(admin)` offers none, because the one state it paints
+ * signed-out in is its 403, and a refusal that pointed somewhere would undo what
+ * answering 403 rather than redirecting is for.
  *
  * **The session read is dynamic and must stay that way.** No `use cache` around
  * it: a cached session read is one person's identity served to the next person,
@@ -66,9 +67,9 @@ export interface AppHeaderProps {
    * What the right-hand side shows with no session, if anything.
    *
    * `(site)` passes `<SignInLink />`. `(admin)` passes nothing, and the absence
-   * is the decision: the only state it renders signed-out in is `/admin/sign-in`,
-   * where a person is already looking at the door — and the door the site offers
-   * is the public one, which is the wrong one to point an Admin at.
+   * is the decision: the only state it renders signed-out in is its own 403,
+   * where `forbidden.tsx` deliberately offers no route onward — chrome that
+   * offered one anyway would put the link back on the page that refuses it.
    */
   readonly signedOut?: ReactNode;
 }

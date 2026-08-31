@@ -26,26 +26,24 @@ describe("requireAdminSession", () => {
   /**
    * **The requirement, stated as one case.** _"An Admin who signed in through the
    * magic link every Account can use is not an authenticated Admin."_ The grant
-   * is real and `twoFactorEnabled` on the user would read `true`; the session
-   * presented no second factor, and that is the fact NFR14 gates on.
+   * is real and the Account's second factor is enrolled; this session presented
+   * only the first of the two, and that is the fact NFR14 gates on.
    */
-  it("refuses an Admin who arrived through a passwordless door", () => {
+  it("refuses an Admin who arrived through a door every Account uses", () => {
     expect(requireAdminSession(session({ signInMethod: "magic_link" }))).toBeNull();
     expect(requireAdminSession(session({ signInMethod: "google" }))).toBeNull();
   });
 
-  it("refuses an Admin who presented a password and no second factor", () => {
-    expect(requireAdminSession(session({ signInMethod: "password" }))).toBeNull();
-  });
-
   /**
    * **The credential door, refused whole.** It was the Admin's door and its
-   * two-factor session was the one this gate admitted; the grant moved to the
-   * passwordless door with the ticket that built it, and the page it belonged to
-   * goes with the ticket after. Until then it stands and opens nothing, which is
-   * the state this case pins.
+   * two-factor session was the one this gate admitted. Both of its members are
+   * gone from `SIGN_IN_METHODS` with the door itself, so these are strings the
+   * column's `CHECK` now refuses — which is why they are asserted here rather
+   * than through the table below, and why they are asserted at all: a row written
+   * before the contract migration still carries one.
    */
   it("refuses a session from the credential door, both factors and all", () => {
+    expect(requireAdminSession(session({ signInMethod: "password" }))).toBeNull();
     expect(requireAdminSession(session({ signInMethod: "password_totp" }))).toBeNull();
   });
 
