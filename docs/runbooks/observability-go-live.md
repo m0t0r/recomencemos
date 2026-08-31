@@ -165,9 +165,11 @@ session as the drain, not rediscovered later:
 - **NFR18 — correlation loss.** `error`-level lines lacking `trace_id` while reporting is active stay
   ≤ 1% over a rolling 1h window.
 - **C18 — report-once.** More than 1 event per `trace_id` for over 1% of traces in a rolling 1h window.
-- **NFR17 — the denominator.** Every completed request emits exactly 1 `info` line carrying `route`,
-  `status`, `duration_ms`, and `trace_id`. Without it an error count cannot be read as a rate and a
-  spike is indistinguishable from a busy Tuesday.
+- **NFR17 — the denominator.** Every **routed** request emits exactly 1 line carrying `method`,
+  `route`, `status`, `duration_ms`, `request_id`, and `trace_id` — at `error` for a 5xx and `info`
+  otherwise. Without it an error count cannot be read as a rate and a spike is indistinguishable from
+  a busy Tuesday. An unrouted request emits a line only when it **failed**: framework asset traffic
+  is not the app's, and counting it puts p95 on chunk 304s and dilutes the rate about 30:1.
 
 ---
 
@@ -272,8 +274,13 @@ you have error reporting and you have log lines, and no way to get from one to t
    - [ ] The drain returns **at least one line** for `$TRACE_ID`.
    - [ ] One of those lines is at `level: "error"` and carries a non-empty **`event_id`**, and that
          `event_id` is the id of the Sentry event you started from.
-   - [ ] One of those lines is at `level: "info"` and carries `route`, `status`, and `duration_ms`
-         (that is NFR17's request-completion line).
+   - [ ] One of those lines is at `level: "info"` and carries `method`, `route`, `status`, and
+         `duration_ms` (that is NFR17's request-completion line). If the request you traced ended in a
+         **5xx**, that line is at `level: "error"` instead — the completion line takes its level from
+         the status.
+   - [ ] Every returned line carries the same **`request_id`**, including the completion line. Unlike
+         `trace_id` this one exists with no DSN at all, so it is the correlator to reach for on a
+         machine where reporting is off.
    - [ ] Every returned line carries the same `service`, `env`, and `release`, and `release` is the SHA
          you deployed.
 
@@ -297,7 +304,10 @@ you have error reporting and you have log lines, and no way to get from one to t
      ```
 
      This is the single most common lookup anyone will run against these logs, and it is the one a
-     support engineer runs without knowing anything else about the incident.
+     support engineer runs without knowing anything else about the incident. **It returns every line
+     the request emitted**, not only the error one: the field is contributed by the logger's mixin
+     from a request-scoped store, so the handler's own lines and the completion line carry it too.
+     A line emitted outside any request carries no `request_id` at all — absent, never stale.
 
    It **fails** on any of: no lines returned (stdout is not reaching the drain); lines returned with no
    `trace_id` (the SDK is not initialised, or the log call is inside a `use cache` scope — see below);
@@ -407,14 +417,19 @@ Named because `threat-model-scope` is `UNSET` and an unnamed threat is not mitig
 
 2. **Log injection through the request identifier.** A `requestId` taken from an inbound header lets an
    attacker write newlines and forged fields into the pretty stdout stream that an agent reads and acts
-   on. **Closed at source**: `AppError` generates `requestId` with `crypto.randomUUID()` and there is
+   on. **Closed at source**: `AppError` generates `requestId` server-side and there is
    deliberately no constructor option an inbound header could be threaded into. There is nothing to
-   configure — the mitigation is the absence of a parameter, which is why it is written down.
+   configure — the mitigation is the absence of a parameter, which is why it is written down. It is
+   the **request's** id, adopted from the completion-line subscriber's store where one is in flight
+   and freshly minted otherwise ([ADR-0016](../adr/0016-one-request-id-per-request-adopted-not-minted-per-error.md)):
+   both values are minted by this process, so the mitigation is untouched by the change.
 
 3. **A credential carried in a URL path segment reaches stdout verbatim.** The request-completion line
    sets `context.path` to the concrete request path — query and hash stripped, the rest whole — on
-   **every** completed request, matched or not. So a password-reset, signed-invite, or unsubscribe
-   route whose token is a path segment logs that token in full:
+   **every** request the app routed, plus any unrouted request that failed. A tokened route is a
+   routed request, so narrowing the line's population to the app's own traffic narrowed nothing here.
+   A password-reset, signed-invite, or unsubscribe route whose token is a path segment logs that token
+   in full:
 
    ```json
    {
@@ -447,7 +462,7 @@ Short because a downstream project owns `@repo/observability` outright — there
 for, and none is coming (ADR-0006). You edit the function. Three points, all of which matter:
 
 - **Change `pathOf` in `packages/observability/src/log-request-complete.ts`; leave `routeOf` alone.**
-  `pathOf` is the only producer of the value, so one edit covers every completed request — in
+  `pathOf` is the only producer of the value, so one edit covers every line the completion path emits — in
   practice you will edit the private `pathnameOf` it delegates to, which is where the query strip
   already lives and where the comment describing this exposure sits.
 - **`route` stays untouched.** It is on the log line's stability contract, it is bounded for a
@@ -571,26 +586,30 @@ scrubber runs on some events that are then dropped. Wasted work, not a correctne
 true with zero code, and a file whose only job would be to carry a comment asserting an absence is not
 worth the accessibility surface it drags along.
 
-**It does not produce silence, and this section used to say it did.** Every completed request emits one
-`info` request-completion line, and a 404 is a completed request. What a tokened 404 leaves behind is:
+**It does not produce silence, and this section used to say it did.** Every **routed** request emits one
+`info` request-completion line, and a 404 is a routed request. What a tokened 404 leaves behind is:
 
 ```json
 {
   "level": "info",
+  "method": "GET",
   "route": "/_not-found",
   "context": { "path": "/reset-password/rp_9f81c2d4e0a7" },
   "status": 404,
   "duration_ms": 444,
+  "request_id": "0f0b1f4c-6a2e-4a5b-9c33-8f2d1e77a0b4",
   "msg": "request complete"
 }
 ```
 
 The base fields every line carries — `time`, `service`, `env`, `release` — are elided above; the
-`duration_ms` is one observed value, not a figure to hold anyone to.
+`duration_ms` and `request_id` are one observed value each, not figures to hold anyone to.
 
-Two details worth having before you go looking for it. **`route` reads `/_not-found`, not `unknown`** —
+Three details worth having before you go looking for it. **`route` reads `/_not-found`, not `unknown`** —
 Next's per-request meta matches a real pattern for a not-found, so the line does not land in the
-unmatched bucket where you might expect to find it. And **the concrete path travels on that line**,
+unmatched bucket where you might expect to find it. That is also why the routed-only emission rule
+leaves a 404 alone: the rule's `status >= 400` clause is there for an unrouted **failure**, not for
+this. And **the concrete path travels on that line**,
 whole, which is the exposure [§10](#10-security-privacy-and-deletion) names as its third threat. If you
 are here to learn what a tokened 404 leaves in the drain, that is the answer, and it is not "nothing".
 

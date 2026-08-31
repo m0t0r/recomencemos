@@ -25,6 +25,10 @@
       "browser": "./src/browser-refusal.ts",
       "default": "./src/startup-notice.ts"
     },
+    "./request-context": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/request-context.ts"
+    },
     "./report-error": {
       "browser": "./src/browser-refusal.ts",
       "default": "./src/report-error.ts"

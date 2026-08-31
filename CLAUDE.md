@@ -264,6 +264,8 @@ middleware an action opts into by naming its principals. Three rules, all in
 
 **`@repo/errors` has no `dependencies` key, and that absence is the design.** It is isomorphic — importable from a Server Component, a Client Component, a Route Handler, a Server Action, or either instrumentation entry point — and the empty dependency list is what _enforces_ that rather than documenting it: a stray `import pino` there fails to resolve under pnpm's isolated store, where a semantic subpath in a single package would only fail a `.next/static` grep after the fact. Never add a runtime dependency to it. Anything needing one belongs in a server-only package instead — which is what `@repo/observability` is.
 
+**Where a server value has to reach it, the value crosses and the module does not** ([ADR-0016](docs/adr/0016-one-request-id-per-request-adopted-not-minted-per-error.md)). `AppError.requestId` is the current request's id, adopted through the `globalThis` slot in `packages/errors/src/ambient-request-id.ts`, which `subscribeRequestCompletion` is the only thing that writes to. It is per-**request**, not per-error: two failures in one request quote one reference number, and the error line joins the completion line. The mitigation is unchanged — there is still no constructor option, so nothing an inbound header carries can reach it — and every way the reader can misbehave costs the adoption rather than the error. Copy the shape only for a value; a _module_ @repo/errors needs is still the signal that the code belongs somewhere else.
+
 **`@repo/observability` is the other half of that split, and it is server-only.** It depends on `pino`, `pino-pretty`, their stream packages, and `@sentry/nextjs` — which is what makes it the home of the report seam and the trace-context reader — so it may not be imported from a Client Component, from `instrumentation-client.ts`, or from anything on a `"use client"` path. What actually keeps it out of the browser is its `exports` map: **every entry carries a `browser` condition pointing at `src/browser-refusal.ts`**, so a `"use client"` import fails to resolve at build and `pino` never enters the client graph at all — mechanism 1 in the table below, in its strongest form, with the observed Turbopack error recorded in that file. `assertServerOnly()` is the backstop, not the mechanism. A browser module that needs an error type imports `@repo/errors`, which is isomorphic by construction.
 
 **`@repo/domain` is the only door to the database, and its `exports` map is what makes that true rather than aspirational** ([ADR-0010](docs/adr/0010-the-domain-package-is-the-only-door-to-the-database.md)). It publishes per-aggregate model subpaths and **withholds** the Drizzle schema, both connections, and (with #12) the Better Auth instance — an unexported subpath is unresolvable under pnpm's isolated store, so reaching past the domain layer is a module-resolution error rather than a review comment somebody has to notice. `apps/web/domain-boundary.test.ts` asserts both halves against **Node's own resolver**, which is the one `next build` uses. Widening the map "just for a script" removes the boundary with no compile error anywhere; the one subpath added beyond the spec's table is `./health`, and the reason is written at the top of `packages/domain/src/health.ts`.
@@ -391,8 +393,10 @@ the rule redaction **cannot** enforce, which is why it is written here rather th
 same secret at `value`.
 
 **The request-completion line is the one exception to that rule, and it is the only one.** `context.path` on the
-request-completion line carries the concrete request path on every request, so a credential in a URL
-**path segment** is logged verbatim by code no caller wrote.
+request-completion line carries the concrete request path on every line it emits — which is every
+request the app **routed**, plus any unrouted failure (#81) — so a credential in a URL
+**path segment** is logged verbatim by code no caller wrote. Narrowing the population narrowed
+nothing about the exposure: a tokened route is a routed request.
 [ADR-0006](docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md) is why nothing ships to
 guess at it — no mechanism can tell a reset token from an order id, and any bound also lands on
 `/orders/42`. `secrets-in-url-paths` in [`docs/policy/security.md`](docs/policy/security.md) is the
@@ -400,6 +404,16 @@ question this product still has to answer, and the go-live runbook's §10 is how
 the answer is yes. Do not read the exception as licence: it exists because the logger cannot know the
 classification of a value it writes on the caller's behalf, which is never true of a `context` a caller
 builds.
+
+**The completion line counts what the app routed, and that is a measurement rule rather than a volume
+one.** The subscription hears every HTTP server in the process, so an unfiltered line put Turbopack
+chunks and HMR in the same population as the app's own requests — about 30:1 on one dev page load. p95
+then sat on chunk 304s permanently, the error rate it exists to be the denominator of was diluted by
+the same factor, and `route: "unknown"` became one bucket holding 96% of traffic. So an **unrouted**
+request emits a line only when `status >= 400`, and the cut is `routeOf`'s own answer rather than a
+`/_next/` prefix match — a path denylist would be [ADR-0006](docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)'s
+heuristic shipped into the field a drain groups by. A 404 is unaffected; it carries `/_not-found` and
+is routed. Restoring a line for unrouted success is not a bug fix, it is reverting #81.
 
 **Thrown is reported; returned is logged.** An error that escapes a request reaches `onRequestError`
 and costs one event plus one `error` line carrying that event's id. An error handled and returned

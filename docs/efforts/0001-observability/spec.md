@@ -193,7 +193,7 @@ Prioritized. Each is demoable on its own, because each becomes a tracer-bullet t
 
 **`AppError`** — one error, five fields plus a cause. `code` (free string, no taxonomy ships),
 `status` (HTTP), `message` (operator-facing English), `userMessage` (the only string permitted to
-reach a browser), `requestId` — **generated server-side with `crypto.randomUUID()`, never read from
+reach a browser), `requestId` — **generated server-side, never read from
 an inbound header**, so no attacker-controlled text reaches the pretty dev stream an agent reads —
 and `context` (one nested object for everything else). Two named
 projections and **no `toJSON`**. `cause` is carried but never appears in either projection — and
@@ -956,6 +956,18 @@ The `trace_id` this buys is worth naming: Build already recorded that **a dev-on
 shared a `trace_id` with the request that triggered it** — a wrong correlation NFR18 cannot detect,
 because that band measures missing ones. A `request_id` minted per channel publish is right where
 that is wrong, and it exists with no DSN, which is every fresh clone and every dev session.
+
+**What Build found doing it, and the amendment it forced** (#81). Minting per channel publish
+collided with `AppError`, which mints `requestId` per **error** in its constructor — so an error line
+and the completion line for the same request carried two different values under one field name, and
+the id a user quotes off a response body matched neither. Observed running, not predicted. The field
+is now the **request's**, adopted by `AppError` from the same store the mixin reads, through a
+`globalThis` slot rather than an import — `@repo/errors` has no `dependencies` key and the request
+store is an `AsyncLocalStorage`, so a **value** crosses where a module may not.
+[ADR-0016](../../adr/0016-one-request-id-per-request-adopted-not-minted-per-error.md) carries the
+reasoning and the three alternatives. C15 is unchanged in substance: the id is still generated
+server-side and there is still no constructor option an inbound header could be threaded into. What
+changed is how often one is generated.
 
 **What remains unverified and must be checked at Build**, because no advisor could read an uninstalled
 package: `sendDefaultPii`'s actual default in 10.70.0, the exact option name for deleting source maps

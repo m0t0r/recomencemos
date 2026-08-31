@@ -11,6 +11,7 @@ import {
   type LoggerEnvironment,
   resolveLogFormat,
 } from "@repo/observability/logger-options";
+import { readRequestContext } from "@repo/observability/request-context";
 import { readTraceContext } from "@repo/observability/trace-context";
 import pino, { type DestinationStream, type Logger } from "pino";
 import PinoPretty from "pino-pretty";
@@ -59,25 +60,53 @@ assertServerOnly("logger");
  * (already containing `pino` and `pino-pretty`) responsible for resolving it. A
  * printer that fails to resolve in production is a worse failure than a printer
  * that loads and is never used.
+ *
+ * **`ignore` and `singleLine` shape only what a human reads.** `resolveLogFormat`
+ * already makes pretty dev-only, so the JSON a drain indexes is untouched by
+ * both. `service`, `env` and `release` are base fields: constant for the whole
+ * process, so on a terminal they are three columns of the same answer repeated
+ * once per line, and they are exactly what a drain's *filters* are for. And a
+ * line whose fields print one per row turns the request-completion line — five
+ * short fields, one per request — into six rows of scrollback, which is how a
+ * dev stops reading it.
  */
 export function createDestination(env: LoggerEnvironment): DestinationStream {
   if (resolveLogFormat(env) === "pretty") {
-    return PinoPretty({ destination: 1, sync: true, translateTime: "SYS:HH:MM:ss.l" });
+    return PinoPretty({
+      destination: 1,
+      sync: true,
+      translateTime: "SYS:HH:MM:ss.l",
+      ignore: "service,env,release",
+      singleLine: true,
+    });
   }
 
   return pino.destination({ fd: 1, sync: true });
 }
 
 /**
- * The reader is passed here rather than imported inside `logger-options.ts` so
- * that module stays pure and free of the SDK — the stdout seam builds its own
- * instance from those options and must not need a reporting client to do it.
+ * The mixin is **two** readers, and they stay two because they fail separately.
  *
- * Import order does not matter: the mixin resolves the active span at each
- * emit, so a logger constructed before `Sentry.init` correlates every line
- * emitted after it.
+ * `trace_id` comes from the active span, so it exists only while reporting is
+ * active — a fresh clone with no DSN correctly gets none. `request_id` is minted
+ * per request by the completion-line subscriber, so it exists in every process
+ * there is, which is what makes it the correlator a dev session and a no-DSN
+ * deployment actually have. Neither is a fallback for the other: a line inside a
+ * traced request carries both, and they answer different questions.
+ *
+ * Composed here rather than inside `createLoggerOptions` so that module stays
+ * pure and free of both the SDK and `node:async_hooks` — the stdout seam builds
+ * its own instance from those options and must not need a reporting client or a
+ * request in flight to do it.
+ *
+ * Import order does not matter: both readers resolve at each emit, so a logger
+ * constructed before `Sentry.init` correlates every line emitted after it.
  */
+function readCorrelationContext(): Record<string, string> {
+  return { ...readTraceContext(), ...readRequestContext() };
+}
+
 export const logger: Logger = pino(
-  createLoggerOptions(process.env, readTraceContext),
+  createLoggerOptions(process.env, readCorrelationContext),
   createDestination(process.env),
 );
