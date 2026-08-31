@@ -50,6 +50,20 @@
       "when": 1788197649266,
       "tag": "0006_contract_narrow_sign_in_method",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788204765740,
+      "tag": "0007_skill_vocabulary",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788204851292,
+      "tag": "0008_seed_skill_vocabulary",
+      "breakpoints": true
     }
   ]
 }

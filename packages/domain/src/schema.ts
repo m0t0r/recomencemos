@@ -454,3 +454,95 @@ export const adminEnrolment = pgTable(
     unique("admin_enrolment_user_id_key").on(table.userId),
   ],
 );
+
+/**
+ * **`Skill`** — the closed vocabulary a CapabilityProfile is built from, and the
+ * one table in this schema whose rows are *copy*.
+ *
+ * **The seed is a source, not the vocabulary** (DD12). CUOC — the *Clasificación
+ * Única de Ocupaciones para Colombia*, established by Decreto 654 de 2021 and
+ * Resolución 771 de 2021, maintained by DANE — is written in the register of a
+ * labour statistician, and the person reading the publishing form is a cook
+ * deciding whether a phrase describes her. {@link skill.cuocCode} records where
+ * an entry came from; {@link skill.labelEs} is what she reads, and the two are
+ * deliberately not the same sentence.
+ *
+ * **`slug` is English and `labelEs` is Spanish, in one row.** That is NFR29's
+ * identifier/value line at its sharpest: the slug is what a browse filter carries
+ * in a query parameter, so it is an identifier and stays English
+ * ([ADR-0012](../../../docs/adr/0012-spanish-is-the-interface-english-is-the-code.md));
+ * the label is the only value in this schema a person reads directly.
+ *
+ * **Seeded by an idempotent migration** rather than by application code, so the
+ * list seam 2 tests against and the list production serves are the same file.
+ * `INSERT … ON CONFLICT (slug) DO NOTHING` is what makes running it twice a
+ * no-op.
+ *
+ * **`BIGINT GENERATED ALWAYS AS IDENTITY`**, for `rate_counter`'s reason: DD2
+ * reserves a UUIDv7 for ids that reach a URL or a browser, and this one reaches
+ * neither — the public handle is the slug. Reading it as a `BigInt` also makes
+ * `JSON.stringify` throw on it, so a key never meant to cross a boundary cannot
+ * be serialised into one by accident.
+ *
+ * **Growth is by Admin promotion, and `active` is why there is no delete.** A
+ * Skill a profile already holds cannot be removed without rewriting what a Worker
+ * said about herself, so retiring one is a flag rather than a `DELETE` — and the
+ * `CHECK`-free boolean is the whole mechanism.
+ */
+export const skill = pgTable(
+  "skill",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    /**
+     * The natural key, and the value a browse filter puts in a query parameter.
+     * English, kebab-case, stable for the life of the entry — a slug that changes
+     * breaks every link a Hirer saved.
+     */
+    slug: text("slug").notNull(),
+
+    /**
+     * What she reads. `es-CO`, a verb phrase or a capability noun so that it needs
+     * no slash form, and short enough to be a label — `docs/policy/voice.md` sets
+     * both rules and the test: read it aloud after *"Sé…"*, and if it does not
+     * finish the sentence the way a person would say it, it is still CUOC.
+     */
+    labelEs: text("label_es").notNull(),
+
+    /**
+     * The five-digit CUOC *Ocupación* code this entry was translated from —
+     * provenance, never displayed. Two entries may share one code where the
+     * granularity a Hirer searches at is finer than CUOC's: cutting hair and
+     * barbering are both `51410`, and a Hirer looking for one is not looking for
+     * the other.
+     */
+    cuocCode: text("cuoc_code").notNull(),
+
+    /**
+     * Whether the entry may still be chosen. Retiring a Skill flips this; nothing
+     * deletes a row a CapabilityProfile may already point at.
+     */
+    active: boolean("active").notNull().default(true),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * The constraint **is** the lookup: every read of this table other than the
+     * full list is by slug, and a second row under one slug is a collision the
+     * engine must refuse rather than a duplicate a query has to resolve. It is
+     * also what `ON CONFLICT (slug) DO NOTHING` conflicts against, which is how
+     * the seed migration is idempotent at all.
+     */
+    unique("skill_slug_key").on(table.slug),
+
+    /**
+     * The picker and the browse filter both read the active list in label order,
+     * and both read it on a page a person is waiting on. Partial, because the
+     * retired entries are never in that answer.
+     */
+    index("skill_active_label_es_idx")
+      .on(table.labelEs)
+      .where(sql`${table.active}`),
+  ],
+);
