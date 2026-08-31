@@ -10,6 +10,14 @@
 // is tokenised — comments, regular expressions and strings each recognised for
 // what they are — and only the string literals are scanned.
 //
+// **Two tokenisers, because shell is a second language rather than a widened
+// first one.** A `.sh` file's quoting rules are not JavaScript's: `'…'` takes no
+// escapes, `$'…'` is a third quoting form, a `#` opens a comment only at a word
+// boundary, and a heredoc body is data at a delimiter the script names. Reading
+// shell with the JavaScript reader would have found citations in some files and
+// silently mis-read others, which is the failure mode this whole gate exists to
+// avoid.
+//
 // **Every string literal, not only the ones a reviewer would guess at.** The
 // rule is about where a string is read, and this gate cannot know which of them
 // reach a terminal, a log drain or a browser. Scanning all of them is the
@@ -29,12 +37,17 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".sh"];
 
 // `.agents` and `.claude` hold vendored skills, which ship real JavaScript that
 // is not ours to edit — the root `.oxlintrc.json` skips them for the same
 // reason, and `//#spec-identifiers` negates them out of its `inputs` so the two
 // statements of this set agree. The rest are build output and dependencies.
+//
+// Since this gate learned to read shell, `.claude` carries a second reason:
+// `.claude/hooks/gate-test.sh` is the suite that drives this gate, and its
+// fixtures are the very citations it refuses, so it cannot be subject to itself.
+// The hooks beside it can be, and that suite runs this gate over them.
 const SKIPPED_DIRECTORIES = new Set([
   ".agents",
   ".claude",
@@ -343,6 +356,266 @@ export function stringLiterals(source) {
   return literals;
 }
 
+/**
+ * Every string literal in a shell script, with the line and column it starts at.
+ *
+ * Three quoting forms, all of them read: `'…'` takes no escapes at all and may
+ * span lines, `"…"` takes `\` escapes and interpolates, and `$'…'` is a third
+ * form with escapes of its own.
+ *
+ * A double-quoted body is split around `$name`, `${…}`, `$(…)` and a backtick,
+ * exactly as the JavaScript reader splits a template around `${…}`: a
+ * substitution names a variable rather than saying anything, so `"$NFR8 holds"`
+ * carries no citation — while a command substitution is a nested script, so its
+ * own strings are read as strings.
+ *
+ * **A `#` opens a comment only at a word boundary**, which is the rule that
+ * makes `$#`, `${#items[@]}` and `foo#bar` ordinary text; a `#` inside either
+ * quote is never one. Comments are the record and are never read, and the cost
+ * of getting that wrong is not a missed line but a swallowed file: an apostrophe
+ * in a comment read as an opening quote runs to the next one, wherever that is.
+ *
+ * **A heredoc body is data**, so it is skipped whole — `<<`, `<<-`, a quoted or
+ * bare delimiter, and the terminator matched with leading tabs stripped for the
+ * dash form. The marker's quoting decides whether the body expands, which
+ * changes nothing here, so it is dropped the way `gate-lib.sh` drops it for the
+ * neighbouring problem. `<<<` is a here-string and is not a heredoc: what
+ * follows it is an ordinary word, and a quoted one is an ordinary string.
+ */
+export function shellStringLiterals(source) {
+  const literals = [];
+  // The base script, a `$( … )` or backtick substitution, and a double-quoted
+  // span. A stack, because each of them nests inside the others. `parens` is
+  // tracked only inside a substitution, where a `)` at depth zero ends it — at
+  // the top level a `)` is a `case` pattern or a function definition and closes
+  // nothing.
+  const stack = [{ kind: "code", parens: 0 }];
+  // Heredocs are announced on one line and read from the next, and a line may
+  // announce more than one.
+  const pending = [];
+  let line = 1;
+  let lineStart = 0;
+  let i = 0;
+  let wordBoundary = true;
+
+  const at = (index) => ({ line, column: index - lineStart + 1 });
+  const newline = (index) => {
+    line += 1;
+    lineStart = index + 1;
+  };
+  const emit = (position, start, end) => {
+    const text = source.slice(start, end);
+    if (text.length > 0) literals.push({ ...position, text });
+  };
+
+  // Past a `${ … }`, which is a name and its modifiers rather than a script.
+  const skipBraces = (index) => {
+    let depth = 0;
+    let j = index;
+    while (j < source.length) {
+      const c = source[j];
+      if (c === "\\") {
+        j += 2;
+        continue;
+      }
+      if (c === "\n") newline(j);
+      if (c === "{") depth += 1;
+      else if (c === "}") {
+        depth -= 1;
+        if (depth === 0) return j + 1;
+      }
+      j += 1;
+    }
+    return j;
+  };
+
+  // Past the bodies of every heredoc the line just read announced. An
+  // unterminated one means the rest of the file is its body, which is what a
+  // shell would do with it too.
+  const skipHeredocBodies = (index) => {
+    let j = index;
+    while (pending.length > 0) {
+      const { term, stripTabs } = pending.shift();
+      let closed = false;
+      while (j < source.length && !closed) {
+        let end = source.indexOf("\n", j);
+        if (end === -1) end = source.length;
+        let text = source.slice(j, end);
+        if (stripTabs) text = text.replace(/^\t+/, "");
+        if (end < source.length) newline(end);
+        j = end < source.length ? end + 1 : end;
+        if (text === term) closed = true;
+      }
+      if (!closed) return j;
+    }
+    return j;
+  };
+
+  while (i < source.length) {
+    const top = stack.at(-1);
+    const character = source[i];
+
+    if (top.kind === "dquote") {
+      // One literal chunk, up to the closing quote or the expansion that
+      // interrupts it.
+      const start = i;
+      const position = at(start);
+      while (i < source.length) {
+        const c = source[i];
+        if (c === "\\") {
+          if (source[i + 1] === "\n") newline(i + 1);
+          i += 2;
+          continue;
+        }
+        if (c === '"' || c === "`") break;
+        if (c === "$" && (source[i + 1] === "(" || source[i + 1] === "{")) break;
+        if (c === "$" && /[A-Za-z_]/.test(source[i + 1] ?? "")) break;
+        if (c === "\n") newline(i);
+        i += 1;
+      }
+      emit(position, start, i);
+      const c = source[i];
+      if (c === '"') {
+        stack.pop();
+        i += 1;
+      } else if (c === "`") {
+        stack.push({ kind: "backtick", parens: 0 });
+        i += 1;
+      } else if (c === "$" && source[i + 1] === "(") {
+        stack.push({ kind: "substitution", parens: 0 });
+        i += 2;
+      } else if (c === "$" && source[i + 1] === "{") {
+        i = skipBraces(i + 1);
+      } else if (c === "$") {
+        i += 1;
+        while (i < source.length && /\w/.test(source[i])) i += 1;
+      }
+      continue;
+    }
+
+    if (character === "\n") {
+      newline(i);
+      i += 1;
+      wordBoundary = true;
+      if (pending.length > 0) i = skipHeredocBodies(i);
+      continue;
+    }
+
+    if (character === "\\") {
+      if (source[i + 1] === "\n") newline(i + 1);
+      i += 2;
+      wordBoundary = false;
+      continue;
+    }
+
+    if (character === "#" && wordBoundary) {
+      while (i < source.length && source[i] !== "\n") i += 1;
+      continue;
+    }
+
+    if (character === "'") {
+      const start = i + 1;
+      const position = at(start);
+      i += 1;
+      while (i < source.length && source[i] !== "'") {
+        if (source[i] === "\n") newline(i);
+        i += 1;
+      }
+      emit(position, start, Math.min(i, source.length));
+      if (source[i] === "'") i += 1;
+      wordBoundary = false;
+      continue;
+    }
+
+    if (character === '"') {
+      stack.push({ kind: "dquote", parens: 0 });
+      i += 1;
+      continue;
+    }
+
+    if (character === "`") {
+      if (top.kind === "backtick") stack.pop();
+      else stack.push({ kind: "backtick", parens: 0 });
+      i += 1;
+      wordBoundary = false;
+      continue;
+    }
+
+    if (character === "$") {
+      const next = source[i + 1];
+      if (next === "'") {
+        const start = i + 2;
+        const position = at(start);
+        i += 2;
+        while (i < source.length && source[i] !== "'") {
+          if (source[i] === "\n") newline(i);
+          i += source[i] === "\\" ? 2 : 1;
+        }
+        emit(position, start, Math.min(i, source.length));
+        if (source[i] === "'") i += 1;
+      } else if (next === '"') {
+        stack.push({ kind: "dquote", parens: 0 });
+        i += 2;
+      } else if (next === "(") {
+        stack.push({ kind: "substitution", parens: 0 });
+        i += 2;
+      } else if (next === "{") {
+        i = skipBraces(i + 1);
+      } else {
+        i += 1;
+        while (i < source.length && /\w/.test(source[i])) i += 1;
+      }
+      wordBoundary = false;
+      continue;
+    }
+
+    if (character === "<" && source[i + 1] === "<") {
+      // `<<<` is a here-string, and `<<=` an arithmetic assignment. Neither
+      // announces a body.
+      if (source[i + 2] === "<" || source[i + 2] === "=") {
+        i += 3;
+        wordBoundary = true;
+        continue;
+      }
+      let j = i + 2;
+      const stripTabs = source[j] === "-";
+      if (stripTabs) j += 1;
+      while (source[j] === " " || source[j] === "\t") j += 1;
+      const start = j;
+      while (j < source.length && !/[\s;&|<>()]/.test(source[j])) j += 1;
+      const term = source.slice(start, j).replace(/[^A-Za-z0-9_]/g, "");
+      if (term !== "") pending.push({ term, stripTabs });
+      i = j;
+      wordBoundary = true;
+      continue;
+    }
+
+    if (top.kind === "substitution") {
+      if (character === "(") top.parens += 1;
+      else if (character === ")") {
+        if (top.parens === 0) {
+          stack.pop();
+          i += 1;
+          wordBoundary = true;
+          continue;
+        }
+        top.parens -= 1;
+      }
+    }
+
+    wordBoundary = /[\s;&|()<>]/.test(character);
+    i += 1;
+  }
+
+  return literals;
+}
+
+// The extension picks the reader. There is no sniffing of content: a file named
+// `.sh` is shell and everything else in the list is JavaScript, so a file cannot
+// be read by the wrong one because of what its first line happens to say.
+const literalsIn = (path, source) =>
+  path.endsWith(".sh") ? shellStringLiterals(source) : stringLiterals(source);
+
 function violations(root) {
   const found = [];
   for (const path of sourceFiles(root)) {
@@ -352,7 +625,7 @@ function violations(root) {
     } catch (error) {
       throw new GateError(`${path} cannot be read: ${error.message}`);
     }
-    for (const literal of stringLiterals(source)) {
+    for (const literal of literalsIn(path, source)) {
       if (CSS_COLOUR.test(literal.text.trim())) continue;
       for (const pattern of IDENTIFIER_PATTERNS) {
         const match = pattern.exec(literal.text);

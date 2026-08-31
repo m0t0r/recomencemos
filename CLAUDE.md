@@ -118,7 +118,9 @@ CHECK` back **on `t`**, and an earlier migration already declared `t`.`x` a `CHE
   source globs and a cache hit is a real one. `REVIEW.md`'s **Spec identifiers stay in the source**
   pass is what it makes red rather than reviewed, and that pass says what a reviewer still has to
   judge — whether the string that replaced a citation says the substance, and whether a comment lost
-  one. It reads no shell; [#127](https://github.com/m0t0r/recomencemos/issues/127) is that half.
+  one. It reads shell too, through a second tokeniser; the one file outside its walk that would
+  otherwise be in it is `gate-test.sh` itself, whose fixtures are the citations it refuses, so that
+  suite runs the gate over the hooks beside it.
 
 - `//#migrations:check` — the same migration gate, run against **this** repository rather than a fixture. It is `cache: false` on purpose and it is not a case inside `gate-test.sh`: that suite is cached on `.claude/hooks/**` plus the three scripts, and this answer also depends on git history and on migration files none of those inputs cover, so a cached replay would report a pass nothing had checked. CI's `test` job therefore checks out with `fetch-depth: 0` **and points `origin/HEAD` at the default branch the webhook payload names** — a shallow clone has no merge base, and a checkout with no `refs/remotes/origin/HEAD` has no default branch to take one against; the gate refuses to call "I could not compare" a pass on either count. `GITHUB_BASE_REF` covers the `pull_request` event only, so the `push` run on `dev` is what needs the second half.
 
@@ -475,11 +477,19 @@ reader needed. Where the citation is load-bearing, put it in the comment directl
 the per-surface table; the audit behind it is in #93.
 
 **`pnpm spec-identifiers` is the machine half, and it runs inside `pnpm test`.** It tokenises every
-JavaScript, TypeScript and JSX file, reads only the string literals, and names the file, the line and
-the string. What it cannot judge is whether the sentence that replaced a citation says the substance
-or merely got shorter — and it never reads a comment, so it is equally silent about one stripped from
-there. It reads no shell either; [#127](https://github.com/m0t0r/recomencemos/issues/127) is that
-half.
+JavaScript, TypeScript, JSX and shell file, reads only the string literals, and names the file, the
+line and the string. What it cannot judge is whether the sentence that replaced a citation says the
+substance or merely got shorter — and it never reads a comment, so it is equally silent about one
+stripped from there.
+
+**Shell is read by a tokeniser of its own**, because its quoting is not JavaScript's: `'…'` takes no
+escapes, `$'…'` is a third quoting form, a `#` opens a comment only at a word boundary — so `$#` and
+`foo#bar` are text, not comments — and a heredoc body is data at a delimiter the script names, skipped
+whole the way `gate-lib.sh`'s `strip_heredocs` skips it for the neighbouring problem. `"$NFR8 holds"`
+names a variable and carries no citation, exactly as `${NFR8}` does in a template literal. The walk
+still skips `.agents/` and `.claude/`, and for shell that skip earns a second reason:
+`gate-test.sh` drives this gate and its fixtures are the citations it refuses, so it cannot be subject
+to itself — which is why that suite runs the gate over the other hooks, `build-guard.sh` included.
 
 ## Things to get right
 

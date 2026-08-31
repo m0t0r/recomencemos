@@ -360,7 +360,7 @@ require() {
 
 banner "Recomencemos go-live — runbook 1-5"
 
-say "This is ticket #7: provisioning, and the domain warm-up that starts now."
+say "Provisioning, and the domain warm-up whose clock starts now."
 say "Everything here is a step an agent cannot take for you."
 note "Source: docs/runbooks/recomencemos-go-live.md, sections 1 to 5"
 printf '\n'
@@ -381,12 +381,12 @@ evidence_init
 # 1 — Credentials: eight, and where each lives
 # ══════════════════════════════════════════════════════════════════════════
 
-section "1 — Credentials (C5, C43, DD10)"
+section "1 — Credentials: eight, and where each of them lives"
 
 # ── Stage 1: the Fly app, which every later secret is set against ─────────
 stage "Fly: the app the other seven secrets are set against"
 say "Nothing in section 1 can be set before an app exists to set it on."
-note "The machine itself is ticket #9's; this stage creates the app and its region."
+note "The machine arrives with the first deploy; this stage creates the app and region."
 ask FLY_APP "Fly app name:"
 ask FLY_REGION "Primary region (bog is Bogota; gig is closest with a Postgres story):"
 if [[ -n "$FLY_APP" ]]; then
@@ -408,10 +408,10 @@ fi
 
 # ── Stage 2: PlanetScale, both connection strings ─────────────────────────
 stage "PlanetScale: the pooled string, and the dangerous one"
-say "Two strings, and they are not interchangeable (#1 and #2 in the table)."
+say "Two strings, and they are not interchangeable: the pooled one and the direct one."
 step "PlanetScale, then your database, then Connect."
 step "Copy the POOLED string first — that is the one the app runs on."
-step "Then the DIRECT string — migrations and the C43 break-glass run on it."
+step "Then the DIRECT string — migrations run on it, and so does Admin recovery."
 warn "The direct string has a higher blast radius than any other value here."
 note "Treat it as the most dangerous string in the list. Section 1 means that."
 open_url "https://app.planetscale.com"
@@ -426,7 +426,7 @@ fly_secret DIRECT_DATABASE_URL "$DIRECT_DATABASE_URL"
 
 # ── Stage 3: Resend, the key and the signing secret ───────────────────────
 stage "Resend: the sending key, and the secret that makes a bounce trustworthy"
-say "Two values (#3 and #4). The second one is not optional."
+say "Two values — the sending key, and the signing secret. The second is not optional."
 step "Resend, then API Keys. Create a key scoped to SENDING, not full access."
 step "Resend, then Webhooks. Create the endpoint, then copy its signing secret."
 warn "Without the signing secret a forged bounce is an account-denial primitive."
@@ -440,7 +440,7 @@ fly_secret RESEND_WEBHOOK_SECRET "$RESEND_WEBHOOK_SECRET"
 
 # ── Stage 4: Cloudflare R2 credentials ────────────────────────────────────
 stage "Cloudflare R2: an access key scoped to one bucket"
-say "#5 in the table. The bucket itself is section 3, two stages from now."
+say "The R2 access key and its secret. The bucket itself is section 3, two stages on."
 step "Cloudflare, then R2, then Manage API tokens. Create a token."
 step "Scope it to the ONE bucket. A tenancy-wide R2 token is not this value."
 open_url "https://dash.cloudflare.com"
@@ -453,7 +453,7 @@ fly_secret R2_SECRET_ACCESS_KEY "$R2_SECRET_ACCESS_KEY"
 
 # ── Stage 5: Google OAuth ─────────────────────────────────────────────────
 stage "Google OAuth: the client, and a redirect URI that matches exactly"
-say "#6 in the table. Story 1 is sign-in with Google in one tap."
+say "The OAuth client behind sign-in with Google in one tap."
 step "Google Cloud console, then APIs and Services, then Credentials."
 step "Set the authorised redirect URI to your deployed origin's callback path."
 warn "The redirect URI must match the deployed origin EXACTLY: scheme, host, path."
@@ -468,7 +468,7 @@ fly_secret GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET"
 
 # ── Stage 6: the two generated secrets ────────────────────────────────────
 stage "Generated: the auth secret, and the scheduler's shared secret"
-say "#7 and #8 — the only two you issue yourself, with openssl."
+say "The auth secret and the scheduler's — the only two you issue yourself, with openssl."
 printf '\n'
 warn "Rotating the auth secret invalidates every Admin second factor."
 note "It encrypts TOTP secrets and backup codes at rest. Rotation is an"
@@ -487,10 +487,10 @@ fi
 fly_secret BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET"
 
 printf '\n'
-say "The shared job secret is #8, and it belongs to section 5b — ticket #19."
-note "This ticket's first criterion says seven credentials; the table says eight."
-note "The eighth was added by DD10 after that table was written. It is offered here"
-note "so #19 is not left holding a credential nobody set — skip it if you prefer."
+say "The shared job secret is the eighth, and it belongs to the scheduler in 5b."
+note "An older count says seven credentials; the table above says eight. The eighth"
+note "arrived with the scheduler, after that count was written, and is offered here"
+note "so 5b is not left holding a credential nobody set — skip it if you prefer."
 if confirm "Set the shared job secret now as well?"; then
   if command -v openssl >/dev/null 2>&1; then
     JOB_SHARED_SECRET=$(openssl rand -base64 32)
@@ -503,7 +503,7 @@ if confirm "Set the shared job secret now as well?"; then
   note "Rotating one without the other stops every scheduled job. That is 5b."
   SKIPPED+=("shared job secret into Trigger.dev, identical to the Fly secret (5b)")
 else
-  SKIPPED+=("shared job secret — deferred to section 5b / ticket #19")
+  SKIPPED+=("shared job secret — deferred to the scheduler in section 5b")
 fi
 
 # ── Stage 7: mirror, then prove the absence ───────────────────────────────
@@ -548,12 +548,12 @@ attest "Every grep hit above is a declaration, never a value" ||
 # 2 — Database
 # ══════════════════════════════════════════════════════════════════════════
 
-section "2 — Database (C35, C17, C23)"
+section "2 — Database: the connection limit, the extensions, retention, one restore"
 
 # ── Stage 8: the connection limit ─────────────────────────────────────────
-stage "Postgres: the connection limit, against DD2's pool cap"
-say "This is the one number effort 0002 could not verify at Design."
-note "It must sit ABOVE the pool cap of 10 per machine that DD2 sets."
+stage "Postgres: the connection limit, against the pool cap the app opens"
+say "This is the one number nobody could verify before the account existed."
+note "It must sit ABOVE the pool cap of 10 connections per machine the app opens."
 if [[ -z "${DIRECT_DATABASE_URL:-}" ]]; then
   ask_secret DIRECT_DATABASE_URL "Direct connection string (needed for section 2):"
 fi
@@ -568,13 +568,13 @@ fi
 CONN_LIMIT=""
 ask CONN_LIMIT "The limit your PLAN states (the dashboard number, not just the setting):"
 record "Connection limit (plan)" "$CONN_LIMIT"
-record "DD2 pool cap" "10 per machine"
+record "Application pool cap" "10 connections per machine"
 attest "The plan's limit sits above 10 per machine" ||
-  SKIPPED+=("section 2 — limit at or below DD2's pool cap. DD2 changes, or the plan does")
+  SKIPPED+=("section 2 — limit at or below the pool cap of 10. The cap changes, or the plan does")
 
 # ── Stage 9: the two extensions ───────────────────────────────────────────
 stage "Postgres: citext and pg_trgm"
-say "NFR21's Spanish search and the citext unique email both depend on these."
+say "Search that ignores accents, and the case-insensitive unique email, need these."
 if command -v psql >/dev/null 2>&1 && [[ -n "${DIRECT_DATABASE_URL:-}" ]]; then
   run "psql \$DIRECT_DATABASE_URL -c 'CREATE EXTENSION IF NOT EXISTS citext'" -- \
     psql "$DIRECT_DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS citext"
@@ -598,7 +598,7 @@ fi
 stage "Backups: retention set to 7 days, and not a day fewer"
 say "7 days matches retention-backups in docs/policy/."
 warn "The deletion copy a Worker reads promises exactly this number."
-note "The vendor setting and that sentence must agree, or story 13 tells a lie."
+note "The vendor setting and that sentence must agree, or the deletion copy lies."
 open_url "https://app.planetscale.com"
 step "PlanetScale, then your database, then Backups. Set retention to 7 days."
 pause "Set? Press Enter."
@@ -607,7 +607,7 @@ ask RETENTION_DAYS "Retention now showing in the dashboard (days):"
 record "Backup retention (days)" "$RETENTION_DAYS"
 if [[ "$RETENTION_DAYS" != "7" ]]; then
   warn "That is not 7."
-  SKIPPED+=("section 2 — retention is '$RETENTION_DAYS'; story 13's copy promises 7")
+  SKIPPED+=("section 2 — retention is '$RETENTION_DAYS'; the deletion copy promises 7")
 fi
 
 # ── Stage 11: the restore rehearsal ───────────────────────────────────────
@@ -653,11 +653,11 @@ attest "Both stores were restored together, not the database alone" ||
 # 3 — Object storage
 # ══════════════════════════════════════════════════════════════════════════
 
-section "3 — Object storage (DD6)"
+section "3 — Object storage: the bucket, the quarantine prefix, transformations"
 
 # ── Stage 12: the bucket, and a quarantine prefix that is really closed ───
 stage "R2: the bucket, and a quarantine prefix that is not publicly readable"
-say "NFR6 bounds the STORED OBJECT, not the page."
+say "What has to be unreachable is the STORED OBJECT, not merely the page."
 warn "A pending photo at a readable URL that nothing links to defeats the rule"
 note "while appearing to satisfy it. So this stage ends in a failed request, by design."
 open_url "https://dash.cloudflare.com"
@@ -685,8 +685,8 @@ if [[ -n "$R2_QUARANTINE_URL" ]] && command -v curl >/dev/null 2>&1; then
     ;;
   200)
     warn "200 means the quarantine prefix IS publicly readable."
-    note "NFR6 bounds the stored object. This is the failure it describes."
-    SKIPPED+=("section 3 — quarantine prefix returned 200. NFR6 is not satisfied")
+    note "The object itself has to be unreachable, and it is not. This is that failure."
+    SKIPPED+=("section 3 — quarantine prefix returned 200, so unreviewed photos are readable")
     ;;
   000 | "")
     warn "No HTTP response at all — a timeout, DNS failure, or no bound domain."
@@ -718,7 +718,7 @@ ask IMAGE_HOST "The image host that will appear in the CSP's img-src (section 5)
 # 4 — Sending domain. The one with a lead time.
 # ══════════════════════════════════════════════════════════════════════════
 
-section "4 — Sending domain (C45)"
+section "4 — Sending domain: the step whose lead time is measured in weeks"
 
 # ── Stage 14: the domain, and the sending subdomain ───────────────────────
 stage "Resend: the sending subdomain"
@@ -808,12 +808,12 @@ attest "A staged announcement plan is written down somewhere durable" ||
 stage "Deliverability: into real Colombian inboxes, by eye"
 warn "This is the check most likely to be ticked without being done."
 note "Section 4 says exactly that, and says its failure is silent: sends are"
-note "ACCEPTED, not bounced. NFR27's conversion metric is the only thing that"
-note "would reveal it, after the window has closed."
+note "ACCEPTED, not bounced. The share of sign-in links that get used is the only"
+note "thing that would reveal it, after the window has closed."
 printf '\n'
 step "Send to a live gmail.com account. Open it. Inbox or spam?"
 step "Send to a live hotmail.com account. Open it. Inbox or spam?"
-note "This does NOT gate the announcement — decided knowingly at C45."
+note "This does NOT gate the announcement — that was decided knowingly."
 GMAIL_RESULT=""
 HOTMAIL_RESULT=""
 ask GMAIL_RESULT "gmail.com landed in (inbox / spam / not sent yet):"
@@ -839,19 +839,19 @@ record "hotmail.com placement" "$HOTMAIL_RESULT"
 # after #9 to close them.
 # ══════════════════════════════════════════════════════════════════════════
 
-section "5 — Application configuration (C34, C6, C33, C10)"
+section "5 — Application configuration: memory, CSP, probe, digest, triage"
 
 # ── Stage 19: machine memory ──────────────────────────────────────────────
 stage "Fly: machine memory of at least 1 GB"
 if command -v fly >/dev/null 2>&1 && [[ -n "${FLY_APP:-}" ]] && fly status --app "$FLY_APP" >/dev/null 2>&1; then
   run "fly scale show --app $FLY_APP" -- fly scale show --app "$FLY_APP"
-  say "Memory must read 1024 MB or more (C34)."
+  say "Memory must read 1024 MB or more."
   if confirm "Set memory to 1 GB now?"; then
     run "fly scale memory 1024 --app $FLY_APP" -- fly scale memory 1024 --app "$FLY_APP"
   fi
 else
   defer "section 5 machine memory of 1 GB" \
-    "no machine exists yet — a machine exists once something deploys, and that is #9"
+    "nothing has deployed yet, and a machine arrives with the first deploy"
 fi
 
 # ── Stage 20: the CSP ─────────────────────────────────────────────────────
@@ -873,7 +873,7 @@ if grep -rqs "frame-ancestors" apps/web 2>/dev/null; then
     SKIPPED+=("section 5 — the CSP is report-only. Report-only is not a control")
 else
   defer "section 5 enforced CSP" \
-    "no CSP in apps/web yet — it ships with the app, and next.config is #9's"
+    "no CSP in apps/web yet; it ships with the app, which has not deployed"
 fi
 
 # ── Stage 21: the uptime probe ────────────────────────────────────────────
@@ -888,32 +888,32 @@ if [[ -n "$HEALTH_URL" ]] && command -v curl >/dev/null 2>&1; then
   note "default-availability is 99.5% monthly, measured externally."
   pause "Configured? Press Enter."
   attest "Probe interval is 60 s and it alerts after 2 consecutive failures" ||
-    SKIPPED+=("section 5 — uptime probe not at 60 s / 2 failures (C33)")
+    SKIPPED+=("section 5 — uptime probe not at 60 s / 2 consecutive failures")
 else
   defer "section 5 uptime probe" \
-    "the health route does not exist yet — that route is #8, deployed by #9"
+    "the health route ships with the app, which has not deployed"
 fi
 
 # ── Stage 22: the digest, which is the human half of alert-destination ────
 stage "Daily digest at 08:00 America/Bogota"
-say "NFR7's queue depths, and the age of the oldest item, once a day (C10)."
+say "The queue depths, and the age of the oldest item, once a day."
 note "alert-destination has two halves: human-queue bands reach a person through"
 note "this digest, and machine bands reach one through the next stage's issue."
-note "Without it, NFR7's 24-hour band is a number nobody is told about."
+note "Without it, the 24-hour band on the oldest item is a number nobody is told."
 if [[ -d packages/notifications ]]; then
   run "ls packages/notifications" -- ls packages/notifications
   step "Confirm one digest arrived at 08:00 America/Bogota."
   step "Confirm it carries the queue depths AND the age of the oldest item."
   attest "A digest arrived at 08:00 America/Bogota carrying both numbers" ||
-    SKIPPED+=("section 5 — the daily digest is not arriving, or is missing a number (C10)")
+    SKIPPED+=("section 5 — the daily digest is not arriving, or is missing a number")
 else
   defer "section 5 daily digest at 08:00 America/Bogota" \
-    "it runs through the notification seam, which is #11, on the queue-digest schedule from #19 (5b)"
+    "it runs through the notification seam, on the queue-digest schedule from section 5b"
 fi
 
 # ── Stage 23: machine bands reach a human, through triage ─────────────────
 stage "Machine bands open a needs-triage issue from CI"
-say "ADR-0001 fixes the destination: findings reach Plan only through triage."
+say "The destination is fixed: a finding reaches planning only through triage."
 note "A breach that arrives as a chat message is a breach nobody owns."
 if [[ -f .github/workflows/needs-triage.yml ]]; then
   run "ls -l .github/workflows/needs-triage.yml" -- ls -l .github/workflows/needs-triage.yml
@@ -993,18 +993,18 @@ finish
 
 if (( ${#FLY_SET[@]} )); then
   note "staged ${#FLY_SET[@]} Fly secret(s): ${FLY_SET[*]}"
-  warn "Staged, not deployed. They apply on the next deploy — which is ticket #9."
+  warn "Staged, not deployed. They apply on the next deploy."
   note "  fly secrets deploy --app ${FLY_APP:-<app>}   # once a machine exists"
 fi
 printf '\n'
 note "The transcript is at $EVIDENCE — a command and its output for every check."
-note "Paste it on ticket #7. A criterion ticked with no evidence is a claim."
+note "Paste it on the ticket. A criterion ticked with no evidence is a claim."
 if (( ${#DEFERRED[@]} )); then
   printf '\n'
   warn "${#DEFERRED[@]} row(s) deferred because nothing is deployed yet."
-  note "Re-run this wizard after ticket #9 deploys; it resumes from $ENV_FILE."
+  note "Re-run this wizard once the app has deployed; it resumes from $ENV_FILE."
 fi
 printf '\n'
-note "Not covered here — the runbook's second half: 5b the scheduler (#19),"
+note "Not covered here — the runbook's second half: 5b the scheduler,"
 note "6 the Admin, 7 Ley 1581, 8 branch protection, 9 security review,"
 note "10 the announcement gate, 11 the user-measured latency figure."

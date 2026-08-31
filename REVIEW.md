@@ -71,10 +71,17 @@ rendered Spanish string — `projectClientError` copies `userMessage` only, so t
 `message` is structurally unable to reach a client. Every breach was in a test name or a log line.
 
 **It is mechanised, so this pass is a reading rather than a search.** `pnpm spec-identifiers` runs
-`scripts/spec-identifiers.mjs` over every JavaScript, TypeScript and JSX file in the repository and
-exits non-zero on a citation in a string, naming the file, the line, the column and the string.
-`pnpm test` runs it as the `//#spec-identifiers` task, CI runs it inside the `test` job, and
+`scripts/spec-identifiers.mjs` over every JavaScript, TypeScript, JSX **and shell** file in the
+repository and exits non-zero on a citation in a string, naming the file, the line, the column and the
+string. `pnpm test` runs it as the `//#spec-identifiers` task, CI runs it inside the `test` job, and
 `verify-before-stop.sh` will not let a session report done with it red.
+
+**Shell is a second tokeniser rather than a widened first one**, because its quoting is not
+JavaScript's. All three quoting forms are read — `'…'` takes no escapes, `"…"` interpolates, `$'…'`
+has escapes of its own — while a `#` opens a comment only at a word boundary, so `$#` and `foo#bar`
+are ordinary text and a comment is still never read. A heredoc body is data at a delimiter the script
+names and is skipped whole. And `"$NFR8 holds"` names a variable rather than citing anything, exactly
+as `${NFR8}` does inside a template literal.
 
 Two things a reviewer still has to do, because no check can:
 
@@ -84,9 +91,13 @@ Two things a reviewer still has to do, because no check can:
 - **Watch the comments.** The gate never reads a comment, so it is equally silent when a citation is
   stripped from one. Nothing is to be removed from a comment, a doc-comment or a `docs/` file.
 
-It reads no shell, and there are citations in `scripts/go-live.sh`'s terminal output and in
-`.claude/hooks/build-guard.sh`'s refusal messages that are breaches of the rule the gate cannot see —
-[#127](https://github.com/m0t0r/recomencemos/issues/127).
+**One boundary, and it is worth knowing where it is.** The walk skips `.agents/` and `.claude/`,
+which hold vendored skills — and, since the gate learned to read shell, one file that cannot be
+subject to it: `.claude/hooks/gate-test.sh` is the suite that drives this gate, and its fixtures are
+the very citations it refuses. So that suite runs the gate over its **neighbours** instead — every
+other hook is copied into a fixture tree and read, which is what keeps `build-guard.sh`'s refusal
+messages honest. `//#test:gates` already declares `.claude/hooks/**` as an input, so editing one
+re-runs the case.
 
 ## Under stacked PRs
 
