@@ -24,9 +24,11 @@
  * - **`AppError` deliberately has no `requestId` option**, and the absence is the
  *   log-injection mitigation: an id taken from an inbound header lets an attacker
  *   write newlines and forged fields into the pretty stdout stream an agent reads
- *   and acts on. That mitigation is unchanged. The only value this can adopt is
- *   one a server minted and registered on its own process — a request body cannot
- *   reach it.
+ *   and acts on. That mitigation is unchanged: there is still no parameter, and
+ *   the only value this can adopt is one a server minted and registered on its
+ *   own process. It is also no longer the *only* thing standing there — see
+ *   {@link SAFE_IDENTIFIER}, which bounds what an adopted value may contain
+ *   whoever registered it.
  * - **A parameter would have to be threaded through every construction site**, and
  *   the sites that matter most are the ones nobody edits: a `throw new AppError`
  *   deep in a query module, in code written before this existed.
@@ -45,6 +47,25 @@
 export type AmbientRequestIdReader = () => string | undefined;
 
 const READER = Symbol.for("repo.errors.ambientRequestIdReader");
+
+/**
+ * What an identifier may be made of, and it is the half of the injection
+ * mitigation that does not depend on who calls the setter.
+ *
+ * The absent constructor option is what keeps a request body away from this
+ * field. That argument covers the *parameter* and says nothing about a registrar
+ * that is itself compromised or merely wrong — and the value reaches the pretty
+ * stdout stream an agent reads and acts on, where a newline or a quote is the
+ * whole attack. A length bound alone admits both. So the charset is checked
+ * rather than assumed: letters, digits, `-` and `_`, which is every id format a
+ * downstream project is likely to mint (a UUID, a ULID, a nanoid, a request id
+ * from a load balancer) and none of the characters that would let a value break
+ * out of the line it is written on.
+ *
+ * Deliberately not "must be a UUID": this bounds what a value may *contain*
+ * without dictating what a downstream project's ids look like.
+ */
+const SAFE_IDENTIFIER = /^[A-Za-z0-9_-]+$/;
 
 type ReaderSlot = Record<symbol, AmbientRequestIdReader | undefined>;
 
@@ -70,9 +91,11 @@ export function setAmbientRequestIdReader(read: AmbientRequestIdReader | undefin
  * something unusable are all the same answer: mint a fresh id, exactly as before
  * any of this existed.
  *
- * The bound applied is the one the wire projection applies to the same field. An
- * id past it is one the browser would refuse to carry, so adopting it would put a
- * value on the log line that no support ticket could ever quote back.
+ * The length bound applied is the one the wire projection applies to the same
+ * field. An id past it is one the browser would refuse to carry, so adopting it
+ * would put a value on the log line that no support ticket could ever quote back.
+ * {@link SAFE_IDENTIFIER} is the other half, and it is the one that keeps the
+ * injection mitigation structural rather than conventional.
  */
 export function readAmbientRequestId(maxLength: number): string | undefined {
   const read = (globalThis as unknown as ReaderSlot)[READER];
@@ -84,6 +107,7 @@ export function readAmbientRequestId(maxLength: number): string | undefined {
 
     if (typeof value !== "string") return undefined;
     if (value.length === 0 || value.length > maxLength) return undefined;
+    if (!SAFE_IDENTIFIER.test(value)) return undefined;
 
     return value;
   } catch {

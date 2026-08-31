@@ -309,6 +309,15 @@ you have error reporting and you have log lines, and no way to get from one to t
      from a request-scoped store, so the handler's own lines and the completion line carry it too.
      A line emitted outside any request carries no `request_id` at all — absent, never stale.
 
+     **One seam in that, worth knowing before you add a log call in an unusual place.** The id is
+     made current with `AsyncLocalStorage.enterWith`, which is all a `diagnostics_channel`
+     subscriber can use, and that mutates the **socket's** execution context rather than the
+     request's — a socket outlives every request on it. So between two requests on a keep-alive
+     connection, code running on that socket but inside no request would read the _previous_
+     request's id. Nothing reaches it today: every line this app emits is either inside a request or
+     outside any server at all. A socket-level `close` or `error` handler that logged would be the
+     first, and it would log a stale id rather than none.
+
    It **fails** on any of: no lines returned (stdout is not reaching the drain); lines returned with no
    `trace_id` (the SDK is not initialised, or the log call is inside a `use cache` scope — see below);
    an `event_id` that resolves to no event (reporting ran with no client).
