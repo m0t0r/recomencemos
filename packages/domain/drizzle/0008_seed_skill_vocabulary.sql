@@ -39,14 +39,14 @@ INSERT INTO "skill" ("slug", "label_es", "cuoc_code") VALUES
 
   -- Cocina y comida
   ('home-cooking',            'Cocinar almuerzos y comida casera', '51201'),
-  ('traditional-cooking',     'Cocina tradicional de la región',   '51202'),
+  ('traditional-cooking',     'Cocinar comida típica paisa',       '51202'),
   ('fast-food',               'Preparar comidas rápidas',          '94110'),
   ('kitchen-assistance',      'Ayudar en la cocina',               '94120'),
   ('baking-and-pastry',       'Panadería y repostería',            '75121'),
   ('table-service',           'Atender mesas en eventos',          '51310'),
   ('bartending',              'Preparar y servir bebidas',         '51321'),
-  ('barista-work',            'Preparar café como barista',        '51322'),
-  ('street-food-selling',     'Vender comida en la calle',         '52120'),
+  ('barista-work',            'Preparar café de especialidad',     '51322'),
+  ('street-food-selling',     'Vender comida preparada',           '52120'),
   ('meat-preparation',        'Cortar y preparar carnes',          '75110'),
 
   -- Cuidado de personas y enseñanza
@@ -91,7 +91,7 @@ INSERT INTO "skill" ("slug", "label_es", "cuoc_code") VALUES
   ('clothing-repairs',        'Arreglar y ajustar ropa',           '75330'),
   ('industrial-sewing',       'Coser en máquina industrial',       '81530'),
   ('knitting',                'Tejer a mano',                      '73320'),
-  ('shoe-repair',             'Arreglar zapatos y calzado',        '75360'),
+  ('shoe-repair',             'Arreglar zapatos y botas',          '75360'),
 
   -- Transporte, mensajería y carga
   ('motorcycle-delivery',     'Domicilios en moto',                '83210'),
