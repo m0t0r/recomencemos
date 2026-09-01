@@ -39,7 +39,7 @@ INSERT INTO "skill" ("slug", "label_es", "cuoc_code") VALUES
 
   -- Cocina y comida
   ('home-cooking',            'Cocinar almuerzos y comida casera', '51201'),
-  ('traditional-cooking',     'Cocinar comida típica paisa',       '51202'),
+  ('traditional-cooking',     'Cocinar comida típica',             '51202'),
   ('fast-food',               'Preparar comidas rápidas',          '94110'),
   ('kitchen-assistance',      'Ayudar en la cocina',               '94120'),
   ('baking-and-pastry',       'Panadería y repostería',            '75121'),
