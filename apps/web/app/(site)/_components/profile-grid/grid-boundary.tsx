@@ -25,7 +25,8 @@
  * module the two route-level boundaries use — one focus protocol, not three.
  */
 
-import { Button } from "@repo/design-system/components/button";
+import { Button, buttonVariants } from "@repo/design-system/components/button";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Component, type ReactNode } from "react";
 import type { BoundaryError } from "@/lib/report-client-error";
@@ -35,14 +36,29 @@ import {
   GRID_ERROR_RETRY,
   GRID_ERROR_RETRYING,
   GRID_ERROR_TITLE,
-} from "./messages";
+} from "../../_lib/lists/messages";
+
+/**
+ * A second way out, for a list that has one.
+ *
+ * The spec's `error` cell for Browse is _"Search failed; the unfiltered list is
+ * still reachable"_ — so a page of `/profiles` that failed offers the whole list
+ * beside the retry. The Wall has no narrower state to escape from and passes
+ * none.
+ */
+export interface GridEscape {
+  readonly href: string;
+  readonly label: string;
+}
 
 function GridFailure({
   error,
   clear,
+  escape,
 }: {
   readonly error: BoundaryError;
   readonly clear: () => void;
+  readonly escape?: GridEscape;
 }) {
   const router = useRouter();
   const { isRetrying, onRetry, headingRef, containerRef } = useErrorBoundary(error, () => {
@@ -65,7 +81,14 @@ function GridFailure({
         {GRID_ERROR_TITLE}
       </h2>
       <p className="text-muted-foreground text-pretty">{GRID_ERROR_EXPLANATION}</p>
-      <Button onClick={onRetry}>{isRetrying ? GRID_ERROR_RETRYING : GRID_ERROR_RETRY}</Button>
+      <div className="flex flex-wrap gap-3">
+        <Button onClick={onRetry}>{isRetrying ? GRID_ERROR_RETRYING : GRID_ERROR_RETRY}</Button>
+        {escape ? (
+          <Link href={escape.href} className={buttonVariants({ variant: "outline" })}>
+            {escape.label}
+          </Link>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -77,7 +100,7 @@ function GridFailure({
  * hears is in {@link GridFailure}.
  */
 export class GridBoundary extends Component<
-  { readonly children: ReactNode },
+  { readonly children: ReactNode; readonly escape?: GridEscape },
   { readonly error: BoundaryError | null }
 > {
   override state: { readonly error: BoundaryError | null } = { error: null };
@@ -91,6 +114,12 @@ export class GridBoundary extends Component<
 
     if (error === null) return this.props.children;
 
-    return <GridFailure error={error} clear={() => this.setState({ error: null })} />;
+    return (
+      <GridFailure
+        error={error}
+        escape={this.props.escape}
+        clear={() => this.setState({ error: null })}
+      />
+    );
   }
 }

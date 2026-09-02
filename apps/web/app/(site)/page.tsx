@@ -25,7 +25,8 @@
  * `_components/profile-grid/prototype/`. While it stands, the framing renders
  * inside the boundary rather than above it, because the variant decides the
  * framing and reading a search parameter is dynamic. Folding the winner in puts
- * the framing back in the shell.
+ * the framing back in the shell, above the boundary, which is where the
+ * skeleton is designed to hold it.
  */
 
 import { buttonVariants } from "@repo/design-system/components/button";
@@ -34,11 +35,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ListEmptyState } from "./_components/profile-grid/empty-state";
 import { GridBoundary } from "./_components/profile-grid/grid-boundary";
-import {
-  NOBODY_PUBLISHED_BODY,
-  NOBODY_PUBLISHED_TITLE,
-  TO_PUBLISH,
-} from "./_components/profile-grid/messages";
 import { ProfileGrid } from "./_components/profile-grid/profile-grid";
 import { PrototypeSwitcher } from "./_components/profile-grid/prototype/switcher";
 import {
@@ -49,18 +45,32 @@ import {
   variantFrom,
 } from "./_components/profile-grid/prototype/variants";
 import { ProfileGridSkeleton } from "./_components/profile-grid/skeleton";
-import { WALL_LEAD, WALL_TITLE, WALL_TO_BROWSE, WALL_TO_BROWSE_HINT } from "./_lib/wall/messages";
+import {
+  NOBODY_PUBLISHED_BODY,
+  NOBODY_PUBLISHED_TITLE,
+  TO_BROWSE,
+  TO_PUBLISH,
+} from "./_lib/lists/messages";
+import { WALL_LEAD, WALL_TITLE, WALL_TO_BROWSE_HINT } from "./_lib/wall/messages";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
-function WallEmpty() {
+/**
+ * The page's own heading and its one line.
+ *
+ * **It renders in every state, including the empty one.** The Wall before the
+ * first profile exists is the pre-launch page, and the spec's `empty` cell asks
+ * for "the proposition and a route into `/publish`" — a panel on its own would
+ * drop the proposition and leave the document with no `h1` at all.
+ */
+function WallFraming() {
   return (
-    <ListEmptyState
-      title={NOBODY_PUBLISHED_TITLE}
-      body={NOBODY_PUBLISHED_BODY}
-      actionHref="/publish"
-      actionLabel={TO_PUBLISH}
-    />
+    <div className="flex flex-col gap-3">
+      <h1 className="text-foreground text-3xl font-semibold tracking-tight text-balance">
+        {WALL_TITLE}
+      </h1>
+      <p className="text-muted-foreground max-w-prose text-lg text-pretty">{WALL_LEAD}</p>
+    </div>
   );
 }
 
@@ -69,7 +79,7 @@ function ToBrowse() {
   return (
     <div className="flex flex-col items-start gap-2">
       <Link href="/profiles" className={buttonVariants({ variant: "outline" })}>
-        {WALL_TO_BROWSE}
+        {TO_BROWSE}
       </Link>
       <p className="text-muted-foreground text-sm">{WALL_TO_BROWSE_HINT}</p>
     </div>
@@ -80,7 +90,19 @@ async function WallBody({ searchParams }: { readonly searchParams: SearchParams 
   const variant = variantFrom((await searchParams).variant);
   const page = await profiles.wall();
 
-  if (page.items.length === 0) return <WallEmpty />;
+  if (page.items.length === 0) {
+    return (
+      <div className="flex flex-col gap-8">
+        <WallFraming />
+        <ListEmptyState
+          title={NOBODY_PUBLISHED_TITLE}
+          body={NOBODY_PUBLISHED_BODY}
+          actionHref="/publish"
+          actionLabel={TO_PUBLISH}
+        />
+      </div>
+    );
+  }
 
   if (variant === "B") {
     return (
@@ -89,7 +111,7 @@ async function WallBody({ searchParams }: { readonly searchParams: SearchParams 
           title={WALL_TITLE}
           lead={WALL_LEAD}
           publishLabel={TO_PUBLISH}
-          browseLabel={WALL_TO_BROWSE}
+          browseLabel={TO_BROWSE}
         />
         <DenseGrid profiles={page.items} />
         <PrototypeSwitcher current={variant} />
@@ -110,12 +132,7 @@ async function WallBody({ searchParams }: { readonly searchParams: SearchParams 
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-foreground text-3xl font-semibold tracking-tight text-balance">
-          {WALL_TITLE}
-        </h1>
-        <p className="text-muted-foreground max-w-prose text-lg text-pretty">{WALL_LEAD}</p>
-      </div>
+      <WallFraming />
 
       {/*
         Story 11's two standing notices land here, above the grid: nobody is

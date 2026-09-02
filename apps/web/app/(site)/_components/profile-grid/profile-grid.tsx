@@ -20,7 +20,7 @@ import { cityLabel } from "@repo/domain/policy";
 import type { PublicProfile } from "@repo/domain/profiles";
 import { displayName, ProfileCard } from "../profile-card";
 import { CountAnnouncement } from "./count-announcement";
-import { photoAlt } from "./messages";
+import { photoAlt } from "../../_lib/lists/messages";
 
 /** One place, so the fallback cannot drift out of step with the content. */
 export const GRID_COLUMNS = "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";

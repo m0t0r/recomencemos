@@ -17,6 +17,10 @@
  *
  * Indexable, like the Wall, and for the same reason: only the public projection
  * reaches it.
+ *
+ * **`?variant=` is a live prototype and is temporary**, exactly as on the Wall:
+ * while it stands the framing renders inside the boundary rather than above it,
+ * and folding the winner in puts it back in the shell.
  */
 
 import { buttonVariants } from "@repo/design-system/components/button";
@@ -26,32 +30,32 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ListEmptyState } from "../_components/profile-grid/empty-state";
 import { GridBoundary } from "../_components/profile-grid/grid-boundary";
-import {
-  NOBODY_PUBLISHED_BODY,
-  NOBODY_PUBLISHED_TITLE,
-  TO_PUBLISH,
-} from "../_components/profile-grid/messages";
 import { ProfileGrid } from "../_components/profile-grid/profile-grid";
 import { PrototypeSwitcher } from "../_components/profile-grid/prototype/switcher";
 import {
   DenseGrid,
   ProfileRows,
   QuietOpening,
+  type Variant,
   variantFrom,
 } from "../_components/profile-grid/prototype/variants";
 import { ProfileGridSkeleton } from "../_components/profile-grid/skeleton";
 import {
-  BROWSE_CLEAR,
+  NOBODY_PUBLISHED_BODY,
+  NOBODY_PUBLISHED_TITLE,
+  TO_BROWSE,
+  TO_PUBLISH,
+} from "../_lib/lists/messages";
+import {
   BROWSE_LEAD,
   BROWSE_LEAD_QUIET,
   BROWSE_MORE,
   BROWSE_NARROWED_BODY,
   BROWSE_NARROWED_TITLE,
-  BROWSE_PAGE_TITLE,
   BROWSE_TITLE,
 } from "./_lib/messages";
 
-export const metadata: Metadata = { title: BROWSE_PAGE_TITLE };
+export const metadata: Metadata = { title: BROWSE_TITLE };
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
@@ -67,13 +71,28 @@ function cursorFrom(value: string | string[] | undefined): string | null {
   return typeof value === "string" && SLUG_PATTERN.test(value) ? value : null;
 }
 
+function BrowseFraming() {
+  return (
+    <div className="flex flex-col gap-3">
+      <h1 className="text-foreground text-3xl font-semibold tracking-tight text-balance">
+        {BROWSE_TITLE}
+      </h1>
+      <p className="text-muted-foreground max-w-prose text-lg text-pretty">{BROWSE_LEAD}</p>
+    </div>
+  );
+}
+
 /**
  * The list is empty for one of two reasons, and they are different states.
  *
  * Nothing published at all is a fact about the platform; nothing on *this* page
  * is a fact about where the reader is standing — so the second names what is
- * narrowing the list and offers to clear it. Story 19's Skill and city filters
- * add their own narrowing to this same shape.
+ * narrowing the list and offers to clear it.
+ *
+ * **Today the narrowing it can name is the page cursor**, because that is the
+ * only one that exists. Story 19's Skill and city filters add their own to this
+ * same shape, and when they do this condition has to widen with them — a filter
+ * set and no cursor would otherwise fall to the "nobody has published" branch.
  */
 function BrowseEmpty({ narrowed }: { readonly narrowed: boolean }) {
   return narrowed ? (
@@ -81,7 +100,7 @@ function BrowseEmpty({ narrowed }: { readonly narrowed: boolean }) {
       title={BROWSE_NARROWED_TITLE}
       body={BROWSE_NARROWED_BODY}
       actionHref="/profiles"
-      actionLabel={BROWSE_CLEAR}
+      actionLabel={TO_BROWSE}
       actionVariant="outline"
     />
   ) : (
@@ -94,7 +113,7 @@ function BrowseEmpty({ narrowed }: { readonly narrowed: boolean }) {
   );
 }
 
-function MoreLink({ cursor, variant }: { readonly cursor: string; readonly variant: string }) {
+function MoreLink({ cursor, variant }: { readonly cursor: string; readonly variant: Variant }) {
   const query = variant === "A" ? "" : `&variant=${variant}`;
 
   return (
@@ -113,7 +132,14 @@ async function BrowseBody({ searchParams }: { readonly searchParams: SearchParam
   const variant = variantFrom(params.variant);
   const page = await profiles.browse({ after });
 
-  if (page.items.length === 0) return <BrowseEmpty narrowed={after !== null} />;
+  if (page.items.length === 0) {
+    return (
+      <div className="flex flex-col gap-8">
+        <BrowseFraming />
+        <BrowseEmpty narrowed={after !== null} />
+      </div>
+    );
+  }
 
   /**
    * The three variants disagree about whether the ordering is named, and that
@@ -144,12 +170,7 @@ async function BrowseBody({ searchParams }: { readonly searchParams: SearchParam
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-foreground text-3xl font-semibold tracking-tight text-balance">
-          {BROWSE_TITLE}
-        </h1>
-        <p className="text-muted-foreground max-w-prose text-lg text-pretty">{BROWSE_LEAD}</p>
-      </div>
+      <BrowseFraming />
 
       {/* Story 11's two standing notices land here, above the grid, as on the Wall. */}
 
@@ -163,7 +184,12 @@ async function BrowseBody({ searchParams }: { readonly searchParams: SearchParam
 export default function BrowsePage({ searchParams }: { readonly searchParams: SearchParams }) {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10">
-      <GridBoundary>
+      {/*
+        The escape the Wall does not need: a page of this list that failed still
+        offers the whole list, which is the spec's `error` cell for Browse —
+        "the unfiltered list is still reachable".
+      */}
+      <GridBoundary escape={{ href: "/profiles", label: TO_BROWSE }}>
         <Suspense fallback={<ProfileGridSkeleton />}>
           <BrowseBody searchParams={searchParams} />
         </Suspense>

@@ -1,5 +1,10 @@
 /**
- * The strings the two public lists share.
+ * The strings the two public lists share — the Wall's and `/profiles`'.
+ *
+ * **In `_lib` rather than beside the components that render them**: `_lib` holds
+ * what a surface knows, including its Spanish, and `_components` holds what it
+ * renders. These two surfaces share a `_lib` for the same reason they share a
+ * grid — they are one pair, and a sentence with two owners drifts.
  *
  * Register is `tú` and the copy names capabilities rather than people, per
  * `docs/policy/voice.md`. Nobody on either page is named by what happened to
@@ -30,14 +35,25 @@ export function photoAlt(displayName: string): string {
  * The Wall and `/profiles` differ in how they are *narrowed*, not in what an
  * unpublished platform is, and two copies of this sentence would be two things
  * to keep in step for no gain. The narrowed case is `/profiles`' own.
+ *
+ * **It says nothing about what publishing does or does not check.** Open
+ * enrolment and its published absence are story 11's standing notice, and a
+ * half-version in an empty state would give that notice a second source.
  */
 export const NOBODY_PUBLISHED_TITLE = "Todavía no hay perfiles publicados";
 
 export const NOBODY_PUBLISHED_BODY =
-  "Sé la primera persona en publicar. Toma unos minutos desde el teléfono y no necesitas ningún documento.";
+  "Sé la primera persona en publicar. Toma unos minutos desde el teléfono.";
 
 /** The verb, not a noun that classifies her. */
 export const TO_PUBLISH = "Publicar lo que sabes hacer";
+
+/**
+ * The way into the full list. One string, because the Wall links there under the
+ * grid and `/profiles` offers the same link when a page of it is empty or failed
+ * — the same destination, so the same words.
+ */
+export const TO_BROWSE = "Ver todos los perfiles";
 
 export const GRID_ERROR_TITLE = "No pudimos cargar los perfiles";
 

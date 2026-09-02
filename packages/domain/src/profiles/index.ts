@@ -390,7 +390,15 @@ export const profiles = {
   },
 };
 
+/**
+ * The two reads themselves are **not** re-exported, only their option and page
+ * types. `listWall` and `listBrowse` take a `DomainDatabase`, and ADR-0010
+ * withholds every handle from `apps/web` — so publishing them past the facade
+ * would put a function on the public subpath that no caller outside this package
+ * can supply an argument to. `profiles.wall()` and `profiles.browse()` are the
+ * door; seam 2 reaches the functions through `#profiles/listing`, which is
+ * private to this package.
+ */
 export type { ListOptions, ProfileListPage } from "#profiles/listing";
-export { listBrowse, listWall } from "#profiles/listing";
 export { SLUG_PATTERN } from "#profiles/slug";
 export type { OwnProfile, PublicProfile } from "#projections";

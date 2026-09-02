@@ -29,7 +29,7 @@
  * Nothing here is cached, and there is no `use cache` anywhere near it.
  */
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import type { CityId } from "#policy/cities";
 import { type Page, PAGE_SIZE, pageOf } from "#policy/listing";
@@ -55,6 +55,15 @@ export type ProfileListPage = Page<PublicProfile>;
  * they may not disagree about its order. `[]` rather than `NULL` for a profile
  * with no Skills, because the alternative is a `LEFT JOIN` that either drops the
  * row or forces the whole page through a `GROUP BY`.
+ *
+ * **The table and column names are written out rather than interpolated from the
+ * schema, and that asymmetry with the keyset predicate below is deliberate.**
+ * Drizzle renders a column unqualified inside a select-list `sql` template, so
+ * `${schema.skill.slug}` here would emit a bare `"slug"` that resolves against
+ * whichever scope reaches it first — silently the wrong column, since the
+ * correlated outer table has a `slug` too. What holds these five names to the
+ * schema is `listing.integration.test.ts`, which reads every one of them back
+ * through a real engine: a rename that type-checks fails there.
  */
 const skillsOfProfile = sql<VocabularyEntry[]>`(
   select coalesce(
@@ -127,30 +136,62 @@ function toPublic(row: PublicRow): PublicProfile {
 const publishedOnly = eq(schema.capabilityProfile.state, "published");
 
 /**
- * The Wall: the most recently published profiles, newest first.
+ * What separates one list from the other: how it sorts, and how a cursor is
+ * turned into "everything after this row".
  *
- * Answered by `capability_profile_wall_idx`, the partial index on
- * `(published_at DESC, id DESC) WHERE state = 'published'`.
+ * Everything else — the columns, the published predicate, the probe row, the
+ * projection — is the same read twice, so it is written once in
+ * {@link readPage}. The two orderings are the difference, and this is the shape
+ * that keeps them the *visible* difference.
  */
-export async function listWall(
+interface Ordering {
+  readonly orderBy: SQL[];
+  /** The keyset predicate for a cursor, against an aliased copy of the table. */
+  readonly after: (cursor: string) => SQL;
+}
+
+const NEWEST_FIRST: Ordering = {
+  orderBy: [desc(schema.capabilityProfile.publishedAt), desc(schema.capabilityProfile.id)],
+  after: (cursor) =>
+    sql`(${schema.capabilityProfile.publishedAt}, ${schema.capabilityProfile.id}) < (
+      select anchor.published_at, anchor.id
+      from capability_profile anchor
+      where anchor.slug = ${cursor}
+    )`,
+};
+
+const ATTENTION_SPREAD: Ordering = {
+  orderBy: [
+    asc(schema.capabilityProfile.deliveredOfferCount),
+    asc(schema.capabilityProfile.rotationKey),
+    asc(schema.capabilityProfile.id),
+  ],
+  after: (cursor) =>
+    sql`(
+      ${schema.capabilityProfile.deliveredOfferCount},
+      ${schema.capabilityProfile.rotationKey},
+      ${schema.capabilityProfile.id}
+    ) > (
+      select anchor.delivered_offer_count, anchor.rotation_key, anchor.id
+      from capability_profile anchor
+      where anchor.slug = ${cursor}
+    )`,
+};
+
+/** One page of published profiles in the given ordering. */
+async function readPage(
   db: DomainDatabase,
-  options: ListOptions = {},
+  ordering: Ordering,
+  options: ListOptions,
 ): Promise<ProfileListPage> {
   const limit = options.limit ?? PAGE_SIZE;
-
-  const after = options.after
-    ? sql`(${schema.capabilityProfile.publishedAt}, ${schema.capabilityProfile.id}) < (
-        select anchor.published_at, anchor.id
-        from capability_profile anchor
-        where anchor.slug = ${options.after}
-      )`
-    : undefined;
+  const after = options.after ? ordering.after(options.after) : undefined;
 
   const rows = await db
     .select(PUBLIC_COLUMNS)
     .from(schema.capabilityProfile)
     .where(after ? and(publishedOnly, after) : publishedOnly)
-    .orderBy(desc(schema.capabilityProfile.publishedAt), desc(schema.capabilityProfile.id))
+    .orderBy(...ordering.orderBy)
     // One more than the page shows, so "is there another page" is answered by a
     // row rather than guessed from a full one.
     .limit(limit + 1);
@@ -161,42 +202,25 @@ export async function listWall(
 }
 
 /**
+ * The Wall: the most recently published profiles, newest first.
+ *
+ * Answered by `capability_profile_wall_idx`, the partial index on
+ * `(published_at DESC, id DESC) WHERE state = 'published'`.
+ */
+export function listWall(db: DomainDatabase, options: ListOptions = {}): Promise<ProfileListPage> {
+  return readPage(db, NEWEST_FIRST, options);
+}
+
+/**
  * The browsable list: fewest delivered Offers first, then the rotation key.
  *
  * Answered by `capability_profile_browse_idx`. The ordering is the attention
  * spread this product commits to, and the middle term is what keeps it a
  * rotation rather than a queue — see `#policy/listing`.
  */
-export async function listBrowse(
+export function listBrowse(
   db: DomainDatabase,
   options: ListOptions = {},
 ): Promise<ProfileListPage> {
-  const limit = options.limit ?? PAGE_SIZE;
-
-  const after = options.after
-    ? sql`(
-        ${schema.capabilityProfile.deliveredOfferCount},
-        ${schema.capabilityProfile.rotationKey},
-        ${schema.capabilityProfile.id}
-      ) > (
-        select anchor.delivered_offer_count, anchor.rotation_key, anchor.id
-        from capability_profile anchor
-        where anchor.slug = ${options.after}
-      )`
-    : undefined;
-
-  const rows = await db
-    .select(PUBLIC_COLUMNS)
-    .from(schema.capabilityProfile)
-    .where(after ? and(publishedOnly, after) : publishedOnly)
-    .orderBy(
-      asc(schema.capabilityProfile.deliveredOfferCount),
-      asc(schema.capabilityProfile.rotationKey),
-      asc(schema.capabilityProfile.id),
-    )
-    .limit(limit + 1);
-
-  const page = pageOf(rows, limit);
-
-  return { items: page.items.map(toPublic), nextCursor: page.nextCursor };
+  return readPage(db, ATTENTION_SPREAD, options);
 }

@@ -8,21 +8,30 @@
  */
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { type Variant, VARIANT_NAMES, VARIANTS } from "./variants";
 
 export function PrototypeSwitcher({ current }: { readonly current: Variant }) {
   const router = useRouter();
   const params = useSearchParams();
 
-  const go = (step: number) => {
-    const index = (VARIANTS.indexOf(current) + step + VARIANTS.length) % VARIANTS.length;
-    const next = new URLSearchParams(params.toString());
-    next.set("variant", VARIANTS[index] as string);
-    router.replace(`?${next.toString()}`);
-  };
+  const go = useCallback(
+    (step: number) => {
+      const index = (VARIANTS.indexOf(current) + step + VARIANTS.length) % VARIANTS.length;
+      const next = new URLSearchParams(params.toString());
+      next.set("variant", VARIANTS[index] as string);
+      router.replace(`?${next.toString()}`);
+    },
+    [current, params, router],
+  );
+
+  const hidden = process.env.NODE_ENV === "production";
 
   useEffect(() => {
+    // Nothing is registered in production: the bar does not render there, and a
+    // global listener that outlived it would be a prototype shipping behaviour.
+    if (hidden) return;
+
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, [contenteditable]")) return;
@@ -32,9 +41,9 @@ export function PrototypeSwitcher({ current }: { readonly current: Variant }) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [hidden, go]);
 
-  if (process.env.NODE_ENV === "production") return null;
+  if (hidden) return null;
 
   return (
     <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/90 px-3 py-2 text-sm text-white shadow-lg">

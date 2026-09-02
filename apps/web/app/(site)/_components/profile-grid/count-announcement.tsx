@@ -22,7 +22,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { announcedCount } from "./messages";
+import { announcedCount } from "../../_lib/lists/messages";
 
 export function CountAnnouncement({ count }: { readonly count: number }) {
   const [announcement, setAnnouncement] = useState("");
