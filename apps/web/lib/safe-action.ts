@@ -95,11 +95,17 @@ export const actionClient = createSafeActionClient({ handleServerError });
  * not exist until the input has been parsed, and a malformed address should cost
  * the ceiling nothing.
  */
-export interface RateLimitOptions<Input> {
+export interface RateLimitOptions<Input, Ctx extends object = object> {
   readonly action: CeilingedAction;
   readonly principals: readonly {
     readonly scope: CeilingScope;
-    readonly id?: (input: Input) => string;
+    /**
+     * The principal's id, from the parsed input or from what an earlier
+     * middleware put in `ctx`. The `account` scope is the second case: the
+     * Account id is nowhere in a form's fields, and `accountActionClient`
+     * has already resolved the session by the time this runs.
+     */
+    readonly id?: (input: Input, ctx: Ctx) => string;
   }[];
 }
 
@@ -116,15 +122,18 @@ export interface RateLimitOptions<Input> {
  * not charge the second, or the address bound would consume the IP bound's
  * budget on requests that never happened.
  */
-export function rateLimit<Input extends object>({ action, principals }: RateLimitOptions<Input>) {
-  return createValidatedMiddleware<{ parsedInput: Input }>().define(
-    async ({ parsedInput, next }) => {
+export function rateLimit<Input extends object, Ctx extends object = object>({
+  action,
+  principals,
+}: RateLimitOptions<Input, Ctx>) {
+  return createValidatedMiddleware<{ ctx: Ctx; parsedInput: Input }>().define(
+    async ({ parsedInput, ctx, next }) => {
       const requestHeaders = await headers();
 
       for (const principal of principals) {
         const charged: CeilingPrincipal = {
           scope: principal.scope,
-          id: principal.id ? principal.id(parsedInput) : clientIp(requestHeaders),
+          id: principal.id ? principal.id(parsedInput, ctx) : clientIp(requestHeaders),
         };
 
         // Sequential on purpose — see the note above.

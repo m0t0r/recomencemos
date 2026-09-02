@@ -96,6 +96,8 @@ const WITHHELD = [
    */
   "@repo/domain/admin/enrolment",
   "@repo/domain/admin/enrol-cli",
+  "@repo/domain/profiles/slug",
+  "@repo/domain/policy/cities",
 ];
 
 /** What the app is allowed to reach, and therefore what it must actually reach. */
@@ -116,6 +118,11 @@ const PUBLISHED = [
   // #15's reads over the closed Skill vocabulary. The seed is a migration, so
   // this subpath publishes no way to write one.
   "@repo/domain/skills",
+  // #16's three: the pure rules, the counted projections, and the aggregate
+  // that publishes a profile and reads one's own.
+  "@repo/domain/policy",
+  "@repo/domain/projections",
+  "@repo/domain/profiles",
 ];
 
 describe("the domain package's export map", () => {

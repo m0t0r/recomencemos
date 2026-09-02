@@ -38,6 +38,30 @@ import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
 
 /**
+ * Her CapabilityProfile, whole — every `personal` and `public` column, because
+ * the export is what a *consulta* is answered with and a column silently
+ * omitted here is the same bug as one leaked elsewhere, wearing a compliance
+ * hat. The photo's storage key is the one deliberate absence: a locator into a
+ * bucket says nothing to her, and the photo ticket owns exporting the object.
+ */
+export interface ExportedProfile {
+  readonly slug: string;
+  readonly fullName: string;
+  readonly firstName: string;
+  readonly lastInitial: string;
+  readonly city: string;
+  readonly headline: string;
+  readonly about: string;
+  readonly phone: string;
+  readonly photoState: string;
+  readonly state: string;
+  readonly publishedAt: Date;
+  readonly deliveredOfferCount: number;
+  readonly skills: readonly string[];
+  readonly workHistory: readonly string[];
+}
+
+/**
  * One Consent row as it appears in the export.
  *
  * Every field is what a *reclamo* asks for: which side, which two documents, that
@@ -72,6 +96,8 @@ export interface ExportedAccount {
 export interface SubjectAccessExport {
   readonly account: ExportedAccount;
   readonly consents: readonly ExportedConsent[];
+  /** `null` until she publishes; an Account is not obliged to hold one. */
+  readonly profile: ExportedProfile | null;
 }
 
 /**
@@ -118,6 +144,8 @@ export async function buildSubjectAccessExport(
     // forwards. It is also the order the index already holds them in.
     .orderBy(asc(schema.consent.createdAt));
 
+  const profile = await exportedProfile(db, accountId);
+
   return {
     account: {
       email: row.email,
@@ -137,6 +165,66 @@ export async function buildSubjectAccessExport(
       transmissionAcknowledged: consent.transmissionAcknowledged,
       consentedAt: consent.createdAt,
     })),
+    profile,
+  };
+}
+
+async function exportedProfile(
+  db: DomainDatabase,
+  accountId: string,
+): Promise<ExportedProfile | null> {
+  const [row] = await db
+    .select({
+      id: schema.capabilityProfile.id,
+      slug: schema.capabilityProfile.slug,
+      fullName: schema.capabilityProfile.fullName,
+      firstName: schema.capabilityProfile.firstName,
+      lastInitial: schema.capabilityProfile.lastInitial,
+      city: schema.capabilityProfile.city,
+      headline: schema.capabilityProfile.headline,
+      about: schema.capabilityProfile.about,
+      phone: schema.capabilityProfile.phone,
+      photoState: schema.capabilityProfile.photoState,
+      state: schema.capabilityProfile.state,
+      publishedAt: schema.capabilityProfile.publishedAt,
+      deliveredOfferCount: schema.capabilityProfile.deliveredOfferCount,
+    })
+    .from(schema.capabilityProfile)
+    .where(eq(schema.capabilityProfile.accountId, accountId))
+    .limit(1);
+
+  if (!row) return null;
+
+  const skills = await db
+    .select({ labelEs: schema.skill.labelEs })
+    .from(schema.profileSkill)
+    .innerJoin(schema.skill, eq(schema.skill.id, schema.profileSkill.skillId))
+    .where(eq(schema.profileSkill.capabilityProfileId, row.id))
+    .orderBy(asc(schema.skill.labelEs));
+
+  const history = await db
+    .select({ text: schema.workHistoryEntry.text })
+    .from(schema.workHistoryEntry)
+    .where(eq(schema.workHistoryEntry.capabilityProfileId, row.id))
+    // The position column is what the order *is*; it reaches the export as the
+    // order of this array rather than as a number beside each line.
+    .orderBy(asc(schema.workHistoryEntry.position));
+
+  return {
+    slug: row.slug,
+    fullName: row.fullName,
+    firstName: row.firstName,
+    lastInitial: row.lastInitial,
+    city: row.city,
+    headline: row.headline,
+    about: row.about,
+    phone: row.phone,
+    photoState: row.photoState,
+    state: row.state,
+    publishedAt: row.publishedAt,
+    deliveredOfferCount: row.deliveredOfferCount,
+    skills: skills.map((skill) => skill.labelEs),
+    workHistory: history.map((entry) => entry.text),
   };
 }
 

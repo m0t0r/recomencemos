@@ -183,13 +183,16 @@ describe("chargeCeiling, against the committed migrations", () => {
   test("sweeps rows old enough that no chargeable window can reach them", async ({ database }) => {
     await chargeRepeatedly(database, 2);
 
-    const threeHoursLater = new Date("2026-08-27T15:00:00.000Z");
-    await chargeCeiling(database.db, ana, "requestMagicLink", threeHoursLater);
+    // Retention is twice the *widest* window in the registry, which became a
+    // day when `publishProfile` joined it — so "old enough" is now past two
+    // days, not past two hours.
+    const threeDaysLater = new Date("2026-08-30T15:00:00.000Z");
+    await chargeCeiling(database.db, ana, "requestMagicLink", threeDaysLater);
 
     const rows = await database.db.select().from(rateCounter);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.windowStart.toISOString()).toBe("2026-08-27T15:00:00.000Z");
+    expect(rows[0]?.windowStart.toISOString()).toBe("2026-08-30T15:00:00.000Z");
   });
 });
 
@@ -248,7 +251,7 @@ describe("the CHECK the first ceiling put on rate_counter.action", () => {
     await expect(
       database.db
         .insert(rateCounter)
-        .values({ principal: "address:x", action: "publishProfile", windowStart: noon, count: 1 }),
+        .values({ principal: "address:x", action: "sendOffer", windowStart: noon, count: 1 }),
     ).rejects.toThrow();
   });
 });

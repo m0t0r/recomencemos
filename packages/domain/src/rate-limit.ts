@@ -95,6 +95,24 @@ export const CEILINGS = {
   verifyAdminBackupCode: {
     account: { max: 10, windowSeconds: 15 * 60 },
   },
+
+  /**
+   * **`publishProfile`, per Account and per IP** — NFR26's own row, and DD7's
+   * answer to the first Worker-side abuse case: many profiles from throwaway
+   * addresses, each with a zero Offer count, to sit on top of the browse
+   * order. One profile per Account is the unique constraint's half; this is the
+   * rate's half. The window is a calendar day rather than a rolling one, which
+   * is what lets the refusal say when it resets.
+   *
+   * **A failed attempt is charged.** The action charges before its body runs,
+   * so a submission the rejector refuses spends one of the three — which is the
+   * case the seventh state exists for: a Worker who trips this after two
+   * refusals meets a sentence rather than silence.
+   */
+  publishProfile: {
+    account: { max: 3, windowSeconds: 24 * 60 * 60 },
+    ip: { max: 3, windowSeconds: 24 * 60 * 60 },
+  },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
@@ -293,6 +311,19 @@ export const CEILING_REFUSALS: Record<
   verifyAdminBackupCode: (ceiling, retryAfter) =>
     `Escribiste ${ceiling.max} códigos de respaldo incorrectos, que es el máximo. ` +
     `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}.`,
+
+  /**
+   * `docs/policy/voice.md`'s own before/after for this ceiling, example 2: the
+   * count is quoted back (Do 4), what to do next is in the same breath (Do 3),
+   * and the last sentence is the one the spec's seventh state names — _that
+   * nothing she typed was lost_. "Intentaste" rather than "publicaste", because
+   * the count includes the attempts the rejector refused, and a sentence that
+   * told her she had published three times would be false.
+   */
+  publishProfile: (ceiling, retryAfter) =>
+    `Intentaste publicar ${ceiling.max} veces hoy, que es el máximo. ` +
+    `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
+    "Nada de lo que escribiste se perdió: sigue aquí.",
 };
 
 /**

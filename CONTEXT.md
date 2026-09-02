@@ -32,6 +32,12 @@ A Worker's public page: the Skills they hold and the terms under which they will
 Spanish UI: _Perfil de capacidades_.
 _Avoid_: CV, résumé, listing, case file
 
+**WorkHistoryEntry**:
+One line, in a Worker's own words, about a place she has worked, kept in the order she wrote
+them. Part of the gated half of a CapabilityProfile: seen by a signed-in Account reading the full
+profile, never on the Wall. Spanish UI: _Dónde has trabajado_.
+_Avoid_: Employment history, CV, résumé, experience (as a section title)
+
 **Skill**:
 One entry from the platform's fixed vocabulary of human capabilities, chosen by a Worker for
 their CapabilityProfile. Spanish UI: _Capacidad_.

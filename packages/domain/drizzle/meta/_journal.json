@@ -64,6 +64,13 @@
       "when": 1788204851292,
       "tag": "0008_seed_skill_vocabulary",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788358800344,
+      "tag": "0009_capability_profile",
+      "breakpoints": true
     }
   ]
 }

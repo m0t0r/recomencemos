@@ -1,0 +1,162 @@
+/**
+ * NFR10, as a test: one fixture carrying five distinct sentinels, three
+ * assertions counting occurrences. This is what makes ADR-0003 enforceable —
+ * a field added to the entity reaches a projection only by being written into
+ * it, and this file is where that would be noticed.
+ *
+ * Counting is over the serialised output, deliberately: the question is what
+ * crosses a boundary, and a boundary is a serializer.
+ */
+
+import {
+  type ProfileRecord,
+  toExchangedContact,
+  toExchangedProfile,
+  toGatedProfile,
+  toOwnProfile,
+  toPublicProfile,
+} from "#projections";
+
+const SENTINELS = {
+  fullName: "SENTINEL_FULL_NAME",
+  phone: "SENTINEL_PHONE",
+  email: "SENTINEL_EMAIL",
+  about: "SENTINEL_ABOUT",
+  workHistory: "SENTINEL_WORK_HISTORY",
+} as const;
+
+const PHOTO_URL = "SENTINEL_PHOTO_URL";
+
+const record: ProfileRecord = {
+  slug: "k7m2p9q4w3x8y1z6",
+  fullName: SENTINELS.fullName,
+  firstName: "Ana",
+  lastInitial: "R",
+  city: "pereira",
+  headline: "Cocino almuerzos para eventos",
+  about: SENTINELS.about,
+  phone: SENTINELS.phone,
+  email: SENTINELS.email,
+  photoState: "pending",
+  photoUrl: PHOTO_URL,
+  skills: [{ slug: "home-cooking", labelEs: "Cocinar almuerzos y comida casera" }],
+  workHistory: [SENTINELS.workHistory, "Diez años en una panadería"],
+  publishedAt: new Date("2026-09-02T12:00:00Z"),
+};
+
+function count(output: unknown, sentinel: string): number {
+  return JSON.stringify(output).split(sentinel).length - 1;
+}
+
+function counts(output: unknown): Record<keyof typeof SENTINELS, number> {
+  return {
+    fullName: count(output, SENTINELS.fullName),
+    phone: count(output, SENTINELS.phone),
+    email: count(output, SENTINELS.email),
+    about: count(output, SENTINELS.about),
+    workHistory: count(output, SENTINELS.workHistory),
+  };
+}
+
+describe("the public projection", () => {
+  it("carries none of the five sentinels", () => {
+    expect(counts(toPublicProfile(record))).toEqual({
+      fullName: 0,
+      phone: 0,
+      email: 0,
+      about: 0,
+      workHistory: 0,
+    });
+  });
+
+  it("carries exactly the contract's keys", () => {
+    expect(Object.keys(toPublicProfile(record)).toSorted()).toEqual(
+      [
+        "city",
+        "firstName",
+        "headline",
+        "lastInitial",
+        "photoUrl",
+        "publishedAt",
+        "skills",
+        "slug",
+      ].toSorted(),
+    );
+  });
+
+  it("withholds a photo that is not approved", () => {
+    expect(toPublicProfile(record).photoUrl).toBeNull();
+    expect(count(toPublicProfile(record), PHOTO_URL)).toBe(0);
+  });
+
+  it("carries an approved photo", () => {
+    expect(toPublicProfile({ ...record, photoState: "approved" }).photoUrl).toBe(PHOTO_URL);
+  });
+});
+
+describe("the gated projection", () => {
+  it("carries the self-description and the work history, and none of the other three", () => {
+    expect(counts(toGatedProfile(record))).toEqual({
+      fullName: 0,
+      phone: 0,
+      email: 0,
+      about: 1,
+      workHistory: 1,
+    });
+  });
+
+  it("still withholds an unapproved photo", () => {
+    expect(toGatedProfile(record).photoUrl).toBeNull();
+  });
+});
+
+describe("the exchanged projection", () => {
+  it("carries all five", () => {
+    expect(counts(toExchangedProfile(record))).toEqual({
+      fullName: 1,
+      phone: 1,
+      email: 1,
+      about: 1,
+      workHistory: 1,
+    });
+  });
+
+  it("is reachable only as the three contact fields, nothing more, on its own", () => {
+    expect(toExchangedContact(record)).toEqual({
+      fullName: SENTINELS.fullName,
+      phone: SENTINELS.phone,
+      email: SENTINELS.email,
+    });
+  });
+});
+
+describe("her own projection", () => {
+  it("carries all five, her photo state, and her photo whatever its state", () => {
+    const own = toOwnProfile(record);
+
+    expect(counts(own)).toEqual({ fullName: 1, phone: 1, email: 1, about: 1, workHistory: 1 });
+    expect(own.photoState).toBe("pending");
+    expect(own.photoUrl).toBe(PHOTO_URL);
+  });
+});
+
+describe("every projection", () => {
+  it.each([
+    ["public", toPublicProfile],
+    ["gated", toGatedProfile],
+    ["exchanged", toExchangedProfile],
+    ["own", toOwnProfile],
+  ])("%s defines no toJSON and is a plain object", (_name, project) => {
+    const output = project(record);
+
+    expect(Object.getPrototypeOf(output)).toBe(Object.prototype);
+    expect("toJSON" in output).toBe(false);
+  });
+
+  it("does not share the record's arrays, so a caller cannot reach back into it", () => {
+    const gated = toGatedProfile(record);
+
+    expect(gated.skills).not.toBe(record.skills);
+    expect(gated.workHistory).not.toBe(record.workHistory);
+  });
+});
