@@ -31,22 +31,12 @@ export const HELD_HEADING = "Lo que ve solo quien tú aceptes";
 export const HELD_EXPLANATION =
   "Tu nombre completo, tu teléfono y tu correo se los damos solo a quien tú aceptes.";
 
-/** The ledger's three visibility words, five words or fewer each. */
-export const VISIBILITY_PUBLIC = "Todo el mundo";
-export const VISIBILITY_GATED = "Quien abra tu perfil";
-export const VISIBILITY_HELD = "Solo quien tú aceptes";
-
-/** Terms for the field ledger. */
-export const NAME_TERM = "Nombre que se muestra";
-export const CITY_TERM = "Ciudad";
-export const SKILLS_TERM = "Capacidades";
-export const HEADLINE_TERM = "Una línea sobre tu trabajo";
+/** Terms for the gated and held sections. */
 export const ABOUT_TERM = "Más sobre tu trabajo";
 export const WORK_HISTORY_TERM = "Dónde has trabajado";
 export const FULL_NAME_TERM = "Nombre completo";
 export const PHONE_TERM = "Teléfono";
 export const EMAIL_TERM = "Correo";
-export const PHOTO_TERM = "Foto";
 
 /** When an optional field is empty: said plainly, and it is fine. */
 export const NOTHING_MORE = "No escribiste nada más. Está bien así.";
@@ -98,19 +88,11 @@ export const MY_PROFILE_COPY = {
 
 export const MY_PROFILE_LABELS = {
   WALL_LINK,
-  VISIBILITY_PUBLIC,
-  VISIBILITY_GATED,
-  VISIBILITY_HELD,
-  NAME_TERM,
-  CITY_TERM,
-  SKILLS_TERM,
-  HEADLINE_TERM,
   ABOUT_TERM,
   WORK_HISTORY_TERM,
   FULL_NAME_TERM,
   PHONE_TERM,
   EMAIL_TERM,
-  PHOTO_TERM,
   LOAD_FAILED_RETRY,
   LOAD_FAILED_RETRYING,
 } as const;

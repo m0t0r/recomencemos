@@ -1,7 +1,7 @@
 # Surface brief: `/my-profile`
 
 **Target:** `apps/web/app/(site)/my-profile/page.tsx` · **Mode:** Operate · **Ticket:**
-[#16](https://github.com/m0t0r/recomencemos/issues/16) · **Shaped:** 2026-09-02
+[#16](https://github.com/m0t0r/recomencemos/issues/16) · **Shaped:** 2026-09-02 · **Locked:** 2026-09-02, variant A ("Tres niveles"); the losers are on `prototype/16-ui-variants`
 
 **Shaped without an interview**, like [`publish.md`](publish.md): assumptions are marked
 `[assumed]` and the open decisions are the human's.

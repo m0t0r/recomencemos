@@ -107,6 +107,32 @@ describe("the signed-in trigger", () => {
   });
 
   /**
+   * **The profile row, in both of its states.** The label is the caller's
+   * because it depends on what she has, and the `href` is what rots if a route
+   * moves — so both halves are asserted, once per state.
+   */
+  it.each([
+    ["/my-profile", "Tu perfil"],
+    ["/publish", "Publica lo que sabes hacer"],
+  ])("points the profile row at %s", async (href, label) => {
+    const user = userEvent.setup();
+    render(<SessionMenu {...SITE_PROPS} profile={{ href, label }} />);
+
+    await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
+
+    expect(screen.getByRole("menuitem", { name: label })).toHaveAttribute("href", href);
+  });
+
+  it("omits the profile row when none is given", async () => {
+    const user = userEvent.setup();
+    render(<SessionMenu {...SITE_PROPS} />);
+
+    await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
+
+    expect(screen.queryByRole("menuitem", { name: "Tu perfil" })).toBeNull();
+  });
+
+  /**
    * **The Admin's shell passes no `accountHref`**, and this is the case that says
    * the omission is real rather than a prop nobody reads. `/account` is the
    * Worker's own Account under a different shell; a row that navigated out of the

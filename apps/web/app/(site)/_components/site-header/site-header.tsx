@@ -18,7 +18,8 @@
 import { AppHeader } from "@/app/_components/app-header/app-header";
 import { signOut } from "@/app/_components/session-menu/actions";
 import { SignInLink } from "./sign-in-link";
-import { HOME_LINK_LABEL } from "./messages";
+import { HOME_LINK_LABEL, MY_PROFILE, PUBLISH } from "./messages";
+import { profiles } from "@repo/domain/profiles";
 
 export { AppHeaderPlaceholder as SiteHeaderPlaceholder } from "@/app/_components/app-header/app-header";
 
@@ -31,6 +32,16 @@ export function SiteHeader() {
       action={signOut}
       /* Her own Account — the only navigation this shell offers. */
       accountHref="/account"
+      /*
+        The row she came for. One read per page for a signed-in session; a
+        profile she holds points at it, and until then the row is the way to
+        publish one.
+      */
+      profileRow={async (session) =>
+        (await profiles.has(session.accountId))
+          ? { href: "/my-profile", label: MY_PROFILE }
+          : { href: "/publish", label: PUBLISH }
+      }
       /*
         The way in, for someone with no session. Offering it was #80's acceptance
         criterion 5, and it is what makes criterion 6 structural rather than

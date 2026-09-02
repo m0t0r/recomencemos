@@ -2,7 +2,9 @@
  * `/my-profile` — what she published, tiered by who sees it.
  *
  * Shaped at `.impeccable/briefs/own-profile.md`; the state set is the spec's
- * (`## UX design`, the Own profile row). Mode is **Operate**.
+ * (`## UX design`, the Own profile row). Mode is **Operate**. The layout was
+ * chosen by `/prototype` UI on this route; the losers live on
+ * `prototype/16-ui-variants`.
  *
  * Three cells are routes or interrupts, decided before anything paints:
  * **signed out →** `/sign-in` with a way back; **a session with no profile →**
@@ -22,14 +24,8 @@ import { profiles } from "@repo/domain/profiles";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
 import { requireAccountPage } from "@/lib/account";
-import {
-  isOwnProfileVariantKey,
-  OWN_PROFILE_VARIANT_KEYS,
-  OWN_PROFILE_VARIANTS,
-  OwnProfileView,
-} from "./_components/own-profile-view";
+import { OwnProfileView } from "./_components/own-profile-view";
 import { MY_PROFILE_PAGE_TITLE, MY_PROFILE_TITLE } from "./_lib/messages";
 
 export const metadata: Metadata = {
@@ -45,24 +41,7 @@ async function ProfilePanel({ searchParams }: { searchParams: SearchParams }) {
 
   if (!profile) redirect("/publish");
 
-  const variant = isOwnProfileVariantKey(params.variant) ? params.variant : "A";
-
-  return (
-    <>
-      <OwnProfileView
-        profile={profile}
-        justPublished={params.published === "1"}
-        variant={variant}
-      />
-      <PrototypeSwitcher
-        variants={OWN_PROFILE_VARIANT_KEYS.map((key) => ({
-          key,
-          name: OWN_PROFILE_VARIANTS[key].name,
-        }))}
-        current={variant}
-      />
-    </>
-  );
+  return <OwnProfileView profile={profile} justPublished={params.published === "1"} />;
 }
 
 function PanelSkeleton() {

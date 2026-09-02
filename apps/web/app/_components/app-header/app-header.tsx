@@ -42,6 +42,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { AuthSession } from "@repo/domain/auth-handler";
 import { auth } from "@/lib/auth";
 import { SessionMenuNoScript } from "@/app/_components/session-menu/no-script";
 import { SessionMenu, type SignOutAction } from "@/app/_components/session-menu/session-menu";
@@ -63,6 +64,12 @@ export interface AppHeaderProps {
   readonly action: SignOutAction;
   /** Passed straight to {@link SessionMenu}; absent omits the account row. */
   readonly accountHref?: string;
+  /**
+   * The profile row for a signed-in session, resolved by the shell that has
+   * one: `(site)` reads whether she holds a profile and names the row
+   * accordingly; `(admin)` passes nothing.
+   */
+  readonly profileRow?: (session: AuthSession) => Promise<{ href: string; label: string }>;
   /**
    * What the right-hand side shows with no session, if anything.
    *
@@ -103,9 +110,11 @@ export async function AppHeader({
   homeLabel,
   action,
   accountHref,
+  profileRow,
   signedOut,
 }: AppHeaderProps) {
   const session = await auth().getSession(await headers());
+  const profile = session && profileRow ? await profileRow(session) : undefined;
 
   return (
     <>
@@ -125,7 +134,12 @@ export async function AppHeader({
         </Link>
 
         {session ? (
-          <SessionMenu email={session.email} action={action} accountHref={accountHref} />
+          <SessionMenu
+            email={session.email}
+            action={action}
+            accountHref={accountHref}
+            profile={profile}
+          />
         ) : (
           /*
             `?? null` rather than rendering nothing at all: `justify-between`

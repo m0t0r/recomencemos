@@ -1,7 +1,7 @@
 # Surface brief: `/publish`
 
 **Target:** `apps/web/app/(site)/publish/page.tsx` · **Mode:** Operate · **Ticket:**
-[#16](https://github.com/m0t0r/recomencemos/issues/16) · **Shaped:** 2026-09-02
+[#16](https://github.com/m0t0r/recomencemos/issues/16) · **Shaped:** 2026-09-02 · **Locked:** 2026-09-02, variant A ("Por lo que ves"); the losers are on `prototype/16-ui-variants`
 
 **Shaped without an interview.** The Build session ran unattended, so every answer below that a
 discovery round would normally settle is an **assumption marked `[assumed]`** rather than a

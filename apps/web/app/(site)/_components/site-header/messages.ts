@@ -38,6 +38,10 @@ export const SIGN_OUT = "Salir";
  */
 export const ACCOUNT = "Tu cuenta";
 
+/** The profile row, in its two states: hers exists, or it is still to publish. */
+export const MY_PROFILE = "Tu perfil";
+export const PUBLISH = "Publica lo que sabes hacer";
+
 /**
  * The accessible name of the control that opens the session menu.
  *
