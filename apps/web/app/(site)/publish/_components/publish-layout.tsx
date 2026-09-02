@@ -2,7 +2,7 @@
 
 /**
  * The publishing form's layout — **"Por lo que ves"**, locked after
- * `/prototype` UI. One column, three fieldsets whose boundaries *are* the
+ * `/prototype` UI. One column, the field groups whose boundaries *are* the
  * disclosure rule, capability before identity, the summary above the button,
  * the button last.
  *
@@ -11,62 +11,27 @@
  * asked is what she can do rather than who she is (voice guide, Do 5). The two
  * losing layouts — the form beside a live preview card, and identity first
  * with the Skills as a chip grid — live on `prototype/16-ui-variants`.
+ *
+ * **The groups themselves moved to `@/app/_components/profile-form` with
+ * #142**, because the edit form writes the same nine fields and had to render
+ * them in the same order under the same legends or teach a different rule the
+ * second time she saw it. What stayed here is what is only publishing's: the
+ * _autorización_ above the fields, and the verb on the button.
  */
 
 import { Button } from "@repo/design-system/components/button";
-import {
-  FieldDescription,
-  FieldGroup,
-  FieldLegend,
-  FieldSet,
-} from "@repo/design-system/components/field";
-import { Separator } from "@repo/design-system/components/separator";
+import { FieldGroup } from "@repo/design-system/components/field";
 import { AuthorizationConsent } from "@/app/_components/consent/authorization";
+import { ProfileFieldGroups } from "@/app/_components/profile-form/field-groups";
+import { FormSummary } from "@/app/_components/profile-form/form-summary";
+import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
 import {
-  CAPABILITY_LEGEND,
-  CAPABILITY_VISIBILITY,
-  CONTACT_LEGEND,
-  CONTACT_VISIBILITY,
   FEEDBACK_REGION_LABEL,
-  FIRST_NAME_HELP,
-  FIRST_NAME_LABEL,
-  FULL_NAME_HELP,
-  FULL_NAME_LABEL,
-  HEADLINE_HELP,
-  HEADLINE_LABEL,
-  IDENTITY_LEGEND,
-  IDENTITY_VISIBILITY,
-  LAST_INITIAL_HELP,
-  LAST_INITIAL_LABEL,
-  MORE_LEGEND,
-  MORE_VISIBILITY,
-  PHONE_HELP,
-  PHONE_LABEL,
+  type PublishFieldName,
   PUBLISH_BUTTON,
 } from "@/app/_lib/profile-form/messages";
-import {
-  firstNameField,
-  fullNameField,
-  headlineField,
-  lastInitialField,
-  LIMITS,
-  phoneField,
-  skillSlugsField,
-} from "@/app/_lib/profile-form/schema";
-import { messageOf } from "@/app/_lib/profile-form/use-profile-fields";
-import {
-  AboutField,
-  CityField,
-  PhotoNote,
-  TextField,
-  WorkHistoryFields,
-} from "@/app/_components/profile-form/fields";
-import { FormSummary } from "@/app/_components/profile-form/form-summary";
-import { SkillPicker } from "@/app/_components/profile-form/skill-picker";
-import type { PublishFieldName } from "@/app/_lib/profile-form/messages";
-import type { ProfileFormMachine } from "@/app/_lib/profile-form/use-profile-form";
 import type { ProfileFieldsForm } from "@/app/_lib/profile-form/use-profile-fields";
-import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
+import type { ProfileFormMachine } from "@/app/_lib/profile-form/use-profile-form";
 
 export interface PublishLayoutProps {
   readonly form: ProfileFieldsForm;
@@ -87,111 +52,13 @@ export function PublishLayout({
     <FieldGroup>
       <AuthorizationConsent error={serverErrorFor("consent")} />
 
-      <FieldSet>
-        <FieldLegend>{CAPABILITY_LEGEND}</FieldLegend>
-        <FieldDescription>{CAPABILITY_VISIBILITY}</FieldDescription>
-        <form.Field name="skillSlugs" validators={{ onSubmit: skillSlugsField }}>
-          {(field) => (
-            <SkillPicker
-              id={idFor("skillSlugs")}
-              vocabulary={vocabulary}
-              selected={field.state.value}
-              onChange={field.handleChange}
-              onBlur={field.handleBlur}
-              error={messageOf(field.state.meta.errors) ?? serverErrorFor("skillSlugs")}
-              hydrated={machine.hydrated}
-            />
-          )}
-        </form.Field>
-        <TextField
-          form={form}
-          name="headline"
-          id={idFor("headline")}
-          label={HEADLINE_LABEL}
-          help={HEADLINE_HELP}
-          schema={headlineField}
-          serverError={serverErrorFor("headline")}
-          maxLength={LIMITS.headline}
-        />
-      </FieldSet>
-
-      <Separator />
-
-      <FieldSet>
-        <FieldLegend>{IDENTITY_LEGEND}</FieldLegend>
-        <FieldDescription>{IDENTITY_VISIBILITY}</FieldDescription>
-        <div className="grid gap-6 sm:grid-cols-[1fr_auto]">
-          <TextField
-            form={form}
-            name="firstName"
-            id={idFor("firstName")}
-            label={FIRST_NAME_LABEL}
-            help={FIRST_NAME_HELP}
-            schema={firstNameField}
-            serverError={serverErrorFor("firstName")}
-            autoComplete="given-name"
-            maxLength={LIMITS.firstName}
-          />
-          <TextField
-            form={form}
-            name="lastInitial"
-            id={idFor("lastInitial")}
-            label={LAST_INITIAL_LABEL}
-            help={LAST_INITIAL_HELP}
-            schema={lastInitialField}
-            serverError={serverErrorFor("lastInitial")}
-            maxLength={1}
-            className="sm:w-56"
-          />
-        </div>
-        <CityField form={form} id={idFor("city")} serverError={serverErrorFor("city")} />
-        <TextField
-          form={form}
-          name="fullName"
-          id={idFor("fullName")}
-          label={FULL_NAME_LABEL}
-          help={FULL_NAME_HELP}
-          schema={fullNameField}
-          serverError={serverErrorFor("fullName")}
-          autoComplete="name"
-          maxLength={LIMITS.fullName}
-        />
-      </FieldSet>
-
-      <Separator />
-
-      <FieldSet>
-        <FieldLegend>{CONTACT_LEGEND}</FieldLegend>
-        <FieldDescription>{CONTACT_VISIBILITY}</FieldDescription>
-        <TextField
-          form={form}
-          name="phone"
-          id={idFor("phone")}
-          label={PHONE_LABEL}
-          help={PHONE_HELP}
-          schema={phoneField}
-          serverError={serverErrorFor("phone")}
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel-national"
-        />
-      </FieldSet>
-
-      <Separator />
-
-      <FieldSet>
-        <FieldLegend>{MORE_LEGEND}</FieldLegend>
-        <FieldDescription>{MORE_VISIBILITY}</FieldDescription>
-        <AboutField form={form} id={idFor("about")} serverError={serverErrorFor("about")} />
-        <WorkHistoryFields
-          form={form}
-          groupId={idFor("workHistory")}
-          idFor={(index) => idFor("workHistory", index)}
-          serverErrorFor={(index) => serverErrorFor("workHistory", index)}
-          hydrated={machine.hydrated}
-        />
-        <PhotoNote />
-      </FieldSet>
+      <ProfileFieldGroups
+        form={form}
+        machine={machine}
+        vocabulary={vocabulary}
+        idFor={idFor}
+        serverErrorFor={serverErrorFor}
+      />
 
       <FormSummary
         summary={machine.summary}

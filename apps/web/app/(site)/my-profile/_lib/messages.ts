@@ -24,6 +24,21 @@ export const PUBLISHED_EXPLANATION =
 /** Link text names its destination. */
 export const WALL_LINK = "Ver el muro";
 
+/**
+ * Arrival from a saved edit — the spec's `success` cell for this surface, and
+ * the reason the edit form redirects here rather than confirming in place: the
+ * proof that a change took is the page showing what people can see.
+ *
+ * Two sentences, and neither mentions the Wall. An edit does not move her
+ * position on it, and saying so would teach her that moving up is something
+ * this site does.
+ */
+export const SAVED_CONFIRMATION = "Guardamos tus cambios.";
+export const SAVED_EXPLANATION = "Así queda tu perfil desde ahora.";
+
+/** The way to the edit form. The verb is hers, and it names what it changes. */
+export const EDIT_LINK = "Cambiar mi perfil";
+
 /** The three tiers, as headings. */
 export const PUBLIC_HEADING = "Lo que ve todo el mundo";
 export const GATED_HEADING = "Lo que ve quien abra tu perfil";

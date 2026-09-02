@@ -124,12 +124,15 @@ export interface ProfileFormOptions {
   readonly schema: {
     safeParse(value: unknown): { success: true } | { success: false; error: z.ZodError };
   };
+  /** The sentence a transport fault gets. Per surface — see `feedbackFor`. */
+  readonly faultMessage: string;
 }
 
 export function useProfileForm({
   action,
   initial,
   schema,
+  faultMessage,
 }: ProfileFormOptions): ProfileFormMachine {
   /**
    * **The one cast in this module, and it is the price of being shared.**
@@ -215,7 +218,7 @@ export function useProfileForm({
     summary,
     serverErrors,
     refusedValues,
-    feedback: feedbackFor(result),
+    feedback: feedbackFor(result, faultMessage),
     summaryRef,
     guardSubmit,
   };
