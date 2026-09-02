@@ -12,7 +12,7 @@
  */
 
 import { useForm } from "@tanstack/react-form";
-import type { PublishProfileValues } from "./schema";
+import type { PublishProfileValues, RefusedProfileValues } from "./schema";
 
 /**
  * What the form opens with, before she types anything.
@@ -31,7 +31,7 @@ export type ProfileFieldDefaults = Partial<PublishProfileValues>;
  * action's result, and this is what puts every value back where she typed it —
  * including, on an edit, over the top of what she had saved before.
  */
-export function useProfileFields(defaults: ProfileFieldDefaults, refused?: PublishProfileValues) {
+export function useProfileFields(defaults: ProfileFieldDefaults, refused?: RefusedProfileValues) {
   const opening = refused ?? defaults;
 
   return useForm({
