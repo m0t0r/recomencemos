@@ -26,6 +26,19 @@ const ADMIN_ID = "the-admin";
 const TARGET = "ana@recomencemos.test";
 
 /**
+ * The `SkillRequest` `promoteSkill` acts on, pinned rather than read back.
+ *
+ * The column is `GENERATED ALWAYS AS IDENTITY`, so the seed writes this value
+ * with `OVERRIDING SYSTEM VALUE` — which is what lets {@link INPUTS} be a
+ * constant. Reading the key back would mean building the inputs per case, and the
+ * completeness table's whole shape is one static input per registered action.
+ *
+ * It is also the id used by the refusal case, which runs with **nothing** seeded:
+ * a request that is not there is `promoteSkill`'s "act that did not happen".
+ */
+const REQUEST_ID = "4242";
+
+/**
  * The actor, forged for the test.
  *
  * **The cast is the only one in this suite and it is deliberate**: `AdminActor`'s
@@ -48,6 +61,11 @@ const actor = { accountId: ADMIN_ID } as AdminActor;
  */
 const INPUTS = {
   revokeSessions: { email: TARGET },
+  promoteSkill: {
+    requestId: REQUEST_ID,
+    slug: "sewing-machine-repair",
+    labelEs: "Arreglo máquinas de coser",
+  },
 } satisfies { [K in AdminActionName]: AdminActionInput<K> };
 
 /** An Account with two live sessions, so `revokeSessions` has something to revoke. */
@@ -64,9 +82,25 @@ async function targetWithSessions(database: TestDatabase): Promise<string> {
   return (account as { id: string }).id;
 }
 
+/** A pending request for `promoteSkill` to resolve, under a key the table can name. */
+async function pendingRequest(database: TestDatabase): Promise<void> {
+  await database.db.insert(schema.user).values({
+    id: "the-worker",
+    name: "Ana",
+    email: "worker@recomencemos.test",
+    emailVerified: true,
+  });
+
+  await database.db
+    .insert(schema.skillRequest)
+    .overridingSystemValue()
+    .values({ id: BigInt(REQUEST_ID), accountId: "the-worker", text: "Arreglo máquinas de coser" });
+}
+
 /** Everything each registered action needs to exist before it can run. */
 async function seedFor(database: TestDatabase, action: AdminActionName): Promise<void> {
   if (action === "revokeSessions") await targetWithSessions(database);
+  if (action === "promoteSkill") await pendingRequest(database);
 }
 
 const audit = (database: TestDatabase) =>
@@ -126,12 +160,19 @@ describe.each(ADMIN_ACTION_NAMES)("every Admin action: %s", (action) => {
   });
 
   /**
-   * **NFR18's other half, over the values rather than the shape.** The one input
-   * this action takes is an email address, and an address reaching a 24-month
-   * table is exactly the "second copy of the thing NFR11 counts" NFR33 refuses.
-   * The row may name the target by id and by nothing else.
+   * **NFR18's other half, over the values rather than the shape.** An email
+   * address, a phrase somebody typed, or any other input value reaching a
+   * 24-month table is exactly the "second copy of the thing NFR11 counts" NFR33
+   * refuses. The row may name the target by id and by nothing else.
+   *
+   * **The target id is the exception, and it is the one this table has to make
+   * explicit.** `revokeSessions` takes an address and audits an Account id, so no
+   * input value can legitimately appear; `promoteSkill` takes the request's own
+   * id, and that id *is* the target — the row's whole job is to name what was
+   * acted on. Skipping the value that equals `targetId` keeps the assertion about
+   * what it is about: every **other** input value, whatever the action, stays out.
    */
-  test("puts no input value in the row", async ({ database }) => {
+  test("puts no input value in the row but the id it acted on", async ({ database }) => {
     await seedFor(database, action);
     await runAdminAction(database.db, actor, action, INPUTS[action]);
 
@@ -139,6 +180,7 @@ describe.each(ADMIN_ACTION_NAMES)("every Admin action: %s", (action) => {
     const written = JSON.stringify({ ...row, id: undefined });
 
     for (const value of Object.values(INPUTS[action] as Record<string, unknown>)) {
+      if (String(value) === row?.targetId) continue;
       expect(written).not.toContain(String(value));
     }
   });

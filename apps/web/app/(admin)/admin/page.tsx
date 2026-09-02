@@ -1,16 +1,17 @@
 /**
  * `/admin` — the moderation queue, and the shell every later source plugs into.
  *
- * **The queue is empty because there is nothing in it.** All five of the spec's
- * branches read tables stories 3, 7, 8 and 10 create, so `QUEUE_SOURCES` has no
- * rows yet and this page renders the empty state — which the acceptance criterion
- * calls _"a real and good state"_ and which is exactly what an Admin should see on
- * a platform with no unreviewed Offers. A stubbed source with invented rows would
- * make this screen look finished while showing a moderator data that is not there.
+ * **One source is wired and four are still absent.** Unreviewed Offers, photos,
+ * Reports and profiles awaiting takedown review read tables stories 7, 8 and 10
+ * create, so they are not in `QUEUE_SOURCES` and nothing here pretends they are —
+ * a stubbed source with invented rows would make this screen look finished while
+ * showing a moderator data that is not there. With no Skill request waiting, this
+ * page renders the empty state, which the acceptance criterion calls _"a real and
+ * good state"_.
  *
  * What is real and finished is everything around it: the gate, the oldest-item
  * figure, the per-source `<Suspense>` boundaries, the named failure state, and the
- * one action that exists.
+ * two actions that exist.
  *
  * **`noindex`** — `/admin*` is on NFR8's list, so the `X-Robots-Tag` arrives from
  * `next.config.ts`'s route table and this carries the `<meta>` half, because NFR8
@@ -18,7 +19,7 @@
  */
 
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { type ComponentType, Suspense } from "react";
 import { requireAdminPage } from "@/lib/admin";
 import {
   OldestItem,
@@ -29,11 +30,13 @@ import {
   SourceSkeleton,
 } from "./_components/queue";
 import { SessionsPanel } from "./_components/sessions-panel";
+import { SkillRequestRow } from "./_components/skill-request-row";
 import { ADMIN_PAGE_TITLE, ADMIN_TITLE } from "./_lib/messages";
 import {
   oldestAgeInHours,
   QUEUE_SOURCES,
   type QueueBranch,
+  type QueueItem,
   type QueueSource,
 } from "./_lib/queue-sources";
 
@@ -129,8 +132,25 @@ async function Source({ source, settled }: Loading) {
   const result = await settled;
   if (!result.ok) return <SourceFailed label={source.label} />;
 
-  return <SourceBranch source={source} branch={result.branch} />;
+  return <SourceBranch source={source} branch={result.branch} Item={QUEUE_ROWS[source.key]} />;
 }
+
+/**
+ * Which sources have a row of their own, by key.
+ *
+ * **It is here rather than on the source itself**, and the reason is a real
+ * import edge rather than taste: a row reaches a Server Action, which reaches
+ * `lib/admin.ts` and `server-only`, and `QUEUE_SOURCES` is read by a pure test of
+ * the oldest-item arithmetic that would then fail to import. The registry stays
+ * data; this page, which is already a server module, is where a key becomes a
+ * component.
+ *
+ * A source with no entry renders its summary and nothing to press — which is
+ * every source that has no resolver yet, honestly.
+ */
+const QUEUE_ROWS: Record<string, ComponentType<{ readonly item: QueueItem }>> = {
+  skillRequests: SkillRequestRow,
+};
 
 /**
  * The empty state, which can only be known once every source has answered.

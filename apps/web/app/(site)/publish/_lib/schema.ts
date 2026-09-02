@@ -37,6 +37,8 @@ import {
   PAGE_STALE,
   PHONE_REQUIRED,
   SKILL_NO_LONGER_LISTED,
+  SKILL_REQUEST_REQUIRED,
+  SKILL_REQUEST_TOO_LONG,
   SKILL_REQUIRED,
   SKILLS_TOO_MANY,
   WORK_HISTORY_LINE_TOO_LONG,
@@ -51,6 +53,7 @@ export const LIMITS = {
   workHistoryLine: 120,
   workHistoryLines: 5,
   skills: 6,
+  skillRequest: 80,
 } as const;
 
 /** Restated from `@repo/domain/policy`'s `CITY_IDS`; `schema.test.ts` pins the agreement. */
@@ -202,6 +205,36 @@ export const publishProfileSchema = z.preprocess(fromFormData, publishProfileFie
 
 /** The lenient parse: what the action accepts, so a refusal can return the values. */
 export const publishProfileValuesSchema = z.preprocess(fromFormData, publishProfileValues);
+
+/**
+ * What a Worker may ask for when the list does not hold her trade.
+ *
+ * **The ceiling on the length is here and the ceiling on the rate is NFR26's**,
+ * and they answer different things: this one keeps a capability the length of a
+ * capability, so an Admin promoting it is reading a phrase rather than a
+ * paragraph, and eighty is the length of the longest entry the seed holds with
+ * room to spare. What this schema deliberately does **not** check is whether the
+ * text carries a phone number — that is `@repo/domain`'s rejector, it is the rule
+ * rather than a typo, and a rule enforced in a browser is not enforced.
+ *
+ * `FormData` is accepted for the reason every other schema here accepts it:
+ * next-safe-action converts neither shape, and the field arrives as one or the
+ * other depending on how the action was dispatched.
+ */
+export const skillRequestField = z
+  .string()
+  .trim()
+  .min(1, SKILL_REQUEST_REQUIRED)
+  .max(LIMITS.skillRequest, SKILL_REQUEST_TOO_LONG);
+
+export const skillRequestFields = z.object({ text: skillRequestField });
+
+export const skillRequestSchema = z.preprocess(
+  (raw) => (raw instanceof FormData ? { text: stringOf(raw, "text") } : raw),
+  skillRequestFields,
+);
+
+export type SkillRequestValues = z.output<typeof skillRequestFields>;
 
 /**
  * The two versions the form *displayed*, travelling as one bound argument

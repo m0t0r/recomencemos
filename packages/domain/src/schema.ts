@@ -32,6 +32,7 @@ import { inList } from "#column-types";
 import { CONSENT_SIDES } from "#consent/registry";
 import { CITY_IDS } from "#policy/cities";
 import { PHOTO_STATES, PROFILE_STATES } from "#policy/profile-states";
+import { SKILL_REQUEST_STATES } from "#policy/skill-request-states";
 import { CEILINGED_ACTIONS } from "#rate-limit";
 
 /**
@@ -518,8 +519,16 @@ export const skill = pgTable(
      * granularity a Hirer searches at is finer than CUOC's: cutting hair and
      * barbering are both `51410`, and a Hirer looking for one is not looking for
      * the other.
+     *
+     * **Nullable since the vocabulary gained its second source.** Every seeded
+     * entry was translated from CUOC and carries its code; an entry an Admin
+     * promoted from a {@link skillRequest} was translated from a sentence a
+     * Worker typed, and may correspond to no CUOC *Ocupación* at all — that is
+     * the whole reason she had to ask. `NULL` is that fact, stated: this column
+     * says where an entry came from, and inventing a code to keep it `NOT NULL`
+     * would make it say something false about half the list.
      */
-    cuocCode: text("cuoc_code").notNull(),
+    cuocCode: text("cuoc_code"),
 
     /**
      * Whether the entry may still be chosen. Retiring a Skill flips this; nothing
@@ -738,5 +747,80 @@ export const profileSkill = pgTable(
     }),
     /** Browse + skill: the reverse of the natural PK (DD2). */
     index("profile_skill_skill_id_idx").on(table.skillId, table.capabilityProfileId),
+  ],
+);
+
+/**
+ * **`SkillRequest`** — what a Worker asked for when the closed list did not hold
+ * her trade, and the queue item that resolves it.
+ *
+ * **A closed vocabulary needs a way in, or it is a way of excluding people.**
+ * ADR-0008 publishes that this platform verifies nobody; a list that silently
+ * left out the woman who repairs sewing machines would be verifying her out of
+ * the product by omission. So the request is a row, it enters the Admin queue as
+ * its own source, and promotion turns it into vocabulary.
+ *
+ * **`BIGINT GENERATED ALWAYS AS IDENTITY`**, not a UUIDv7, and the exception DD2
+ * grants `Offer.id` does not reach here. That exception is argued from two
+ * harms — a sequential key *"publishes the platform's total Offer count to every
+ * Hirer"* and *"hands an enumerator a clean `/offers/1..N` sweep"*. This id
+ * reaches no URL, and the only browser it reaches is an Admin's, who is already
+ * being shown this branch's total on the same screen. There is no third party to
+ * publish a count to, and nothing to enumerate behind NFR14's 403.
+ *
+ * **The text is hers, and it has passed the rejector.** `#skills` runs
+ * `rejectContactDetails` before the insert (NFR12, DD3), so a request carrying a
+ * phone number never becomes a row — which matters more here than on the fields
+ * beside it, because this one is read by an Admin rather than published, and a
+ * field nobody publishes is the field where a rejector is easiest to forget.
+ *
+ * **`resolvedAt` is a column rather than an inference**, for the reason
+ * `deliveredAt` is one on `Offer`: a queue's health is measured on how long its
+ * items waited, and a `state` that has moved cannot say when it moved.
+ */
+export const skillRequest = pgTable(
+  "skill_request",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    /**
+     * Who asked. Cascade, because story 13's deletion reaches everything she
+     * wrote — and what she typed here is hers even though only an Admin reads it.
+     */
+    accountId: text("account_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    /** The capability in her own words. Passed the rejector (DD3, NFR12). */
+    text: text("text").notNull(),
+
+    state: text("state").notNull().default("pending"),
+
+    /** When an Admin resolved it. `NULL` for as long as it is waiting. */
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * DD2's index on the foreign key column: without it NFR17's leaf-first purge
+     * is a sequential scan of this table per Account deleted.
+     */
+    index("skill_request_account_id_idx").on(table.accountId),
+
+    /**
+     * **Partial, on the pending predicate**, which is the only predicate anything
+     * asks about: the queue reads the oldest few, counts the branch, and takes
+     * `MIN(created_at)` over it — three questions the resolved rows are never
+     * part of. Partial rather than plain so the index stays the size of the
+     * backlog instead of the size of the history, and so the age of the oldest
+     * item is an index-only scan for the life of the product rather than one that
+     * grows with every request ever made.
+     */
+    index("skill_request_pending_idx")
+      .on(table.createdAt)
+      .where(sql`${table.state} = 'pending'`),
+
+    check("skill_request_state_known", inList(table.state, SKILL_REQUEST_STATES)),
   ],
 );

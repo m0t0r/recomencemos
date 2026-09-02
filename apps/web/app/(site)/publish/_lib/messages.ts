@@ -45,13 +45,65 @@ export const SKILLS_LABEL = "Tus capacidades";
 export const SKILLS_HELP = "Escoge hasta seis. Es lo primero que ve quien busca a alguien.";
 export const SKILL_FILTER_LABEL = "Busca en la lista";
 export const SKILL_NOT_LISTED_LABEL = "No está en la lista";
+
 /**
- * The option exists and is reachable; its action is story 3's. Saying so is
- * Directness 5 — a control that promised a request nobody can yet make would
- * be the dead end this product refuses.
+ * What the option does, said before she opens it.
+ *
+ * **The second sentence is the whole promise of this control**: she is mid-form
+ * with everything typed, and the fear a request naturally raises is that asking
+ * costs her the page. Saying it does not is what makes the option usable at the
+ * moment she meets it.
  */
 export const SKILL_NOT_LISTED_HELP =
-  "Pronto vas a poder pedir que la agreguemos. Por ahora escoge la más parecida y publica.";
+  "Escríbela y la revisamos. No sales de este formulario ni pierdes lo que llevas.";
+
+/** The field itself. Its help says what we do with it, not what it must contain. */
+export const SKILL_REQUEST_LABEL = "¿Qué sabes hacer?";
+export const SKILL_REQUEST_HELP = "En tus palabras, como se lo dirías a alguien.";
+export const SKILL_REQUEST_BUTTON = "Pedir que la agreguen";
+
+/**
+ * Sent.
+ *
+ * **It says what happens next and what to do now**, in that order, because both
+ * are true and only the second is hers to act on: an Admin reads it, and
+ * meanwhile the form she is standing in still needs a Skill on it. Optimism 4 in
+ * the tone matrix, and no exclamation mark — she asked for something ordinary and
+ * got it.
+ */
+export const SKILL_REQUEST_SENT =
+  "Lista, ya la tenemos. Mientras la revisamos, escoge la más parecida y publica.";
+
+/**
+ * The request is empty or longer than a capability is.
+ *
+ * Neither says *inválido* and neither calls it hers: the first says what is
+ * missing, the second says what our rule is.
+ */
+export const SKILL_REQUEST_REQUIRED = "Escribe la capacidad que quieres pedir.";
+export const SKILL_REQUEST_TOO_LONG = "Escríbela más corta: hasta 80 caracteres.";
+
+/**
+ * The request did not reach us.
+ *
+ * **It says what is still true**, which on this surface is the thing she needs:
+ * nothing about the form changed, so the sentence sends her back to publishing
+ * rather than to worrying about a page she has spent ten minutes on.
+ */
+export const SKILL_REQUEST_FAILED =
+  "No pudimos enviar tu solicitud. Tu formulario sigue completo; intenta de nuevo.";
+
+/**
+ * The one place this surface renders a refusal that came from JavaScript being
+ * unavailable rather than from a rule.
+ *
+ * NFR4 binds publishing, not this — a request travels through a Server Action
+ * this page dispatches, and with no script there is nothing to dispatch it. So
+ * the option stays reachable and says the true thing rather than showing a button
+ * that would post her whole draft to the wrong place.
+ */
+export const SKILL_NOT_LISTED_NO_SCRIPT =
+  "Aquí puedes pedirla cuando la página termine de cargar. Ahora escoge la más parecida.";
 
 export function skillsNoneMatch(query: string): string {
   return `Ninguna capacidad tiene «${query}». Prueba con otra palabra.`;
@@ -216,6 +268,14 @@ export const PUBLISH_COPY = {
   SKILL_FILTER_LABEL,
   SKILL_NOT_LISTED_LABEL,
   SKILL_NOT_LISTED_HELP,
+  SKILL_NOT_LISTED_NO_SCRIPT,
+  SKILL_REQUEST_LABEL,
+  SKILL_REQUEST_HELP,
+  SKILL_REQUEST_BUTTON,
+  SKILL_REQUEST_SENT,
+  SKILL_REQUEST_REQUIRED,
+  SKILL_REQUEST_TOO_LONG,
+  SKILL_REQUEST_FAILED,
   SKILLS_AT_MAXIMUM,
   HEADLINE_LABEL,
   HEADLINE_HELP,
@@ -269,6 +329,8 @@ export const PUBLISH_LABELS = {
   SKILLS_LABEL,
   SKILL_FILTER_LABEL,
   SKILL_NOT_LISTED_LABEL,
+  SKILL_REQUEST_LABEL,
+  SKILL_REQUEST_BUTTON,
   FEEDBACK_REGION_LABEL,
   HEADLINE_LABEL,
   FIRST_NAME_LABEL,

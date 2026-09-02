@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from "@repo/design-system/components/alert";
 import { Card } from "@repo/design-system/components/card";
 import { Skeleton } from "@repo/design-system/components/skeleton";
+import type { ComponentType } from "react";
 import {
   OLDEST_ITEM_LABEL,
   oldestItemHours,
@@ -8,7 +9,7 @@ import {
   QUEUE_EMPTY_TITLE,
   sourceFailed,
 } from "../_lib/messages";
-import type { QueueBranch, QueueSource } from "../_lib/queue-sources";
+import type { QueueBranch, QueueItem, QueueSource } from "../_lib/queue-sources";
 
 /**
  * The queue's four states, as four components — the spec's Admin-queue row made
@@ -117,8 +118,30 @@ export function SourceSkeleton({ label }: { label: string }) {
   );
 }
 
-/** One source's items, once they have arrived. */
-export function SourceBranch({ source, branch }: { source: QueueSource; branch: QueueBranch }) {
+/**
+ * One source's items, once they have arrived.
+ *
+ * **`Item` is how a source that has something to be done to it renders its own
+ * row**, and its absence is the shell's default: the summary, and nothing to
+ * press. It is a prop rather than a field on `QueueSource` so that this module
+ * and the registry beside it stay importable from a test — a row component
+ * reaches a Server Action, which reaches the domain, and a registry that carried
+ * one could not be read by the pure suite that checks the oldest-item arithmetic.
+ *
+ * It is also transitional. Each source gets its own route behind the sidebar
+ * shell, where the row shape, its affordances and its focus behaviour are that
+ * ticket's work; this is what keeps a resolver usable on the screen that exists
+ * in the meantime.
+ */
+export function SourceBranch({
+  source,
+  branch,
+  Item,
+}: {
+  source: QueueSource;
+  branch: QueueBranch;
+  Item?: ComponentType<{ readonly item: QueueItem }>;
+}) {
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-baseline justify-between gap-4">
@@ -135,7 +158,11 @@ export function SourceBranch({ source, branch }: { source: QueueSource; branch: 
       <ul className="flex flex-col gap-2">
         {branch.items.map((item) => (
           <li key={item.id} className="border-border rounded-md border p-3">
-            <p className="text-foreground text-sm leading-5">{item.summary}</p>
+            {Item ? (
+              <Item item={item} />
+            ) : (
+              <p className="text-foreground text-sm leading-5">{item.summary}</p>
+            )}
           </li>
         ))}
       </ul>

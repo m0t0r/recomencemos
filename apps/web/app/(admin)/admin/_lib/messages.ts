@@ -107,3 +107,53 @@ export const sessionsRevoked = (count: number) =>
  * string rather than a default.
  */
 export const ADDRESS_LOOKS_WRONG = "Escribe un correo válido.";
+
+/**
+ * The Skill requests branch.
+ *
+ * **The heading names what is waiting rather than what to do to it**, like every
+ * other source: an Admin scanning five headings is reading a list of backlogs.
+ */
+export const SKILL_REQUESTS_LABEL = "Capacidades pedidas";
+
+/**
+ * Promoting one. Two fields, and their help says what each is *for*, because the
+ * distinction between them is the one thing an Admin can get wrong here and the
+ * only thing this form has to teach.
+ *
+ * **The identifier is English and the name is Spanish** (ADR-0012), and the help
+ * says so in the terms of what each is used for rather than by naming a rule: one
+ * travels in a link, one is read on the form. An Admin who reads only the labels
+ * still gets it right.
+ */
+export const PROMOTE_HEADING = "Agregar al listado de capacidades";
+export const PROMOTE_SLUG_LABEL = "Identificador";
+export const PROMOTE_SLUG_HELP = "En inglés, con guiones. Viaja en los enlaces de búsqueda.";
+export const PROMOTE_LABEL_LABEL = "Nombre que se lee";
+export const PROMOTE_LABEL_HELP =
+  "En español, como lo diría ella. Es lo que aparece en el formulario.";
+export const PROMOTE_CUOC_LABEL = "Código CUOC (opcional)";
+export const PROMOTE_CUOC_HELP = "Si la capacidad corresponde a una ocupación de la CUOC.";
+export const PROMOTE_SUBMIT = "Agregar";
+export const PROMOTE_SUBMITTING = "Agregando…";
+
+/** The identifier's own rules, as refusals rather than as instructions. */
+export const PROMOTE_SLUG_REQUIRED = "Escribe el identificador en inglés.";
+export const PROMOTE_SLUG_SHAPE = "Solo minúsculas, números y guiones.";
+export const PROMOTE_LABEL_REQUIRED = "Escribe el nombre que se va a leer.";
+export const PROMOTE_LABEL_TOO_LONG = "Acórtalo: hasta 80 caracteres.";
+export const PROMOTE_CUOC_SHAPE = "El código CUOC tiene cinco dígitos.";
+
+/**
+ * What the Admin is told afterwards: the entry, quoted back.
+ *
+ * **The label rather than a count**, because one promotion is one entry and the
+ * thing worth confirming is *which words* are now in front of every Worker on the
+ * publishing form — the Admin typed them a moment ago and this is the only place
+ * they are read back.
+ */
+export const skillPromoted = (labelEs: string) => `Agregamos «${labelEs}» al listado.`;
+
+/** When the request arrived, so an Admin can see what is oldest without arithmetic. */
+export const requestedOn = (at: Date) =>
+  `Pedida el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long" })}`;

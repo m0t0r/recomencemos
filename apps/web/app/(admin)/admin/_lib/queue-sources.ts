@@ -12,19 +12,24 @@
  * `web:test`, since a Node-environment Vitest run sets no `react-server` condition
  * and `server-only` throws there. Which is how this comment came to exist.
  *
- * **It is empty today, and that is not a placeholder.** All five of the spec's
- * branches — unreviewed Offers, unreviewed photos, Reports, Skill requests, and
- * profiles awaiting takedown review — read tables that stories 7, 8, 10 and 3
- * create. There is nothing to list, and an empty registry renders the state the
- * acceptance criterion names: _"queue empty is a real and good state and says the
- * oldest-item age is zero"_. A stubbed source returning invented rows would make
- * this screen look finished while showing an Admin data that is not there, which
- * is the one thing a moderation queue must never do.
+ * **It holds one source, and the other four are still absent rather than
+ * stubbed.** Unreviewed Offers, unreviewed photos, Reports and profiles awaiting
+ * takedown review read tables that stories 7, 8 and 10 create, so there is
+ * nothing to list and nothing here pretending otherwise. A stubbed source
+ * returning invented rows would make this screen look finished while showing an
+ * Admin data that is not there, which is the one thing a moderation queue must
+ * never do.
  *
- * **What is real is the shape.** A source declares its name, and a `load` that
- * answers its items plus the two figures NFR7 is measured on. Story 7 adds a row;
- * the shell, the per-source skeletons, the named failure state and the empty state
- * are already here and already tested.
+ * **Skill requests are here because story 3 carries both halves of its own
+ * loop.** The story's own argument is that a queue item whose resolver is a
+ * lower-priority story is a queue item that accumulates — so the source and the
+ * promotion that empties it arrived together, and the shell it plugs into was
+ * already built and already tested.
+ *
+ * **The shape is what the registry publishes.** A source declares its name and a
+ * `load` that answers its items plus the two figures the queue's health is
+ * measured on. The per-source skeletons, the named failure state and the empty
+ * state come with it.
  *
  * **Each branch is `LIMIT`-capped for display while its count and age-of-oldest
  * are computed over the whole branch** (C55). That is a property of a `load`
@@ -34,10 +39,24 @@
  * waiting, which is NFR7's detector silently disabled.
  */
 
+import { skills } from "@repo/domain/skills";
+import { SKILL_REQUESTS_LABEL } from "./messages";
+
 /** One row a person acts on. `id` is what an Admin action names as its target. */
 export interface QueueItem {
   readonly id: string;
-  /** What a person reads. Built by the source, never from a field somebody typed. */
+  /**
+   * What a person reads.
+   *
+   * **Usually built by the source rather than taken from a field somebody typed**
+   * — a summary assembled from ids and states cannot carry anything an Admin was
+   * not meant to see. The Skill request is the deliberate exception and the
+   * reason this sentence is longer than it was: the *item is her sentence*, the
+   * spec requires each branch rendered in full so nothing is acted on unread, and
+   * an Admin promoting a request has to read the words she actually wrote. It has
+   * passed the contact-detail rejector and a length bound before becoming a row,
+   * and React escapes it on the way out.
+   */
   readonly summary: string;
   /** When it arrived. The oldest across all sources is what renders first. */
   readonly arrivedAt: Date;
@@ -61,10 +80,41 @@ export interface QueueSource {
 }
 
 /**
- * Story 7 ([#21](https://github.com/m0t0r/recomencemos/issues/21)) adds the first
- * row. Until then the queue is empty, honestly.
+ * The sources, in the order they render.
+ *
+ * Skill requests are the first, because story 3 ships both halves of its own
+ * loop. Unreviewed Offers, photos, Reports and profiles awaiting takedown review
+ * arrive with the stories that create them.
  */
-export const QUEUE_SOURCES: readonly QueueSource[] = [];
+export const QUEUE_SOURCES: readonly QueueSource[] = [
+  {
+    key: "skillRequests",
+    label: SKILL_REQUESTS_LABEL,
+    async load(): Promise<QueueBranch> {
+      const branch = await skills.pendingRequests(SKILL_REQUEST_DISPLAY_CAP);
+
+      return {
+        items: branch.items.map((request) => ({
+          id: request.id,
+          summary: request.text,
+          arrivedAt: request.requestedAt,
+        })),
+        total: branch.total,
+        oldestArrivedAt: branch.oldestRequestedAt,
+      };
+    },
+  },
+];
+
+/**
+ * How many requests render at once (C55).
+ *
+ * **The cap is on the rendering and not on the count**, which the domain read
+ * enforces by computing both figures over the whole predicate. Twenty is a
+ * screenful an Admin can work through in one sitting; the number beside the
+ * heading is what says whether there are more.
+ */
+export const SKILL_REQUEST_DISPLAY_CAP = 20;
 
 /**
  * The age of the oldest item across every source, in whole hours — NFR7's number,

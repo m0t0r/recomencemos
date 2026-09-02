@@ -123,9 +123,35 @@ describe("the sentences the ticket names specifically", () => {
     expect(PUBLISH_COPY.PHOTO_NOTE.toLowerCase()).toContain("después");
   });
 
-  // The "not on the list" option says what happens today rather than promising.
-  it("tells her what the not-listed option does today", () => {
-    expect(PUBLISH_COPY.SKILL_NOT_LISTED_HELP.toLowerCase()).toContain("por ahora");
+  /**
+   * The "not on the list" option's own promise, and the one thing it has to say
+   * before she opens it: asking does not cost her the page she is standing in.
+   * She is mid-form with everything typed, and that is the fear the sentence
+   * exists to answer.
+   */
+  it("promises she keeps the form when she asks for a Skill", () => {
+    expect(PUBLISH_COPY.SKILL_NOT_LISTED_HELP.toLowerCase()).toContain("no sales");
+    expect(PUBLISH_COPY.SKILL_NOT_LISTED_HELP.toLowerCase()).toContain("pierdes");
+  });
+
+  /**
+   * **The confirmation leaves the form usable.** An Admin reads the request and
+   * she still needs a Skill on the profile she is publishing, so the sentence
+   * names the next step rather than stopping at "sent".
+   */
+  it("sends her back to the list once the request lands", () => {
+    expect(PUBLISH_COPY.SKILL_REQUEST_SENT.toLowerCase()).toContain("más parecida");
+    expect(PUBLISH_COPY.SKILL_REQUEST_SENT.toLowerCase()).toContain("publica");
+  });
+
+  /**
+   * **The unhydrated sentence promises nothing it cannot do.** Publishing without
+   * JavaScript is a requirement; requesting a Skill is not, because the request
+   * is a dispatched action and there is nothing to dispatch it. So the option
+   * says when it will work, and points at the answer that exists now.
+   */
+  it("says what the option can do before the page has loaded", () => {
+    expect(PUBLISH_COPY.SKILL_NOT_LISTED_NO_SCRIPT.toLowerCase()).toContain("más parecida");
   });
 
   // Voice guide, Don't 5: the actor is us, and every refusal says so.

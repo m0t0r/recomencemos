@@ -146,6 +146,35 @@ export const ADMIN_SIGN_IN_ONLY =
 export const ADMIN_ACCOUNT_NOT_FOUND = "No hay ninguna cuenta con ese correo.";
 
 /**
+ * The three ways promoting a requested capability can be refused, and they are
+ * three strings because they are three different situations for the person
+ * reading them.
+ *
+ * All three are read only by an Admin, on a screen they are working through, so
+ * each says what is true of the queue now and what the next move is — a refusal
+ * that only said "no" would leave them re-reading a row that has already changed
+ * under them.
+ */
+
+/** The request is not there at all: resolved and swept, or never that id. */
+export const ADMIN_SKILL_REQUEST_GONE = "Esa solicitud ya no está. Vuelve a cargar la página.";
+
+/**
+ * Somebody already resolved it — the second Admin's case, and the reason the row
+ * is read under a lock. It names the other person's work rather than an error,
+ * because that is what happened.
+ */
+export const ADMIN_SKILL_REQUEST_RESOLVED =
+  "Otra persona ya resolvió esa solicitud. Vuelve a cargar la página.";
+
+/**
+ * The English identifier collides with an entry the vocabulary already holds.
+ * The next step is a different identifier, and it is in the same breath (Do 3).
+ */
+export const ADMIN_SKILL_SLUG_TAKEN =
+  "Ya hay una capacidad con ese identificador. Escribe otro y vuelve a intentarlo.";
+
+/**
  * An Admin action that broke on our side.
  *
  * **The second sentence is the one that matters**, and it is true by

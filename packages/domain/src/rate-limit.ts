@@ -113,6 +113,26 @@ export const CEILINGS = {
     account: { max: 3, windowSeconds: 24 * 60 * 60 },
     ip: { max: 3, windowSeconds: 24 * 60 * 60 },
   },
+
+  /**
+   * **`requestSkill`, per Account and per IP** — NFR26's own row, and the bound
+   * on the one way a Worker can put a row in front of an Admin.
+   *
+   * What it protects is the scarcest resource in this design, which is one
+   * person's attention (DD7): the vocabulary's way in is also a way to fill the
+   * moderation queue with sentences nobody has to read before Offers stop being
+   * reviewed inside their band. Five is generous against the honest case — she
+   * is describing what she can do, and if it takes five phrasings the list is
+   * what has the problem.
+   *
+   * **She meets this mid-publish**, which is what makes its refusal copy
+   * different from every other one here: the ceiling refuses a request, not the
+   * publish, so the sentence has to leave the form she is standing in usable.
+   */
+  requestSkill: {
+    account: { max: 5, windowSeconds: 24 * 60 * 60 },
+    ip: { max: 5, windowSeconds: 24 * 60 * 60 },
+  },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
@@ -324,6 +344,29 @@ export const CEILING_REFUSALS: Record<
     `Intentaste publicar ${ceiling.max} veces hoy, que es el máximo. ` +
     `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
     "Nada de lo que escribiste se perdió: sigue aquí.",
+
+  /**
+   * **The one refusal in this table that is read by somebody in the middle of
+   * something else**, and the spec singles it out for that: she is mid-publish
+   * when she meets it, which is the moment silence costs the most.
+   *
+   * Three sentences, and the middle one is the load-bearing one. A ceiling on a
+   * request she has already sent five of reads, with nothing said, as *the five
+   * went nowhere* — so the second sentence says where they went. The third
+   * leaves the form usable rather than sending her away from it: the closest
+   * entry on the list is a real answer today, and it is the only next step that
+   * does not depend on an Admin.
+   *
+   * It stops there deliberately. The obvious fourth clause — publish now and
+   * change it once the Skill is added — names something this product has no way
+   * to do: editing a published CapabilityProfile has no action and no surface.
+   * A refusal that promised one would be the dead end the picker's own "not on
+   * the list" option was written to avoid, one turn further in.
+   */
+  requestSkill: (ceiling, retryAfter) =>
+    `Pediste ${ceiling.max} capacidades hoy, que es el máximo. ` +
+    "Las que enviaste quedaron en la fila: siguen ahí. " +
+    `Puedes pedir otra ${retryPhrase(retryAfter)}; ahora escoge la más parecida y publica.`,
 };
 
 /**

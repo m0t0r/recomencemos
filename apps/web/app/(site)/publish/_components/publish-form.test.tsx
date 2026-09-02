@@ -12,16 +12,22 @@ import {
   CONSENT_REQUIRED,
   FEEDBACK_REGION_LABEL,
   PUBLISH_BUTTON,
+  SKILL_NOT_LISTED_HELP,
+  SKILL_REQUEST_BUTTON,
+  SKILL_REQUEST_LABEL,
+  SKILL_REQUEST_REQUIRED,
+  SKILL_REQUEST_SENT,
   SKILL_REQUIRED,
   SKILLS_AT_MAXIMUM,
   summaryHeading,
 } from "../_lib/messages";
 
-const { publishProfile } = vi.hoisted(() => ({
+const { publishProfile, requestSkill } = vi.hoisted(() => ({
   publishProfile: Object.assign(vi.fn(), { bind: () => vi.fn() }),
+  requestSkill: vi.fn(),
 }));
 
-vi.mock("../actions", () => ({ publishProfile }));
+vi.mock("../actions", () => ({ publishProfile, requestSkill }));
 
 const vocabulary = [
   { slug: "home-cooking", labelEs: "Cocinar almuerzos y comida casera" },
@@ -181,13 +187,166 @@ describe("the Skill picker", () => {
     expect(screen.queryByRole("checkbox", { name: vocabulary[0]!.labelEs })).toBeNull();
   });
 
-  it("reaches the not-on-the-list option and says what it does today", async () => {
+  it("reaches the not-on-the-list option and says what it does", async () => {
     const user = userEvent.setup();
     renderForm();
 
     const option = screen.getByRole("checkbox", { name: /está en la lista/i });
     await user.click(option);
 
-    expect(option).toHaveAccessibleDescription(/Por ahora/);
+    expect(option).toHaveAccessibleDescription(SKILL_NOT_LISTED_HELP);
+  });
+});
+
+/**
+ * The request itself, which is story 3's whole point: she asks **from inside the
+ * form**, and nothing about the form moves.
+ *
+ * These belong here rather than at seam 3 for the reason the rest of this file
+ * does: what a running server cannot cheaply show is the *keyboard path* to a
+ * control that only exists once hydrated, and whether the answer reaches the
+ * accessibility tree at all.
+ */
+async function openTheRequest(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("checkbox", { name: /está en la lista/i }));
+  return screen.getByRole("textbox", { name: SKILL_REQUEST_LABEL });
+}
+
+describe("asking for a Skill that is not on the list", () => {
+  beforeEach(() => {
+    requestSkill.mockReset();
+    // The `useActionState` contract: given the previous state and the payload,
+    // answer the next state. The default is a request that lands.
+    requestSkill.mockResolvedValue({ data: { requested: true } });
+  });
+
+  /**
+   * **The acceptance criterion's own sentence**: the option is reachable and
+   * operable from the keyboard alone. It keeps a tab stop of its own — the roving
+   * index above covers the vocabulary entries and deliberately not this control —
+   * and the field and the button it reveals are the next two stops, typed into
+   * and pressed with no pointer.
+   *
+   * **The one pointer event is the toggle, and it is an environment limit rather
+   * than a gap in the assertion.** Base UI renders the control as a
+   * `span[role="checkbox"]` and handles Space itself; `user.keyboard(" ")` on a
+   * span synthesises no activation under happy-dom, so pressing it here would
+   * assert the DOM environment rather than the product. Space on this control is
+   * verified against a real browser at seam 3. What this test owns is the part a
+   * browser run cannot show cheaply: that every control in the path is in the tab
+   * order, in the order a person meets them.
+   */
+  it("is reachable and operable from the keyboard alone", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    const option = screen.getByRole("checkbox", { name: /está en la lista/i });
+    option.focus();
+    expect(option).toHaveFocus();
+    expect(option).not.toHaveAttribute("tabindex", "-1");
+
+    await user.click(option);
+
+    await user.tab();
+    expect(screen.getByRole("textbox", { name: SKILL_REQUEST_LABEL })).toHaveFocus();
+
+    await user.keyboard("Arreglo máquinas de coser");
+    await user.tab();
+    expect(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(requestSkill).toHaveBeenCalled();
+  });
+
+  /**
+   * **Nothing she typed moves, and she is still on the form.** The form's own
+   * fields are read back after the request lands: a request that navigated, reset
+   * the form or re-rendered it from an action result would show up here as an
+   * empty field.
+   */
+  it("leaves the rest of the form exactly as she left it", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByRole("textbox", { name: /línea sobre tu trabajo/i }), "Cocino");
+    const field = await openTheRequest(user);
+    await user.type(field, "Arreglo máquinas de coser");
+    await user.click(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON }));
+
+    expect(screen.getByRole("textbox", { name: /línea sobre tu trabajo/i })).toHaveValue("Cocino");
+    expect(publishProfile).not.toHaveBeenCalled();
+  });
+
+  it("says it arrived, politely, and clears the field", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    const field = await openTheRequest(user);
+    await user.type(field, "Arreglo máquinas de coser");
+    // Asserted before the click, so "cleared" is a change rather than a field
+    // that never held anything.
+    expect(field).toHaveValue("Arreglo máquinas de coser");
+
+    await user.click(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON }));
+
+    // The element carrying the sentence, and the role it carries it with: a
+    // polite region, because nothing is waiting on her reading it.
+    expect(await screen.findByText(SKILL_REQUEST_SENT)).toHaveAttribute("role", "status");
+    expect(field).toHaveValue("");
+  });
+
+  /**
+   * **A refusal interrupts.** She asked for something and this is the answer, so
+   * it is an `alert` rather than the polite region — the same distinction the
+   * seventh-Skill refusal above makes.
+   */
+  it("speaks the refusal the server sent, whatever refused it", async () => {
+    const user = userEvent.setup();
+    requestSkill.mockResolvedValue({
+      serverError: { code: "skill_request_refused", message: "Quita el «300 123 4567»." },
+    });
+    renderForm();
+
+    const field = await openTheRequest(user);
+    await user.type(field, "Arreglo estufas, 300 123 4567");
+    await user.click(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON }));
+
+    // The sentence and the role it interrupts with, on the same element — the
+    // form has other `alert`s, and which one carries this is the assertion.
+    expect(await screen.findByText(/300 123 4567/)).toHaveAttribute("role", "alert");
+  });
+
+  /** An empty field costs no round trip, and says so where the field is. */
+  it("refuses an empty request in the browser", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await openTheRequest(user);
+    await user.click(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON }));
+
+    expect(requestSkill).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: SKILL_REQUEST_LABEL })).toHaveAccessibleDescription(
+      new RegExp(SKILL_REQUEST_REQUIRED),
+    );
+  });
+
+  /**
+   * **No second `<form>`, and no `formAction` on the button.** Both would be
+   * illegal or wrong inside the publishing form — HTML does not nest forms, and a
+   * button carrying its own `formAction` submits the form around it, which
+   * unhydrated would post her whole draft to the request action.
+   */
+  it("adds no second form and no submit button", async () => {
+    const user = userEvent.setup();
+    const { container } = renderForm();
+
+    await openTheRequest(user);
+
+    expect(container.querySelectorAll("form")).toHaveLength(1);
+    expect(container.querySelector("[formaction]")).toBeNull();
+    expect(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON })).toHaveAttribute(
+      "type",
+      "button",
+    );
   });
 });
