@@ -16,17 +16,27 @@
 #     or a journal, which are what `migrations:check` reads (NFR30, DD13).
 #   - Turborepo caches every task it runs, so a clean tree costs about a second.
 #
+# THE TREE IS READ FROM THE PAYLOAD, and that is not tidiness. This hook used to
+# `cd "$CLAUDE_PROJECT_DIR"`, which keeps naming the checkout the session launched
+# from even after the session enters a worktree -- so in a worktree session it ran
+# `git status` against the MAIN checkout, found it clean, and exited at the
+# changed-file test below having verified nothing at all. The strongest gate in
+# the Build stage silently did nothing for exactly the sessions the worktree rule
+# now makes standard. tree_for() in gate-lib.sh carries the measurement.
+#
 # See README "The Build stage" and CLAUDE.md "Verifying your work".
 set -uo pipefail
 
-root="${CLAUDE_PROJECT_DIR:-.}"
-cd "$root" || exit 0
+# shellcheck source=./gate-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/gate-lib.sh"
 
 input=$(cat)
 [ "$(printf '%s' "$input" | jq -r '.stop_hook_active // false')" = "true" ] && exit 0
 
 command -v git >/dev/null 2>&1 || exit 0
-git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+root=$(tree_for "$(printf '%s' "$input" | jq -r '.cwd // ""')") || exit 0
+cd "$root" || exit 0
 
 # Staged, unstaged, and untracked alike. Untracked counts: a source file the
 # session just created is the work product, and genuinely ignored scratch never
@@ -41,6 +51,15 @@ block() {
   jq -nc --arg r "$1" '{decision: "block", reason: $r}'
   exit 0
 }
+
+# A fresh worktree has no node_modules of its own, and it cannot borrow the main
+# checkout's: the workspace symlinks are relative, so every @repo/* in a worktree
+# resolves inside that worktree or not at all. `pnpm exec` installs on demand and
+# `pnpm run` does not, so without this the first stop in a new worktree blocks on
+# a missing-binary error that names neither the cause nor the fix.
+if [ ! -d "$root/node_modules" ]; then
+  block "This worktree has no node_modules, so none of the checks below can run — and a check that could not run is not a check that passed. Run \`pnpm install\` here first; the store is shared with the main checkout, so it costs seconds rather than a full download."
+fi
 
 out=$(pnpm lint 2>&1) || block "\`pnpm lint\` fails, so this change is not done. Fix it rather than relaxing --max-warnings 0; a scoped overrides entry or an oxlint-disable-next-line with a reason is the escape hatch, not the flag.
 
