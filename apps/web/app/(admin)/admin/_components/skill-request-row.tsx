@@ -29,6 +29,8 @@ import {
   FieldDescription,
   FieldError,
   FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
 import { useActionState, useEffect, useId, useRef } from "react";
@@ -112,8 +114,8 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
       */}
       {result.data ? null : (
         <form action={formAction} className="flex flex-col gap-3">
-          <fieldset className="contents">
-            <legend className="text-muted-foreground text-xs">{PROMOTE_HEADING}</legend>
+          <FieldSet className="gap-3">
+            <FieldLegend variant="label">{PROMOTE_HEADING}</FieldLegend>
 
             {/*
               **The request id is a bound value the row already knows**, and it is
@@ -168,7 +170,7 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
               />
               {cuocError ? <FieldError id={`${cuocId}-error`}>{cuocError}</FieldError> : null}
             </Field>
-          </fieldset>
+          </FieldSet>
 
           <Button
             type="submit"
