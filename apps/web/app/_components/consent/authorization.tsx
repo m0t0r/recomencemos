@@ -22,9 +22,14 @@
  * shape that rule exists to replace, and `authorization.test.tsx` asserts its
  * absence so it cannot come back.
  *
- * **`"use client"` is for the checkbox and nothing else.** The registry's
- * `Checkbox` is Base UI and holds state; the text half renders identically on
- * either side of the boundary, and a Server Component may render both.
+ * **`"use client"` is for the checkbox and nothing else** — and because a
+ * directive marks a *module*, the text half now lives in `authorization-text.tsx`
+ * rather than beside it. It renders identically on either side of the boundary,
+ * but while it shared this file every consumer got it as client code: `/privacy`
+ * is a Server Component rendering nothing but that block and was shipping this
+ * module, the `Checkbox` and the field primitives to a browser with nothing to
+ * do. The split is along what is actually interactive, not along what is about
+ * consent.
  */
 
 import { Checkbox } from "@repo/design-system/components/checkbox";
@@ -36,42 +41,8 @@ import {
 } from "@repo/design-system/components/field";
 import Link from "next/link";
 import { useId } from "react";
-import {
-  AUTHORIZATION_CHECKBOX_HELP,
-  AUTHORIZATION_TEXT,
-  CONSENT_LABELS,
-} from "@/app/_lib/consent/messages";
-
-/** Where the full *aviso de privacidad* lives. English segment, per ADR-0012. */
-export const PRIVACY_NOTICE_PATH = "/privacy";
-
-/**
- * The anchor the *autorización* sits at, so a form can link straight to the text
- * it is showing a shortened form of.
- *
- * An `id` is an identifier, so it is English while everything rendered inside it
- * is `es-CO`.
- */
-export const AUTHORIZATION_ANCHOR = "authorization";
-
-/**
- * The *autorización*, as text.
- *
- * Rendered as separate paragraphs rather than one block: each sentence is a
- * distinct thing being authorized, and a screen reader's paragraph navigation is
- * how a person moves through a legal text she did not come here to read.
- */
-export function AuthorizationText() {
-  return (
-    <div className="flex flex-col gap-2">
-      {AUTHORIZATION_TEXT.map((paragraph) => (
-        <p key={paragraph} className="text-pretty">
-          {paragraph}
-        </p>
-      ))}
-    </div>
-  );
-}
+import { AUTHORIZATION_CHECKBOX_HELP, CONSENT_LABELS } from "@/app/_lib/consent/messages";
+import { AUTHORIZATION_ANCHOR, AuthorizationText, PRIVACY_NOTICE_PATH } from "./authorization-text";
 
 export interface AuthorizationConsentProps {
   /**

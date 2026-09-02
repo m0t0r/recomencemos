@@ -107,25 +107,68 @@ describe("the Skill picker", () => {
     expect(first).toHaveFocus();
   });
 
-  it("stops at six and says so", async () => {
+  // The list is 91 entries in production. As plain checkboxes that is 91 tab
+  // stops between this group and the next field, which is the whole reason
+  // the arrow keys above exist — so the tab stop being *one* is the half
+  // worth pinning, not the arrows on their own.
+  it("is a single tab stop, which follows the entry she last moved to", () => {
+    renderForm();
+
+    const entries = vocabulary.map((entry) =>
+      screen.getByRole("checkbox", { name: entry.labelEs }),
+    );
+    const tabbable = () => entries.filter((entry) => entry.getAttribute("tabindex") === "0");
+
+    expect(tabbable()).toEqual([entries[0]]);
+
+    entries[0]!.focus();
+    fireEvent.keyDown(entries[0]!, { key: "ArrowDown" });
+
+    expect(tabbable()).toEqual([entries[1]]);
+  });
+
+  // Greying the rest out at six is what this replaced: it stranded focus on an
+  // inert control, where Space did nothing and the next Tab left the group
+  // with no way back to what she had picked. Nothing she can reach is
+  // disabled now, so the ceiling has to be said rather than shown.
+  it("refuses a seventh out loud, and leaves every entry reachable", async () => {
     const user = userEvent.setup();
     const { container } = renderForm();
 
     for (const entry of vocabulary.slice(0, 6)) {
-      // Sequential on purpose: the seventh is disabled only once six are ticked.
+      // Sequential on purpose: each pick changes what the next one costs.
       // oxlint-disable-next-line no-await-in-loop
       await user.click(screen.getByRole("checkbox", { name: entry.labelEs }));
     }
 
+    const seventh = screen.getByRole("checkbox", { name: vocabulary[6]!.labelEs });
+    expect(seventh).toBeEnabled();
     // The half that decides what is posted is the hidden native input beside
     // the styled control — a hidden input has no role, so it is queried by
     // name and value.
-    expect(container.querySelector('input[name="skillSlugs"][value="welding"]')).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: vocabulary[6]!.labelEs })).toHaveAttribute(
-      "aria-checked",
-      "false",
-    );
-    expect(screen.getByText(new RegExp(SKILLS_AT_MAXIMUM))).toBeInTheDocument();
+    expect(container.querySelector('input[name="skillSlugs"][value="welding"]')).toBeEnabled();
+
+    await user.click(seventh);
+
+    expect(seventh).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("alert", { name: "" })).toHaveTextContent(SKILLS_AT_MAXIMUM);
+  });
+
+  it("takes the seventh once she gives one back", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    for (const entry of vocabulary.slice(0, 6)) {
+      // oxlint-disable-next-line no-await-in-loop
+      await user.click(screen.getByRole("checkbox", { name: entry.labelEs }));
+    }
+    await user.click(screen.getByRole("checkbox", { name: vocabulary[0]!.labelEs }));
+
+    const seventh = screen.getByRole("checkbox", { name: vocabulary[6]!.labelEs });
+    await user.click(seventh);
+
+    expect(seventh).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByText(SKILLS_AT_MAXIMUM)).toBeNull();
   });
 
   it("narrows the list from the filter box, folding accents", async () => {

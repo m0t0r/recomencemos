@@ -14,12 +14,8 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import {
-  AUTHORIZATION_ANCHOR,
-  AuthorizationConsent,
-  AuthorizationText,
-  PRIVACY_NOTICE_PATH,
-} from "./authorization";
+import { AuthorizationConsent } from "./authorization";
+import { AUTHORIZATION_ANCHOR, AuthorizationText, PRIVACY_NOTICE_PATH } from "./authorization-text";
 import {
   AUTHORIZATION_CHECKBOX_HELP,
   AUTHORIZATION_TEXT,
