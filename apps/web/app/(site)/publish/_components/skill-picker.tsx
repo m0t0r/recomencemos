@@ -351,27 +351,24 @@ function SkillRequest() {
   const fieldId = useId();
   const helpId = useId();
   const errorId = useId();
-  const [text, setText] = useState("");
-
-  /**
-   * Cleared once it lands, because what was in it is now in the queue and a
-   * field still holding it invites a second copy of the same request. Derived
-   * from the machine rather than stored, so nothing has to remember to reset it.
-   */
-  const value = machine.sent ? "" : text;
 
   return (
     <div className="border-border mt-2 flex flex-col gap-3 rounded-md border p-3">
       <Field>
         <FieldLabel htmlFor={fieldId}>{SKILL_REQUEST_LABEL}</FieldLabel>
         <FieldDescription id={helpId}>{SKILL_REQUEST_HELP}</FieldDescription>
+        {/*
+          Controlled by the machine, because *landing* is what empties it: the
+          request is in the queue and a field still holding it invites a second
+          copy of the same request.
+        */}
         <Input
           id={fieldId}
-          value={value}
+          value={machine.text}
           maxLength={LIMITS.skillRequest}
           aria-describedby={machine.fieldError ? `${helpId} ${errorId}` : helpId}
           aria-invalid={machine.fieldError ? true : undefined}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => machine.setText(event.target.value)}
         />
         {machine.fieldError ? <FieldError id={errorId}>{machine.fieldError}</FieldError> : null}
       </Field>
@@ -382,7 +379,7 @@ function SkillRequest() {
           variant="outline"
           size="sm"
           disabled={machine.pending}
-          onClick={() => machine.send(value)}
+          onClick={() => machine.send()}
         >
           {SKILL_REQUEST_BUTTON}
         </Button>

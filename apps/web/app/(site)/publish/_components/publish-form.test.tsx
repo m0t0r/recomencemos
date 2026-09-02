@@ -296,6 +296,34 @@ describe("asking for a Skill that is not on the list", () => {
   });
 
   /**
+   * **A second request, after a first one landed** — the case seam 3 found and
+   * these tests did not, because they sent once.
+   *
+   * The field's value was derived as `sent ? "" : text`, which empties it on
+   * success and then keeps emptying it: `sent` stays true for as long as the last
+   * result does, so the controlled input was pinned empty and nothing could be
+   * typed into it again. Two Skills missing from the list is not an exotic case —
+   * it is the second sentence of the same conversation.
+   */
+  it("takes a second request after the first one landed", async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    const field = await openTheRequest(user);
+    await user.type(field, "Arreglo máquinas de coser");
+    await user.click(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON }));
+    await screen.findByText(SKILL_REQUEST_SENT);
+
+    await user.type(field, "Coso en máquina plana");
+    expect(field).toHaveValue("Coso en máquina plana");
+
+    await user.click(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON }));
+
+    const sent = requestSkill.mock.calls.at(-1)?.[1] as FormData;
+    expect(sent.get("text")).toBe("Coso en máquina plana");
+  });
+
+  /**
    * **A refusal interrupts.** She asked for something and this is the answer, so
    * it is an `alert` rather than the polite region — the same distinction the
    * seventh-Skill refusal above makes.
