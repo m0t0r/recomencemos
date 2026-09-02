@@ -15,7 +15,7 @@ import {
   SKILL_REQUIRED,
   SKILLS_AT_MAXIMUM,
   summaryHeading,
-} from "../_lib/messages";
+} from "@/app/_lib/profile-form/messages";
 
 const { publishProfile } = vi.hoisted(() => ({
   publishProfile: Object.assign(vi.fn(), { bind: () => vi.fn() }),

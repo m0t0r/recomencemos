@@ -15,9 +15,9 @@
 
 import { Alert, AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
 import type { RefObject } from "react";
-import { FIELD_LABELS, SUMMARY_KEPT, workHistoryLineLabel } from "../_lib/messages";
-import type { Summary } from "../_lib/summary";
-import type { Feedback } from "../_lib/use-publish";
+import { FIELD_LABELS, SUMMARY_KEPT, workHistoryLineLabel } from "@/app/_lib/profile-form/messages";
+import type { Summary } from "@/app/_lib/profile-form/summary";
+import type { Feedback } from "@/app/_lib/profile-form/use-profile-form";
 
 export interface FormSummaryProps {
   readonly summary: Summary | undefined;

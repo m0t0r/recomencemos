@@ -24,7 +24,7 @@ import {
   skillsNoneMatch,
   summaryHeading,
   workHistoryLineLabel,
-} from "./messages";
+} from "@/app/_lib/profile-form/messages";
 
 const copy = [
   ...Object.entries(PUBLISH_COPY),

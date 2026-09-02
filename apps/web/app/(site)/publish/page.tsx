@@ -26,7 +26,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireAccountPage } from "@/lib/account";
 import { PublishForm } from "./_components/publish-form";
-import { PUBLISH_INTRO, PUBLISH_PAGE_TITLE, PUBLISH_TITLE } from "./_lib/messages";
+import { PUBLISH_INTRO, PUBLISH_PAGE_TITLE, PUBLISH_TITLE } from "@/app/_lib/profile-form/messages";
 
 export const metadata: Metadata = {
   title: PUBLISH_PAGE_TITLE,
