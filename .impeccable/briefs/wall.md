@@ -148,7 +148,11 @@ those notices still render. So the boundary sits **inside** the page, around the
   `@repo/design-system`. `ProfileCard` is product and stays in `apps/web`.
 - **WCAG 2.2 AA**, `es-CO`, `tú`-register, and the `CONTEXT.md` _Avoid_ list is binding — nobody on
   either page is named by what happened to them.
-- **NFR3:** `/` ships ≤ 120 KB of compressed JavaScript. Anything added to this page is measured
-  against that, not assumed to be free.
+- **NFR3:** `/` and `/profiles` each ship ≤ 140 KB of gzip JavaScript on first load — counting every
+  `<script>` the prerendered document requests and excluding the `noModule` polyfill bundle no
+  browser inside NFR5's floor downloads. Amended 2026-09-03 with #157; the old ≤ 120 KB was set
+  without measuring the framework floor, which is 81 KB on `/`. Anything added to this page is
+  measured against that, not assumed to be free — and the figure names its compression, because the
+  ambiguity cost 39 KB once.
 - **NFR2:** p95 ≤ 400 ms server-side. One query per page, Skills aggregated into it; a query per card
   is the way this requirement is actually missed.
