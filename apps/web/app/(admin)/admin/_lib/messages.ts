@@ -142,7 +142,8 @@ export const PROMOTE_SLUG_REQUIRED = "Escribe el identificador en inglés.";
 export const PROMOTE_SLUG_SHAPE = "Solo minúsculas, números y guiones.";
 export const PROMOTE_LABEL_REQUIRED = "Escribe el nombre que se va a leer.";
 export const PROMOTE_LABEL_TOO_LONG = "Acórtalo: hasta 80 caracteres.";
-export const PROMOTE_CUOC_SHAPE = "El código CUOC tiene cinco dígitos.";
+/** Says what to do rather than what the code is (voice guide, Do 3). */
+export const PROMOTE_CUOC_SHAPE = "Escribe los cinco dígitos del código, o déjalo vacío.";
 
 /**
  * What the Admin is told afterwards: the entry, quoted back.
@@ -154,6 +155,14 @@ export const PROMOTE_CUOC_SHAPE = "El código CUOC tiene cinco dígitos.";
  */
 export const skillPromoted = (labelEs: string) => `Agregamos «${labelEs}» al listado.`;
 
-/** When the request arrived, so an Admin can see what is oldest without arithmetic. */
+/**
+ * When the request arrived, so an Admin can see what is oldest without
+ * arithmetic.
+ *
+ * **The year is written out**, which is `docs/policy/voice.md`'s own date format:
+ * `10 de agosto de 2026`, never `08/10/2026` — *"which reads as August in one
+ * country and October in another"*. It costs three words on a queue that will
+ * hold rows from more than one year.
+ */
 export const requestedOn = (at: Date) =>
-  `Pedida el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long" })}`;
+  `Pedida el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
