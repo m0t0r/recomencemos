@@ -18,6 +18,7 @@
 import { eq, getTableColumns } from "drizzle-orm";
 import { CURRENT_CONSENT_VERSIONS, recordConsent } from "#consent/index";
 import { buildSubjectAccessExport } from "#export";
+import { publishProfile } from "#profiles";
 import * as schema from "#schema";
 import { signIn, signInStack } from "#testing/auth-stack";
 import { test } from "#testing/fixtures";
@@ -31,6 +32,12 @@ const SENTINEL = {
   email: "sentinel-email@recomencemos.test",
   name: "SentinelNombreCompleto",
   image: "https://example.test/sentinel-avatar.png",
+  fullName: "SentinelNombreEnElPerfil",
+  firstName: "SentinelPrimerNombre",
+  headline: "SentinelUnaLinea",
+  about: "SentinelDescripcion",
+  phone: "+573009876543",
+  workHistory: "SentinelHistorialDeTrabajo",
 } as const;
 
 async function anAccountWithEverything(database: TestDatabase): Promise<string> {
@@ -52,9 +59,23 @@ async function anAccountWithEverything(database: TestDatabase): Promise<string> 
     .set({ name: SENTINEL.name, image: SENTINEL.image })
     .where(eq(schema.user.id, accountId));
 
-  await database.db.transaction(async (tx) => {
-    await recordConsent(tx, { accountId, side: "worker", versions: CURRENT_CONSENT_VERSIONS });
+  // The Worker consent arrives with the profile, through the module that owns
+  // both — a hand-inserted profile would drift from the schema on its first
+  // added column.
+  const published = await publishProfile(database.db, accountId, {
+    fullName: SENTINEL.fullName,
+    firstName: SENTINEL.firstName,
+    lastInitial: "S",
+    city: "pereira",
+    headline: SENTINEL.headline,
+    about: SENTINEL.about,
+    phone: SENTINEL.phone,
+    skillSlugs: ["home-cooking"],
+    workHistory: [SENTINEL.workHistory],
+    consentVersions: CURRENT_CONSENT_VERSIONS,
   });
+  if (!published.ok) throw new Error("the fixture profile did not publish");
+
   await database.db.transaction(async (tx) => {
     await recordConsent(tx, { accountId, side: "hirer", versions: CURRENT_CONSENT_VERSIONS });
   });
@@ -167,6 +188,24 @@ const EXPORTED_BY_COLUMN: Record<string, string> = {
   "consent.authorizationVersion": "authorizationVersion",
   "consent.transmissionAcknowledged": "transmissionAcknowledged",
   "consent.createdAt": "consentedAt",
+  "capability_profile.slug": "slug",
+  "capability_profile.fullName": "fullName",
+  "capability_profile.firstName": "firstName",
+  "capability_profile.lastInitial": "lastInitial",
+  "capability_profile.city": "city",
+  "capability_profile.headline": "headline",
+  "capability_profile.about": "about",
+  "capability_profile.phone": "phone",
+  "capability_profile.photoState": "photoState",
+  "capability_profile.state": "state",
+  "capability_profile.publishedAt": "publishedAt",
+  "capability_profile.deliveredOfferCount": "deliveredOfferCount",
+  // The position is the order of the array, and the text is its items.
+  "work_history_entry.position": "workHistory",
+  "work_history_entry.text": "workHistory",
+  // Both halves of the join reach the export as the Skill labels she chose.
+  "profile_skill.capabilityProfileId": "skills",
+  "profile_skill.skillId": "skills",
 };
 
 /**
@@ -186,9 +225,31 @@ const EXCLUDED: Record<string, string> = {
   "user.updatedAt": "bookkeeping, superseded by registeredAt",
   // The export is already scoped to her, so the join column tells her nothing.
   "consent.accountId": "the join this export is already scoped by",
+  "capability_profile.id": "a surrogate key, and not a fact about her",
+  "capability_profile.accountId": "the join this export is already scoped by",
+  // A locator into a bucket says nothing to her; the photo ticket owns
+  // exporting the object it points at.
+  "capability_profile.photoKey": "an internal storage locator, not the photo",
+  // NFR22's daily-rewritten ordering input: how the browse list is shuffled,
+  // not a fact about her.
+  "capability_profile.rotationKey": "internal — a browse-ordering input, not who she is",
+  // Derived, at write time, from four fields the export already carries.
+  "capability_profile.searchText": "derived from firstName, city, headline and the Skills",
+  "capability_profile.createdAt": "bookkeeping, superseded by publishedAt",
+  "capability_profile.updatedAt": "bookkeeping, superseded by publishedAt",
+  "work_history_entry.id": "a surrogate key, and not a fact about her",
+  "work_history_entry.capabilityProfileId": "the join this export is already scoped by",
+  "work_history_entry.createdAt": "bookkeeping; the profile's publishedAt is the date",
+  "profile_skill.createdAt": "bookkeeping; the profile's publishedAt is the date",
 };
 
-const TABLES = { user: schema.user, consent: schema.consent };
+const TABLES = {
+  user: schema.user,
+  consent: schema.consent,
+  capability_profile: schema.capabilityProfile,
+  work_history_entry: schema.workHistoryEntry,
+  profile_skill: schema.profileSkill,
+};
 
 const COLUMNS = Object.entries(TABLES).flatMap(([table, definition]) =>
   Object.keys(getTableColumns(definition)).map((column) => `${table}.${column}`),
@@ -225,6 +286,7 @@ describe("every column is classified", () => {
     const onTheWire = new Set([
       ...Object.keys(subject?.account ?? {}),
       ...Object.keys(consent ?? {}),
+      ...Object.keys(subject?.profile ?? {}),
     ]);
 
     for (const field of Object.values(EXPORTED_BY_COLUMN)) {

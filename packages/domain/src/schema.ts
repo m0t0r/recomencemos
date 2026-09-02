@@ -19,6 +19,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -29,6 +30,8 @@ import { ADMIN_ACTION_NAMES } from "#admin/names";
 import { user } from "#auth-schema";
 import { inList } from "#column-types";
 import { CONSENT_SIDES } from "#consent/registry";
+import { CITY_IDS } from "#policy/cities";
+import { PHOTO_STATES, PROFILE_STATES } from "#projections";
 import { CEILINGED_ACTIONS } from "#rate-limit";
 
 /**
@@ -544,5 +547,196 @@ export const skill = pgTable(
     index("skill_active_label_es_idx")
       .on(table.labelEs)
       .where(sql`${table.active}`),
+  ],
+);
+
+/**
+ * **`CapabilityProfile`** — a Worker's public page, 1:1 with an Account, and
+ * the table this whole effort exists to fill.
+ *
+ * **`BIGINT GENERATED ALWAYS AS IDENTITY`**, per DD2: its public handle is the
+ * opaque {@link capabilityProfile.slug}, so the primary key never crosses a
+ * boundary and has no reason to be wide. **One profile per Account, by unique
+ * constraint rather than by the form** — that constraint is half of NFR26's
+ * Sybil answer, and it is also DD2's index on the foreign key column.
+ *
+ * **The columns are classified, and the classification is the design** (Core
+ * entities, ADR-0009). `firstName`, `lastInitial`, `city`, `headline` and an
+ * approved photo are `public`; `fullName`, `about`, `phone` and the Account's
+ * `email` are `personal`. `fullName` is collected here and released only at
+ * Contact Exchange (C1), which is why it sits in this table beside the public
+ * fields and reaches neither `PublicProfile` nor `GatedProfile` — the
+ * projection, not the table, is where the split is enforced.
+ *
+ * **There is no column for what she lost, and there will not be one**
+ * (ADR-0009).
+ *
+ * Enum-shaped columns are `TEXT` + `CHECK` built from the registries in
+ * `#policy/cities` and `#projections`, per DD2. `deleted` is not a state:
+ * moderation takedown and the data subject's own deletion never share a
+ * mechanism (DD8).
+ */
+export const capabilityProfile = pgTable(
+  "capability_profile",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    /** The Account that holds it. Cascade, because story 13's deletion reaches everything. */
+    accountId: text("account_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    /**
+     * The public handle (NFR9): server-generated, opaque, derived from no part
+     * of her name, city or Skills, and stable across edits. Minted by
+     * `#profiles/slug` from random bytes and nothing else.
+     */
+    slug: text("slug").notNull(),
+
+    /** `personal`. Collected at publish, crosses only at Contact Exchange (C1). */
+    fullName: text("full_name").notNull(),
+
+    /** `public`. What a card shows. */
+    firstName: text("first_name").notNull(),
+
+    /** `public`. One letter. */
+    lastInitial: text("last_initial").notNull(),
+
+    /** `public`. One of the three municipalities, by identifier. */
+    city: text("city").notNull(),
+
+    /** `public`. The one line in her own words. Passed the rejector (DD3). */
+    headline: text("headline").notNull(),
+
+    /** `personal`, gated. The longer self-description. Empty when she wrote none. */
+    about: text("about").notNull().default(""),
+
+    /** `personal`. E.164, normalised by `#policy/phone`. */
+    phone: text("phone").notNull(),
+
+    /** Where the photo is in its life. `absent` until the photo ticket lands. */
+    photoState: text("photo_state").notNull().default("absent"),
+
+    /** `personal` always: the public URL is derived only at `approved` (DD6). */
+    photoKey: text("photo_key"),
+
+    state: text("state").notNull().default("published"),
+
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+
+    /**
+     * NFR22's ordering input, kept as a column rather than an inference: `state`
+     * moves past `delivered`, so a count over Offer state would drift the moment
+     * one is accepted.
+     */
+    deliveredOfferCount: integer("delivered_offer_count").notNull().default(0),
+
+    /**
+     * A daily-rewritten integer (DD2), so the browse sort stays index-ordered
+     * and keyset-paginable. Zero until the rotation job first runs.
+     */
+    rotationKey: integer("rotation_key").notNull().default(0),
+
+    /** DD4: lowercased, accents folded, written at publish and on edit. */
+    searchText: text("search_text").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** One profile per Account, said by the engine. Also the FK index DD2 asks for. */
+    unique("capability_profile_account_id_key").on(table.accountId),
+
+    /** The lookup for `/profile/[slug]`. */
+    unique("capability_profile_slug_key").on(table.slug),
+
+    /** The Wall: newest published first (DD2). */
+    index("capability_profile_wall_idx")
+      .on(sql`${table.publishedAt} DESC`, sql`${table.id} DESC`)
+      .where(sql`${table.state} = 'published'`),
+
+    /** Browse: fewest delivered Offers first, rotated daily (DD2, NFR22). */
+    index("capability_profile_browse_idx")
+      .on(table.deliveredOfferCount, table.rotationKey, table.id)
+      .where(sql`${table.state} = 'published'`),
+
+    /** Browse + city: the equality column leads (DD2). */
+    index("capability_profile_browse_city_idx")
+      .on(table.city, table.deliveredOfferCount, table.rotationKey, table.id)
+      .where(sql`${table.state} = 'published'`),
+
+    /**
+     * The duplicate-phone signal (C30): **non-unique**, because families and
+     * shared households genuinely share one handset. A moderation signal, never
+     * a constraint.
+     */
+    index("capability_profile_phone_idx").on(table.phone),
+
+    check("capability_profile_city_known", inList(table.city, CITY_IDS)),
+    check("capability_profile_photo_state_known", inList(table.photoState, PHOTO_STATES)),
+    check("capability_profile_state_known", inList(table.state, PROFILE_STATES)),
+
+    /** One letter, upper-cased by the boundary parse. The `CHECK` is the backstop. */
+    check("capability_profile_last_initial_one_letter", sql`char_length(${table.lastInitial}) = 1`),
+  ],
+);
+
+/**
+ * **`WorkHistoryEntry`** — 0..n per profile, `personal`, gated, with an explicit
+ * `position` and `UNIQUE (capability_profile_id, position)`. "Ordered" with no
+ * ordering column means an edit silently reorders her history (Core entities);
+ * the constraint is also DD2's index on the foreign key column.
+ */
+export const workHistoryEntry = pgTable(
+  "work_history_entry",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    capabilityProfileId: bigint("capability_profile_id", { mode: "bigint" })
+      .notNull()
+      .references(() => capabilityProfile.id, { onDelete: "cascade" }),
+
+    /** Zero-based, in the order she wrote them. */
+    position: integer("position").notNull(),
+
+    /** One line, in her words. Passed the rejector (DD3). */
+    text: text("text").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("work_history_entry_capability_profile_id_position_key").on(
+      table.capabilityProfileId,
+      table.position,
+    ),
+    check("work_history_entry_position_non_negative", sql`${table.position} >= 0`),
+  ],
+);
+
+/**
+ * **`ProfileSkill`** — many-to-many, composite natural PK, indexed **in both
+ * directions**: the browse filter reads it the reverse way from the profile
+ * render (Core entities, DD2). A pure join table takes no surrogate at all.
+ */
+export const profileSkill = pgTable(
+  "profile_skill",
+  {
+    capabilityProfileId: bigint("capability_profile_id", { mode: "bigint" })
+      .notNull()
+      .references(() => capabilityProfile.id, { onDelete: "cascade" }),
+
+    skillId: bigint("skill_id", { mode: "bigint" })
+      .notNull()
+      .references(() => skill.id),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "profile_skill_pkey",
+      columns: [table.capabilityProfileId, table.skillId],
+    }),
+    /** Browse + skill: the reverse of the natural PK (DD2). */
+    index("profile_skill_skill_id_idx").on(table.skillId, table.capabilityProfileId),
   ],
 );
