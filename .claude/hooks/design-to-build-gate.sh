@@ -18,13 +18,19 @@
 # See README "The Design stage". This gates artifacts only, never a PR.
 set -uo pipefail
 
-root="${CLAUDE_PROJECT_DIR:-.}"
-
 # shellcheck source=./gate-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/gate-lib.sh"
 
 input=$(cat)
 tool=$(printf '%s' "$input" | jq -r '.tool_name // ""')
+
+# Rule E scans the effort artifacts, so it has to scan the tree the session is
+# actually working in. CLAUDE_PROJECT_DIR names the checkout the session launched
+# from and goes on naming it inside a worktree, so reading it here would judge
+# `/to-tickets` against the specs on the default branch and never see the one the
+# session just wrote. tree_for() in gate-lib.sh carries the measurement; the
+# fallback is that same variable, which is the right answer outside a worktree.
+root=$(tree_for "$(printf '%s' "$input" | jq -r '.cwd // ""')") || root="${CLAUDE_PROJECT_DIR:-.}"
 
 case "$tool" in
   Bash)
