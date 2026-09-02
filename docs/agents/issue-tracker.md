@@ -146,8 +146,11 @@ and the four conditions that define **done**.
 1. **Claim.** Run the frontier query against the parent, take the first open, unblocked, unassigned
    ticket, and `gh issue edit <n> --add-assignee @me`. This is the session's first write. One ticket
    per session — `/clear` between them, which is safe because the position lives in the tracker.
-2. **Branch.** `ticket/<issue-number>-<slug>`, so the branch names its ticket. Where `stacked-prs` is
-   `yes`, base it on its blocker's branch rather than the default branch; see below.
+2. **Worktree, then branch.** Open a worktree **before the first write** — before the plan comment,
+   before any code. `ticket/<issue-number>-<slug>` is the branch, so the branch names its ticket and
+   the frontier query can find its work. This is [`../policy/build.md`](../policy/build.md)'s
+   `worktree-required`, and `.claude/hooks/worktree-gate.sh` refuses a commit made anywhere else.
+   See "Working in a worktree" below for how, and for what a worktree does not isolate.
 3. **Plan, and post it.** Plan the change, then post the approved plan as a **comment on the ticket**
    before writing code. The playbook commits a `plan.md` for this reason — _"the PR review play
    checks the eventual diff against it"_ — and the Spec axis of `/code-review` is what does the
@@ -169,6 +172,61 @@ and the four conditions that define **done**.
 Where the ticket came from `/triage` rather than `/to-tickets` there is no parent and no spec. Steps
 1–7 are unchanged except that step 4 has no agreed seam to read, so the seams are confirmed with the
 user in-session, as `tdd` requires.
+
+### Working in a worktree
+
+This applies to **every** session that changes anything, not only a Build session and not only
+parallel ones: an ADR, a spec amendment, a runbook edit and a one-line fix are all work, and
+[`../policy/build.md`](../policy/build.md) makes no exception for any of them. Reading, searching and
+exploring on the default branch are untouched.
+
+**The default route is the harness's own worktree tool**, which creates the worktree under
+`.claude/worktrees/`, branches it from the current `origin/<default>` and moves the session into it.
+It names the branch for itself, though, so **rename it straight away** — asked for
+`chore/foo` it produces `worktree-chore+foo`, and a branch that does not match
+`ticket/<issue>-<slug>` or `<type>/<slug>` is one neither the frontier query nor the PR linkage can
+read:
+
+```sh
+git branch -m ticket/124-add-widget    # from inside the new worktree
+git branch --show-current              # confirm before writing anything
+```
+
+**A stacked ticket takes the other route.** The harness tool always branches from
+`origin/<default>`, and a stacked ticket must be based on its blocker's branch, so create the
+worktree by hand and enter it by path:
+
+```sh
+git worktree add .claude/worktrees/ticket+124-add-widget \
+  -b ticket/124-add-widget ticket/123-the-blocker
+```
+
+**What a worktree does not isolate.** It isolates git and nothing else, and each of these has cost a
+session before:
+
+- **`node_modules`.** A fresh worktree has none, and it cannot borrow the main checkout's — the
+  workspace symlinks are relative, so every `@repo/*` resolves inside the worktree or not at all. Run
+  `pnpm install` in it; the store is shared, so it costs seconds. `pnpm exec` installs on demand and
+  `pnpm run` does not, which is why the stop gate checks for the directory and names the fix.
+- **`.env.local`.** Gitignored, so it is absent. `cp apps/web/.env.example apps/web/.env.local`
+  again, or `pnpm dev` fails in a way that looks like a code problem.
+- **The database and the ports.** `docker-compose.yaml` binds one Postgres on 5432 and one PgBouncer
+  on 6432 for the whole machine, and `next dev` wants 3000. Two trees share all three. Before
+  trusting what a dev server serves, confirm the process answering the port is yours — `next dev`
+  writes its PID to `apps/web/.next/dev/lock`, and `lsof -i :3000` settles it otherwise.
+- **The stash.** One stack, shared by every tree and every session. Prefer a WIP commit.
+
+**Before starting, check the tree is not already mid-task** — `git status --short` in the main
+checkout. Uncommitted work there belongs to somebody, and it is not yours to build on top of.
+
+**Keep the worktree until the PR is merged or closed**, then remove it. `-D` rather than `-d` is
+expected and is not a warning about lost work: `pr-merge-method` is rebase, and after a rebase-merge
+`-d` refuses a branch whose commits are all upstream under different hashes.
+
+```sh
+git worktree remove .claude/worktrees/ticket+124-add-widget
+git branch -D ticket/124-add-widget
+```
 
 **A Build session that discovers it is setting a convention stops and surfaces it before writing the
 ADR.** The tell is scope: the decision would bind surfaces beyond this ticket — a form idiom eight

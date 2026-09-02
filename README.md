@@ -458,14 +458,16 @@ ticket" guarantee that skill describes.
 It costs rebase churn — a fix low in the stack rebases everything above it — and it multiplies PRs,
 which is why `REVIEW.md` has to say what runs per-PR and what runs once at the top.
 
-**The Build gate.** Two `PreToolUse` hooks and one `Stop` hook add four rules to the five before them:
+**The Build gate.** Three `PreToolUse` hooks and one `Stop` hook add six rules to the five before them:
 
-| Rule                   | Refuses                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------ |
-| **F. The ship gate**   | `gh pr merge`, an approving `gh pr review`, or `gh stack merge` — a stack merge is a merge |
-| **G. No side door**    | `git push` to the default branch. Without it F is theatre                                  |
-| **H. Protected paths** | hand-editing a vendored skill, a committed advisory, or `pnpm-lock.yaml`                   |
-| **I. Credentials**     | writing an AWS key, GitHub token, Anthropic key, Slack token, or private key into the repo |
+| Rule                   | Refuses                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| **F. The ship gate**   | `gh pr merge`, an approving `gh pr review`, or `gh stack merge` — a stack merge is a merge             |
+| **G. No side door**    | `git push` to the default branch. Without it F is theatre                                              |
+| **H. Protected paths** | hand-editing a vendored skill, a committed advisory, or `pnpm-lock.yaml`                               |
+| **I. Credentials**     | writing an AWS key, GitHub token, Anthropic key, Slack token, or private key into the repo             |
+| **J. Shipped schema**  | hand-editing a migration a `meta/_journal.json` beside it already names                                |
+| **K. The wrong tree**  | committing in a checkout that has the default branch out. G refuses the same mistake one step too late |
 
 Rule F is the load-bearing one, exactly as **A** is for Plan and **C** for Design: the act has to be
 one the agent cannot perform. Unlike **B** and **E** it reads no artifact, because there is no state
@@ -475,11 +477,27 @@ Rule H's test is **`skills-lock.json`** rather than a hand-kept list, and that i
 survive: a skill named in the lock is one `skills update` overwrites, and this repo's own skills sit
 in the same directory precisely because forking one means leaving the lock.
 
+Rule **K** is the one that says where work is _written_, and it is a backstop rather than the
+mechanism: `CLAUDE.md` tells a session to open a worktree before its first write, which is also what
+licenses the harness's worktree tool. A session that did so never reaches the rule. It refuses the
+commit rather than the write because that is where the mistake stops being free — before it, one
+`git switch -c` carries everything across; after it, the recovery is a `git reset --hard` on the
+branch everything else is based on.
+[ADR-0017](./docs/adr/0017-work-is-written-in-a-worktree-and-merged-into-the-default-branch.md)
+carries the argument and the two hook bugs it found.
+
 `verify-before-stop.sh` closes the loop the playbook cares most about — _"a session checks its own
 work and fixes its own mistakes before an engineer sees them."_ It refuses to let the session stop
 while lint, `check-types`, `test`, or `test:gates` is red, fires only when code actually changed, and
 never twice. **A hook edit counts as code here** — the stage hooks are this repo's own logic, so a
 session that changes one runs `gate-test.sh` before it may stop.
+
+**It reads the tree from the hook payload, and that was a bug before it was a convention.** Every
+hook here used to resolve the repository through `CLAUDE_PROJECT_DIR`, which names the directory the
+session was _launched_ from and goes on naming the main checkout after the session enters a worktree.
+So in a worktree session this gate ran `git status` against the main checkout, found it clean, and
+reported a pass having verified nothing at all. `tree_for()` in `gate-lib.sh` is the fix, and the
+rule it stands for is that a hook reading repo state reads it through the payload.
 
 **A gate that blocks correct work is a gate someone turns off.** All four false refusals found while
 writing these were exactly that, and two are worth knowing about: a commit message _naming_ the
