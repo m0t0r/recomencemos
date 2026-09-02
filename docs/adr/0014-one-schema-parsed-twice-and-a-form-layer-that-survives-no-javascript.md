@@ -53,7 +53,7 @@ So zod on the client is a **real cost this record chose**, not a free ride, and
 removed `better-auth/react` from the bundle without changing zod's presence at all — which is the
 clean proof the two were never linked. As shipped it is one chunk of 385,265 B raw / 93,253 B gzipped
 carrying zod among much else; the isolated figure is not separable from that build, so the honest
-statement is that **the cost is unquantified and non-zero**, and NFR3's 120 KB budget on `/publish`
+statement is that **the cost is unquantified and non-zero**, and NFR3's byte budget on `/publish`
 is where it has to be paid. The rest of this record's argument does not rest on the false claim —
 but the paragraph below on `/publish` and the budget is now the one that decides, rather than a
 formality.
@@ -130,5 +130,11 @@ saving that is now measured at approximately nothing.
 - A form whose submit path stops working with JavaScript disabled is a regression against this
   record, not a detail — `sign-in-form.test.tsx` asserts the native `action` and the named inputs for
   that reason.
-- If `/publish` cannot meet NFR3's 120 KB budget with this layer in it, the layer goes, not the
-  budget.
+- If `/publish` cannot meet NFR3's byte budget with this layer in it, the layer goes, not the
+  budget. **Amended 2026-09-03 with #157**, which measured what that sentence had assumed. On that
+  day `/publish` shipped **392 KB** gzip on first load: this layer is **81 KB** of it, the Sentry
+  browser SDK is **148 KB**, and the framework floor underneath both is **99 KB**. So the form layer
+  was never the marginal cost that decides — removing it entirely leaves `/publish` at 311 KB, still
+  2.6× the budget the consequence was written against. NFR3 was amended the same day to a number
+  measured rather than assumed, and this layer meets it with room. The consequence stands unchanged
+  in force; what changed is that it now points at a budget a page can actually reach.

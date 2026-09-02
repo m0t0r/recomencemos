@@ -29,10 +29,19 @@ export function announcedCount(count: number): string {
  *
  * **"más" is the load-bearing word.** The first announcement is a total — "24
  * perfiles" — so a second one reading "3 perfiles" would say the list had
- * shrunk. This says what actually happened.
+ * shrunk.
+ *
+ * **It takes both numbers, and it needs both.** `added` is what actually
+ * arrived; passing the running total there announced "48 perfiles más" when 24
+ * had come, which is the number a reader would act on. But `added` alone is not
+ * enough either: a live region announces on a *change* of text, so two
+ * consecutive full pages would both read "24 perfiles más" and the second would
+ * be announced to nobody. The total is what keeps the sentence moving, and it
+ * is the number a reader who has lost count actually wants.
  */
-export function announcedMore(count: number): string {
-  return count === 1 ? "1 perfil más" : `${count} perfiles más`;
+export function announcedMore(added: number, total: number): string {
+  const arrived = added === 1 ? "1 perfil más" : `${added} perfiles más`;
+  return `${arrived}. ${total} en total.`;
 }
 
 /** The `alt` for a photo. Says what it shows and nothing about her circumstances. */

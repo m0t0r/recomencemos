@@ -216,8 +216,25 @@ concerns.
   objected to. `default-latency` is set to both numbers on that understanding, and the row in the policy
   table below says which half is monitored.
   **Binds:** 2, 4, 19.
-- **NFR3 — Worker-path page weight.** `/` and `/publish` each ship **≤ 120 KB** of compressed
-  JavaScript on first load and reach **LCP ≤ 2.5 s at p75** under 4× network and 4× CPU throttling.
+- **NFR3 — Worker-path page weight.** `/` and `/profiles` each ship **≤ 140 KB**, and `/publish`
+  **≤ 250 KB**, of gzip-compressed JavaScript on first load, and all three reach **LCP ≤ 2.5 s at
+  p75** under 4× network and 4× CPU throttling. The LCP figure is the requirement; the byte budget
+  is its leading indicator, and is the half a ticket can be held to before there is any traffic to
+  measure.
+  **What counts, written down because the ambiguity cost 39 KB once.** gzip on the wire, every
+  `<script>` the prerendered document requests, **excluding** the `noModule` polyfill bundle — no
+  browser inside NFR5's floor downloads it. Any figure quoted anywhere names its compression.
+  **Amended 2026-09-03 with #157.** It was one **≤ 120 KB** budget over both routes, set without
+  measuring what the framework costs before a line of this product's code runs. Measured that day
+  from a production build, `/`'s floor — React, the Next runtime and the app shell, with no Sentry,
+  no Base UI and no form layer — is **81 KB**, so 120 KB left **39 KB** for everything the product
+  is, against Base UI's popup machinery alone at 53 KB. `/privacy`, a static page owning no client
+  component of its own, missed it by 171 KB. The second half below was written from one side only: a
+  budget **nothing** can meet fails exactly as a budget met by shipping less of the page does, and is
+  the worse of the two, because it reads as a requirement while being guidance nobody is expected to
+  act on. The replacement numbers are the measured floor plus the headroom #157 leaves — `/` lands
+  at 133 KB and `/publish` at 233 KB the day it does — so both are tight rather than slack, and
+  neither is met today.
   **Second half:** a page meeting the byte budget must still render the Wall's cards, both standing
   notices, and every field of the publishing form. A budget met by shipping less of the page is a
   budget failed.
