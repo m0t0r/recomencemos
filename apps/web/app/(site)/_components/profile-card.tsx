@@ -33,7 +33,7 @@ export interface ProfileCardProps {
   readonly className?: string;
 }
 
-function initialOf(firstName: string): string {
+export function initialOf(firstName: string): string {
   return [...firstName.trim()][0]?.toLocaleUpperCase("es-CO") ?? "";
 }
 
