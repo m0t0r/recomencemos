@@ -48,10 +48,11 @@ export interface SkillRequestMachine {
   readonly pending: boolean;
   /** What to announce, or nothing yet. */
   readonly notice: SkillRequestNotice | undefined;
-  /** Whether the field should be cleared — it landed, so what was in it is gone. */
-  readonly sent: boolean;
+  /** What is in the field. Owned here, because landing is what empties it. */
+  readonly text: string;
+  readonly setText: (text: string) => void;
   /** Send what she typed. Validated here first, so an empty field costs no round trip. */
-  readonly send: (text: string) => void;
+  readonly send: () => void;
   /** The client-side verdict on the field, when there is one. */
   readonly fieldError: string | undefined;
 }
@@ -59,8 +60,34 @@ export interface SkillRequestMachine {
 export function useSkillRequest(): SkillRequestMachine {
   const [result, dispatch, pending] = useActionState(requestSkill, INITIAL);
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
+  const [text, setText] = useState("");
 
-  function send(text: string) {
+  /**
+   * **Emptied when a request lands — adjusted during render, keyed on the result
+   * that has not been seen yet.**
+   *
+   * Two shapes were wrong before this one, and both are worth naming because both
+   * read as obviously correct. Deriving the value as `sent ? "" : text` empties
+   * the field on success and then keeps emptying it: `sent` stays true for as
+   * long as the last result does, so the controlled input was **pinned** empty and
+   * a second request could not be typed at all — found at seam 3, on the second
+   * request, because the tests sent one. Doing it in an effect fixes the
+   * behaviour and asks React for a second render to do what the first could have
+   * done, which is what `react(set-state-in-effect)` says out loud.
+   *
+   * So the reset is React's documented adjustment during render: remember which
+   * result has been acted on, and when a new one arrives, act on it once.
+   * `result` is a fresh object per dispatch, so this fires for every outcome —
+   * including two successes in a row, which is the case that started this.
+   */
+  const [actedOn, setActedOn] = useState(result);
+
+  if (actedOn !== result) {
+    setActedOn(result);
+    if (result.data?.requested) setText("");
+  }
+
+  function send() {
     const parsed = skillRequestFields.safeParse({ text });
 
     if (!parsed.success) {
@@ -76,13 +103,7 @@ export function useSkillRequest(): SkillRequestMachine {
     startTransition(() => dispatch(formData));
   }
 
-  return {
-    pending,
-    notice: noticeFor(result),
-    sent: result.data?.requested === true,
-    send,
-    fieldError,
-  };
+  return { pending, notice: noticeFor(result), text, setText, send, fieldError };
 }
 
 /**
