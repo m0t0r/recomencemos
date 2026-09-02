@@ -15,6 +15,40 @@ Four consequences for how you work here:
 - **Three refusals hold the design together, and each is load-bearing rather than a limitation to route around**: the platform never handles money ([ADR-0007](docs/adr/0007-the-platform-never-handles-money.md)), verifies nobody and publishes that absence ([ADR-0008](docs/adr/0008-open-enrolment-with-published-non-verification.md)), and adjudicates nothing — no ratings, no reviews, no reputation, no arbitration. A feature that quietly reintroduces one is the failure mode to watch for.
 - **What is genuinely still unbuilt is listed in `README.md` under "Still to replace"**, and each row names who owns it. Add a row when something lands half-done rather than leaving it implied; delete a row when it is done.
 
+## Before you change anything: open a worktree
+
+**If this session is going to change anything, open a worktree first — before the first write, not
+before the first commit.** Use the harness's worktree tool. This is not scoped to Build sessions or
+to parallel ones: an ADR, a spec amendment, a runbook edit and a one-line fix are all work, and none
+of them is written in the checkout that has `dev` out. Reading, searching, running the suite and
+exploring on `dev` need no worktree at all.
+
+Three things follow immediately, and each has cost a session:
+
+- **Rename the branch.** The tool names it for itself — asked for `chore/foo` it produces
+  `worktree-chore+foo`. `git branch -m ticket/<issue>-<slug>` (or `<type>/<slug>` for work with no
+  ticket) before writing anything, because a branch that does not match those patterns is one neither
+  the frontier query nor the PR linkage can read.
+- **A worktree isolates git and nothing else.** No `node_modules` until you run `pnpm install` in it,
+  no `.env.local`, and the Docker database and port 3000 are shared with every other tree.
+- **Use absolute paths.** The shell's working directory does not reliably persist between calls, and
+  the same relative path exists in both trees — so a relative write lands in the main checkout
+  silently, and the tests pass identically either way.
+
+`.claude/hooks/worktree-gate.sh` rule K refuses a commit made in a checkout that has the default
+branch out, which is the backstop rather than the mechanism: a session that opened a worktree never
+reaches it. [ADR-0017](docs/adr/0017-work-is-written-in-a-worktree-and-merged-into-the-default-branch.md)
+is why, `docs/policy/build.md`'s `worktree-required` is the policy, and
+`docs/agents/issue-tracker.md` → "Working in a worktree" is the procedure, including the stacked-PR
+case the harness tool cannot serve and the cleanup after a merge.
+
+**A hook that reads repo state reads it through the payload, never through `CLAUDE_PROJECT_DIR`.**
+That variable names the directory the session **launched** from and goes on naming the main checkout
+inside a worktree — measured, not assumed. Two hooks read the wrong tree because of it: the stop gate
+verified a clean main checkout and reported a pass having run nothing, and the Design gate judged
+`/to-tickets` against the specs on the default branch. `tree_for()` in `.claude/hooks/gate-lib.sh` is
+the fix and the record; use it in any new hook that touches the repository.
+
 ## Commands
 
 Run from the repo root; `turbo` fans out to every workspace — the scripts are in `package.json`. pnpm 11 is pinned via `packageManager`; do not use npm/yarn. `pnpm dev` puts web on `:3000`.
@@ -70,7 +104,7 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
   - **The database arrives as a `test.extend` fixture, not as hooks.** Import `test` from `#testing/fixtures` in an `*.integration.test.ts` and destructure `{ database }`; the restore-and-close lifecycle is the fixture's. Three files used to open with the identical `let database` / `beforeEach` / `afterEach`. The fixture lives in `#testing/fixtures` and **not** in `#testing/database` on purpose: `global-setup.ts` imports the latter for `SNAPSHOT_PATH`, and a `test.extend` at that module's top level aborts the run with _"Vitest failed to find the current suite"_ because `globalSetup` runs with no suite. The globals stay — this replaces `describe`/`it`/`expect` with nothing.
   - `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows.
 - `web:test` — `vitest run`, **happy-dom**, the design system's config copied per the paragraph below, plus `vitest.setup.ts`. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`. Its setup file registers **`toMatchSchema`** from `apps/web/testing/matchers.ts` — a custom matcher taking a **Standard Schema** rather than a Zod schema, so nothing in a test has an opinion about the validation library. Reach for a matcher over a helper when the assertion's failure message is the thing worth owning: `expect(x).toBe(true)` on a `safeParse` result reports `false is not true` and names neither the rule nor the value.
-- `//#test:gates` — `gate-test.sh`, the 206 cases that drive the repo's own gates. Sixty-four are the stage hooks; the rest drive the three gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and all three scripts.
+- `//#test:gates` — `gate-test.sh`, the 235 cases that drive the repo's own gates. Ninety-three are the stage hooks; the rest drive the three gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and all three scripts.
   - The **dependency audit** (`scripts/audit-direct.mjs`), thirteen cases. Five exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0.
   - **Migration integrity** (`scripts/migration-integrity.mjs`), fifty-seven cases across NFR30's four counts — an append-only journal, immutable shipped migrations, destructive statements travelling alone under a `contract` marker, and a marked migration never sharing a pull request with `@repo/domain`'s query modules. Its fixtures are real git repositories, because the gate's whole frame is `git merge-base <base branch> HEAD` and there is nothing left to mock that would still be the thing under test. Ten of the fifty-seven are a section of their own — holes `/code-review` found in the first draft, four of which passed green while checking nothing. Read them before touching the SQL scan: an escaped quote that swallowed the rest of the file, and an `ALTER TABLE` whose comma-separated actions hid a `DROP` beside an `ADD`. **`run_mig` unsets `GITHUB_BASE_REF` for every case**, and that is load-bearing: CI sets it on a `pull_request` event, the gate reads it ahead of `origin/HEAD`, and a fixture is a different repository with no such ref — thirty-five cases went red on the first CI run for exactly that.
 
@@ -656,7 +690,7 @@ DAG, so the decomposition rule (maximal chains become stacks; a ticket with two 
 serialized) is in `issue-tracker.md`. Never stack unrelated tickets for tidiness — a stack asserts an
 ordering, and a false one makes review worse.
 
-**The Build gate.** Two hooks, six rules, all covered by `gate-test.sh`:
+**The Build gate.** Three hooks, seven rules, all covered by `gate-test.sh`:
 
 | Hook                      | Rule                                                                                                                                    |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -665,6 +699,7 @@ ordering, and a false one makes review worse.
 | `build-guard.sh`          | **H.** never hand-edit a vendored skill, a committed advisory, or `pnpm-lock.yaml`                                                      |
 | `build-guard.sh`          | **I.** never write a credential into the repo                                                                                           |
 | `build-guard.sh`          | **J.** never hand-edit a migration already named by a `meta/_journal.json` beside it                                                    |
+| `worktree-gate.sh`        | **K.** never commit in a checkout that has the default branch out. Rule G refuses the same mistake one step too late                    |
 | `verify-before-stop.sh`   | a `Stop` hook: the session may not report done while lint, `check-types`, `test`, `test:gates`, or `migrations:check` is red            |
 
 Rule F is load-bearing exactly as rule A is for Plan and C for Design — the act must be one the agent

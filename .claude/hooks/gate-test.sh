@@ -33,6 +33,7 @@ PLAN="$HOOKS/plan-to-design-gate.sh"
 BUILD="$HOOKS/design-to-build-gate.sh"
 GUARD="$HOOKS/build-guard.sh"
 SHIP="$HOOKS/build-to-deploy-gate.sh"
+WT="$HOOKS/worktree-gate.sh"
 
 ROOT=$(mktemp -d)
 export CLAUDE_PROJECT_DIR="$ROOT"
@@ -315,6 +316,104 @@ run "an ADR quoting the destructive list"                  allow "$(wj Write "$R
 
 section "unrelated paths"
 run "ordinary source file saying status: approved"        allow "$(wj Write "$ROOT/apps/web/app/page.tsx" 'status: approved')"
+
+# Rule K gets its own fixtures and its own runner, and both are deliberate.
+#
+# Its question is "which checkout is this command about", so a shared payload
+# shape cannot ask it: every case needs a `cwd`, and the interesting ones need two
+# real checkouts of one repository that disagree about the branch. `run_mig` and
+# `run_ident` set the precedent for a gate-specific runner.
+#
+# It is also NOT added to run(). That runner drives every gate over one fixture on
+# one branch, and four of its existing cases are `git commit -F - <<EOF` written
+# to prove that rules F and G read a commit MESSAGE as prose -- with the fixture
+# sitting on its default branch, which is precisely what rule K refuses. Both
+# behaviours are right; they just cannot share a fixture.
+WTMAIN="$ROOT/wt/main"
+WTREE="$ROOT/wt/tree"
+WTALT="$ROOT/wt/alt"
+mkdir -p "$ROOT/wt" "$ROOT/wt/plain"
+
+# The default branch is read from the remote, so the fixture that matters most is
+# one whose default is NOT the name a hardcoded guess would pick.
+git -C "$ROOT" init -q "$WTMAIN" -b dev
+git -C "$WTMAIN" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/dev
+git -C "$WTMAIN" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+git -C "$WTMAIN" worktree add -q "$WTREE" -b ticket/12-add-widget
+
+# A second repository, default `main`, to prove the name comes from the remote in
+# both directions rather than from this repo's own answer.
+git -C "$ROOT" init -q "$WTALT" -b main
+git -C "$WTALT" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+git -C "$WTALT" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+
+wtj() { jq -nc --arg c "$1" --arg d "$2" '{tool_name:"Bash",cwd:$d,tool_input:{command:$c}}'; }
+
+run_wt() { # name expect json [project-dir]
+  local name="$1" expect="$2" json="$3" pdir="${4:-$CLAUDE_PROJECT_DIR}" out decision="allow"
+  out=$(printf '%s' "$json" | CLAUDE_PROJECT_DIR="$pdir" bash "$WT" 2>&1)
+  [ -n "$out" ] && decision=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "ERR"' 2>/dev/null || echo ERR)
+  if [ "$decision" = "$expect" ]; then
+    pass=$((pass+1)); sec_pass=$((sec_pass+1))
+    [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> %s\n' "$name" "$decision"
+  else
+    fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+    printf '  FAIL %-51s -> %s (want %s)\n' "$name" "$decision" "$expect"
+    printf '       %s\n' "${out:-<empty>}"
+  fi
+  return 0
+}
+
+section "Rule K: no commit on the default branch"
+run_wt "git commit on the default branch"                 deny  "$(wtj 'git commit -m x' "$WTMAIN")"
+run_wt "git commit -am on the default branch"             deny  "$(wtj 'git commit -am x' "$WTMAIN")"
+run_wt "git commit --amend on the default branch"         deny  "$(wtj 'git commit --amend --no-edit' "$WTMAIN")"
+run_wt "git cherry-pick on the default branch"            deny  "$(wtj 'git cherry-pick 0123abc' "$WTMAIN")"
+run_wt "git revert on the default branch"                 deny  "$(wtj 'git revert 0123abc' "$WTMAIN")"
+run_wt "git am on the default branch"                     deny  "$(wtj 'git am patch.mbox' "$WTMAIN")"
+run_wt "a commit after && on the default branch"          deny  "$(wtj 'git add -A && git commit -m x' "$WTMAIN")"
+run_wt "a commit in a subshell on the default branch"     deny  "$(wtj '(git commit -m x)' "$WTMAIN")"
+run_wt "git -c k=v commit on the default branch"          deny  "$(wtj 'git -c user.name=t commit -m x' "$WTMAIN")"
+
+# The case the whole gate exists to allow.
+run_wt "git commit from a worktree of the same repo"      allow "$(wtj 'git commit -m x' "$WTREE")"
+run_wt "a commit after && from a worktree"                allow "$(wtj 'git add -A && git commit -m x' "$WTREE")"
+
+# And the case that pins WHY the gate reads the payload rather than the
+# environment. CLAUDE_PROJECT_DIR keeps naming the checkout the session launched
+# from -- the main one, on the default branch -- for the whole life of a worktree
+# session. A gate reading it would refuse every commit from every worktree, which
+# is the exact inverse of what it is for. This case forces that arrangement: the
+# variable on the default branch, the payload in the worktree.
+run_wt "the worktree case with the env on the default"    allow "$(wtj 'git commit -m x' "$WTREE")" "$WTMAIN"
+run_wt "the default-branch case with the env in a tree"   deny  "$(wtj 'git commit -m x' "$WTMAIN")" "$WTREE"
+
+section "Rule K: the checkout the command is about"
+run_wt "git -C at the default branch, from a worktree"    deny  "$(wtj "git -C $WTMAIN commit -m x" "$WTREE")"
+run_wt "git -C at a worktree, from the default branch"    allow "$(wtj "git -C $WTREE commit -m x" "$WTMAIN")"
+run_wt "an attached -C at the default branch"             deny  "$(wtj "git -C$WTMAIN commit -m x" "$WTREE")"
+run_wt "a relative -C resolved against the payload cwd"   deny  "$(wtj 'git -C ../main commit -m x' "$WTREE")"
+run_wt "a second repo, default main, on main"             deny  "$(wtj 'git commit -m x' "$WTALT")"
+
+git -C "$WTALT" checkout -q -b ticket/13-other
+run_wt "a second repo, default main, on a ticket branch"  allow "$(wtj 'git commit -m x' "$WTALT")"
+
+section "Rule K: what it must not refuse"
+run_wt "git status on the default branch"                 allow "$(wtj 'git status --short' "$WTMAIN")"
+run_wt "git pull on the default branch"                   allow "$(wtj 'git pull --ff-only' "$WTMAIN")"
+run_wt "git push on the default branch"                   allow "$(wtj 'git push' "$WTMAIN")"
+run_wt "git log on the default branch"                    allow "$(wtj 'git log --oneline -5' "$WTMAIN")"
+run_wt "git commit-graph write on the default branch"     allow "$(wtj 'git commit-graph write' "$WTMAIN")"
+run_wt "a command that merely contains the word commit"   allow "$(wtj 'grep -rn "git commit" docs/' "$WTMAIN")"
+run_wt "a commit message that names the refused act"      allow "$(wtj 'gh issue comment 5 --body "run git commit on a branch"' "$WTMAIN")"
+run_wt "the act named inside a heredoc body"              allow "$(wtj 'gh issue create --body-file - <<EOF
+git commit on dev is what the gate refuses
+EOF' "$WTMAIN")"
+run_wt "a commit outside any repository"                  allow "$(wtj 'git commit -m x' "$ROOT/wt/plain")"
+
+git -C "$WTMAIN" checkout -q --detach
+run_wt "a commit on a detached HEAD"                      allow "$(wtj 'git commit -m x' "$WTMAIN")"
+git -C "$WTMAIN" checkout -q dev
 
 # The dependency audit is not a hook, but it is the same kind of thing: repo
 # logic deciding whether work may proceed. Its fixture repository is built here
