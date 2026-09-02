@@ -30,7 +30,7 @@
  * success is a redirect too; nothing renders here.
  */
 
-import { type PublishRefusal, profiles } from "@repo/domain/profiles";
+import { type ProfileRefusal, profiles } from "@repo/domain/profiles";
 import { AppError, projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { redirect } from "next/navigation";
@@ -80,7 +80,7 @@ function refuse(errors: FieldErrorTree, values: PublishProfileValues): never {
  * than in the domain because the sentence is `es-CO` copy under the voice guide
  * and the refusal is an English identifier (ADR-0012).
  */
-function treeFromRefusals(refusals: readonly PublishRefusal[]): FieldErrorTree {
+function treeFromRefusals(refusals: readonly ProfileRefusal[]): FieldErrorTree {
   const tree: FieldErrorTree = {};
   // oxlint-disable-next-line no-underscore-dangle -- the tree's own key
   const say = (field: Exclude<PublishFieldName, "workHistory">, message: string) => {

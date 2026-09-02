@@ -71,6 +71,13 @@
       "when": 1788358800344,
       "tag": "0009_capability_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788382695295,
+      "tag": "0010_update_profile_ceiling",
+      "breakpoints": true
     }
   ]
 }
