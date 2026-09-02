@@ -12,7 +12,6 @@
  */
 
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/design-system/components/avatar";
-import { Badge } from "@repo/design-system/components/badge";
 import {
   Card,
   CardContent,
@@ -20,13 +19,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@repo/design-system/components/card";
+import type { VocabularyEntry } from "@repo/domain/skills";
+import { SkillChips } from "./profile-list/skill-chips";
 
 export interface ProfileCardProps {
   readonly firstName: string;
   readonly lastInitial: string;
   readonly cityLabel: string;
   readonly headline: string;
-  readonly skillLabels: readonly string[];
+  /**
+   * The Skills themselves, not their labels.
+   *
+   * **It took `readonly string[]` and rebuilt entries from it** —
+   * `skillLabels.map((label) => ({ slug: label, labelEs: label }))` — which
+   * put a Spanish display string in a `slug`, against ADR-0012's
+   * identifier-versus-value line, and then keyed a list on it so two Skills
+   * sharing a label collided. Both callers already hold the entries and were
+   * throwing them away one line before handing them over.
+   */
+  readonly skills: readonly VocabularyEntry[];
   readonly photoUrl?: string | null;
   /** The `alt` for a real photo. Never a description of her circumstances. */
   readonly photoAlt?: string;
@@ -49,7 +60,7 @@ export function ProfileCard({
   lastInitial,
   cityLabel,
   headline,
-  skillLabels,
+  skills,
   photoUrl,
   photoAlt = "",
   className,
@@ -68,15 +79,13 @@ export function ProfileCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {headline ? <p className="text-foreground text-pretty">{headline}</p> : null}
-        {skillLabels.length > 0 ? (
-          <ul className="flex flex-wrap gap-1.5">
-            {skillLabels.map((label) => (
-              <li key={label}>
-                <Badge variant="secondary">{label}</Badge>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {/*
+          The same chips the public list renders, and for the same reason: a
+          Skill label is a verb phrase, and the registry's `Badge` is
+          `shrink-0 whitespace-nowrap`, so a long one used to escape the card's
+          border rather than wrap. See `profile-list/skill-chips.tsx`.
+        */}
+        <SkillChips skills={skills} />
       </CardContent>
     </Card>
   );

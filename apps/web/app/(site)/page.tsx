@@ -1,38 +1,129 @@
 /**
- * The holding page, and only until story 4 lands.
+ * `/` — the Wall: the most recently published CapabilityProfiles, newest first.
  *
- * `/` is the **Wall** — the public list of the most recently published
- * CapabilityProfiles (`CONTEXT.md`). It does not exist yet: story 4
- * (https://github.com/m0t0r/recomencemos/issues/21) builds it, and this file is
- * what that ticket replaces. What it is *not* is design-system scaffolding, and
- * it is not `create-next-app` output either — both were deleted with the
- * template framing this repository came from.
+ * Shaped at `.impeccable/briefs/wall.md`; the state set is the spec's `## UX
+ * design`, Wall row. The layout was chosen by `/prototype` UI on this route —
+ * variant C's rows carrying variant B's Skill chips, with B's opening reduced to
+ * a single primary action. The losers live on `prototype/21-ui-variants`.
  *
- * **It deliberately makes no claim about verification or money.** Those are
- * story 11's two standing notices
- * (https://github.com/m0t0r/recomencemos/issues/22), which are product
- * components rendered on the Wall, on `/profiles`, and on every profile and
- * Offer surface. A half-version here would give them a second source, and the
- * one thing worse than an absent notice is two that disagree.
+ * **It is a teaser, not the catalogue.** `CONTEXT.md` says so, and `/profiles`
+ * is the catalogue — ordered so the people nobody has contacted are met first.
+ * This page shows one page of the newest and links there under the list.
  *
- * The copy follows `docs/policy/voice.md`: `tú`-register `es-CO`, sentences
- * under twenty words, active voice with the actor named, and no word from a
- * `CONTEXT.md` *Avoid* list. Nobody is named by what happened to them.
+ * **The opening carries one action, and it is hers.** A Hirer needs no button:
+ * the list below *is* what he came for, and he is asked for nothing. The one
+ * person on this page who needs a route somewhere else is a Worker who has not
+ * published yet, so *Publicar lo que sabes hacer* is the page's only primary
+ * weight — which is why the header's _Entrar_ stopped being a button in the same
+ * change.
+ *
+ * **Nothing is cached, so the read sits inside a designed `<Suspense>`
+ * boundary**, and the framing sits above it: the standing notices story 11 adds
+ * go between them, and the fallback holds the list's layout so neither moves
+ * when the rows arrive.
+ *
+ * **The error boundary is inside the page rather than at the route**, for the
+ * same reason — see `_components/profile-list/list-boundary.tsx`.
+ *
+ * Indexable, deliberately: it carries only the public projection, so there is
+ * nothing here a crawler may not read. It is not on NFR8's gated list and
+ * `gated-routes.test.ts` asserts that it stays off it.
  */
 
-export default function Home() {
-  return (
-    <main className="mx-auto flex min-h-svh max-w-prose flex-col justify-center gap-6 px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight text-balance">Recomencemos</h1>
+import { buttonVariants } from "@repo/design-system/components/button";
+import { profiles } from "@repo/domain/profiles";
+import Link from "next/link";
+import { connection } from "next/server";
+import { Suspense } from "react";
+import { ListEmptyState } from "./_components/profile-list/empty-state";
+import { ListBoundary } from "./_components/profile-list/list-boundary";
+import { ProfileList } from "./_components/profile-list/profile-list";
+import { ProfileListSkeleton } from "./_components/profile-list/skeleton";
+import {
+  NOBODY_PUBLISHED_BODY,
+  NOBODY_PUBLISHED_TITLE,
+  TO_BROWSE,
+  TO_PUBLISH,
+} from "./_lib/lists/messages";
+import { WALL_LEAD, WALL_TITLE, WALL_TO_BROWSE_HINT } from "./_lib/wall/messages";
 
-      <div className="text-muted-foreground flex flex-col gap-3 text-lg text-pretty">
-        <p>Personas de Pereira, Dosquebradas y Santa Rosa de Cabal publican lo que saben hacer.</p>
-        <p>Quien quiera pagarles por un trabajo las encuentra aquí.</p>
+async function WallList() {
+  /*
+    **The read is request-time, and saying so is what keeps `next build` green
+    without a database.**
+
+    Cache Components prerenders this subtree until something tells it not to.
+    Nothing here does: the read is uncached by design (ADR-0011), but "uncached"
+    is not a signal the prerender can see, so `next build` calls `profiles.wall()`
+    itself. With `DATABASE_URL` unset — which is every CI run, because NFR24
+    forbids it as a build input — `poolConfig` throws, and the `AppError`
+    constructor's `crypto.randomUUID()` is an unstable value the prerender
+    rejects. The reported error names the randomness rather than the missing
+    variable, and a local build hides all of it because `.env.local` is loaded.
+
+    `connection()` is `[dynamic]` from the framework's own menu, and the same
+    boundary `privacy/page.tsx` and `app/api/health/route.ts` already use. It
+    changes nothing about how the page renders — `/` is still partially
+    prerendered, the shell is still static and this list still streams into the
+    `<Suspense>` below.
+
+    `/profiles` needs no such line: it awaits `searchParams` before its read,
+    which is already a dynamic access.
+  */
+  await connection();
+
+  const page = await profiles.wall();
+
+  if (page.items.length === 0) {
+    return (
+      <ListEmptyState
+        title={NOBODY_PUBLISHED_TITLE}
+        body={NOBODY_PUBLISHED_BODY}
+        actionHref="/publish"
+        actionLabel={TO_PUBLISH}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <ProfileList profiles={page.items} />
+      <div className="flex flex-col items-start gap-2">
+        <Link href="/profiles" className={buttonVariants({ variant: "outline" })}>
+          {TO_BROWSE}
+        </Link>
+        <p className="text-muted-foreground text-sm">{WALL_TO_BROWSE_HINT}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function WallPage() {
+  return (
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
+      <div className="flex flex-col items-start gap-5">
+        <div className="flex flex-col gap-3">
+          <h1 className="text-foreground text-3xl font-semibold tracking-tight text-balance">
+            {WALL_TITLE}
+          </h1>
+          <p className="text-muted-foreground max-w-prose text-lg text-pretty">{WALL_LEAD}</p>
+        </div>
+        <Link href="/publish" className={buttonVariants({ size: "lg" })}>
+          {TO_PUBLISH}
+        </Link>
       </div>
 
-      <p className="text-muted-foreground text-sm">
-        Todavía no está abierto. Cuando lo abramos, aquí vas a ver los perfiles más recientes.
-      </p>
+      {/*
+        Story 11's two standing notices land here, above the list and below the
+        opening: nobody is verified, and the platform holds no money. The
+        boundary below is scoped so a failed read leaves them on screen.
+      */}
+
+      <ListBoundary>
+        <Suspense fallback={<ProfileListSkeleton />}>
+          <WallList />
+        </Suspense>
+      </ListBoundary>
     </main>
   );
 }
