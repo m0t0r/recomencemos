@@ -7,7 +7,13 @@
 import { render, screen } from "@testing-library/react";
 import type { OwnProfile } from "@repo/domain/profiles";
 import { OwnProfileView } from "./own-profile-view";
-import { HELD_HEADING, PUBLISHED_CONFIRMATION, WALL_LINK } from "../_lib/messages";
+import {
+  EDIT_LINK,
+  HELD_HEADING,
+  PUBLISHED_CONFIRMATION,
+  SAVED_CONFIRMATION,
+  WALL_LINK,
+} from "../_lib/messages";
 
 const PAYLOAD = "javascript:alert(1)";
 
@@ -30,7 +36,9 @@ const profile: OwnProfile = {
 
 describe("the view", () => {
   it("renders every free-text field as text and never as a URL", () => {
-    const { container } = render(<OwnProfileView profile={profile} justPublished={false} />);
+    const { container } = render(
+      <OwnProfileView profile={profile} justPublished={false} justSaved={false} />,
+    );
 
     // Over the HTML rather than the tree: the question is whether the payload
     // ever becomes an attribute, wherever it renders.
@@ -47,20 +55,42 @@ describe("the view", () => {
   });
 
   it("shows the phone as a number to read, not as a link", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} />);
+    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
 
     expect(screen.queryByRole("link", { name: /300 123 4567/ })).toBeNull();
   });
 
   it("renders the confirmation with the Wall linked when she has just published", () => {
-    render(<OwnProfileView profile={profile} justPublished />);
+    render(<OwnProfileView profile={profile} justPublished justSaved={false} />);
 
     expect(screen.getByRole("status")).toHaveTextContent(PUBLISHED_CONFIRMATION);
     expect(screen.getByRole("link", { name: WALL_LINK })).toHaveAttribute("href", "/");
   });
 
+  it("renders the saved confirmation, and not publishing's, when she has just saved", () => {
+    render(<OwnProfileView profile={profile} justPublished={false} justSaved />);
+
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(SAVED_CONFIRMATION);
+    expect(status).not.toHaveTextContent(PUBLISHED_CONFIRMATION);
+  });
+
+  /**
+   * The way into the edit form is a **link**, and asserting the role is the
+   * assertion: a control that navigates must announce as one, which is the
+   * finding `sign-in-link.tsx` records at length.
+   */
+  it("offers a link into the edit form", () => {
+    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
+
+    expect(screen.getByRole("link", { name: EDIT_LINK })).toHaveAttribute(
+      "href",
+      "/my-profile/edit",
+    );
+  });
+
   it("renders no confirmation otherwise", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} />);
+    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
 
     expect(screen.queryByRole("status")).toBeNull();
   });
@@ -68,7 +98,7 @@ describe("the view", () => {
 
 describe("the tiers", () => {
   it("heads the held section by who sees it", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} />);
+    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
 
     expect(screen.getByRole("heading", { name: HELD_HEADING })).toBeInTheDocument();
   });

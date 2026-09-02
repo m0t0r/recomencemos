@@ -204,6 +204,34 @@ export const publishProfileSchema = z.preprocess(fromFormData, publishProfileFie
 export const publishProfileValuesSchema = z.preprocess(fromFormData, publishProfileValues);
 
 /**
+ * **Editing: the same nine fields, `consent` removed.**
+ *
+ * `.omit` rather than a second `z.object`, so the two can only ever differ by
+ * the field named here. The API contract says the edit action is
+ * "`publishProfile`'s field set minus `consentVersion`", and this is that
+ * sentence in the type system — a field added to publishing appears here
+ * without anybody remembering to add it, which is the failure a copied object
+ * literal would have had.
+ *
+ * An edit collects no consent because it is a change to what her profile says
+ * rather than a fresh collection of her data.
+ */
+export const updateProfileFields = publishProfileFields.omit({ consent: true });
+
+export type UpdateProfileInput = z.output<typeof updateProfileFields>;
+
+/** The lenient half, the same way round: her values survive a refusal. */
+export const updateProfileValues = publishProfileValues.omit({ consent: true });
+
+export type UpdateProfileValues = z.output<typeof updateProfileValues>;
+
+/** The strict parse the edit form's browser-side guard runs. */
+export const updateProfileSchema = z.preprocess(fromFormData, updateProfileFields);
+
+/** The lenient parse the edit action accepts. */
+export const updateProfileValuesSchema = z.preprocess(fromFormData, updateProfileValues);
+
+/**
  * The two versions the form *displayed*, travelling as one bound argument
  * rather than as hidden inputs (ADR-0015, `authorization.tsx`). The action
  * validates them on arrival and the domain refuses a stale pair.

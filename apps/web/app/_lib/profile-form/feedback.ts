@@ -6,7 +6,6 @@
 
 import { SESSION_REQUIRED_CODE } from "@/app/_lib/session/codes";
 import type { ActionError } from "@/lib/safe-action";
-import { PUBLISH_FAILED } from "./messages";
 
 export interface Feedback {
   readonly message: string;
@@ -23,10 +22,18 @@ export interface Feedback {
  *
  * Exported for its own test: it is the one rule here rather than a wiring.
  */
-export function feedbackFor(result: {
-  readonly serverError?: ActionError | undefined;
-  readonly validationErrors?: unknown;
-}): Feedback | undefined {
+export function feedbackFor(
+  result: {
+    readonly serverError?: ActionError | undefined;
+    readonly validationErrors?: unknown;
+  },
+  /**
+   * What a transport fault says. Per surface, because "no pudimos publicar tu
+   * perfil" on a form that was saving a change to one names an act she did not
+   * take — which is the failure the voice guide's Don't 4 is about.
+   */
+  faultMessage: string,
+): Feedback | undefined {
   if (!result.serverError) return undefined;
 
   // A per-field refusal is the summary's to say, item by item; a second
@@ -39,5 +46,5 @@ export function feedbackFor(result: {
   // A refusal with a sentence of its own — the session gone — says that
   // sentence. Anything else is a fault, and the fault's sentence is ours rather
   // than whatever the transport produced.
-  return { message: code === SESSION_REQUIRED_CODE ? message : PUBLISH_FAILED };
+  return { message: code === SESSION_REQUIRED_CODE ? message : faultMessage };
 }

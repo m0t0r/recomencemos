@@ -19,7 +19,7 @@
 import type { ConsentVersions } from "@repo/domain/consent";
 import { useId } from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
-import type { PublishFieldName } from "@/app/_lib/profile-form/messages";
+import { type PublishFieldName, PUBLISH_FAILED } from "@/app/_lib/profile-form/messages";
 import { publishProfileSchema } from "@/app/_lib/profile-form/schema";
 import { serverFieldError } from "@/app/_lib/profile-form/summary";
 import { useProfileFields } from "@/app/_lib/profile-form/use-profile-fields";
@@ -46,6 +46,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
     action: publishProfile.bind(null, consentVersions),
     initial: INITIAL_RESULT,
     schema: publishProfileSchema,
+    faultMessage: PUBLISH_FAILED,
   });
   const form = useProfileFields(prefill, machine.refusedValues);
   const base = useId();
