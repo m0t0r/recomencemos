@@ -165,6 +165,20 @@ And the audit record, which two other sections of this spec already assert uncon
     repudiation is the one STRIDE letter with no other answer here, and logs live 30 days while a
     Report lives 24 months.
 
+**Also `Must`, added by amendment (2026-09-02, #139).** Four places in this document already assumed
+editing existed — NFR9's "stable across edits", DD4's `searchText` "written on publish and on edit",
+the **Own profile** row's `success` copy, and the seventh-state copy telling a Worker she can publish
+with the closest Skill and correct it later — and no story, no action and no ticket built it. It is
+`Must` because all four of those are load-bearing today, and because a wrong phone number on a
+published profile is a profile nobody can reach. Story numbers are stable across this document, so
+this one takes the next free number rather than a position in the list above.
+
+24. As a Worker, I want to change what my published profile says — my Skills, my work history, the
+    line in my own words, my city, my name as it is shown and the number people reach me on — so that
+    a mistake or a change in what I do is mine to correct, from the same phone, without asking
+    anybody. The address people already hold for my profile keeps working, and correcting it does not
+    move me to the top of the Wall.
+
 **Should**
 
 1.  As a Worker and as a Hirer, I want a check-in seven days after a Contact Exchange asking whether
@@ -213,9 +227,13 @@ concerns.
   served at a width appropriate to its slot and in a format the browser negotiated — **0** Wall cards
   request an image more than **2×** their rendered CSS width, and resizing happens at the edge rather
   than on the Fly machine (DD6). **Binds:** 2, 4, 11.
-- **NFR4 — Publishing without JavaScript.** With JavaScript unavailable or still loading, a Worker
-  completes **every** field except the photo and submitting produces a published profile. The photo is
-  the single documented exception and the form says so where it appears. **Binds:** 2, 4.
+- **NFR4 — Publishing and editing without JavaScript.** With JavaScript unavailable or still loading,
+  a Worker completes **every** field except the photo and submitting produces a published profile —
+  **and the same holds for a change to one already published.** The photo is the single documented
+  exception and the form says so where it appears. _Amended 2026-09-02 with #139: this named publishing
+  alone. She corrects a wrong number on the same phone and the same connection she typed it on, and the
+  edit form is the publish form minus one field, so the exemption had no argument behind it._
+  **Binds:** 2, 4, 24.
 - **NFR5 — Browser floor.** Every platform feature on a Worker-critical path is **Baseline Widely
   Available** — 30 months past the date all four core browsers shipped it, verified against web.dev's
   definition rather than recalled. Concretely Chrome on Android 10+, Safari on iOS 16+, current
@@ -236,7 +254,9 @@ concerns.
   never fetched, so its `noindex` is never read, and a linked-but-disallowed URL can still be indexed
   as a bare string. NFR9 is what makes that bare string harmless. **Binds:** 5, 8.
 - **NFR9 — The slug carries no identity.** A profile's public slug is server-generated, opaque,
-  derived from **no** part of her name, city or Skills, and stable across edits. **Binds:** 4, 5.
+  derived from **no** part of her name, city or Skills, and stable across edits. _Amended 2026-09-02
+  with #139: "stable across edits" was vacuous until story 24 gave the document an edit — an address a
+  Hirer already holds keeps resolving after she corrects her wording._ **Binds:** 4, 5, 24.
 - **NFR10 — The three projections, counted.** For a profile whose full name, phone, email,
   self-description and work history each carry a distinct sentinel: the **public** projection contains
   **0** sentinels; the **gated** contains the self-description and work-history sentinels and **0** of
@@ -252,7 +272,7 @@ concerns.
   email address, or a messaging-app URL in the forms named in DD3, and the rejection **names the
   fragment it objected to and preserves everything the person typed**. **Second half:** this is a
   speed bump, not a control — human review of every Offer is the control, and no copy claims
-  otherwise. **Binds:** 2, 6.
+  otherwise. **Binds:** 2, 6, 24.
 - **NFR13 — Session lifetime, and revocation before expiry.** Own device **30 days, absolute**
   _(amended 2026-08-28, with #12: this read "rolling", and rolling is not implementable without
   breaking the shared-device promise — better-auth@1.7.1 computes its refresh predicate from the
@@ -345,7 +365,7 @@ concerns.
   a processor carry a query string. **Binds:** 17.
 - **NFR20 — Accessibility.** **WCAG 2.2 AA** (`docs/policy/ux.md` → `wcag-level`) on every surface, in
   the single light theme, in `es-CO`, including every error state and the full six-state set named per
-  surface in **UX design**. **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19, 20, 21.
+  surface in **UX design**. **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19, 20, 21, 24.
 - **NFR21 — Search quality in Spanish.** A query returns the same results with or without accents and
   in any case, over **≥ 95%** of the seeded vocabulary, measured against a fixture of
   accented/unaccented pairs. **Binds:** 19.
@@ -395,9 +415,13 @@ concerns.
   `DEPLOY_ALLOW_BRANCH=1` says a rehearsal is meant.
 - **NFR26 — Ceilings on the two exhaustible resources.** Gated profile reads **≤ 60 per Account per
   hour, ≤ 300 per day**, with a higher per-IP bound above it. Per Account and per IP:
-  `publishProfile` **≤ 3/day**, `sendOffer` **≤ 10/day**, `reportOffer` **≤ 10/day**, `requestSkill`
-  **≤ 5/day**, `createPhotoUpload` **≤ 10/day**, `changeEmail` **≤ 3/day**, `requestMagicLink`
-  **≤ 5/hour per address and ≤ 20/hour per IP**. One Account holds at most one CapabilityProfile, by
+  `publishProfile` **≤ 3/day**, `updateProfile` **≤ 10/day**, `sendOffer` **≤ 10/day**, `reportOffer`
+  **≤ 10/day**, `requestSkill` **≤ 5/day**, `createPhotoUpload` **≤ 10/day**, `changeEmail`
+  **≤ 3/day**, `requestMagicLink` **≤ 5/hour per address and ≤ 20/hour per IP**.
+  _Amended 2026-09-02 with #139: `updateProfile` added. Deliberately **not** `publishProfile`'s 3/day —
+  publishing happens once and editing is a repeated act, so a Worker fixing her own wording three times
+  would be locked out of her profile for a day by a number chosen to bound a one-off. 10/day is the
+  shape `sendOffer` and `reportOffer` already use._ One Account holds at most one CapabilityProfile, by
   unique constraint rather than by the form. The counter lives in Postgres, not process memory,
   because deploys are continuous and an in-memory limiter resets several times a day. It **fails
   closed**.
@@ -422,9 +446,11 @@ concerns.
   **Third half, which the second was missing (C39): a refusal is legible to the person who hit it.**
   Every ceiling returns an `AppError` carrying `code: "rate_limited"`, a **`retryAfter`**, and a
   `userMessage` in her terms, and every surface with a ceiling carries a rate-limited state in the UX
-  state table — **all eight ceilings, checked as a list against that table rather than by eye** (C57).
+  state table — **all nine ceilings, checked as a list against that table rather than by eye** (C57).
+  _Amended 2026-09-02 with #139: eight became nine. The count is written out because C57 made this a
+  list somebody ticks, and a ceiling added without its seventh state is the exact defect C57 closed._
   A Worker who trips `publishProfile ≤ 3/day` after two failed attempts must not be stopped by
-  silence. **Binds:** 16, 2, 6, 10.
+  silence. **Binds:** 16, 2, 6, 10, 24.
 - **NFR27 — Sign-in actually completes.** **≥ 70%** of `requestMagicLink` calls are followed by a
   completed sign-in within 30 minutes, rolling 7 days; a **drop of > 20 points** against the trailing
   30-day value is the actionable signal. This replaces a bounce-rate-only indicator, which goes green
@@ -534,7 +560,10 @@ by unique constraint, not by the form — that constraint is half of NFR26's Syb
 
 **CapabilityProfile** — 1:1 with an Account. `slug` (opaque, NFR9), `fullName`, `firstName`, `lastInitial`,
 `city`, `headline`, `about`, `phone` (E.164), `photoState`, `photoKey`, `state`
-(`published` | `taken_down`), `publishedAt`, `deliveredOfferCount`, `rotationKey`, `searchText`.
+(`published` | `taken_down`), `publishedAt`, `updatedAt`, `deliveredOfferCount`, `rotationKey`,
+`searchText`. _Amended 2026-09-02 with #139: `updatedAt` was missing from this list while the column
+existed, which is what let story 24's write have no field to stamp. `publishedAt` and `updatedAt` are
+two columns for one reason — only the first is indexed, and only the first orders the Wall._
 `firstName`, `lastInitial`, `city`, `headline` and an **approved** photo are `public`; `fullName`,
 `about`, `phone` and the Account's `email` are `personal`. **`fullName` is collected at publish and
 released only at Contact Exchange** (C1) — prefilled and editable from a Google profile, typed by a
@@ -649,6 +678,7 @@ endpoint and a page-level check does not extend to it. Every one also **rate-lim
 | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /publish`                                          | —                                                                                                                                                                                                              | Signed-in Account with no CapabilityProfile                                                                                                                                                                                |
 | action `publishProfile`                                 | `{ fullName, firstName, lastInitial, city, headline, about, phone, skillSlugs[], workHistory[], consentVersion }` → `{ ok } \| { fieldErrors }`. `fullName` is gated at rest and crosses only at exchange (C1) | Itself only                                                                                                                                                                                                                |
+| action `updateProfile`                                  | `publishProfile`'s field set **minus `consentVersion`** → `{ ok } \| { fieldErrors }`. Rewrites `searchText` and `updatedAt`; `slug` and `publishedAt` untouched. Added 2026-09-02 with #139 — see below       | The owner. Rate-limited (NFR26)                                                                                                                                                                                            |
 | action `createPhotoUpload`                              | `{ contentType, byteLength }` → `{ uploadUrl, photoKey }`, a presigned PUT into a quarantine prefix                                                                                                            | The owner. **Not** a multipart Server Action — the body limit defaults to 1 MB and a phone photo is 2–5 MB (DD6)                                                                                                           |
 | action `attachPhoto`                                    | `{ photoKey }` → `{ photoState: "pending" }`                                                                                                                                                                   | The owner                                                                                                                                                                                                                  |
 | action `requestSkill`                                   | `{ text }` → `{ ok }`                                                                                                                                                                                          | The owner                                                                                                                                                                                                                  |
@@ -659,6 +689,15 @@ endpoint and a page-level check does not extend to it. Every one also **rate-lim
 | action `signOutEverywhere`                              | `{}` → `{ ok }`                                                                                                                                                                                                | Itself                                                                                                                                                                                                                     |
 | action `changeEmail`                                    | `{ email }` → `{ ok: "verification_sent" }`                                                                                                                                                                    | Itself. **Two-phase**: the new address is verified before the switch, the old address is notified, and all other sessions end on completion. A one-shot switch is an account-takeover primitive from any abandoned session |
 | action `deleteAccount`                                  | `{ confirmationPhrase }` → `{ ok }`                                                                                                                                                                            | Itself, and only from a **fresh** sign-in                                                                                                                                                                                  |
+
+_Added 2026-09-02 with #139, on `updateProfile`._ Three things about that row are load-bearing and do
+not fit in a table cell. **The DD3 rejector runs again**, on every edited free-text field, exactly as
+it does at publish — a field checked once and never again is a field with a documented way past the
+consent step. **`searchText` is rewritten** because DD4 already says it is written "on publish and on
+edit", and this is the edit. **`publishedAt` is not stamped**: it orders the Wall
+(`published_at DESC, id DESC`), so stamping it on an edit would make editing a free bump to the top of
+the most-linked surface on the site, and story 20's attention-spread measurement would go on reporting
+a fairness property the site no longer had. The full argument is in **Further Notes**.
 
 ### Hirer — Account required, `noindex`
 
@@ -1920,7 +1959,7 @@ own schedule.
 | **Full profile**     | `app/profile/[slug]/page.tsx`      | n/a                                                                                                                                                                            | Skeleton at the profile's height                                                             | Identity rendered, work history streaming                                                                                                                                      | Profile failed to load                                                                                                                                                                                                                                                | **Signed out** → the Account gate and why it exists. **Frozen** (a Report is open against him) → indistinguishable from "not found" (C22). **Blocked** → served normally: a Block reaches the send only, and the send is where he is refused (C3) | n/a                                                                                                                                                                                                                                                                                                                          |
 | **Sign in**          | `app/sign-in/page.tsx`             | n/a                                                                                                                                                                            | Per-door: the Google button and the email button busy independently; the form stays readable | n/a                                                                                                                                                                            | Send failed, retry available, address still in the field. **Google failed** → the email door is still offered, never a dead end                                                                                                                                       | **Already signed in** → redirected to its `returnPath` when safe, else `/`. No message: there is nothing to tell somebody about a problem they do not have                                                                                        | Email → "Check your email", said **whether or not the address exists**, because the honest reply and the enumeration-safe reply are the same one; a consumed link offers an immediate resend. **Google** → the surface names the account it is about to use, because on a borrowed Android it may be the phone owner's (DD5) |
 | **Publish**          | `app/publish/page.tsx`             | Skill picker before a query                                                                                                                                                    | Per-field, never a whole-form spinner                                                        | Fields accepted, photo still uploading — the profile is already live                                                                                                           | Per-field errors **and** a focused form-level summary; the contact-detail rejection names the fragment and keeps everything typed (NFR12); a photo rejected at the size ceiling says so in her terms rather than failing opaquely (DD6)                               | Already has a profile → route to `/my-profile`                                                                                                                                                                                                    | Published, with the live profile linked and the pending photo explained without a badge                                                                                                                                                                                                                                      |
-| **Own profile**      | `app/my-profile/page.tsx`          | n/a                                                                                                                                                                            | Skeleton                                                                                     | Photo pending → **her own photo shown**, dignified, described as under review, not flagged                                                                                     | Load failed                                                                                                                                                                                                                                                           | Not the owner → 404                                                                                                                                                                                                                               | Edit saved                                                                                                                                                                                                                                                                                                                   |
+| **Own profile**      | `app/my-profile/page.tsx`          | n/a                                                                                                                                                                            | Skeleton                                                                                     | Photo pending → **her own photo shown**, dignified, described as under review, not flagged                                                                                     | Load failed                                                                                                                                                                                                                                                           | Not the owner → 404                                                                                                                                                                                                                               | Edit saved — story 24's `updateProfile`, added 2026-09-02 with #139; see below                                                                                                                                                                                                                                               |
 | **Received Offers**  | `app/offers/page.tsx`              | No Offers yet: say what makes one arrive, and that a person reads each first                                                                                                   | Row skeletons                                                                                | Some rows, terms streaming                                                                                                                                                     | Load failed                                                                                                                                                                                                                                                           | Not the owner → 404                                                                                                                                                                                                                               | n/a                                                                                                                                                                                                                                                                                                                          |
 | **One Offer**        | `app/offers/[id]/page.tsx`         | n/a                                                                                                                                                                            | Skeleton at the terms' height                                                                | Terms rendered, Hirer identity streaming                                                                                                                                       | Load failed                                                                                                                                                                                                                                                           | Not the addressee → 404                                                                                                                                                                                                                           | Accepted → the Contact Exchange below. Declined → confirmed, and it stays confirmed rather than vanishing                                                                                                                                                                                                                    |
 | **Contact Exchange** | same route, post-accept            | n/a                                                                                                                                                                            | n/a                                                                                          | Details on screen, the email still sending — and the screen says the email is a copy, not the original                                                                         | Email failed to send: the details are **still on screen**, which is why they are on screen                                                                                                                                                                            | Not a party to it → 404                                                                                                                                                                                                                           | Both sides' details, once, plus the standing safety guidance and the no-money notice                                                                                                                                                                                                                                         |
@@ -1929,6 +1968,14 @@ own schedule.
 | **Admin queue**      | `app/admin/[section]/`             | Queue empty — a real and good state, and it says the oldest-item age is zero. Never an illustration and never "nothing here yet": zero unreviewed Offers is the system working | Skeleton rows per section, at the row's height                                               | Some rows rendered, others streaming; **the age of the oldest item renders first** (story 7), because it is the number that decides whether this person keeps working          | A source failed: say **which**, because a silently missing source is an unreviewed Offer. The other sections stay usable                                                                                                                                              | Not an Admin session → 403, not a redirect (NFR14), enforced once at the shell                                                                                                                                                                    | Per-action: the item leaves its section, the sidebar count decrements, and focus returns to the **next** row rather than to the top of the page                                                                                                                                                                              |
 | **Admin door**       | `app/admin/continue/page.tsx`      | n/a                                                                                                                                                                            | The code field is busy; nothing else on the screen moves                                     | n/a                                                                                                                                                                            | A wrong code says only that it was wrong — never whether the challenge, the Account or the code was the part that failed. At the attempt ceiling it says when the Account may try again, which is the honest reply and tells an attacker nothing he could not measure | No token, or a spent, expired or unknown one → **404**. Already an Admin session → `/admin`                                                                                                                                                       | Session created, `/admin`                                                                                                                                                                                                                                                                                                    |
 | **Admin enrolment**  | `app/admin/enrol/[token]/page.tsx` | n/a                                                                                                                                                                            | n/a — the QR and the codes are rendered in one pass or not at all                            | n/a                                                                                                                                                                            | Enrolment failed: say so plainly and say the command may be run again, because nothing has been granted yet                                                                                                                                                           | Same 404 rule as the door                                                                                                                                                                                                                         | **Shown once**, and the screen says so before the codes rather than after them. It carries runbook §6's condition where it applies — keep them out of reach of the same unlock as the mailbox, which is the other factor — because a person who closes this screen has lost them                                             |
+
+_Amended 2026-09-02 with #139, on the **Own profile** row._ Its `success` cell read "Edit saved" while
+no story asked for an edit and no action could produce one; story 24 is that action. The edit surface
+sits under `app/(site)/my-profile/` — the targets in this table predate the route groups #103
+introduced — and **whether the text fields, the Skills and the work history are edited on one form or
+on several is the ticket's `shape` question**, deliberately not one this table answers. Its `error`
+cell is the Publish row's: per-field errors, a focused form-level summary, and a contact-detail
+rejection that names the fragment and keeps everything she typed.
 
 **A seventh state, on every surface that has a ceiling: `rate limited`** (C39). NFR26's refusal returns
 rather than throws, which protects the Sentry quota and says nothing to the person who hit it. Each
@@ -1944,6 +1991,7 @@ one renders the `userMessage` and the `retryAfter` in her terms:
 | **Full profile** | reads ≤ 60/hour, ≤ 300/day                   | Reading paused, when it resumes — the honest reply, since a harvester learns nothing he did not already know from being stopped                                                                                                                         |
 | **One Offer**    | `sendOffer` ≤ 10/day, `reportOffer` ≤ 10/day | When he may send again; a Report is never silently dropped                                                                                                                                                                                              |
 | **Account**      | `changeEmail` ≤ 3/day                        | When she may try again, and that the address on file is unchanged                                                                                                                                                                                       |
+| **Own profile**  | `updateProfile` ≤ 10/day (#139)              | When she may save again, that nothing she typed was lost, and that the profile people can already see is the last version she saved — not a half-applied one                                                                                            |
 
 The case that motivated this is concrete: a Worker who trips `publishProfile` after two failed
 attempts currently meets silence, from a requirement that passes green.
@@ -3471,3 +3519,50 @@ magnitude, DD1 is the first thing to revisit** — not last.
 `voice-guide` (concern C2) blocks the Skill-vocabulary seeding ticket, which blocks story 3 and story
 2's picker. It is the only non-code dependency on the `Must` path, and the `brand-voice` session
 should be scheduled before `/to-tickets` runs rather than after.
+
+### Appended with editing a published CapabilityProfile (2026-09-02, #139)
+
+This document assumed editing existed in four places and built it in none. NFR9 called the slug
+"stable across **edits**", DD4 said `searchText` is written "on publish **and on edit**", the **Own
+profile** row's `success` cell read "Edit saved", and the seventh-state copy for `requestSkill` told a
+Worker she could publish with the closest Skill on the list and **edit later**. No user story asked
+for it, the Worker table of the API contract carried no `updateProfile`, and no ticket under this
+spec's issue built it — so #16 shipped `/my-profile` as a read-only view and said so in its brief.
+Editing was also absent from **Out of Scope**, which is what makes this an omission rather than a
+refusal. Story 24, the `updateProfile` row and the ceiling on it are the amendment.
+
+**`publishedAt` is untouched, and it is the one rule the issue that raised this did not state.** The
+Wall reads `capability_profile (published_at DESC, id DESC) WHERE state = 'published'`. C32 kept the
+Wall newest-first knowing that bypasses NFR22's rotation, and promoted story 20 to `Must` so that the
+realized attention spread is **measured** rather than asserted. An edit that stamped `publishedAt`
+would make editing a free bump to the top of the most-linked, most-shared surface on the site — a
+Worker who learned the trick would sit at the top of it indefinitely, and story 20 would go on
+reporting a fairness property the site no longer had. `updatedAt` is a separate column and no index
+reads it, so the Wall is safe today only by accident. It is written down so that it stays safe on
+purpose.
+
+**The rejector runs again, on every free-text field, on every edit.** DD3's rejector is what stops the
+consent step being routed around by putting a phone number in the headline, and a field checked once
+at publish and never again is a field with a documented way past it. NFR12 binds story 24 for that
+reason. It remains what DD3 says it is — a speed bump, not a control.
+
+**NFR4 was widened; NFR3 was not, and the asymmetry is deliberate.** NFR4 named publishing alone,
+which left a Worker able to publish on a broken connection and unable to correct what she published on
+the same one. The edit form is the publish form minus `consentVersion`, and this repo's form idiom is
+already server-first, so the widening asks the ticket for nothing it was not going to build anyway.
+NFR3 is different: its budget is stated per **named route**, and adding a route to a page-weight
+requirement is a measurement obligation with a real cost. The edit surface inherits `/publish`'s
+component budget in practice and is not a route this spec measures. If that turns out to be wrong, the
+fix is an NFR3 amendment naming the route, not a silent reading of the existing one.
+
+**What this amendment does not settle, and where it goes instead.** `publishProfile` collects
+`consentVersion`; whether an edit made after that version has moved needs a fresh `Consent` row is a
+Ley 1581 question, and the answer belongs to the owner of story 14 rather than to a passing sentence
+here. It is filed as a `needs-triage` finding
+([ADR-0001](../../adr/0001-findings-enter-through-triage.md), issue #143) rather than left in this
+paragraph, because a paragraph is where a question like that gets lost. Two
+further things stay out on purpose: **the photo**, because `attachPhoto` already swaps one and lands
+with story 2b — the two tickets are independent and carry no blocking edge between them; and **a
+Worker taking her own profile down**, because `taken_down` is Admin-only moderation and the subject's
+own deletion is story 13's Account-level hard delete. DD8's "two deletions, never one mechanism" is
+what keeps a third from being invented here.
