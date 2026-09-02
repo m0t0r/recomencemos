@@ -5,8 +5,9 @@
  * handle.
  *
  * The contact-detail rejector (DD3), the phone normalizer, the search normalizer
- * (DD4) and the city registry (DD2). The Offer state machine and the list
- * ordering (NFR22) arrive here with the stories that need them.
+ * (DD4), the city registry (DD2) and the two list orderings — the Wall's, and
+ * the attention spread the browsable list commits to. The Offer state machine
+ * arrives here with the story that needs it.
  */
 
 export { CITIES, CITY_IDS, type CityId, cityLabel, isCityId } from "#policy/cities";
@@ -15,6 +16,15 @@ export {
   type ContactDetailVerdict,
   rejectContactDetails,
 } from "#policy/contact-details";
+export {
+  type AttentionSpreadOrder,
+  compareByAttentionSpread,
+  compareByNewest,
+  type NewestOrder,
+  type Page,
+  PAGE_SIZE,
+  pageOf,
+} from "#policy/listing";
 export { formatColombianPhone, normalizeColombianPhone, type PhoneVerdict } from "#policy/phone";
 export {
   PHOTO_STATES,
