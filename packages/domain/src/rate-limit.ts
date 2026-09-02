@@ -133,6 +133,26 @@ export const CEILINGS = {
     account: { max: 5, windowSeconds: 24 * 60 * 60 },
     ip: { max: 5, windowSeconds: 24 * 60 * 60 },
   },
+
+  /**
+   * **`updateProfile`, and deliberately not `publishProfile`'s three.**
+   *
+   * Publishing happens once, so three a day bounds a Worker-side abuse case at
+   * no cost to anyone real. Editing is a repeated act by the same person on the
+   * row she already owns: a Worker correcting her own wording three times would
+   * be locked out of her own profile for a day by a number chosen to bound a
+   * one-off. Ten a day is the shape `sendOffer` and `reportOffer` already use,
+   * and the abuse it has to bound is smaller than publishing's — an edit mints
+   * no row, takes no slug, and cannot put a second card on the Wall.
+   *
+   * **A refused save is charged**, as publishing's is: the action charges before
+   * its body runs, so a submission the rejector refuses spends one of the ten.
+   * That is the case the seventh state exists for.
+   */
+  updateProfile: {
+    account: { max: 10, windowSeconds: 24 * 60 * 60 },
+    ip: { max: 10, windowSeconds: 24 * 60 * 60 },
+  },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
@@ -357,16 +377,37 @@ export const CEILING_REFUSALS: Record<
    * entry on the list is a real answer today, and it is the only next step that
    * does not depend on an Admin.
    *
-   * It stops there deliberately. The obvious fourth clause — publish now and
-   * change it once the Skill is added — names something this product has no way
-   * to do: editing a published CapabilityProfile has no action and no surface.
-   * A refusal that promised one would be the dead end the picker's own "not on
-   * the list" option was written to avoid, one turn further in.
+   * It stopped there deliberately. The obvious fourth clause — publish now and
+   * change it once the Skill is added — named something this product had no way
+   * to do: editing a published CapabilityProfile had no action and no surface.
+   * A refusal that promised one would have been the dead end the picker's own
+   * "not on the list" option was written to avoid, one turn further in.
+   *
+   * **Editing exists now**, so the reason above no longer holds and the sentence
+   * is unchanged only because nobody has re-decided it. Adding that clause is a
+   * copy decision, not a merge's to take.
    */
   requestSkill: (ceiling, retryAfter) =>
     `Pediste ${ceiling.max} capacidades hoy, que es el máximo. ` +
     "Las que enviaste quedaron en la fila: siguen ahí. " +
     `Puedes pedir otra ${retryPhrase(retryAfter)}; ahora escoge la más parecida y publica.`,
+
+  /**
+   * **The third sentence is this ceiling's own, and it is the reassurance
+   * publishing's cannot give.** She already has a profile; what she needs to
+   * know is not only that her typing survived the refusal but that the version
+   * strangers can see right now is a whole one — the last save that succeeded,
+   * never a half-applied edit. The write is one transaction, so that sentence is
+   * true by construction rather than by hope.
+   *
+   * "Guardar" rather than "editar", because that is the word on the control she
+   * pressed, and a refusal that names a different act than the one she took
+   * reads as a refusal about something else.
+   */
+  updateProfile: (ceiling, retryAfter) =>
+    `Guardaste cambios ${ceiling.max} veces hoy, que es el máximo. ` +
+    `Puedes guardar otra vez ${retryPhrase(retryAfter)}. ` +
+    "Nada de lo que escribiste se perdió, y tu perfil sigue como lo guardaste la última vez.",
 };
 
 /**

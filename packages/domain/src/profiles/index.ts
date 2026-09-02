@@ -37,8 +37,18 @@ import type { PhotoState } from "#policy/profile-states";
 import { type OwnProfile, type ProfileRecord, toOwnProfile } from "#projections";
 import * as schema from "#schema";
 
-/** What the boundary parse hands over. Shape has been checked; substance is checked here. */
-export interface PublishProfileInput {
+/**
+ * **What a person types about herself**, and the whole of it — publishing and
+ * editing write the same nine fields, which is the API contract's own reading
+ * of the edit action ("`publishProfile`'s field set **minus `consentVersion`**").
+ *
+ * Declaring it once is what makes that relationship structural rather than a
+ * comment two interfaces have to keep agreeing with: {@link PublishProfileInput}
+ * is this plus the consent versions, {@link UpdateProfileInput} is this exactly,
+ * and {@link refusalsFor} takes this, so the rejector cannot drift between the
+ * two paths.
+ */
+export interface ProfileFields {
   readonly fullName: string;
   readonly firstName: string;
   readonly lastInitial: string;
@@ -48,17 +58,27 @@ export interface PublishProfileInput {
   readonly phone: string;
   readonly skillSlugs: readonly string[];
   readonly workHistory: readonly string[];
+}
+
+/** What the boundary parse hands over. Shape has been checked; substance is checked here. */
+export interface PublishProfileInput extends ProfileFields {
   readonly consentVersions: ConsentVersions;
 }
 
+/** The same fields with no consent: an edit is not a fresh collection of her data. */
+export type UpdateProfileInput = ProfileFields;
+
 /** The fields a refusal can name. English identifiers; the surface maps them to labels. */
-export type PublishField = "headline" | "about" | "workHistory" | "skillSlugs" | "phone" | "city";
+export type ProfileField = "headline" | "about" | "workHistory" | "skillSlugs" | "phone" | "city";
 
 /**
  * One reason a submission was refused, with what the surface needs to say it:
  * the field, the kind, and — for the rejector — the fragment (NFR12).
+ *
+ * Shared by both write paths, because both run the same rejector on the same
+ * fields and the surface renders one set of sentences for either.
  */
-export type PublishRefusal =
+export type ProfileRefusal =
   | {
       readonly field: "headline" | "about" | "workHistory";
       readonly code: "contact_detail";
@@ -82,12 +102,26 @@ export type PublishProfileOutcome =
   | {
       readonly ok: false;
       readonly reason: "refused";
-      readonly refusals: readonly PublishRefusal[];
+      readonly refusals: readonly ProfileRefusal[];
+    };
+
+/**
+ * An edit's outcomes. `no_profile` is the edit-side counterpart of publishing's
+ * `already_has_profile`: an ordinary answer to an ordinary request, returned
+ * rather than thrown, so a caller who has nothing to edit costs no Sentry event.
+ */
+export type UpdateProfileOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "no_profile" }
+  | {
+      readonly ok: false;
+      readonly reason: "refused";
+      readonly refusals: readonly ProfileRefusal[];
     };
 
 /** The pure half: everything that can be refused without a row. */
-function refusalsFor(input: PublishProfileInput): PublishRefusal[] {
-  const refusals: PublishRefusal[] = [];
+function refusalsFor(input: ProfileFields): ProfileRefusal[] {
+  const refusals: ProfileRefusal[] = [];
 
   const headline = rejectContactDetails(input.headline);
   if (!headline.ok) {
@@ -236,6 +270,140 @@ export async function publishProfile(
   });
 }
 
+/**
+ * **Change what a published profile says.** One transaction, the same rejector,
+ * and two columns it must not touch.
+ *
+ * **`published_at` is not stamped, and `slug` is not reminted.** The Wall reads
+ * `(published_at DESC, id DESC) WHERE state = 'published'`, so an edit that
+ * stamped it would make editing a free bump to the top of the site's
+ * most-linked surface — and story 20's attention-spread measurement would go on
+ * reporting a fairness property the site no longer had. The slug is stable
+ * across edits (NFR9), so an address a Hirer already holds keeps resolving.
+ * `updated_at` is the column that moves, and no index reads it. Both properties
+ * are asserted at seam 2 rather than left to this comment.
+ *
+ * **No Consent row.** An edit is a change to what her profile says, not a fresh
+ * collection of her data, so `publishProfile`'s consent write has no
+ * counterpart here. Whether a `consentVersion` that has moved since she
+ * published needs a fresh one is a Ley 1581 question filed separately; nothing
+ * here decides it.
+ *
+ * **Skills and work history are replaced, not merged** — the form submits the
+ * whole set, so anything absent from it is something she removed.
+ */
+export async function updateProfile(
+  db: DomainDatabase,
+  accountId: string,
+  input: UpdateProfileInput,
+): Promise<UpdateProfileOutcome> {
+  const refusals = refusalsFor(input);
+  if (refusals.length > 0) return { ok: false, reason: "refused", refusals };
+
+  // Narrowed by `refusalsFor` above; restated so the types agree without a cast.
+  const phone = normalizeColombianPhone(input.phone);
+  if (!phone.ok || !isCityId(input.city)) return { ok: false, reason: "refused", refusals };
+  const city: CityId = input.city;
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: schema.capabilityProfile.id })
+      .from(schema.capabilityProfile)
+      .where(eq(schema.capabilityProfile.accountId, accountId))
+      .limit(1);
+
+    if (!existing) return { ok: false as const, reason: "no_profile" as const };
+
+    /**
+     * **The choosable set on an edit is the active vocabulary plus what she
+     * already holds**, which is where this parts company with publishing.
+     *
+     * `publishProfile` admits only active Skills, which is right for a first
+     * publish. Applied to an edit it would mean that retiring one Skill froze
+     * every profile holding it — a save that only corrected a phone number
+     * would be refused for a Skill she never touched, naming a slug she cannot
+     * remove without noticing the refusal first. So a Skill she holds stays
+     * choosable, and a Skill she is *adding* must still be active. Read inside
+     * the transaction so a promotion or retirement racing this save is seen
+     * whole or not at all.
+     */
+    const held = await tx
+      .select({ id: schema.skill.id, slug: schema.skill.slug, labelEs: schema.skill.labelEs })
+      .from(schema.profileSkill)
+      .innerJoin(schema.skill, eq(schema.skill.id, schema.profileSkill.skillId))
+      .where(eq(schema.profileSkill.capabilityProfileId, existing.id));
+
+    const wanted = [...new Set(input.skillSlugs)];
+    const active = await tx
+      .select({ id: schema.skill.id, slug: schema.skill.slug, labelEs: schema.skill.labelEs })
+      .from(schema.skill)
+      .where(and(inArray(schema.skill.slug, wanted), eq(schema.skill.active, true)));
+
+    const choosable = new Map(active.map((skill) => [skill.slug, skill]));
+    for (const skill of held) if (!choosable.has(skill.slug)) choosable.set(skill.slug, skill);
+
+    const unknown = wanted.filter((slug) => !choosable.has(slug));
+    if (unknown.length > 0) {
+      return {
+        ok: false as const,
+        reason: "refused" as const,
+        refusals: [
+          { field: "skillSlugs" as const, code: "unknown_skill" as const, slugs: unknown },
+        ],
+      };
+    }
+
+    // Non-null by the `unknown` check above; `wanted` is the order she chose.
+    const skills = wanted.map((slug) => choosable.get(slug) as (typeof active)[number]);
+
+    await tx
+      .update(schema.capabilityProfile)
+      .set({
+        fullName: input.fullName,
+        firstName: input.firstName,
+        lastInitial: input.lastInitial,
+        city,
+        headline: input.headline,
+        about: input.about,
+        phone: phone.e164,
+        searchText: normalizeSearchText(
+          input.firstName,
+          city,
+          input.headline,
+          ...skills.map((skill) => skill.labelEs),
+        ),
+        // Explicit: the column defaults on insert, and Postgres does not move it
+        // on its own. `published_at` is deliberately absent from this object.
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.capabilityProfile.id, existing.id));
+
+    await tx
+      .delete(schema.profileSkill)
+      .where(eq(schema.profileSkill.capabilityProfileId, existing.id));
+
+    await tx
+      .insert(schema.profileSkill)
+      .values(skills.map((skill) => ({ capabilityProfileId: existing.id, skillId: skill.id })));
+
+    await tx
+      .delete(schema.workHistoryEntry)
+      .where(eq(schema.workHistoryEntry.capabilityProfileId, existing.id));
+
+    const history = input.workHistory.map((text) => text.trim()).filter((text) => text.length > 0);
+
+    if (history.length > 0) {
+      await tx
+        .insert(schema.workHistoryEntry)
+        .values(
+          history.map((text, position) => ({ capabilityProfileId: existing.id, position, text })),
+        );
+    }
+
+    return { ok: true as const };
+  });
+}
+
 /** Whether this Account already holds a profile — what `/publish`'s gate asks. */
 export async function hasProfile(db: DomainDatabase, accountId: string): Promise<boolean> {
   const rows = await db
@@ -351,6 +519,11 @@ export const profiles = {
   async publish(accountId: string, input: PublishProfileInput): Promise<PublishProfileOutcome> {
     const { db } = await import("#connection");
     return publishProfile(db(), accountId, input);
+  },
+
+  async update(accountId: string, input: UpdateProfileInput): Promise<UpdateProfileOutcome> {
+    const { db } = await import("#connection");
+    return updateProfile(db(), accountId, input);
   },
 
   async has(accountId: string): Promise<boolean> {
