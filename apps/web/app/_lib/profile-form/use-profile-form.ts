@@ -33,7 +33,7 @@ import {
 import type { z } from "zod";
 import type { ActionError } from "@/lib/safe-action";
 import { type Feedback, feedbackFor } from "./feedback";
-import { type PublishProfileValues, publishProfileValues } from "./schema";
+import { type RefusedProfileValues, refusedProfileValues } from "./schema";
 import { type Summary, summaryFromIssues, summaryFromValidationErrors } from "./summary";
 
 /**
@@ -79,7 +79,7 @@ export interface ProfileFormMachine {
    * What she submitted, when the server refused it. The unhydrated page mounts
    * fresh from the action's result, and this is what puts her values back.
    */
-  readonly refusedValues: PublishProfileValues | undefined;
+  readonly refusedValues: RefusedProfileValues | undefined;
   /** A ceiling or a transport fault: neither is a field error. */
   readonly feedback: Feedback | undefined;
   /** Focus lands here on every failed outcome — the count before the field. */
@@ -229,7 +229,7 @@ export function useProfileForm({
  * ceiling both echo the parsed input. Read through the schema rather than
  * trusted, because `input` is typed `unknown` on the wire.
  */
-export function refusedValuesOf(result: ProfileFormResult): PublishProfileValues | undefined {
-  const echoed = publishProfileValues.safeParse(result.serverError?.input);
+export function refusedValuesOf(result: ProfileFormResult): RefusedProfileValues | undefined {
+  const echoed = refusedProfileValues.safeParse(result.serverError?.input);
   return echoed.success ? echoed.data : undefined;
 }

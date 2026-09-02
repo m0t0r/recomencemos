@@ -50,6 +50,28 @@ describe("refusedValuesOf", () => {
     ).toEqual(VALUES);
   });
 
+  /**
+   * The edit form has no consent field, so an edit's refusal echoes nine
+   * fields and never a tenth. A reader that insisted on the tenth returned
+   * nothing for every refused edit — and nothing is what the unhydrated page
+   * then re-rendered her fields from, under a sentence promising that what she
+   * typed had survived. Found at seam 3, against a running server.
+   */
+  it("reads them off an edit's refusal, which carries no consent at all", () => {
+    const { consent: _consent, ...edited } = VALUES;
+
+    expect(
+      refusedValuesOf({
+        serverError: {
+          code: "profile_update_refused",
+          message: "x",
+          requestId: "r",
+          input: edited,
+        },
+      }),
+    ).toEqual(edited);
+  });
+
   it("is nothing when the input is absent or not the form's shape", () => {
     expect(refusedValuesOf({})).toBeUndefined();
     expect(

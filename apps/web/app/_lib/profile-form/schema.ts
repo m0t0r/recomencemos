@@ -232,6 +232,24 @@ export const updateProfileSchema = z.preprocess(fromFormData, updateProfileField
 export const updateProfileValuesSchema = z.preprocess(fromFormData, updateProfileValues);
 
 /**
+ * **What a refusal echoes back, from either form.**
+ *
+ * The nine fields both forms render, plus publishing's consent where the form
+ * that was refused had one — `consent` optional rather than required, because
+ * the edit form has none and a reader that insisted on it returned *nothing*
+ * for every refused edit. On the unhydrated path that is every value she typed,
+ * lost, under a sentence saying nothing was lost. Optional rather than omitted
+ * because a publish refusal really does carry it, and a reader shared by two
+ * surfaces should describe both rather than the narrower one.
+ *
+ * Nothing re-ticks the consent box from this: consent is an act she takes, not
+ * a value the form displays back to her.
+ */
+export const refusedProfileValues = publishProfileValues.partial({ consent: true });
+
+export type RefusedProfileValues = z.output<typeof refusedProfileValues>;
+
+/**
  * The two versions the form *displayed*, travelling as one bound argument
  * rather than as hidden inputs (ADR-0015, `authorization.tsx`). The action
  * validates them on arrival and the domain refuses a stale pair.
