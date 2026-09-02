@@ -46,7 +46,7 @@ import {
   SKILL_NO_LONGER_LISTED,
   SKILL_REQUIRED,
   SUMMARY_KEPT,
-} from "./_lib/messages";
+} from "@/app/_lib/profile-form/messages";
 import {
   consentVersionsArg,
   publishProfileFields,
@@ -54,9 +54,9 @@ import {
   publishProfileValuesSchema,
   skillRequestSchema,
   type SkillRequestValues,
-} from "./_lib/schema";
-import { PUBLISH_REFUSED_CODE, SKILL_REQUEST_REFUSED_CODE } from "./_lib/codes";
-import { type FieldErrorTree, treeFromIssues } from "./_lib/summary";
+} from "@/app/_lib/profile-form/schema";
+import { PUBLISH_REFUSED_CODE, SKILL_REQUEST_REFUSED_CODE } from "@/app/_lib/profile-form/codes";
+import { type FieldErrorTree, treeFromIssues } from "@/app/_lib/profile-form/summary";
 
 /**
  * Refuse by return, with the tree and her values. Logged at `warn` because a

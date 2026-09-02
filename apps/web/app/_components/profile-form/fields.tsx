@@ -38,7 +38,7 @@ import {
   WORK_HISTORY_HELP,
   WORK_HISTORY_LABEL,
   workHistoryLineLabel,
-} from "../_lib/messages";
+} from "@/app/_lib/profile-form/messages";
 import {
   aboutField,
   CITY_IDS,
@@ -46,8 +46,12 @@ import {
   LIMITS,
   optionalOnBlur,
   workHistoryLineField,
-} from "../_lib/schema";
-import { messageOf, type PublishForm, type TextFieldName } from "../_lib/use-publish-form";
+} from "@/app/_lib/profile-form/schema";
+import {
+  messageOf,
+  type ProfileFieldsForm,
+  type TextFieldName,
+} from "@/app/_lib/profile-form/use-profile-fields";
 import type { z } from "zod";
 
 /** Proper nouns read the same in both languages; restated here so the browser needs no domain import. */
@@ -58,7 +62,7 @@ export const CITY_LABELS: Record<(typeof CITY_IDS)[number], string> = {
 };
 
 export interface TextFieldProps {
-  readonly form: PublishForm;
+  readonly form: ProfileFieldsForm;
   readonly name: TextFieldName;
   readonly id: string;
   readonly label: string;
@@ -122,7 +126,7 @@ export function TextField({
 }
 
 export interface FieldProps {
-  readonly form: PublishForm;
+  readonly form: ProfileFieldsForm;
   readonly id: string;
   readonly serverError?: string | undefined;
 }
@@ -217,7 +221,7 @@ export function CityField({
 }
 
 export interface WorkHistoryFieldsProps {
-  readonly form: PublishForm;
+  readonly form: ProfileFieldsForm;
   readonly idFor: (index: number) => string;
   readonly groupId: string;
   readonly serverErrorFor: (index: number) => string | undefined;
@@ -285,7 +289,7 @@ function WorkHistoryLine({
   serverError,
   onRemove,
 }: {
-  form: PublishForm;
+  form: ProfileFieldsForm;
   index: number;
   id: string;
   serverError: string | undefined;

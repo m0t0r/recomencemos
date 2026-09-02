@@ -62,9 +62,9 @@ import {
   SKILLS_LABEL,
   skillsChosen,
   skillsNoneMatch,
-} from "../_lib/messages";
-import { LIMITS } from "../_lib/schema";
-import { useSkillRequest } from "../_lib/use-skill-request";
+} from "@/app/_lib/profile-form/messages";
+import { LIMITS } from "@/app/_lib/profile-form/schema";
+import { useSkillRequest } from "@/app/_lib/profile-form/use-skill-request";
 
 export interface VocabularyEntry {
   readonly slug: string;

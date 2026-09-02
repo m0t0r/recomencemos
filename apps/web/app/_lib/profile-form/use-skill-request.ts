@@ -2,8 +2,21 @@
 
 /**
  * The Skill request's machine — what the picker's last option *does*, kept apart
- * from what it looks like, exactly as `use-publish.ts` is kept apart from
- * `publish-layout.tsx`.
+ * from what it looks like, exactly as `use-profile-form.ts` is kept apart from
+ * the layouts that render it.
+ *
+ * **It sits in the shared layer because the picker does.** Since #142 the Skill
+ * picker is rendered by `/publish` and by `/my-profile/edit`, and the option it
+ * ends with — *no está en la lista* — cannot mean two things on two forms: the
+ * only copy that exists says the request is real, and a Worker who is editing
+ * because what she does has changed is exactly the person who finds the list
+ * short.
+ *
+ * **`requestSkill` is imported from `/publish`'s `actions.ts`, which is the one
+ * cross-route import in this app and is flagged as such** (#142's pull request).
+ * The action is the Skill vocabulary's rather than publishing's, so it wants a
+ * home of its own; giving it one is a convention this ticket declined to set on
+ * its way past.
  *
  * **It is a second `useActionState` on a page that already has one, and never a
  * second `<form>`.** A `<form>` cannot nest inside a `<form>`, and the publishing
@@ -26,7 +39,7 @@
  */
 
 import { startTransition, useActionState, useState } from "react";
-import { requestSkill } from "../actions";
+import { requestSkill } from "@/app/(site)/publish/actions";
 import { skillRequestFields } from "./schema";
 import { noticeFor, type SkillRequestNotice } from "./skill-request-notice";
 

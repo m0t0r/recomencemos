@@ -7,7 +7,7 @@
 
 import { publishProfileFields } from "./schema";
 import { treeFromIssues } from "./summary";
-import { refusedValuesOf } from "./use-publish";
+import { refusedValuesOf } from "./use-profile-form";
 
 // The hook module imports the Server Action, whose module carries
 // `server-only`; the function under test needs neither. The factory closes
