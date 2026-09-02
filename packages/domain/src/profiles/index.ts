@@ -32,6 +32,7 @@ import { type CityId, isCityId } from "#policy/cities";
 import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-details";
 import { normalizeColombianPhone } from "#policy/phone";
 import { normalizeSearchText } from "#policy/search-text";
+import { type ListOptions, listBrowse, listWall, type ProfileListPage } from "#profiles/listing";
 import { mintSlug } from "#profiles/slug";
 import type { PhotoState } from "#policy/profile-states";
 import { type OwnProfile, type ProfileRecord, toOwnProfile } from "#projections";
@@ -573,7 +574,37 @@ export const profiles = {
     const { db } = await import("#connection");
     return findOwnProfile(db(), accountId);
   },
+
+  /**
+   * The Wall, newest first.
+   *
+   * **It takes no principal, and that is not an exception to the rule that every
+   * function reading an owned row takes one first.** That rule is about owned
+   * rows; a published profile's public projection is owned by nobody who has to
+   * be checked, which is the whole of story 4 — a Hirer decides whether anyone
+   * here is worth paying before he is asked to register.
+   */
+  async wall(options?: ListOptions): Promise<ProfileListPage> {
+    const { db } = await import("#connection");
+    return listWall(db(), options);
+  },
+
+  /** The browsable list, fewest delivered Offers first. Public for the same reason. */
+  async browse(options?: ListOptions): Promise<ProfileListPage> {
+    const { db } = await import("#connection");
+    return listBrowse(db(), options);
+  },
 };
 
+/**
+ * The two reads themselves are **not** re-exported, only their option and page
+ * types. `listWall` and `listBrowse` take a `DomainDatabase`, and ADR-0010
+ * withholds every handle from `apps/web` — so publishing them past the facade
+ * would put a function on the public subpath that no caller outside this package
+ * can supply an argument to. `profiles.wall()` and `profiles.browse()` are the
+ * door; seam 2 reaches the functions through `#profiles/listing`, which is
+ * private to this package.
+ */
+export type { ListOptions, ProfileListPage } from "#profiles/listing";
 export { SLUG_PATTERN } from "#profiles/slug";
-export type { OwnProfile } from "#projections";
+export type { OwnProfile, PublicProfile } from "#projections";

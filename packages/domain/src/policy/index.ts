@@ -5,8 +5,9 @@
  * handle.
  *
  * The contact-detail rejector (DD3), the phone normalizer, the search normalizer
- * (DD4) and the city registry (DD2). The Offer state machine and the list
- * ordering (NFR22) arrive here with the stories that need them.
+ * (DD4), the city registry (DD2) and the two list orderings — the Wall's, and
+ * the attention spread the browsable list commits to. The Offer state machine
+ * arrives here with the story that needs it.
  */
 
 export { CITIES, CITY_IDS, type CityId, cityLabel, isCityId } from "#policy/cities";
@@ -15,6 +16,16 @@ export {
   type ContactDetailVerdict,
   rejectContactDetails,
 } from "#policy/contact-details";
+/*
+  **The two orderings and the pager are not published, only the types a caller
+  needs to name.** `profiles.wall()` and `profiles.browse()` are the door to both
+  lists, exactly as `profiles/index.ts` argues when it declines to re-export
+  `listWall`/`listBrowse` — publishing the comparators here would put a second,
+  handle-free way to reorder a list on the public subpath, which is the widening
+  ADR-0010 exists to refuse. Every consumer reaches them through `#policy/listing`,
+  which is private to this package.
+*/
+export type { AttentionSpreadOrder, NewestOrder } from "#policy/listing";
 export { formatColombianPhone, normalizeColombianPhone, type PhoneVerdict } from "#policy/phone";
 export {
   PHOTO_STATES,
