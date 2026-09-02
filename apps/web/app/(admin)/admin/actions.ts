@@ -30,7 +30,7 @@ import { projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { adminActionClient } from "@/lib/admin";
 import { returnActionError } from "@/lib/safe-action";
-import { promoteSkillSchema, revokeSessionsSchema } from "./_lib/schema";
+import { promoteSkillRequestArg, promoteSkillSchema, revokeSessionsSchema } from "./_lib/schema";
 
 /** What the queue tells the Admin afterwards: a count, and no personal data. */
 export interface SessionsRevoked {
@@ -76,22 +76,33 @@ export interface SkillPromoted {
  * the active vocabulary when it renders, and no layer between them caches it.
  */
 export const promoteSkill = adminActionClient
+  /**
+   * **The request id is bound, not hidden** (ADR-0015): it travels with the
+   * submit and nobody types it, so React encodes it into the action reference and
+   * this validates it on arrival. The row's markup then carries no mirror of it —
+   * which matters here beyond tidiness, because this row is the shape the four
+   * remaining queue sections will copy.
+   */
+  .bindArgsSchemas([promoteSkillRequestArg])
   .inputSchema(promoteSkillSchema)
-  .stateAction<SkillPromoted>(async ({ parsedInput, ctx: { actor } }) => {
-    const outcome = await admin.run(actor, "promoteSkill", parsedInput);
+  .stateAction<SkillPromoted>(
+    async ({ parsedInput, bindArgsParsedInputs: [requestId], ctx: { actor } }) => {
+      const outcome = await admin.run(actor, "promoteSkill", { ...parsedInput, requestId });
 
-    if (!outcome.ok) {
-      // Returned, not thrown. A request somebody else already resolved and a
-      // slug already taken are both ordinary answers on a shared queue.
-      logRequestError(outcome.error, { level: "warn" });
-      return returnActionError(projectClientError(outcome.error));
-    }
+      if (!outcome.ok) {
+        // Returned, not thrown. A request somebody else already resolved and a
+        // slug already taken are both ordinary answers on a shared queue.
+        logRequestError(outcome.error, { level: "warn" });
+        return returnActionError(projectClientError(outcome.error));
+      }
 
-    /**
-     * **The label, and not the slug beside it.** The Admin has just typed both,
-     * and only one of them is the thing every Worker will read on the publishing
-     * form — quoting that back is the confirmation. The request's own text is
-     * deliberately absent: it is on screen already, in the row this came from.
-     */
-    return { labelEs: outcome.result.labelEs };
-  });
+      /**
+       * **The label, and not the slug beside it.** The Admin has just typed both,
+       * and only one of them is the thing every Worker will read on the
+       * publishing form — quoting that back is the confirmation. The request's
+       * own text is deliberately absent: it is on screen already, in the row this
+       * came from.
+       */
+      return { labelEs: outcome.result.labelEs };
+    },
+  );

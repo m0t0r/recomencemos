@@ -26,22 +26,13 @@
  */
 
 import { startTransition, useActionState, useState } from "react";
-import { SESSION_REQUIRED_CODE } from "@/app/_lib/session/codes";
-import type { ActionError } from "@/lib/safe-action";
 import { requestSkill } from "../actions";
-import { SKILL_REQUEST_FAILED, SKILL_REQUEST_SENT } from "./messages";
-import { SKILL_REQUEST_REFUSED_CODE } from "./codes";
 import { skillRequestFields } from "./schema";
+import { noticeFor, type SkillRequestNotice } from "./skill-request-notice";
 
 export type SkillRequestResult = Awaited<ReturnType<typeof requestSkill>>;
 
 const INITIAL: SkillRequestResult = {};
-
-/** What the region beside the field says, and whether it is an answer or a refusal. */
-export interface SkillRequestNotice {
-  readonly message: string;
-  readonly refused: boolean;
-}
 
 export interface SkillRequestMachine {
   /** Whether the request is in flight, so the button can say so. */
@@ -104,34 +95,4 @@ export function useSkillRequest(): SkillRequestMachine {
   }
 
   return { pending, notice: noticeFor(result), text, setText, send, fieldError };
-}
-
-/**
- * What the region says, or nothing.
- *
- * **A ceiling, a rejected fragment and an expired session all arrive as
- * `serverError`, and all three carry their own sentence** — one written by
- * NFR26's refusal table, one by the surface's `contactDetailRefusal`, one by the
- * domain. None is rewritten here: each says something the others cannot, and the
- * first two are refusals a person provokes on purpose. Anything else is a fault,
- * and the fault's sentence is ours rather than whatever the transport produced.
- *
- * Exported for its own test — it is the one rule in this module rather than a
- * wiring.
- */
-export function noticeFor(result: {
-  readonly data?: { readonly requested: true } | undefined;
-  readonly serverError?: ActionError | undefined;
-}): SkillRequestNotice | undefined {
-  if (result.serverError) {
-    const { code, message, retryAfter } = result.serverError;
-    const spoken =
-      retryAfter !== undefined ||
-      code === SKILL_REQUEST_REFUSED_CODE ||
-      code === SESSION_REQUIRED_CODE;
-
-    return { message: spoken ? message : SKILL_REQUEST_FAILED, refused: true };
-  }
-
-  return result.data?.requested ? { message: SKILL_REQUEST_SENT, refused: false } : undefined;
 }

@@ -19,7 +19,22 @@ import {
 } from "../_lib/messages";
 import type { QueueItem } from "../_lib/queue-sources";
 
-const { promoteSkill } = vi.hoisted(() => ({ promoteSkill: vi.fn() }));
+/**
+ * `bind` is the action's real surface here, so the double carries one: the row
+ * binds the request id and this is what records which id it bound.
+ */
+const { promoteSkill, bound } = vi.hoisted(() => {
+  const action = vi.fn();
+  const record = vi.fn();
+  Object.assign(action, {
+    bind: (_this: unknown, requestId: string) => {
+      record(requestId);
+      return action;
+    },
+  });
+
+  return { promoteSkill: action, bound: record };
+});
 
 vi.mock("../actions", () => ({ promoteSkill }));
 
@@ -31,6 +46,7 @@ const item: QueueItem = {
 
 beforeEach(() => {
   promoteSkill.mockReset();
+  bound.mockReset();
   promoteSkill.mockResolvedValue({ data: { labelEs: "Arreglo máquinas de coser" } });
 });
 
@@ -47,23 +63,31 @@ it("renders the request as she wrote it", () => {
   expect(screen.getByText(item.summary)).toBeInTheDocument();
 });
 
-it("names the request it is about to promote, without showing the Admin an id", async () => {
+/**
+ * **The request id is bound, and it is nowhere in the markup** (ADR-0015): a
+ * hidden input mirroring a value nobody typed is the shape that rule replaces,
+ * and this row is the one the four remaining queue sections will copy.
+ *
+ * The hidden-input half is asserted with a raw selector on purpose — the same
+ * escape hatch `sign-in-form.test.tsx` uses, and for the identical reason: a
+ * hidden input has no accessible role, so its **absence** is unassertable through
+ * the accessibility tree.
+ */
+it("binds the request it is about to promote instead of mirroring it into the form", async () => {
   const user = userEvent.setup();
   const { container } = render(<SkillRequestRow item={item} />);
+
+  expect(bound).toHaveBeenCalledWith("7");
+  expect(container.querySelector('input[type="hidden"]')).toBeNull();
 
   await user.type(screen.getByRole("textbox", { name: PROMOTE_SLUG_LABEL }), "sewing-repair");
   await user.type(
     screen.getByRole("textbox", { name: PROMOTE_LABEL_LABEL }),
     "Arreglo máquinas de coser",
   );
-  // The one hidden input on this row, read before the submit that removes the
-  // form: the value the server locks on is the row's own id, not anything typed.
-  expect(container.querySelector('input[name="requestId"]')).toHaveValue("7");
-
   await user.click(screen.getByRole("button", { name: PROMOTE_SUBMIT }));
 
   const sent = promoteSkill.mock.calls.at(-1)?.[1] as FormData;
-  expect(sent.get("requestId")).toBe("7");
   expect(sent.get("slug")).toBe("sewing-repair");
   expect(sent.get("labelEs")).toBe("Arreglo máquinas de coser");
 });

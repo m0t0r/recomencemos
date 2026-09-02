@@ -55,8 +55,14 @@ type Result = Awaited<ReturnType<typeof promoteSkill>>;
 const INITIAL: Result = {};
 
 export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
-  const [result, formAction, pending] = useActionState(promoteSkill, INITIAL);
-  const requestId = useId();
+  /**
+   * **The request id is bound rather than mirrored into a hidden input**
+   * (ADR-0015): React encodes it into the action reference, the action validates
+   * it on arrival, and this row's markup carries no copy of it. `bind` returns a
+   * new reference per render, which `useActionState` is fine with — it is the
+   * shape `/publish` already uses for the consent versions.
+   */
+  const [result, formAction, pending] = useActionState(promoteSkill.bind(null, item.id), INITIAL);
   const slugId = useId();
   const slugHelpId = useId();
   const labelId = useId();
@@ -116,16 +122,6 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
         <form action={formAction} className="flex flex-col gap-3">
           <FieldSet className="gap-3">
             <FieldLegend variant="label">{PROMOTE_HEADING}</FieldLegend>
-
-            {/*
-              **The request id is a bound value the row already knows**, and it is
-              a hidden input rather than `action.bind` for one reason: ADR-0015's
-              rule is about values that travel with a *submit she typed into*, and
-              this is a row identifier the server re-checks under a lock before it
-              does anything. A forged id reaches a 404 or a resolved request, both
-              of which are refusals this action already answers.
-            */}
-            <input type="hidden" name="requestId" value={item.id} id={requestId} readOnly />
 
             <Field>
               <FieldLabel htmlFor={slugId}>{PROMOTE_SLUG_LABEL}</FieldLabel>

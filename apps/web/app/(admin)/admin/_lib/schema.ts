@@ -51,8 +51,23 @@ export const revokeSessionsSchema = z.preprocess(
 export type RevokeSessionsInput = z.output<typeof revokeSessionsFields>;
 
 /**
- * `promoteSkill` takes the request it resolves and the two names the entry will
- * carry.
+ * The request the promotion resolves, as a **bound argument** rather than a
+ * hidden input (ADR-0015): it travels with a submit and is not typed into it, so
+ * React encodes it into the action reference itself, it is validated on arrival,
+ * and the row's markup carries no mirror of it.
+ *
+ * Digits rather than a number: it is a `BIGINT` key, parsing it into a
+ * JavaScript `number` is lossy past 2^53, and nothing does arithmetic on it. No
+ * message, because no person can provoke this — the id comes from the row, and a
+ * forged one meets the refusals the action already answers.
+ */
+export const promoteSkillRequestArg = z.string().regex(/^\d+$/);
+
+/** The label is read on the publishing form, so it is the length of a label. */
+export const PROMOTE_LABEL_MAX = 80;
+
+/**
+ * The two names the entry will carry, and the code it may carry.
  *
  * **The Admin authors both names, and the shapes are enforced here** because
  * they are the vocabulary's own rules rather than this form's: an identifier
@@ -65,19 +80,18 @@ export type RevokeSessionsInput = z.output<typeof revokeSessionsFields>;
  * **`cuocCode` is optional and the column is nullable.** An entry that arrived
  * through a request may answer to no CUOC *Ocupación*, which is frequently why it
  * had to be requested; an empty field means exactly that.
- *
- * The id is digits rather than a number: it is a `BIGINT` key, and parsing it
- * into a JavaScript `number` is lossy past 2^53 for no benefit — nothing here
- * does arithmetic on it.
  */
 export const promoteSkillFields = z.object({
-  requestId: z.string().regex(/^\d+$/),
   slug: z
     .string()
     .trim()
     .min(1, PROMOTE_SLUG_REQUIRED)
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, PROMOTE_SLUG_SHAPE),
-  labelEs: z.string().trim().min(1, PROMOTE_LABEL_REQUIRED).max(80, PROMOTE_LABEL_TOO_LONG),
+  labelEs: z
+    .string()
+    .trim()
+    .min(1, PROMOTE_LABEL_REQUIRED)
+    .max(PROMOTE_LABEL_MAX, PROMOTE_LABEL_TOO_LONG),
   /**
    * `""` becomes absent rather than a refusal: an empty optional field is how the
    * form says "no code", and asking Zod to distinguish the two would make the
@@ -95,7 +109,6 @@ export const promoteSkillSchema = z.preprocess(
   (raw) =>
     raw instanceof FormData
       ? {
-          requestId: field(raw, "requestId"),
           slug: field(raw, "slug"),
           labelEs: field(raw, "labelEs"),
           cuocCode: field(raw, "cuocCode"),

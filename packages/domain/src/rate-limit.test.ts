@@ -45,6 +45,20 @@ describe("CEILINGS", () => {
     expect(Object.keys(CEILINGS)).toContain("verifyAdminTotp");
     expect(Object.keys(CEILINGS)).toContain("verifyAdminBackupCode");
   });
+
+  /**
+   * **Five a day, per Account and per IP, and the whole object is asserted.**
+   * NFR26 names both scopes for this action and either alone leaves the obvious
+   * way round: an Account-only bound is defeated by a second address, an IP-only
+   * one by mobile data. The window is a calendar day rather than a rolling one,
+   * which is what lets the refusal say when it reopens.
+   */
+  it("bounds requestSkill at five a day per Account and per IP", () => {
+    expect(CEILINGS.requestSkill).toEqual({
+      account: { max: 5, windowSeconds: 86_400 },
+      ip: { max: 5, windowSeconds: 86_400 },
+    });
+  });
 });
 
 describe("principalKey", () => {
@@ -148,6 +162,40 @@ describe("CEILING_REFUSALS", () => {
   // Google door is still there, so a ceiling is never a dead end.
   it("names the door that is still open", () => {
     expect(message).toContain("Google");
+  });
+
+  /**
+   * **The one refusal read by somebody in the middle of something else**, and the
+   * spec singles it out for that: she is mid-publish when she meets it, which is
+   * the moment silence costs the most. Three clauses are named there, so three
+   * assertions — the requests already sent are queued and not lost, when she may
+   * ask again, and that she can publish now with the closest entry on the list.
+   *
+   * The fourth clause the criterion names — and change it later — is deliberately
+   * absent: editing a published profile has no action and no surface, so
+   * promising one would be a refusal pointing at a door that is not there.
+   */
+  describe("the request a Worker meets mid-publish", () => {
+    const refused = CEILING_REFUSALS.requestSkill({ max: 5, windowSeconds: 86_400 }, 720);
+
+    it("says the ones she already sent are still there", () => {
+      expect(refused).toContain("quedaron en la fila");
+      expect(refused).toContain("siguen ahí");
+    });
+
+    it("says when she may ask again", () => {
+      expect(refused).toContain("en 12 minutos");
+    });
+
+    it("leaves her the way forward that does not wait on anybody", () => {
+      expect(refused).toContain("más parecida");
+      expect(refused).toContain("publica");
+    });
+
+    it("promises no edit she cannot make", () => {
+      expect(refused.toLowerCase()).not.toContain("después");
+      expect(refused.toLowerCase()).not.toContain("cambiar");
+    });
   });
 
   /**
