@@ -12,7 +12,7 @@
  */
 
 import { AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
-import { Button } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button";
 import { Separator } from "@repo/design-system/components/separator";
 import { cityLabel, formatColombianPhone } from "@repo/domain/policy";
 import type { OwnProfile } from "@repo/domain/profiles";
@@ -63,9 +63,22 @@ function Confirmation() {
       <AlertTitle>{PUBLISHED_CONFIRMATION}</AlertTitle>
       <AlertDescription className="flex flex-col gap-3">
         <p>{PUBLISHED_EXPLANATION}</p>
-        <Button variant="outline" size="sm" className="self-start" render={<Link href="/" />}>
+        {/*
+          `buttonVariants` on a plain `<Link>`, not `<Button render={<Link/>}>`,
+          for the reason `sign-in-link.tsx` sets out at length: this navigates,
+          so it is a link and must announce as one. Handing the registry's
+          `Button` a link made Base UI warn on every render that native button
+          semantics had been stripped — observed in `next dev` stdout, which is
+          where `logging.browserToTerminal` puts it — and the flag it suggests
+          stamps `role="button"` onto the `<a>`, hiding a working link from
+          anyone navigating by links.
+        */}
+        <Link
+          href="/"
+          className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+        >
           {WALL_LINK}
-        </Button>
+        </Link>
       </AlertDescription>
     </PublishedConfirmation>
   );

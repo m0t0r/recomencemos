@@ -45,7 +45,10 @@ import { CURRENT_CONSENT_VERSIONS } from "@repo/domain/consent";
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { AUTHORIZATION_ANCHOR, AuthorizationText } from "@/app/_components/consent/authorization";
+import {
+  AUTHORIZATION_ANCHOR,
+  AuthorizationText,
+} from "@/app/_components/consent/authorization-text";
 import {
   contactLine,
   DATA_ITEMS,
