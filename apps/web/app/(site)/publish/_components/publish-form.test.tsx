@@ -11,6 +11,7 @@ import { PublishForm } from "./publish-form";
 import { VARIANT_KEYS, type VariantKey } from "./variants";
 import {
   CONSENT_REQUIRED,
+  FEEDBACK_REGION_LABEL,
   PUBLISH_BUTTON,
   SKILL_REQUIRED,
   SKILLS_AT_MAXIMUM,
@@ -77,7 +78,7 @@ describe.each(VARIANT_KEYS)("variant %s", (variant) => {
 
     await user.click(screen.getByRole("button", { name: PUBLISH_BUTTON }));
 
-    const summary = await screen.findByRole("alert", { name: "Resultado" });
+    const summary = await screen.findByRole("alert", { name: FEEDBACK_REGION_LABEL });
     expect(summary).toHaveFocus();
     expect(summary).toHaveTextContent(summaryHeading(8));
     expect(summary).toHaveTextContent(SKILL_REQUIRED);
@@ -143,7 +144,7 @@ describe("the Skill picker", () => {
     const user = userEvent.setup();
     renderForm();
 
-    const option = screen.getByRole("checkbox", { name: /no está en la lista/ });
+    const option = screen.getByRole("checkbox", { name: /está en la lista/i });
     await user.click(option);
 
     expect(option).toHaveAccessibleDescription(/Por ahora/);

@@ -4,6 +4,7 @@
  * carries `server-only`).
  */
 
+import { SESSION_REQUIRED_CODE } from "@/app/_lib/session/codes";
 import type { ActionError } from "@/lib/safe-action";
 import { PUBLISH_FAILED } from "./messages";
 
@@ -28,11 +29,15 @@ export function feedbackFor(result: {
 }): Feedback | undefined {
   if (!result.serverError) return undefined;
 
+  // A per-field refusal is the summary's to say, item by item; a second
+  // sentence above it would say the same thing twice.
+  if (result.serverError.fieldErrors !== undefined) return undefined;
+
   const { message, retryAfter, code } = result.serverError;
   if (retryAfter !== undefined) return { message, retryAfter };
 
   // A refusal with a sentence of its own — the session gone — says that
   // sentence. Anything else is a fault, and the fault's sentence is ours rather
   // than whatever the transport produced.
-  return { message: code === "session_required" ? message : PUBLISH_FAILED };
+  return { message: code === SESSION_REQUIRED_CODE ? message : PUBLISH_FAILED };
 }

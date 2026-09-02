@@ -9,11 +9,12 @@
  * route with the real read behind them. Locking one is the human's call.
  */
 
-import { Alert, AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
+import { AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
 import { Badge } from "@repo/design-system/components/badge";
 import { Button } from "@repo/design-system/components/button";
 import { Separator } from "@repo/design-system/components/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/design-system/components/tabs";
+import { cityLabel, formatColombianPhone } from "@repo/domain/policy";
 import type { OwnProfile } from "@repo/domain/profiles";
 import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
@@ -46,20 +47,6 @@ import {
   WALL_LINK,
   WORK_HISTORY_TERM,
 } from "../_lib/messages";
-
-/** Proper nouns; the same three strings `/publish` restates for the same reason. */
-const CITY_LABELS: Record<OwnProfile["city"], string> = {
-  pereira: "Pereira",
-  dosquebradas: "Dosquebradas",
-  santa_rosa_de_cabal: "Santa Rosa de Cabal",
-};
-
-/** `300 123 4567` from `+573001234567`, for reading. Never a link (DD7). */
-function readablePhone(e164: string): string {
-  const national = e164.startsWith("+57") ? e164.slice(3) : e164;
-  if (national.length !== 10) return e164;
-  return `${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`;
-}
 
 function photoSentence(state: OwnProfile["photoState"]): string {
   switch (state) {
@@ -98,7 +85,7 @@ function Card({ profile }: { profile: OwnProfile }) {
     <ProfileCard
       firstName={profile.firstName}
       lastInitial={profile.lastInitial}
-      cityLabel={CITY_LABELS[profile.city]}
+      cityLabel={cityLabel(profile.city)}
       headline={profile.headline}
       skillLabels={profile.skills.map((skill) => skill.labelEs)}
       photoUrl={profile.photoUrl}
@@ -151,7 +138,7 @@ function HeldTerms({ profile }: { profile: OwnProfile }) {
   return (
     <dl className="flex flex-col gap-4">
       <Term term={FULL_NAME_TERM}>{profile.fullName}</Term>
-      <Term term={PHONE_TERM}>{readablePhone(profile.phone)}</Term>
+      <Term term={PHONE_TERM}>{formatColombianPhone(profile.phone)}</Term>
       <Term term={EMAIL_TERM}>{profile.email}</Term>
     </dl>
   );
@@ -194,22 +181,20 @@ function Tiers({ profile, justPublished }: OwnProfileViewProps) {
   );
 }
 
-function LedgerRow({
-  term,
-  visibility,
-  children,
-}: {
-  term: string;
-  visibility: string;
-  children: ReactNode;
-}) {
+type Tier = "public" | "gated" | "held";
+
+const TIER_LABEL: Record<Tier, string> = {
+  public: VISIBILITY_PUBLIC,
+  gated: VISIBILITY_GATED,
+  held: VISIBILITY_HELD,
+};
+
+function LedgerRow({ term, tier, children }: { term: string; tier: Tier; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <dt className="text-muted-foreground text-sm">{term}</dt>
-        <Badge variant={visibility === VISIBILITY_HELD ? "outline" : "secondary"}>
-          {visibility}
-        </Badge>
+        <Badge variant={tier === "held" ? "outline" : "secondary"}>{TIER_LABEL[tier]}</Badge>
       </div>
       <dd className="text-foreground text-pretty">{children}</dd>
     </div>
@@ -222,13 +207,13 @@ function Ledger({ profile, justPublished }: OwnProfileViewProps) {
     <div className="flex flex-col gap-6">
       {justPublished ? <Confirmation /> : null}
       <dl className="divide-border flex flex-col divide-y">
-        <LedgerRow term={NAME_TERM} visibility={VISIBILITY_PUBLIC}>
+        <LedgerRow term={NAME_TERM} tier="public">
           {displayName(profile.firstName, profile.lastInitial)}
         </LedgerRow>
-        <LedgerRow term={CITY_TERM} visibility={VISIBILITY_PUBLIC}>
-          {CITY_LABELS[profile.city]}
+        <LedgerRow term={CITY_TERM} tier="public">
+          {cityLabel(profile.city)}
         </LedgerRow>
-        <LedgerRow term={SKILLS_TERM} visibility={VISIBILITY_PUBLIC}>
+        <LedgerRow term={SKILLS_TERM} tier="public">
           <ul className="flex flex-wrap gap-1.5">
             {profile.skills.map((skill) => (
               <li key={skill.slug}>
@@ -237,27 +222,27 @@ function Ledger({ profile, justPublished }: OwnProfileViewProps) {
             ))}
           </ul>
         </LedgerRow>
-        <LedgerRow term={HEADLINE_TERM} visibility={VISIBILITY_PUBLIC}>
+        <LedgerRow term={HEADLINE_TERM} tier="public">
           {profile.headline}
         </LedgerRow>
-        <LedgerRow term={PHOTO_TERM} visibility={VISIBILITY_PUBLIC}>
+        <LedgerRow term={PHOTO_TERM} tier="public">
           {photoSentence(profile.photoState)}
         </LedgerRow>
-        <LedgerRow term={ABOUT_TERM} visibility={VISIBILITY_GATED}>
+        <LedgerRow term={ABOUT_TERM} tier="gated">
           {profile.about || NOTHING_MORE}
         </LedgerRow>
         {profile.workHistory.length > 0 ? (
-          <LedgerRow term={WORK_HISTORY_TERM} visibility={VISIBILITY_GATED}>
+          <LedgerRow term={WORK_HISTORY_TERM} tier="gated">
             <WorkHistoryList lines={profile.workHistory} />
           </LedgerRow>
         ) : null}
-        <LedgerRow term={FULL_NAME_TERM} visibility={VISIBILITY_HELD}>
+        <LedgerRow term={FULL_NAME_TERM} tier="held">
           {profile.fullName}
         </LedgerRow>
-        <LedgerRow term={PHONE_TERM} visibility={VISIBILITY_HELD}>
-          {readablePhone(profile.phone)}
+        <LedgerRow term={PHONE_TERM} tier="held">
+          {formatColombianPhone(profile.phone)}
         </LedgerRow>
-        <LedgerRow term={EMAIL_TERM} visibility={VISIBILITY_HELD}>
+        <LedgerRow term={EMAIL_TERM} tier="held">
           {profile.email}
         </LedgerRow>
       </dl>

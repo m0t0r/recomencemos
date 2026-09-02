@@ -16,4 +16,10 @@ export {
   rejectContactDetails,
 } from "#policy/contact-details";
 export { formatColombianPhone, normalizeColombianPhone, type PhoneVerdict } from "#policy/phone";
+export {
+  PHOTO_STATES,
+  type PhotoState,
+  PROFILE_STATES,
+  type ProfileState,
+} from "#policy/profile-states";
 export { normalizeSearchText } from "#policy/search-text";

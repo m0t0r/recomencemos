@@ -31,7 +31,7 @@ import { user } from "#auth-schema";
 import { inList } from "#column-types";
 import { CONSENT_SIDES } from "#consent/registry";
 import { CITY_IDS } from "#policy/cities";
-import { PHOTO_STATES, PROFILE_STATES } from "#projections";
+import { PHOTO_STATES, PROFILE_STATES } from "#policy/profile-states";
 import { CEILINGED_ACTIONS } from "#rate-limit";
 
 /**

@@ -29,7 +29,7 @@ export const PUBLIC_HEADING = "Lo que ve todo el mundo";
 export const GATED_HEADING = "Lo que ve quien abra tu perfil";
 export const HELD_HEADING = "Lo que ve solo quien tú aceptes";
 export const HELD_EXPLANATION =
-  "Tu nombre completo, tu teléfono y tu correo cruzan solo cuando aceptas una propuesta.";
+  "Tu nombre completo, tu teléfono y tu correo se los damos solo a quien tú aceptes.";
 
 /** The ledger's three visibility words, five words or fewer each. */
 export const VISIBILITY_PUBLIC = "Todo el mundo";
@@ -59,6 +59,12 @@ export const NOTHING_MORE = "No escribiste nada más. Está bien así.";
 export const PHOTO_ABSENT = "Todavía no tienes foto. En su lugar se muestra tu inicial.";
 export const PHOTO_PENDING =
   "Una persona está mirando tu foto. Mientras tanto se muestra tu inicial.";
+/** The load failed: what failed, and that reloading helps. */
+export const LOAD_FAILED_TITLE = "No pudimos cargar tu perfil";
+export const LOAD_FAILED_EXPLANATION = "Tu perfil sigue publicado. Recarga la página para verlo.";
+export const LOAD_FAILED_RETRY = "Recargar";
+export const LOAD_FAILED_RETRYING = "Recargando";
+
 export const PHOTO_REJECTED =
   "No pudimos publicar esa foto. Se muestra tu inicial; puedes subir otra.";
 
@@ -86,6 +92,8 @@ export const MY_PROFILE_COPY = {
   PHOTO_ABSENT,
   PHOTO_PENDING,
   PHOTO_REJECTED,
+  LOAD_FAILED_TITLE,
+  LOAD_FAILED_EXPLANATION,
 } as const;
 
 export const MY_PROFILE_LABELS = {
@@ -103,4 +111,6 @@ export const MY_PROFILE_LABELS = {
   PHONE_TERM,
   EMAIL_TERM,
   PHOTO_TERM,
+  LOAD_FAILED_RETRY,
+  LOAD_FAILED_RETRYING,
 } as const;

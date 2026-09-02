@@ -26,6 +26,7 @@ import {
   CAPABILITY_LEGEND,
   CONTACT_LEGEND,
   CONTACT_VISIBILITY,
+  FEEDBACK_REGION_LABEL,
   FIRST_NAME_HELP,
   FIRST_NAME_LABEL,
   FULL_NAME_HELP,
@@ -204,7 +205,7 @@ export function WithPreview({ form, machine, vocabulary, idFor, serverErrorFor }
           feedback={machine.feedback}
           summaryRef={machine.summaryRef}
           idFor={idFor}
-          label="Resultado"
+          label={FEEDBACK_REGION_LABEL}
         />
 
         <Button type="submit" size="lg" disabled={machine.pending} aria-busy={machine.pending}>

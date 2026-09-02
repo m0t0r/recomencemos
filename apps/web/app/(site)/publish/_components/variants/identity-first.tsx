@@ -17,6 +17,7 @@ import { FieldGroup } from "@repo/design-system/components/field";
 import { AuthorizationConsent } from "@/app/_components/consent/authorization";
 import {
   CONTACT_VISIBILITY,
+  FEEDBACK_REGION_LABEL,
   FIRST_NAME_HELP,
   FIRST_NAME_LABEL,
   FULL_NAME_HELP,
@@ -53,7 +54,7 @@ export function IdentityFirst({ form, machine, vocabulary, idFor, serverErrorFor
         feedback={machine.feedback}
         summaryRef={machine.summaryRef}
         idFor={idFor}
-        label="Resultado"
+        label={FEEDBACK_REGION_LABEL}
       />
 
       <p className="text-muted-foreground text-sm">{IDENTITY_VISIBILITY}</p>

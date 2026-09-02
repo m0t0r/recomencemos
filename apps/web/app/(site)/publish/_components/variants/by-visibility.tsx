@@ -24,6 +24,7 @@ import {
   CAPABILITY_VISIBILITY,
   CONTACT_LEGEND,
   CONTACT_VISIBILITY,
+  FEEDBACK_REGION_LABEL,
   FIRST_NAME_HELP,
   FIRST_NAME_LABEL,
   FULL_NAME_HELP,
@@ -47,13 +48,13 @@ import {
   lastInitialField,
   LIMITS,
   phoneField,
+  skillSlugsField,
 } from "../../_lib/schema";
 import { messageOf } from "../../_lib/use-publish-form";
 import { AboutField, CityField, PhotoNote, TextField, WorkHistoryFields } from "../fields";
 import { FormSummary } from "../form-summary";
 import { SkillPicker } from "../skill-picker";
 import type { VariantProps } from "./index";
-import { skillSlugsField } from "../../_lib/schema";
 
 export function ByVisibility({ form, machine, vocabulary, idFor, serverErrorFor }: VariantProps) {
   return (
@@ -171,7 +172,7 @@ export function ByVisibility({ form, machine, vocabulary, idFor, serverErrorFor 
         feedback={machine.feedback}
         summaryRef={machine.summaryRef}
         idFor={idFor}
-        label="Resultado"
+        label={FEEDBACK_REGION_LABEL}
       />
 
       <Button type="submit" size="lg" disabled={machine.pending} aria-busy={machine.pending}>

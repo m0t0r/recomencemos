@@ -127,4 +127,11 @@ describe("the sentences the ticket names specifically", () => {
   it("tells her what the not-listed option does today", () => {
     expect(PUBLISH_COPY.SKILL_NOT_LISTED_HELP.toLowerCase()).toContain("por ahora");
   });
+
+  // Voice guide, Don't 5: the actor is us, and every refusal says so.
+  it("names us as the ones who hand over her contact details, in every refusal", () => {
+    for (const kind of ["phone", "email", "messaging_url"] as const) {
+      expect(contactDetailRefusal(kind, "x").toLowerCase()).toContain("damos nosotros");
+    }
+  });
 });

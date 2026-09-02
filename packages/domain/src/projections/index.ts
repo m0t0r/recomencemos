@@ -30,15 +30,8 @@
  */
 
 import type { CityId } from "#policy/cities";
+import type { PhotoState } from "#policy/profile-states";
 import type { VocabularyEntry } from "#skills";
-
-/** Where the photo is in its life. `absent` is a profile that never attached one. */
-export const PHOTO_STATES = ["absent", "pending", "approved", "rejected"] as const;
-export type PhotoState = (typeof PHOTO_STATES)[number];
-
-/** `deleted` is deliberately not here — moderation takedown and habeas data never share a mechanism (DD8). */
-export const PROFILE_STATES = ["published", "taken_down"] as const;
-export type ProfileState = (typeof PROFILE_STATES)[number];
 
 /**
  * Everything a projection may read. The query modules build this; nothing

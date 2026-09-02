@@ -34,7 +34,9 @@ import {
   LAST_INITIAL_ONE_LETTER,
   LAST_INITIAL_REQUIRED,
   PHONE_LOOKS_WRONG,
+  PAGE_STALE,
   PHONE_REQUIRED,
+  SKILL_NO_LONGER_LISTED,
   SKILL_REQUIRED,
   SKILLS_TOO_MANY,
   WORK_HISTORY_LINE_TOO_LONG,
@@ -100,7 +102,7 @@ export const phoneField = z
 
 /** Slugs are English identifiers; anything else in the array is not from the picker. */
 export const skillSlugsField = z
-  .array(z.string().regex(/^[a-z0-9-]+$/))
+  .array(z.string().regex(/^[a-z0-9-]+$/, SKILL_NO_LONGER_LISTED))
   .min(1, SKILL_REQUIRED)
   .max(LIMITS.skills, SKILLS_TOO_MANY);
 
@@ -133,7 +135,31 @@ export const publishProfileFields = z.object({
 });
 
 export type PublishProfileInput = z.output<typeof publishProfileFields>;
-export type PublishProfileValues = z.input<typeof publishProfileFields>;
+
+/**
+ * The same ten fields with **no rule applied** — the shape the action accepts
+ * at its boundary, so that a refused submission can be handed back whole.
+ *
+ * The strict parse runs inside the action rather than as its `inputSchema`
+ * because next-safe-action returns only `validationErrors` for a schema
+ * refusal and never the input, and on the unhydrated path the page re-renders
+ * from what the action returned: a refusal that carried errors and not values
+ * would re-render an empty form under a sentence saying nothing was lost.
+ */
+export const publishProfileValues = z.object({
+  fullName: z.string(),
+  firstName: z.string(),
+  lastInitial: z.string(),
+  city: z.string(),
+  headline: z.string(),
+  about: z.string(),
+  phone: z.string(),
+  skillSlugs: z.array(z.string()),
+  workHistory: z.array(z.string()),
+  consent: z.boolean(),
+});
+
+export type PublishProfileValues = z.output<typeof publishProfileValues>;
 
 function stringsOf(raw: FormData, name: string): string[] {
   return raw.getAll(name).map((value) => (typeof value === "string" ? value : ""));
@@ -154,24 +180,28 @@ function stringOf(raw: FormData, name: string): string {
  * refuses anything but. A plain object passes straight through, so a direct
  * call and a test need not build a `FormData`.
  */
-export const publishProfileSchema = z.preprocess(
-  (raw) =>
-    raw instanceof FormData
-      ? {
-          fullName: stringOf(raw, "fullName"),
-          firstName: stringOf(raw, "firstName"),
-          lastInitial: stringOf(raw, "lastInitial"),
-          city: stringOf(raw, "city"),
-          headline: stringOf(raw, "headline"),
-          about: stringOf(raw, "about"),
-          phone: stringOf(raw, "phone"),
-          skillSlugs: stringsOf(raw, "skillSlugs"),
-          workHistory: stringsOf(raw, "workHistory"),
-          consent: raw.get("consent") === "true",
-        }
-      : raw,
-  publishProfileFields,
-);
+function fromFormData(raw: unknown): unknown {
+  return raw instanceof FormData
+    ? {
+        fullName: stringOf(raw, "fullName"),
+        firstName: stringOf(raw, "firstName"),
+        lastInitial: stringOf(raw, "lastInitial"),
+        city: stringOf(raw, "city"),
+        headline: stringOf(raw, "headline"),
+        about: stringOf(raw, "about"),
+        phone: stringOf(raw, "phone"),
+        skillSlugs: stringsOf(raw, "skillSlugs"),
+        workHistory: stringsOf(raw, "workHistory"),
+        consent: raw.get("consent") === "true",
+      }
+    : raw;
+}
+
+/** The strict parse over either shape: what the browser guards a submit with. */
+export const publishProfileSchema = z.preprocess(fromFormData, publishProfileFields);
+
+/** The lenient parse: what the action accepts, so a refusal can return the values. */
+export const publishProfileValuesSchema = z.preprocess(fromFormData, publishProfileValues);
 
 /**
  * The two versions the form *displayed*, travelling as one bound argument
@@ -179,6 +209,6 @@ export const publishProfileSchema = z.preprocess(
  * validates them on arrival and the domain refuses a stale pair.
  */
 export const consentVersionsArg = z.object({
-  notice: z.string().min(1),
-  authorization: z.string().min(1),
+  notice: z.string().min(1, PAGE_STALE),
+  authorization: z.string().min(1, PAGE_STALE),
 });

@@ -11,6 +11,40 @@
 import type { z } from "zod";
 import { FIELD_LABELS, type PublishFieldName, summaryHeading } from "./messages";
 
+/**
+ * The formatted error tree next-safe-action renders `validationErrors` in,
+ * and the shape this surface's action returns its own refusals in: `_errors`
+ * at each node, nested by field, a work-history line under its index.
+ */
+// `_errors` is the library's own key for a node's messages, not ours.
+// oxlint-disable-next-line no-underscore-dangle
+export type FieldErrorNode = { _errors?: string[] };
+export type FieldErrorTree = FieldErrorNode & {
+  [field in Exclude<PublishFieldName, "workHistory">]?: FieldErrorNode;
+} & { workHistory?: FieldErrorNode & Record<number, FieldErrorNode> };
+
+/** Zod's issues as the same tree, so a schema refusal and a domain refusal render alike. */
+export function treeFromIssues(issues: readonly z.core.$ZodIssue[]): FieldErrorTree {
+  const tree: FieldErrorTree = {};
+  for (const issue of issues) {
+    const [field, index] = issue.path;
+    if (!isFieldName(field)) continue;
+    if (field === "workHistory" && typeof index === "number") {
+      tree.workHistory ??= {};
+      // oxlint-disable-next-line no-underscore-dangle
+      (tree.workHistory[index] ??= {})._errors ??= [];
+      // oxlint-disable-next-line no-underscore-dangle
+      tree.workHistory[index]?._errors?.push(issue.message);
+      continue;
+    }
+    // oxlint-disable-next-line no-underscore-dangle
+    ((tree[field] ??= {}) as FieldErrorNode)._errors ??= [];
+    // oxlint-disable-next-line no-underscore-dangle
+    (tree[field] as FieldErrorNode)._errors?.push(issue.message);
+  }
+  return tree;
+}
+
 export interface SummaryItem {
   readonly field: PublishFieldName;
   /** Which line, when the field is the work history. */

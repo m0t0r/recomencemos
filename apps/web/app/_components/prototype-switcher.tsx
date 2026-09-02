@@ -31,31 +31,36 @@ export function PrototypeSwitcher({ variants, current }: PrototypeSwitcherProps)
     variants.findIndex((variant) => variant.key === current),
   );
 
-  function go(offset: number) {
-    const next = variants[(index + offset + variants.length) % variants.length];
-    if (next) router.replace(`?variant=${next.key}`);
-  }
-
   useEffect(() => {
+    function step(offset: number) {
+      const next = variants[(index + offset + variants.length) % variants.length];
+      if (next) router.replace(`?variant=${next.key}`);
+    }
+
     function onKey(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable]")) return;
-      if (event.key === "ArrowLeft") go(-1);
-      if (event.key === "ArrowRight") go(1);
+      if (event.key === "ArrowLeft") step(-1);
+      if (event.key === "ArrowRight") step(1);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [index, variants, router]);
 
   if (process.env.NODE_ENV === "production") return null;
 
   const variant = variants[index];
 
+  function go(offset: number) {
+    const next = variants[(index + offset + variants.length) % variants.length];
+    if (next) router.replace(`?variant=${next.key}`);
+  }
+
   return (
     <div
       role="toolbar"
       aria-label="Prototype variants"
-      className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-neutral-900 px-4 py-2 font-mono text-sm text-white shadow-lg"
+      className="bg-foreground text-background fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 font-mono text-sm shadow-lg"
     >
       <button type="button" onClick={() => go(-1)} aria-label="Previous variant" className="px-1">
         ←

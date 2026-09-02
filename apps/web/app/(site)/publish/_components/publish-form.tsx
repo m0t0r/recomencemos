@@ -37,7 +37,7 @@ export interface PublishFormProps {
 
 export function PublishForm({ vocabulary, prefill, consentVersions, variant }: PublishFormProps) {
   const machine = usePublish(consentVersions);
-  const form = usePublishForm(prefill);
+  const form = usePublishForm(prefill, machine.refusedValues);
   const base = useId();
 
   const idFor = (field: PublishFieldName, index?: number) =>
@@ -48,8 +48,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions, variant }: P
     machine,
     vocabulary,
     idFor,
-    serverErrorFor: (field, index) =>
-      serverFieldError(machine.result.validationErrors, field, index),
+    serverErrorFor: (field, index) => serverFieldError(machine.serverErrors, field, index),
   };
 
   const Layout = VARIANTS[variant].component;
