@@ -71,3 +71,36 @@ describe("every gated route carries X-Robots-Tag", () => {
     expect(sources).not.toContain("/sign-in");
   });
 });
+
+/**
+ * The other side of NFR8, which the list above cannot state: the two public
+ * lists are **indexable**, and story 4 turns on their being so — a Hirer decides
+ * whether anyone here is worth paying before he has an Account, and a page a
+ * crawler will not serve is a page he never reaches.
+ *
+ * **`/profile` and `/profiles` differ by one character, and one is gated.** That
+ * is the trap this block exists for. A `source` of `/profile` matches the path
+ * `/profile` and nothing else — Next's patterns match whole segments — so
+ * `/profiles` is untouched by the gated list. Asserting it here catches the
+ * regression where somebody "fixes" the prefix by widening it to `/profile*`.
+ *
+ * The header a real request carries is checked running, at seam 3; this is the
+ * configuration half.
+ */
+describe("the two public lists stay indexable", () => {
+  it.each(["/", "/profiles"])("does not put %s on the gated list", async (path) => {
+    const sources = (await configuredHeaders()).map((rule) => rule.source);
+
+    expect(sources).not.toContain(path);
+    expect(sources).not.toContain(`${path}/:path*`);
+  });
+
+  it("gates /profile without reaching /profiles", async () => {
+    const sources = (await configuredHeaders()).map((rule) => rule.source);
+
+    expect(sources).toContain("/profile");
+    // A wildcard directly on the prefix would swallow the public list.
+    expect(sources).not.toContain("/profile*");
+    expect(sources).not.toContain("/profile:path*");
+  });
+});

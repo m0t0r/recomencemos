@@ -49,13 +49,21 @@ export function SignInLink() {
 
   return (
     /*
-      **Primary weight, not outline.** Signed out, this is the only action the
-      shell offers and the only thing in the row that is not the product's own
-      name — so there is nothing for a primary weight to compete with, and an
-      outline button reads as the secondary half of a pair that does not exist.
-      `primary` carries primary actions and is not decoration (`DESIGN.md` →
-      Colors); one accent on a Restrained palette, on the one control. It is the
-      variants' own default, so no `variant` is named.
+      **A link, not a button — changed with story 4, and the reason is that its
+      original argument expired.** It was primary weight on the grounds that
+      signed out, this was *"the only action the shell offers … so there is
+      nothing for a primary weight to compete with"*. The Wall now opens with
+      _Publicar lo que sabes hacer_ at primary weight, and that premise is gone:
+      two primaries in one viewport is no primary at all, and the one that has to
+      win is hers. `DESIGN.md` → Colors is explicit that `primary` carries
+      primary actions and is not decoration, so the accent goes to the action the
+      page is for.
+
+      **Ghost weight rather than outline.** An outline button is the secondary
+      half of a pair, and this is not in a pair with anything — it is chrome,
+      reached deliberately by someone who already has an account. The `ghost`
+      variant keeps the target size and the hover and focus states a button has
+      while spending no colour on the row.
 
       **`buttonVariants` on a plain `<Link>`, not `<Button render={<Link/>}>`.**
       This navigates, so it is a link and must announce as one. Handing the
@@ -64,18 +72,13 @@ export function SignInLink() {
       stamps `role="button"` onto the `<a>`, which is the opposite of the fix: it
       takes a working link and hides it from anyone navigating by links. The test
       in `session-menu.test.tsx` querying `getByRole("link")` is what caught that.
-
-      Reaching for the variants directly is the registry's own answer for a link
-      that looks like a button: identical styling, no button behaviour, no
-      warning, and the element stays what it is.
     */
-    <Link href={SIGN_IN_PATH} className={buttonVariants({ size: "lg" })}>
+    <Link href={SIGN_IN_PATH} className={buttonVariants({ variant: "ghost", size: "lg" })}>
       {/*
         No icon, deliberately. _Salir_ carries one because it is a row in a menu
         that later stories add rows to, and a leading icon is what makes a list
-        of rows scannable. This is a lone primary button holding a single word:
-        an icon beside it decorates rather than distinguishes, and `primary`
-        weight is already doing the work of marking it as the action.
+        of rows scannable. This is one word in a header row: an icon beside it
+        decorates rather than distinguishes.
       */}
       {SIGN_IN}
     </Link>

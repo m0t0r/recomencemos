@@ -91,7 +91,7 @@ function Card({ profile }: { profile: OwnProfile }) {
       lastInitial={profile.lastInitial}
       cityLabel={cityLabel(profile.city)}
       headline={profile.headline}
-      skillLabels={profile.skills.map((skill) => skill.labelEs)}
+      skills={profile.skills}
       photoUrl={profile.photoUrl}
     />
   );
