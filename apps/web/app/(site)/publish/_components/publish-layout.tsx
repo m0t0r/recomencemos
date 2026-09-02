@@ -1,13 +1,16 @@
 "use client";
 
 /**
- * Variant A — **"Por lo que ves"**: the brief's default. One column, three
- * fieldsets whose boundaries *are* the disclosure rule, capability before
- * identity, the summary above the button, the button last.
+ * The publishing form's layout — **"Por lo que ves"**, locked after
+ * `/prototype` UI. One column, three fieldsets whose boundaries *are* the
+ * disclosure rule, capability before identity, the summary above the button,
+ * the button last.
  *
- * The bet: a Worker learns what is public and what is held from the shape of
- * the form, without a paragraph about it, and the first thing she is asked
- * is what she can do rather than who she is (voice guide, Do 5).
+ * The bet it won on: a Worker learns what is public and what is held from the
+ * shape of the form, without a paragraph about it, and the first thing she is
+ * asked is what she can do rather than who she is (voice guide, Do 5). The two
+ * losing layouts — the form beside a live preview card, and identity first
+ * with the Skills as a chip grid — live on `prototype/16-ui-variants`.
  */
 
 import { Button } from "@repo/design-system/components/button";
@@ -40,7 +43,7 @@ import {
   PHONE_HELP,
   PHONE_LABEL,
   PUBLISH_BUTTON,
-} from "../../_lib/messages";
+} from "../_lib/messages";
 import {
   firstNameField,
   fullNameField,
@@ -49,14 +52,31 @@ import {
   LIMITS,
   phoneField,
   skillSlugsField,
-} from "../../_lib/schema";
-import { messageOf } from "../../_lib/use-publish-form";
-import { AboutField, CityField, PhotoNote, TextField, WorkHistoryFields } from "../fields";
-import { FormSummary } from "../form-summary";
-import { SkillPicker } from "../skill-picker";
-import type { VariantProps } from "./index";
+} from "../_lib/schema";
+import { messageOf } from "../_lib/use-publish-form";
+import { AboutField, CityField, PhotoNote, TextField, WorkHistoryFields } from "./fields";
+import { FormSummary } from "./form-summary";
+import { SkillPicker } from "./skill-picker";
+import type { PublishFieldName } from "../_lib/messages";
+import type { PublishMachine } from "../_lib/use-publish";
+import type { PublishForm } from "../_lib/use-publish-form";
+import type { VocabularyEntry } from "./skill-picker";
 
-export function ByVisibility({ form, machine, vocabulary, idFor, serverErrorFor }: VariantProps) {
+export interface PublishLayoutProps {
+  readonly form: PublishForm;
+  readonly machine: PublishMachine;
+  readonly vocabulary: readonly VocabularyEntry[];
+  readonly idFor: (field: PublishFieldName, index?: number) => string;
+  readonly serverErrorFor: (field: PublishFieldName, index?: number) => string | undefined;
+}
+
+export function PublishLayout({
+  form,
+  machine,
+  vocabulary,
+  idFor,
+  serverErrorFor,
+}: PublishLayoutProps) {
   return (
     <FieldGroup>
       <AuthorizationConsent error={serverErrorFor("consent")} />

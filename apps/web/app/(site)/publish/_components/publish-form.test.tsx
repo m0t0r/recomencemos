@@ -1,14 +1,13 @@
 /**
- * What a running server cannot show about the publishing form, on every
- * variant: the HTML that survives with no JavaScript, the absence of hidden
- * inputs, the Skill picker from the keyboard, and where focus lands when a
- * submit is refused before it leaves the browser.
+ * What a running server cannot show about the publishing form: the HTML that
+ * survives with no JavaScript, the absence of hidden inputs, the Skill picker
+ * from the keyboard, and where focus lands when a submit is refused before it
+ * leaves the browser.
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublishForm } from "./publish-form";
-import { VARIANT_KEYS, type VariantKey } from "./variants";
 import {
   CONSENT_REQUIRED,
   FEEDBACK_REGION_LABEL,
@@ -34,23 +33,22 @@ const vocabulary = [
   { slug: "welding", labelEs: "Soldadura y trabajos en hierro" },
 ];
 
-function renderForm(variant: VariantKey = "A") {
+function renderForm() {
   return render(
     <PublishForm
       vocabulary={vocabulary}
       prefill={{ fullName: "" }}
       consentVersions={{ notice: "2026-08-30", authorization: "2026-08-30" }}
-      variant={variant}
     />,
   );
 }
 
-describe.each(VARIANT_KEYS)("variant %s", (variant) => {
+describe("the form", () => {
   it("keeps a native action and a named control for every field", () => {
     // The one place a raw DOM query is the right tool: "is there a `<form>`
     // with an `action`" is a question about the HTML that survives with no
     // JavaScript, not about the accessibility tree.
-    const { container } = renderForm(variant);
+    const { container } = renderForm();
     const form = container.querySelector("form");
 
     expect(form?.getAttribute("action")).toBeTruthy();
@@ -67,14 +65,14 @@ describe.each(VARIANT_KEYS)("variant %s", (variant) => {
   it("carries no hidden inputs at all", () => {
     // A hidden input has no accessible role by definition, so its absence is
     // unassertable through any query built on the accessibility tree.
-    const { container } = renderForm(variant);
+    const { container } = renderForm();
 
     expect(container.querySelectorAll('input[type="hidden"]').length).toBe(0);
   });
 
   it("moves focus to the summary, with the count first, when the browser refuses a submit", async () => {
     const user = userEvent.setup();
-    renderForm(variant);
+    renderForm();
 
     await user.click(screen.getByRole("button", { name: PUBLISH_BUTTON }));
 

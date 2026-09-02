@@ -1,13 +1,10 @@
 "use client";
 
 /**
- * The form element and its wiring, and nothing about layout.
- *
- * Three variants of `/publish`, switchable via `?variant=`, on the real route
- * with the real Server Action behind them (`/prototype` UI, sub-shape A). Each
- * variant owns everything inside the `<form>` — order, hierarchy, where the
- * summary sits, where the button sits — and this component owns what must be
- * true whichever one wins:
+ * The form element and its wiring; `publish-layout.tsx` owns what is inside
+ * it. The split is what let three `/prototype` UI layouts share one machine
+ * on the real route before one was locked, and it is kept because it keeps
+ * what must be true of the form apart from what it looks like:
  *
  * - **A native `action`, and every control named.** A submit before hydration
  *   posts and the Server Action answers (NFR4). `noValidate` is withheld until
@@ -25,17 +22,16 @@ import type { PublishFieldName } from "../_lib/messages";
 import { serverFieldError } from "../_lib/summary";
 import { usePublish } from "../_lib/use-publish";
 import { usePublishForm } from "../_lib/use-publish-form";
+import { PublishLayout } from "./publish-layout";
 import type { VocabularyEntry } from "./skill-picker";
-import { type VariantProps, VARIANTS, type VariantKey } from "./variants";
 
 export interface PublishFormProps {
   readonly vocabulary: readonly VocabularyEntry[];
   readonly prefill: { readonly fullName: string };
   readonly consentVersions: ConsentVersions;
-  readonly variant: VariantKey;
 }
 
-export function PublishForm({ vocabulary, prefill, consentVersions, variant }: PublishFormProps) {
+export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFormProps) {
   const machine = usePublish(consentVersions);
   const form = usePublishForm(prefill, machine.refusedValues);
   const base = useId();
@@ -43,25 +39,20 @@ export function PublishForm({ vocabulary, prefill, consentVersions, variant }: P
   const idFor = (field: PublishFieldName, index?: number) =>
     index === undefined ? `${base}-${field}` : `${base}-${field}-${index}`;
 
-  const variantProps: VariantProps = {
-    form,
-    machine,
-    vocabulary,
-    idFor,
-    serverErrorFor: (field, index) => serverFieldError(machine.serverErrors, field, index),
-  };
-
-  const Layout = VARIANTS[variant].component;
-
   return (
     <form
       action={machine.formAction}
       noValidate={machine.hydrated}
       onSubmit={(event) => machine.guardSubmit(event, () => void form.handleSubmit())}
       className="flex flex-col gap-8"
-      data-variant={variant}
     >
-      <Layout {...variantProps} />
+      <PublishLayout
+        form={form}
+        machine={machine}
+        vocabulary={vocabulary}
+        idFor={idFor}
+        serverErrorFor={(field, index) => serverFieldError(machine.serverErrors, field, index)}
+      />
     </form>
   );
 }

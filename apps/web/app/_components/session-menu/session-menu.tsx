@@ -44,7 +44,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/design-system/components/dropdown-menu";
-import { LogOutIcon, UserRoundIcon } from "lucide-react";
+import { IdCardIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
 import Link from "next/link";
 import { useActionState } from "react";
 import type { signOut } from "./actions";
@@ -102,6 +102,13 @@ export interface SessionMenuProps {
    * places, which is why this is a prop and not a second component.
    */
   readonly accountHref?: string;
+  /**
+   * Her profile row, or absent to omit it — the same shape as `accountHref`,
+   * for the same reason: `(site)`'s shell has one, `(admin)`'s does not. The
+   * label is the caller's because it depends on what she has: _Tu perfil_ once
+   * it exists, _Publica lo que sabes hacer_ until then.
+   */
+  readonly profile?: { readonly href: string; readonly label: string };
 }
 
 /**
@@ -116,7 +123,7 @@ function initialOf(email: string): string {
   return [...email][0]?.toLocaleUpperCase("es-CO") ?? "";
 }
 
-export function SessionMenu({ email, action, accountHref }: SessionMenuProps) {
+export function SessionMenu({ email, action, accountHref, profile }: SessionMenuProps) {
   const [result, formAction, pending] = useActionState(action, INITIAL);
 
   /**
@@ -191,6 +198,18 @@ export function SessionMenu({ email, action, accountHref }: SessionMenuProps) {
             </div>
 
             <DropdownMenuSeparator />
+
+            {/* Her profile first: it is the thing she came here to do. */}
+            {profile ? (
+              <DropdownMenuItem
+                render={
+                  <Link href={profile.href}>
+                    <IdCardIcon aria-hidden="true" />
+                    {profile.label}
+                  </Link>
+                }
+              />
+            ) : null}
 
             {/*
               **The way to `/account`, and the only navigation the shell offers —

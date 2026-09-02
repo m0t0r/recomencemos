@@ -4,9 +4,10 @@
  * Shaped at `.impeccable/briefs/publish.md`; the state set and the target path
  * are the spec's (`## UX design`, the Publish row). Mode is **Operate**.
  *
- * **Three `/prototype` UI variants live on this route behind `?variant=`**,
- * with the real Server Action behind all three. Locking one is the human's
- * call; `_components/variants/index.ts` says what happens then.
+ * The layout was chosen by `/prototype` UI — three variants on this real route
+ * with the real Server Action behind them; the losing two live on
+ * `prototype/16-ui-variants` and `_components/publish-layout.tsx` carries the
+ * winner and the argument for it.
  *
  * Two of the surface table's cells are routes rather than renders, and both
  * are decided here before anything paints: **signed out →** `/sign-in` with a
@@ -23,10 +24,8 @@ import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
 import { requireAccountPage } from "@/lib/account";
 import { PublishForm } from "./_components/publish-form";
-import { DEFAULT_VARIANT, isVariantKey, VARIANT_KEYS, VARIANTS } from "./_components/variants";
 import { PUBLISH_INTRO, PUBLISH_PAGE_TITLE, PUBLISH_TITLE } from "./_lib/messages";
 
 export const metadata: Metadata = {
@@ -34,40 +33,27 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
-
 /**
  * The dynamic half: the session, whether she already has a profile, the
  * vocabulary, and the Google-door prefill. All uncached, so the boundary is
  * `[stream]` from Cache Components' own menu — the heading paints first.
  */
-async function PublishPanel({ searchParams }: { searchParams: SearchParams }) {
+async function PublishPanel() {
   const session = await requireAccountPage("/publish");
 
   if (await profiles.has(session.accountId)) redirect("/my-profile");
 
-  const [vocabulary, prefill, params] = await Promise.all([
+  const [vocabulary, prefill] = await Promise.all([
     skills.listActive(),
     profiles.prefill(session.accountId),
-    searchParams,
   ]);
 
-  const requested = params.variant;
-  const variant = isVariantKey(requested) ? requested : DEFAULT_VARIANT;
-
   return (
-    <>
-      <PublishForm
-        vocabulary={vocabulary}
-        prefill={prefill}
-        consentVersions={CURRENT_CONSENT_VERSIONS}
-        variant={variant}
-      />
-      <PrototypeSwitcher
-        variants={VARIANT_KEYS.map((key) => ({ key, name: VARIANTS[key].name }))}
-        current={variant}
-      />
-    </>
+    <PublishForm
+      vocabulary={vocabulary}
+      prefill={prefill}
+      consentVersions={CURRENT_CONSENT_VERSIONS}
+    />
   );
 }
 
@@ -84,7 +70,7 @@ function PanelSkeleton() {
   );
 }
 
-export default function PublishPage({ searchParams }: { searchParams: SearchParams }) {
+export default function PublishPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
       <div className="flex flex-col gap-2">
@@ -95,7 +81,7 @@ export default function PublishPage({ searchParams }: { searchParams: SearchPara
       </div>
 
       <Suspense fallback={<PanelSkeleton />}>
-        <PublishPanel searchParams={searchParams} />
+        <PublishPanel />
       </Suspense>
     </main>
   );
