@@ -1,7 +1,8 @@
 "use server";
 
 /**
- * `/publish`'s one action.
+ * `/publish`'s two actions: publishing a profile, and asking for a capability
+ * the closed list does not hold.
  *
  * **It authorizes independently** — `accountActionClient` refuses a caller with
  * no session before the boundary parse, because Next compiles this to a
@@ -31,6 +32,7 @@
  */
 
 import { type PublishRefusal, profiles } from "@repo/domain/profiles";
+import { skills } from "@repo/domain/skills";
 import { AppError, projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { redirect } from "next/navigation";
@@ -50,8 +52,10 @@ import {
   publishProfileFields,
   type PublishProfileValues,
   publishProfileValuesSchema,
+  skillRequestSchema,
+  type SkillRequestValues,
 } from "./_lib/schema";
-import { PUBLISH_REFUSED_CODE } from "./_lib/codes";
+import { PUBLISH_REFUSED_CODE, SKILL_REQUEST_REFUSED_CODE } from "./_lib/codes";
 import { type FieldErrorTree, treeFromIssues } from "./_lib/summary";
 
 /**
@@ -161,4 +165,67 @@ export const publishProfile = accountActionClient
      * swallowed failure. `/my-profile` renders the confirmation.
      */
     redirect("/my-profile?published=1");
+  });
+
+/** What comes back when a request lands: that it did, and nothing else. */
+export interface SkillRequested {
+  readonly requested: true;
+}
+
+/**
+ * Ask for a capability the list does not hold, **without leaving the form**.
+ *
+ * **It navigates nowhere and returns nothing about her draft**, which is the
+ * whole requirement: she is mid-publish, everything is typed, and a request that
+ * cost her the page would be worse than no request at all. So this action knows
+ * only its own field — the publishing form's values never travel with it — and
+ * the page it was dispatched from re-renders nothing.
+ *
+ * **It authorizes and rate-limits exactly as `publishProfile` does**, for the
+ * same two reasons: Next compiles it to a directly reachable POST endpoint that
+ * the page's gate does not cover, and NFR26 bounds it at five a day per Account
+ * and per IP. The ceiling's own sentence is the one the spec singles out, and it
+ * is written where every ceiling's copy lives.
+ *
+ * **The refusal is returned, never thrown.** A phone number typed into a field
+ * asking what she can do is an ordinary use of a form; `returnActionError` costs
+ * one `warn` line and no Sentry event.
+ */
+export const requestSkill = accountActionClient
+  .inputSchema(skillRequestSchema)
+  .useValidated(
+    rateLimit<SkillRequestValues, AccountContext>({
+      action: "requestSkill",
+      principals: [
+        { scope: "account", id: (_input, ctx) => ctx.session.accountId },
+        { scope: "ip" },
+      ],
+    }),
+  )
+  .stateAction<SkillRequested>(async ({ parsedInput: { text }, ctx }) => {
+    const outcome = await skills.request(ctx.session.accountId, text);
+
+    if (!outcome.ok) {
+      const refusal = new AppError({
+        code: SKILL_REQUEST_REFUSED_CODE,
+        status: 422,
+        message:
+          "A Skill request carried a contact detail and was refused before it became a row. " +
+          "The fragment travels back to her; nothing was written.",
+        userMessage: contactDetailRefusal(outcome.kind, outcome.fragment),
+        // The kind is an enum value. The fragment is not on the line: it is part
+        // of a phone number or an address, which is `personal` (NFR18).
+        context: { kind: outcome.kind },
+      });
+
+      logRequestError(refusal, { level: "warn" });
+      return returnActionError(projectClientError(refusal));
+    }
+
+    /**
+     * **A flag, and nothing of hers.** The sentence she reads is the surface's,
+     * so there is nothing to send back but the fact that it arrived — and the
+     * request's own id is an identifier only an Admin has any use for.
+     */
+    return { requested: true };
   });

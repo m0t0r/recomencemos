@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * The Admin's actions. One today; ten more arrive with the stories that create
+ * The Admin's actions. Two today; nine more arrive with the stories that create
  * what they act on.
  *
  * **Each authorizes independently, and on this surface that is not a formality.**
@@ -30,7 +30,7 @@ import { projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { adminActionClient } from "@/lib/admin";
 import { returnActionError } from "@/lib/safe-action";
-import { revokeSessionsSchema } from "./_lib/schema";
+import { promoteSkillSchema, revokeSessionsSchema } from "./_lib/schema";
 
 /** What the queue tells the Admin afterwards: a count, and no personal data. */
 export interface SessionsRevoked {
@@ -56,4 +56,42 @@ export const revokeSessions = adminActionClient
      * RSC payload is one.
      */
     return { revoked: outcome.result.revoked };
+  });
+
+/** What the queue tells the Admin afterwards: the entry that now exists. */
+export interface SkillPromoted {
+  readonly labelEs: string;
+}
+
+/**
+ * Promote a requested capability into the vocabulary.
+ *
+ * **The whole act is `@repo/domain/admin`'s**, which is why this reads as
+ * plumbing: `runAdminAction` opens the transaction, locks the request, writes the
+ * entry, resolves the row and records the `AdminAction` — all of it, or none of
+ * it. There is nothing here to forget.
+ *
+ * **A promoted Skill is choosable immediately**, and that follows from the read
+ * rather than from anything done here: the publishing form asks the database for
+ * the active vocabulary when it renders, and no layer between them caches it.
+ */
+export const promoteSkill = adminActionClient
+  .inputSchema(promoteSkillSchema)
+  .stateAction<SkillPromoted>(async ({ parsedInput, ctx: { actor } }) => {
+    const outcome = await admin.run(actor, "promoteSkill", parsedInput);
+
+    if (!outcome.ok) {
+      // Returned, not thrown. A request somebody else already resolved and a
+      // slug already taken are both ordinary answers on a shared queue.
+      logRequestError(outcome.error, { level: "warn" });
+      return returnActionError(projectClientError(outcome.error));
+    }
+
+    /**
+     * **The label, and not the slug beside it.** The Admin has just typed both,
+     * and only one of them is the thing every Worker will read on the publishing
+     * form — quoting that back is the confirmation. The request's own text is
+     * deliberately absent: it is on screen already, in the row this came from.
+     */
+    return { labelEs: outcome.result.labelEs };
   });

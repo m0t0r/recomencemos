@@ -36,6 +36,7 @@
  */
 
 import { Badge } from "@repo/design-system/components/badge";
+import { Button } from "@repo/design-system/components/button";
 import { Checkbox } from "@repo/design-system/components/checkbox";
 import {
   Field,
@@ -52,6 +53,10 @@ import {
   SKILL_FILTER_LABEL,
   SKILL_NOT_LISTED_HELP,
   SKILL_NOT_LISTED_LABEL,
+  SKILL_NOT_LISTED_NO_SCRIPT,
+  SKILL_REQUEST_BUTTON,
+  SKILL_REQUEST_HELP,
+  SKILL_REQUEST_LABEL,
   SKILLS_AT_MAXIMUM,
   SKILLS_HELP,
   SKILLS_LABEL,
@@ -59,6 +64,7 @@ import {
   skillsNoneMatch,
 } from "../_lib/messages";
 import { LIMITS } from "../_lib/schema";
+import { useSkillRequest } from "../_lib/use-skill-request";
 
 export interface VocabularyEntry {
   readonly slug: string;
@@ -308,9 +314,94 @@ export function SkillPicker({
           {SKILL_NOT_LISTED_LABEL}
         </FieldLabel>
         {notListed ? (
-          <FieldDescription id={notListedHelpId}>{SKILL_NOT_LISTED_HELP}</FieldDescription>
+          <FieldDescription id={notListedHelpId}>
+            {hydrated ? SKILL_NOT_LISTED_HELP : SKILL_NOT_LISTED_NO_SCRIPT}
+          </FieldDescription>
         ) : null}
+        {notListed && hydrated ? <SkillRequest /> : null}
       </Field>
     </FieldSet>
+  );
+}
+
+/**
+ * The request itself: one field, one button, and an answer that does not move
+ * her off the page.
+ *
+ * **It is not a `<form>`, and it cannot be** — this sits inside the publishing
+ * form and HTML does not nest one. The button is `type="button"` so it cannot
+ * submit the form around it, and the machine dispatches its own `FormData`. A
+ * `formAction` pointing at this action would have been the other shape and is
+ * worse in the one case it exists for: unhydrated, it would post her entire draft
+ * to an action that knows nothing about publishing.
+ *
+ * **It renders only once hydrated**, which is why the sentence above it changes.
+ * NFR4 binds publishing and the profile edit, not this — and an affordance that
+ * looked live with no script behind it would be the dead end the option was
+ * written to remove, one turn further in.
+ *
+ * **The answer is announced, not merely shown.** She is at the bottom of a long
+ * form on a phone; a sentence that appears silently below the fold is a sentence
+ * she does not know arrived. The refusal interrupts (`alert`) because she asked
+ * for something and this is the answer; the confirmation is polite, because
+ * nothing is waiting on her reading it.
+ */
+function SkillRequest() {
+  const machine = useSkillRequest();
+  const fieldId = useId();
+  const helpId = useId();
+  const errorId = useId();
+  const [text, setText] = useState("");
+
+  /**
+   * Cleared once it lands, because what was in it is now in the queue and a
+   * field still holding it invites a second copy of the same request. Derived
+   * from the machine rather than stored, so nothing has to remember to reset it.
+   */
+  const value = machine.sent ? "" : text;
+
+  return (
+    <div className="border-border mt-2 flex flex-col gap-3 rounded-md border p-3">
+      <Field>
+        <FieldLabel htmlFor={fieldId}>{SKILL_REQUEST_LABEL}</FieldLabel>
+        <FieldDescription id={helpId}>{SKILL_REQUEST_HELP}</FieldDescription>
+        <Input
+          id={fieldId}
+          value={value}
+          maxLength={LIMITS.skillRequest}
+          aria-describedby={machine.fieldError ? `${helpId} ${errorId}` : helpId}
+          aria-invalid={machine.fieldError ? true : undefined}
+          onChange={(event) => setText(event.target.value)}
+        />
+        {machine.fieldError ? <FieldError id={errorId}>{machine.fieldError}</FieldError> : null}
+      </Field>
+
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={machine.pending}
+          onClick={() => machine.send(value)}
+        >
+          {SKILL_REQUEST_BUTTON}
+        </Button>
+      </div>
+
+      {/*
+        One region, two tones. Keyed by the message so a second identical answer
+        is announced again rather than sitting mounted and silent — the same
+        mechanism the maximum-Skills refusal above uses, and for the same reason.
+      */}
+      {machine.notice ? (
+        <p
+          key={machine.notice.message}
+          role={machine.notice.refused ? "alert" : "status"}
+          className={cn("text-sm", machine.notice.refused && "text-destructive")}
+        >
+          {machine.notice.message}
+        </p>
+      ) : null}
+    </div>
   );
 }

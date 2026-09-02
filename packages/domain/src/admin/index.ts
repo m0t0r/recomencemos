@@ -40,6 +40,7 @@ import { requireAdminSession } from "#admin/actor";
 import type { AdminActor } from "#admin/actor";
 import {
   ADMIN_ACTION_HANDLERS,
+  type AdminActionHandler,
   type AdminActionInput,
   type AdminActionResult,
 } from "#admin/handlers";
@@ -83,7 +84,24 @@ export async function runAdminAction<K extends AdminActionName>(
 ): Promise<AdminActionOutcome<K>> {
   try {
     const result = await db.transaction(async (tx) => {
-      const handler = ADMIN_ACTION_HANDLERS[action];
+      /**
+       * **The cast is the registry's own `satisfies` read back**, and it became
+       * necessary the moment there were two actions rather than one.
+       *
+       * `ADMIN_ACTION_HANDLERS[action]` under a generic `K` is a *union* of
+       * handlers, and TypeScript types a call to a union of functions with the
+       * **intersection** of their parameters — so passing `AdminActionInput<K>`
+       * is rejected on the grounds that it might be one member's input handed to
+       * another member's handler. That correlation is exactly what the registry's
+       * `satisfies { [K in AdminActionName]: AdminActionHandler<K> }` establishes
+       * and what the compiler cannot carry through an indexed access here.
+       *
+       * It is therefore a narrowing rather than an assumption, and it is the only
+       * one: `action` indexes the registry, `input` is typed from the same key,
+       * and a handler whose shape disagreed with its name would be a compile
+       * error at the registry rather than a runtime error here.
+       */
+      const handler = ADMIN_ACTION_HANDLERS[action] as AdminActionHandler<K>;
       const outcome = await handler(tx, input);
 
       /**

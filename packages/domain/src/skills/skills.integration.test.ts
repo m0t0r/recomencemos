@@ -89,10 +89,19 @@ describe("the seeded vocabulary", () => {
     expect(await everyRow(database)).toEqual(before);
   });
 
-  test("records a five-digit CUOC code as the provenance of every entry", async ({ database }) => {
+  /**
+   * **Every entry the migration seeded**, which in this suite is every entry
+   * there is. The column is nullable because the vocabulary has a second source —
+   * an Admin promoting what a Worker asked for, which may answer to no CUOC
+   * *Ocupación* at all — and `?? ""` fails this assertion rather than passing it,
+   * so a seeded row that lost its code is still red here.
+   */
+  test("records a five-digit CUOC code as the provenance of every seeded entry", async ({
+    database,
+  }) => {
     const rows = await everyRow(database);
 
-    expect(rows.filter((row) => !/^\d{5}$/.test(row.cuocCode))).toEqual([]);
+    expect(rows.filter((row) => !/^\d{5}$/.test(row.cuocCode ?? ""))).toEqual([]);
   });
 
   /**

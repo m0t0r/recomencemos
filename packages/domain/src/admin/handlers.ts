@@ -29,7 +29,12 @@ import { eq } from "drizzle-orm";
 import type { AdminActionName } from "#admin/names";
 import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
-import { ADMIN_ACCOUNT_NOT_FOUND } from "#user-messages";
+import {
+  ADMIN_ACCOUNT_NOT_FOUND,
+  ADMIN_SKILL_REQUEST_GONE,
+  ADMIN_SKILL_REQUEST_RESOLVED,
+  ADMIN_SKILL_SLUG_TAKEN,
+} from "#user-messages";
 
 /** The input and result of each action, as one table two types are derived from. */
 export interface AdminActionShapes {
@@ -47,6 +52,37 @@ export interface AdminActionShapes {
    * handler's first act, and the address goes no further.
    */
   revokeSessions: { input: { readonly email: string }; result: { readonly revoked: number } };
+
+  /**
+   * Turns a Worker's request into vocabulary.
+   *
+   * **The Admin writes both names, and neither is her sentence.** `slug` is the
+   * English identifier a browse filter carries in a query parameter (ADR-0012)
+   * and `labelEs` is the `es-CO` phrase the picker renders — which DD12 argues
+   * has to be *translated* rather than copied, since the whole reason the seed is
+   * a translation of CUOC is that a labour statistician's register is not the
+   * register of the person reading the form. Her request is the evidence for the
+   * entry, not the entry.
+   *
+   * **`cuocCode` is optional here and nullable in the table.** An entry that
+   * arrived this way may correspond to no CUOC *Ocupación* at all — that is
+   * frequently why she had to ask — and a column recording provenance must be
+   * allowed to record that it has none.
+   *
+   * **The result carries the entry rather than a bare `ok`**, because the Admin
+   * has just typed two strings that are about to be read by everyone, and the
+   * screen saying which pair landed is the only confirmation available.
+   */
+  promoteSkill: {
+    input: {
+      /** The `SkillRequest` row, as digits — see `#skills` for why it crosses as a string. */
+      readonly requestId: string;
+      readonly slug: string;
+      readonly labelEs: string;
+      readonly cuocCode?: string | undefined;
+    };
+    result: { readonly slug: string; readonly labelEs: string };
+  };
 }
 
 export type AdminActionInput<K extends AdminActionName> = AdminActionShapes[K]["input"];
@@ -123,5 +159,97 @@ export const ADMIN_ACTION_HANDLERS = {
       .returning({ id: schema.session.id });
 
     return { targetId: account.id, result: { revoked: revoked.length } };
+  },
+
+  async promoteSkill(tx, { requestId, slug, labelEs, cuocCode }) {
+    /**
+     * **Locked, because two Admins are the case this exists for.** NFR33's
+     * eleven actions are performed by whoever is on the queue, and the spec is
+     * explicit that there is more than one Admin — so the same request being
+     * open in two browsers is ordinary rather than exotic. Reading the state
+     * without a lock leaves both reads seeing `pending`, both inserts racing on
+     * `skill_slug_key`, and one of them producing a second `AdminAction` for an
+     * act that did not happen.
+     *
+     * `FOR UPDATE` rather than an `UPDATE … WHERE state = 'pending'` returning a
+     * count, because the refusals below want to tell the two cases apart: a
+     * request that never existed and one somebody has already resolved are
+     * different sentences to the person reading them.
+     */
+    const [request] = await tx
+      .select({ id: schema.skillRequest.id, state: schema.skillRequest.state })
+      .from(schema.skillRequest)
+      .where(eq(schema.skillRequest.id, BigInt(requestId)))
+      .for("update")
+      .limit(1);
+
+    if (!request) {
+      throw new AppError({
+        code: "admin_skill_request_not_found",
+        status: 404,
+        message:
+          "promoteSkill was given a request id no row carries. Nothing was promoted and no " +
+          "AdminAction was written, because nothing happened.",
+        userMessage: ADMIN_SKILL_REQUEST_GONE,
+        // The id is an identifier and carries nothing of hers (NFR18).
+        context: { request_id: requestId },
+      });
+    }
+
+    /**
+     * **Promoting the same request twice.** The second Admin is refused here
+     * rather than by the unique constraint below, which matters because the two
+     * failures mean different things: a resolved request is somebody else's
+     * finished work, and a taken slug is a name collision with an entry that may
+     * have nothing to do with this request.
+     */
+    if (request.state !== "pending") {
+      throw new AppError({
+        code: "admin_skill_request_resolved",
+        status: 409,
+        message:
+          `promoteSkill was asked to promote a request already in state "${request.state}". ` +
+          "Nothing was promoted; the transaction rolls back with no AdminAction row.",
+        userMessage: ADMIN_SKILL_REQUEST_RESOLVED,
+        context: { request_id: requestId, state: request.state },
+      });
+    }
+
+    /**
+     * `ON CONFLICT DO NOTHING` returns no row when the slug is taken, which is
+     * the check rather than a way of ignoring one: a slug already in the
+     * vocabulary is refused out loud, because silently pointing this request at
+     * somebody else's entry would resolve her request with something she did not
+     * ask for.
+     */
+    const [promoted] = await tx
+      .insert(schema.skill)
+      .values({ slug, labelEs, cuocCode: cuocCode ?? null })
+      .onConflictDoNothing({ target: schema.skill.slug })
+      .returning({ slug: schema.skill.slug, labelEs: schema.skill.labelEs });
+
+    if (!promoted) {
+      throw new AppError({
+        code: "admin_skill_slug_taken",
+        status: 409,
+        message:
+          `promoteSkill was given the slug "${slug}", which the vocabulary already holds. ` +
+          "Nothing was promoted and the request is still pending.",
+        userMessage: ADMIN_SKILL_SLUG_TAKEN,
+        // The slug is an English identifier, not anything a person typed about
+        // themselves — the label beside it is deliberately absent.
+        context: { request_id: requestId, slug },
+      });
+    }
+
+    await tx
+      .update(schema.skillRequest)
+      .set({ state: "promoted", resolvedAt: new Date() })
+      .where(eq(schema.skillRequest.id, request.id));
+
+    return {
+      targetId: String(request.id),
+      result: { slug: promoted.slug, labelEs: promoted.labelEs },
+    };
   },
 } as const satisfies { [K in AdminActionName]: AdminActionHandler<K> };

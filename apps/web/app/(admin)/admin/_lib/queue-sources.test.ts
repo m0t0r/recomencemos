@@ -75,17 +75,28 @@ describe("oldestAgeInHours", () => {
 
 describe("the source registry", () => {
   /**
-   * **The registry is empty, deliberately, and this test is what makes that a
-   * statement rather than an oversight.**
+   * **It holds the sources whose data exists, and no others.**
    *
-   * All five of the spec's branches read tables stories 3, 7, 8 and 10 create. A
-   * source stubbed to return invented rows would make `/admin` look finished while
-   * showing a moderator data that is not there — the one thing a moderation queue
-   * must never do. So the queue renders its empty state, honestly, and the story
-   * that adds a source deletes this assertion in the same commit that makes it
-   * false.
+   * This assertion was `toEqual([])` while every branch read a table no story had
+   * created yet, and the reason has not changed — only the count has. A source
+   * stubbed to return invented rows would make `/admin` look finished while
+   * showing a moderator data that is not there, which is the one thing a
+   * moderation queue must never do. Unreviewed Offers, photos, Reports and
+   * profiles awaiting takedown review are still absent, and the story that adds
+   * each one edits this list in the same commit that makes it true.
    */
-  it("is empty until a story adds a source that has something to list", () => {
-    expect(QUEUE_SOURCES).toEqual([]);
+  it("holds one source per branch whose data exists", () => {
+    expect(QUEUE_SOURCES.map((source) => source.key)).toEqual(["skillRequests"]);
+  });
+
+  /**
+   * Spanish heading, English key (ADR-0012) — the key reaches a `Record` lookup
+   * and a `<Suspense>` boundary, the label is read by a person.
+   */
+  it("names every source in Spanish under an English key", () => {
+    for (const source of QUEUE_SOURCES) {
+      expect(source.key).toMatch(/^[a-zA-Z]+$/);
+      expect(source.label.trim().length).toBeGreaterThan(0);
+    }
   });
 });
