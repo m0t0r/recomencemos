@@ -18,12 +18,14 @@
 
 import type { ConsentVersions } from "@repo/domain/consent";
 import { useId } from "react";
-import type { PublishFieldName } from "../_lib/messages";
-import { serverFieldError } from "../_lib/summary";
-import { usePublish } from "../_lib/use-publish";
-import { usePublishForm } from "../_lib/use-publish-form";
+import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
+import type { PublishFieldName } from "@/app/_lib/profile-form/messages";
+import { publishProfileSchema } from "@/app/_lib/profile-form/schema";
+import { serverFieldError } from "@/app/_lib/profile-form/summary";
+import { useProfileFields } from "@/app/_lib/profile-form/use-profile-fields";
+import { INITIAL_RESULT, useProfileForm } from "@/app/_lib/profile-form/use-profile-form";
+import { publishProfile } from "../actions";
 import { PublishLayout } from "./publish-layout";
-import type { VocabularyEntry } from "./skill-picker";
 
 export interface PublishFormProps {
   readonly vocabulary: readonly VocabularyEntry[];
@@ -32,8 +34,20 @@ export interface PublishFormProps {
 }
 
 export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFormProps) {
-  const machine = usePublish(consentVersions);
-  const form = usePublishForm(prefill, machine.refusedValues);
+  const machine = useProfileForm({
+    /**
+     * **Bound here, not hidden, and bound *here* rather than inside the
+     * machine** (ADR-0015). The consent versions travel in the action
+     * reference, so the JSX carries no mirror of them and a browser with
+     * JavaScript unavailable still submits them. The machine is shared with a
+     * form that has no consent at all, which is why the binding is the
+     * surface's job.
+     */
+    action: publishProfile.bind(null, consentVersions),
+    initial: INITIAL_RESULT,
+    schema: publishProfileSchema,
+  });
+  const form = useProfileFields(prefill, machine.refusedValues);
   const base = useId();
 
   const idFor = (field: PublishFieldName, index?: number) =>

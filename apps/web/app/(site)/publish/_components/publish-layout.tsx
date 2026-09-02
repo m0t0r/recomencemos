@@ -43,7 +43,7 @@ import {
   PHONE_HELP,
   PHONE_LABEL,
   PUBLISH_BUTTON,
-} from "../_lib/messages";
+} from "@/app/_lib/profile-form/messages";
 import {
   firstNameField,
   fullNameField,
@@ -52,19 +52,25 @@ import {
   LIMITS,
   phoneField,
   skillSlugsField,
-} from "../_lib/schema";
-import { messageOf } from "../_lib/use-publish-form";
-import { AboutField, CityField, PhotoNote, TextField, WorkHistoryFields } from "./fields";
-import { FormSummary } from "./form-summary";
-import { SkillPicker } from "./skill-picker";
-import type { PublishFieldName } from "../_lib/messages";
-import type { PublishMachine } from "../_lib/use-publish";
-import type { PublishForm } from "../_lib/use-publish-form";
-import type { VocabularyEntry } from "./skill-picker";
+} from "@/app/_lib/profile-form/schema";
+import { messageOf } from "@/app/_lib/profile-form/use-profile-fields";
+import {
+  AboutField,
+  CityField,
+  PhotoNote,
+  TextField,
+  WorkHistoryFields,
+} from "@/app/_components/profile-form/fields";
+import { FormSummary } from "@/app/_components/profile-form/form-summary";
+import { SkillPicker } from "@/app/_components/profile-form/skill-picker";
+import type { PublishFieldName } from "@/app/_lib/profile-form/messages";
+import type { ProfileFormMachine } from "@/app/_lib/profile-form/use-profile-form";
+import type { ProfileFieldsForm } from "@/app/_lib/profile-form/use-profile-fields";
+import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
 
 export interface PublishLayoutProps {
-  readonly form: PublishForm;
-  readonly machine: PublishMachine;
+  readonly form: ProfileFieldsForm;
+  readonly machine: ProfileFormMachine;
   readonly vocabulary: readonly VocabularyEntry[];
   readonly idFor: (field: PublishFieldName, index?: number) => string;
   readonly serverErrorFor: (field: PublishFieldName, index?: number) => string | undefined;

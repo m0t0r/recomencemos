@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * Everything `/publish` *does*, separated from everything it *looks like* —
- * the same split `/sign-in` made, and for the same reason: three prototype
- * layouts share one machine, so the parts that are easy to get subtly wrong
- * have one home.
+ * Everything a profile form *does*, separated from everything it *looks like* —
+ * the same split `/sign-in` made, and for the same reason: several layouts
+ * share one machine, so the parts that are easy to get subtly wrong have one
+ * home. Since #142 that is two surfaces as well as several layouts, which is
+ * why the action arrives as an argument rather than as an import.
  *
  * **TanStack Form owns field state and client-side validation; it does not
  * own submission** (ADR-0014). The `<form>` keeps its native `action`, so a
@@ -19,7 +20,6 @@
  * the `useActionState` result and are read from there.
  */
 
-import type { ConsentVersions } from "@repo/domain/consent";
 import {
   type FormEvent,
   type RefObject,
@@ -30,19 +30,34 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { publishProfile } from "../actions";
+import type { z } from "zod";
+import type { ActionError } from "@/lib/safe-action";
 import { type Feedback, feedbackFor } from "./feedback";
-import { type PublishProfileValues, publishProfileSchema, publishProfileValues } from "./schema";
+import { type PublishProfileValues, publishProfileValues } from "./schema";
 import { type Summary, summaryFromIssues, summaryFromValidationErrors } from "./summary";
 
-export type PublishResult = Awaited<ReturnType<typeof publishProfile>>;
+/**
+ * The parts of a `useActionState` result this machine reads.
+ *
+ * **Structural rather than `Awaited<ReturnType<typeof someAction>>`**, which is
+ * what it was while there was one action to name. A module in the shared layer
+ * that imported a route's action would make every form depend on one surface's
+ * `actions.ts` — and that module carries `"use server"`, so the dependency
+ * would run the wrong way round as well as the wrong distance. `feedbackFor`
+ * already took its argument this way, for the same reason.
+ */
+export interface ProfileFormResult {
+  readonly serverError?: ActionError | undefined;
+  readonly validationErrors?: unknown;
+}
 
-const INITIAL: PublishResult = {};
+/** What a form's `useActionState` starts on: nothing has been submitted. */
+export const INITIAL_RESULT: ProfileFormResult = {};
 
 export type { Feedback } from "./feedback";
 
-export interface PublishMachine {
-  readonly result: PublishResult;
+export interface ProfileFormMachine {
+  readonly result: ProfileFormResult;
   readonly formAction: (formData: FormData) => void;
   readonly pending: boolean;
   /**
@@ -80,17 +95,61 @@ export interface PublishMachine {
 
 const subscribeToNothing = () => () => {};
 
-export function usePublish(consentVersions: ConsentVersions): PublishMachine {
+/**
+ * The action, **already bound by its caller**.
+ *
+ * Binding is the surface's business, not this hook's: `/publish` binds the
+ * consent versions it displayed (ADR-0015 — bound, not hidden, so the JSX
+ * carries no mirror of them and a browser with JavaScript unavailable still
+ * submits them), and an edit binds nothing, because there is nothing that
+ * travels with the submit that she does not type. A hook that took the
+ * versions would be a hook that knew about consent, on a form that has none.
+ */
+export type ProfileFormAction = (state: never, formData: FormData) => Promise<ProfileFormResult>;
+
+export interface ProfileFormOptions {
+  readonly action: ProfileFormAction;
+  /** The action's initial `useActionState` value. `INITIAL_RESULT` unless a surface has more. */
+  readonly initial: ProfileFormResult;
   /**
-   * **Bound, not hidden.** The consent versions travel as a bound argument, so
-   * the JSX carries no mirror of them and a browser with JavaScript unavailable
-   * still submits them — React serialises a bound argument into the action
-   * reference itself.
+   * **The strict parse `guardSubmit` runs, which is the action's own.**
+   *
+   * A parameter rather than a constant, and the reason is a bug this would
+   * otherwise have: publishing's strict schema requires the consent checkbox,
+   * and an edit form has none — so a shared guard hard-wired to it would refuse
+   * every save in the browser, silently, on the one path the server never sees.
+   * Handing each surface's schema in keeps the promise the guard is built on:
+   * the browser parses with exactly what the server will parse with.
    */
-  const [result, formAction, pending] = useActionState(
-    publishProfile.bind(null, consentVersions),
-    INITIAL,
-  );
+  readonly schema: {
+    safeParse(value: unknown): { success: true } | { success: false; error: z.ZodError };
+  };
+}
+
+export function useProfileForm({
+  action,
+  initial,
+  schema,
+}: ProfileFormOptions): ProfileFormMachine {
+  /**
+   * **The one cast in this module, and it is the price of being shared.**
+   *
+   * Each action's `useActionState` state type is its own union of the
+   * envelopes next-safe-action can return. Declaring the parameter `never`
+   * above is what lets any of them be passed in — a function's parameters are
+   * contravariant, so a narrow state type is assignable to a `never` one and
+   * not to a widened one. `useActionState` then has to be handed something it
+   * can call, and this is that. Nothing is being asserted about the *value*:
+   * every field the machine reads is on {@link ProfileFormResult}, and the two
+   * that are not — `data`, and whichever envelope carried it — are never read
+   * here.
+   */
+  const call = action as (
+    state: ProfileFormResult,
+    formData: FormData,
+  ) => Promise<ProfileFormResult>;
+
+  const [result, formAction, pending] = useActionState(call, initial);
 
   const hydrated = useSyncExternalStore(
     subscribeToNothing,
@@ -120,9 +179,9 @@ export function usePublish(consentVersions: ConsentVersions): PublishMachine {
     }
   }, [result]);
 
-  const guardSubmit: PublishMachine["guardSubmit"] = (event, runValidators) => {
+  const guardSubmit: ProfileFormMachine["guardSubmit"] = (event, runValidators) => {
     const formData = new FormData(event.currentTarget);
-    const parsed = publishProfileSchema.safeParse(formData);
+    const parsed = schema.safeParse(formData);
 
     if (parsed.success) {
       /**
@@ -167,7 +226,7 @@ export function usePublish(consentVersions: ConsentVersions): PublishMachine {
  * ceiling both echo the parsed input. Read through the schema rather than
  * trusted, because `input` is typed `unknown` on the wire.
  */
-export function refusedValuesOf(result: PublishResult): PublishProfileValues | undefined {
+export function refusedValuesOf(result: ProfileFormResult): PublishProfileValues | undefined {
   const echoed = publishProfileValues.safeParse(result.serverError?.input);
   return echoed.success ? echoed.data : undefined;
 }
