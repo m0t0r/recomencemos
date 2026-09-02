@@ -10,6 +10,19 @@ describe("feedbackFor", () => {
     expect(feedbackFor({ validationErrors: { headline: { _errors: ["x"] } } })).toBeUndefined();
   });
 
+  it("is nothing for a per-field refusal, which the summary carries instead", () => {
+    expect(
+      feedbackFor({
+        serverError: {
+          code: "publish_refused",
+          message: "x",
+          requestId: "r",
+          fieldErrors: { headline: { _errors: ["x"] } },
+        },
+      }),
+    ).toBeUndefined();
+  });
+
   it("carries the ceiling's own sentence and its seconds", () => {
     const feedback = feedbackFor({
       serverError: {

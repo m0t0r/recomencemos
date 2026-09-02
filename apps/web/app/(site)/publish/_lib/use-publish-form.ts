@@ -12,26 +12,35 @@
  */
 
 import { useForm } from "@tanstack/react-form";
+import type { PublishProfileValues } from "./schema";
 
 export interface PublishDefaults {
   /** The Google-door name, when there is one. Editable — prefilled is not decided. */
   readonly fullName: string;
 }
 
-export function usePublishForm(defaults: PublishDefaults) {
+/**
+ * `refused` is what the server handed back with a refusal. On the hydrated
+ * path the fields already hold it and these defaults are never read again; on
+ * the unhydrated path the page mounts fresh from the action's result, and this
+ * is what puts every value back where she typed it.
+ */
+export function usePublishForm(defaults: PublishDefaults, refused?: PublishProfileValues) {
   return useForm({
     defaultValues: {
-      fullName: defaults.fullName,
-      firstName: "",
-      lastInitial: "",
-      city: "",
-      headline: "",
-      about: "",
-      phone: "",
-      skillSlugs: [] as string[],
+      fullName: refused?.fullName ?? defaults.fullName,
+      firstName: refused?.firstName ?? "",
+      lastInitial: refused?.lastInitial ?? "",
+      city: refused?.city ?? "",
+      headline: refused?.headline ?? "",
+      about: refused?.about ?? "",
+      phone: refused?.phone ?? "",
+      skillSlugs: (refused?.skillSlugs ?? []) as string[],
       // One empty line to start, so the section is a field rather than a
       // button; empty lines are dropped by the schema's consumer.
-      workHistory: [""] as string[],
+      workHistory: (refused && refused.workHistory.length > 0
+        ? refused.workHistory
+        : [""]) as string[],
     },
   });
 }

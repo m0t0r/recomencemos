@@ -44,7 +44,7 @@ export const MORE_VISIBILITY = "Lo ve quien abra tu perfil completo. Es opcional
 export const SKILLS_LABEL = "Tus capacidades";
 export const SKILLS_HELP = "Escoge hasta seis. Es lo primero que ve quien busca a alguien.";
 export const SKILL_FILTER_LABEL = "Busca en la lista";
-export const SKILL_NOT_LISTED_LABEL = "Lo que sé hacer no está en la lista";
+export const SKILL_NOT_LISTED_LABEL = "No está en la lista";
 /**
  * The option exists and is reachable; its action is story 3's. Saying so is
  * Directness 5 — a control that promised a request nobody can yet make would
@@ -58,7 +58,7 @@ export function skillsNoneMatch(query: string): string {
 }
 
 export function skillsChosen(count: number): string {
-  if (count === 0) return "Todavía no escoges ninguna.";
+  if (count === 0) return "Todavía no has escogido ninguna.";
   if (count === 1) return "Escogiste una capacidad.";
   return `Escogiste ${count} capacidades.`;
 }
@@ -73,7 +73,7 @@ export const FIRST_NAME_LABEL = "Tu primer nombre";
 export const FIRST_NAME_HELP = "Como quieres que te llamen.";
 
 export const LAST_INITIAL_LABEL = "Inicial de tu apellido";
-export const LAST_INITIAL_HELP = "Solo la primera letra. El apellido completo no se muestra.";
+export const LAST_INITIAL_HELP = "Para que te reconozcan sin mostrar tu apellido.";
 
 export const CITY_LEGEND = "Tu ciudad";
 
@@ -81,13 +81,13 @@ export const FULL_NAME_LABEL = "Tu nombre completo";
 export const FULL_NAME_HELP = "Se lo damos solo a quien tú aceptes, junto con tu teléfono.";
 
 export const PHONE_LABEL = "Tu teléfono";
-export const PHONE_HELP = "Un número colombiano, como 300 123 4567.";
+export const PHONE_HELP = "Donde te llama quien tú aceptes.";
 
 export const ABOUT_LABEL = "Más sobre tu trabajo";
 export const ABOUT_HELP = "Lo que quieras contar: años, lugares, lo que mejor te sale.";
 
 export const WORK_HISTORY_LABEL = "Dónde has trabajado";
-export const WORK_HISTORY_HELP = "Una línea por lugar. Hasta cinco.";
+export const WORK_HISTORY_HELP = "Los lugares donde has trabajado, uno por línea.";
 export function workHistoryLineLabel(number: number): string {
   return `Lugar ${number}`;
 }
@@ -133,6 +133,8 @@ export const SKILL_NO_LONGER_LISTED =
 export const WORK_HISTORY_LINE_TOO_LONG = "Cada lugar cabe en 120 letras. Acórtalo un poco.";
 export const WORK_HISTORY_TOO_MANY = "Hasta cinco lugares. Quita uno.";
 export const CONSENT_REQUIRED = "Para publicar, marca la autorización.";
+/** The bound versions arrived malformed — a tampered or very stale page. Reloading is the fix. */
+export const PAGE_STALE = "Esta página quedó vieja. Recárgala e inténtalo de nuevo.";
 
 /**
  * The contact-detail rejector's sentence (NFR12), voice guide example 3: it
@@ -158,7 +160,7 @@ export function contactDetailRefusal(
     case "messaging_url":
       return (
         `Esta línea tiene un enlace: «${fragment}». Quítalo e inténtalo de nuevo. ` +
-        "Los datos de contacto se entregan aquí, y solo cuando tú aceptes una propuesta."
+        "Tus datos de contacto los damos nosotros, y solo a quien tú aceptes."
       );
   }
 }
@@ -173,6 +175,9 @@ export function summaryHeading(count: number): string {
 }
 /** The sentence the seventh state and every refusal here share: nothing was lost. */
 export const SUMMARY_KEPT = "Todo lo que escribiste sigue en el formulario.";
+
+/** The accessible name of the region focus lands on. The same word `/account` uses. */
+export const FEEDBACK_REGION_LABEL = "Resultado";
 
 /** A transport fault, not a refusal: what failed, that nothing was lost, and that retrying helps. */
 export const PUBLISH_FAILED =
@@ -250,6 +255,7 @@ export const PUBLISH_COPY = {
   WORK_HISTORY_LINE_TOO_LONG,
   WORK_HISTORY_TOO_MANY,
   CONSENT_REQUIRED,
+  PAGE_STALE,
   SUMMARY_KEPT,
   PUBLISH_FAILED,
 } as const;
@@ -262,6 +268,8 @@ export const PUBLISH_LABELS = {
   MORE_LEGEND,
   SKILLS_LABEL,
   SKILL_FILTER_LABEL,
+  SKILL_NOT_LISTED_LABEL,
+  FEEDBACK_REGION_LABEL,
   HEADLINE_LABEL,
   FIRST_NAME_LABEL,
   LAST_INITIAL_LABEL,

@@ -33,7 +33,8 @@ import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-de
 import { normalizeColombianPhone } from "#policy/phone";
 import { normalizeSearchText } from "#policy/search-text";
 import { mintSlug } from "#profiles/slug";
-import { type OwnProfile, type PhotoState, type ProfileRecord, toOwnProfile } from "#projections";
+import type { PhotoState } from "#policy/profile-states";
+import { type OwnProfile, type ProfileRecord, toOwnProfile } from "#projections";
 import * as schema from "#schema";
 
 /** What the boundary parse hands over. Shape has been checked; substance is checked here. */
@@ -166,7 +167,7 @@ export async function publishProfile(
      */
     const wanted = [...new Set(input.skillSlugs)];
     const skills = await tx
-      .select({ id: schema.skill.id, slug: schema.skill.slug })
+      .select({ id: schema.skill.id, slug: schema.skill.slug, labelEs: schema.skill.labelEs })
       .from(schema.skill)
       .where(and(inArray(schema.skill.slug, wanted), eq(schema.skill.active, true)));
 
@@ -184,11 +185,6 @@ export async function publishProfile(
         ],
       };
     }
-
-    const labels = await tx
-      .select({ labelEs: schema.skill.labelEs })
-      .from(schema.skill)
-      .where(inArray(schema.skill.slug, wanted));
 
     const slug = mintSlug();
 
@@ -208,7 +204,7 @@ export async function publishProfile(
           input.firstName,
           city,
           input.headline,
-          ...labels.map((label) => label.labelEs),
+          ...skills.map((skill) => skill.labelEs),
         ),
       })
       .returning({ id: schema.capabilityProfile.id });

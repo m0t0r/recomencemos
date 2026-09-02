@@ -28,6 +28,7 @@ import { AppError, projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { SESSION_REQUIRED_CODE } from "@/app/_lib/session/codes";
 import { SESSION_REQUIRED } from "@/app/_lib/session/messages";
 import { auth } from "@/lib/auth";
 import { actionClient, returnActionError } from "@/lib/safe-action";
@@ -49,7 +50,7 @@ export const accountActionClient = actionClient.use(async ({ next }) => {
   if (session) return next({ ctx: { session } satisfies AccountContext });
 
   const refusal = new AppError({
-    code: "session_required",
+    code: SESSION_REQUIRED_CODE,
     status: 401,
     message:
       "A signed-in Server Action was called with no session. The action authorizes " +

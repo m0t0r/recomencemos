@@ -32,7 +32,7 @@ import {
 } from "react";
 import { publishProfile } from "../actions";
 import { type Feedback, feedbackFor } from "./feedback";
-import { publishProfileSchema } from "./schema";
+import { type PublishProfileValues, publishProfileSchema, publishProfileValues } from "./schema";
 import { type Summary, summaryFromIssues, summaryFromValidationErrors } from "./summary";
 
 export type PublishResult = Awaited<ReturnType<typeof publishProfile>>;
@@ -53,6 +53,18 @@ export interface PublishMachine {
   readonly hydrated: boolean;
   /** The form-level summary, from whichever verdict is current, or nothing. */
   readonly summary: Summary | undefined;
+  /**
+   * The server's per-field verdict, for each field to render beside itself.
+   * `unknown` on purpose: it is the action's own tree, or — for a payload that
+   * was not even the right shape — next-safe-action's, and both are read
+   * defensively by `serverFieldError`.
+   */
+  readonly serverErrors: unknown;
+  /**
+   * What she submitted, when the server refused it. The unhydrated page mounts
+   * fresh from the action's result, and this is what puts her values back.
+   */
+  readonly refusedValues: PublishProfileValues | undefined;
   /** A ceiling or a transport fault: neither is a field error. */
   readonly feedback: Feedback | undefined;
   /** Focus lands here on every failed outcome — the count before the field. */
@@ -95,13 +107,17 @@ export function usePublish(consentVersions: ConsentVersions): PublishMachine {
    * moment a submit is allowed through, so a stale client list cannot sit
    * beside a fresh server one.
    */
-  const serverSummary = summaryFromValidationErrors(result.validationErrors);
+  const serverErrors = result.serverError?.fieldErrors ?? result.validationErrors;
+  const serverSummary = summaryFromValidationErrors(serverErrors);
   const summary = serverSummary ?? clientSummary;
+  const refusedValues = refusedValuesOf(result);
 
   useEffect(() => {
     // Read from `result` rather than a derived boolean: `result` is a fresh
     // object per dispatch, which is what makes "on every outcome" true.
-    if (result.serverError ?? result.validationErrors) summaryRef.current?.focus();
+    if (result.serverError ?? result.validationErrors) {
+      summaryRef.current?.focus();
+    }
   }, [result]);
 
   const guardSubmit: PublishMachine["guardSubmit"] = (event, runValidators) => {
@@ -138,8 +154,20 @@ export function usePublish(consentVersions: ConsentVersions): PublishMachine {
     pending,
     hydrated,
     summary,
+    serverErrors,
+    refusedValues,
     feedback: feedbackFor(result),
     summaryRef,
     guardSubmit,
   };
+}
+
+/**
+ * Her values, from whichever refusal carried them — the field refusal or the
+ * ceiling both echo the parsed input. Read through the schema rather than
+ * trusted, because `input` is typed `unknown` on the wire.
+ */
+export function refusedValuesOf(result: PublishResult): PublishProfileValues | undefined {
+  const echoed = publishProfileValues.safeParse(result.serverError?.input);
+  return echoed.success ? echoed.data : undefined;
 }

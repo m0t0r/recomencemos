@@ -51,7 +51,26 @@ import { clientIp } from "./client-ip";
  * C39 asks the surface to render the sentence *and* the number, and a shape that
  * buried the seconds is a shape where the surface quietly stops rendering them.
  */
-export type ActionError = ClientError & { readonly retryAfter?: number };
+export type ActionError = ClientError & {
+  readonly retryAfter?: number;
+  /**
+   * The per-field verdict, in next-safe-action's formatted tree, when a
+   * refusal is about fields rather than about the request. **Carried on the
+   * error rather than returned as data**, and the reason is measured: on the
+   * unhydrated postback a `.stateAction()` that *returns* a value sends React's
+   * server render into a hot loop and the request never completes, while a
+   * returned `serverError` re-renders in tens of milliseconds. Every refusal
+   * that must survive without JavaScript therefore travels this way.
+   */
+  readonly fieldErrors?: unknown;
+  /**
+   * What she submitted, when a refusal has to hand it back. The refusal's own
+   * sentence says nothing she typed was lost, and on the unhydrated path the
+   * page re-renders from this result alone — so the input travels back with it.
+   * It is her own input, returned to her; nothing else is on it.
+   */
+  readonly input?: unknown;
+};
 
 /**
  * The typed alias the supporting docs recommend over bare `returnServerError`.
@@ -149,6 +168,7 @@ export function rateLimit<Input extends object, Ctx extends object = object>({
         return returnActionError({
           ...outcome.error.toClientError(),
           retryAfter: outcome.retryAfter,
+          input: parsedInput,
         });
       }
 
