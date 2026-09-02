@@ -25,6 +25,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireAccountPage } from "@/lib/account";
+import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
 import { OwnProfileView } from "./_components/own-profile-view";
 import { MY_PROFILE_PAGE_TITLE, MY_PROFILE_TITLE } from "./_lib/messages";
 
@@ -46,6 +47,7 @@ async function ProfilePanel({ searchParams }: { searchParams: SearchParams }) {
       profile={profile}
       justPublished={params.published === "1"}
       justSaved={params.saved === "1"}
+      variant={typeof params.variant === "string" ? params.variant : "A"}
     />
   );
 }
@@ -71,6 +73,20 @@ export default function MyProfilePage({ searchParams }: { searchParams: SearchPa
       </h1>
       <Suspense fallback={<PanelSkeleton />}>
         <ProfilePanel searchParams={searchParams} />
+      </Suspense>
+
+      {/*
+        `/prototype` UI for #142: open decision 2 is about *this* page, so the
+        bar is here too and the variant travels on every link between the two.
+      */}
+      <Suspense fallback={null}>
+        <PrototypeSwitcher
+          variants={[
+            { key: "A", name: "Un solo control" },
+            { key: "B", name: "Un enlace por sección" },
+            { key: "C", name: "Un enlace por sección, guardar fijo" },
+          ]}
+        />
       </Suspense>
     </main>
   );

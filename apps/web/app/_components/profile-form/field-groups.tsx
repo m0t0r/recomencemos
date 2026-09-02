@@ -74,6 +74,9 @@ export const FIELD_GROUP_IDS = {
   more: "more",
 } as const;
 
+/** What every group needs; `ProfileFieldGroupsProps` is the same set. */
+export type GroupProps = ProfileFieldGroupsProps;
+
 export interface ProfileFieldGroupsProps {
   readonly form: ProfileFieldsForm;
   readonly machine: ProfileFormMachine;
@@ -87,121 +90,139 @@ export interface ProfileFieldGroupsProps {
   readonly photoNote?: React.ReactNode;
 }
 
-export function ProfileFieldGroups({
-  form,
-  machine,
-  vocabulary,
-  idFor,
-  serverErrorFor,
-  photoNote,
-}: ProfileFieldGroupsProps) {
+/**
+ * **The four groups, each exported on its own** — added by `/prototype` UI for
+ * #142, where one variant renders them as a disclosure list one at a time and
+ * another pins a save bar beneath all four. `ProfileFieldGroups` below is
+ * still the composition every non-prototype caller uses, so nothing about the
+ * shipped order or the legends moved.
+ */
+export function CapabilityGroup({ form, machine, vocabulary, idFor, serverErrorFor }: GroupProps) {
+  return (
+    <FieldSet id={FIELD_GROUP_IDS.capability}>
+      <FieldLegend>{CAPABILITY_LEGEND}</FieldLegend>
+      <FieldDescription>{CAPABILITY_VISIBILITY}</FieldDescription>
+      <form.Field name="skillSlugs" validators={{ onSubmit: skillSlugsField }}>
+        {(field) => (
+          <SkillPicker
+            id={idFor("skillSlugs")}
+            vocabulary={vocabulary}
+            selected={field.state.value}
+            onChange={field.handleChange}
+            onBlur={field.handleBlur}
+            error={messageOf(field.state.meta.errors) ?? serverErrorFor("skillSlugs")}
+            hydrated={machine.hydrated}
+          />
+        )}
+      </form.Field>
+      <TextField
+        form={form}
+        name="headline"
+        id={idFor("headline")}
+        label={HEADLINE_LABEL}
+        help={HEADLINE_HELP}
+        schema={headlineField}
+        serverError={serverErrorFor("headline")}
+        maxLength={LIMITS.headline}
+      />
+    </FieldSet>
+  );
+}
+
+export function IdentityGroup({ form, idFor, serverErrorFor }: GroupProps) {
+  return (
+    <FieldSet id={FIELD_GROUP_IDS.identity}>
+      <FieldLegend>{IDENTITY_LEGEND}</FieldLegend>
+      <FieldDescription>{IDENTITY_VISIBILITY}</FieldDescription>
+      <div className="grid gap-6 sm:grid-cols-[1fr_auto]">
+        <TextField
+          form={form}
+          name="firstName"
+          id={idFor("firstName")}
+          label={FIRST_NAME_LABEL}
+          help={FIRST_NAME_HELP}
+          schema={firstNameField}
+          serverError={serverErrorFor("firstName")}
+          autoComplete="given-name"
+          maxLength={LIMITS.firstName}
+        />
+        <TextField
+          form={form}
+          name="lastInitial"
+          id={idFor("lastInitial")}
+          label={LAST_INITIAL_LABEL}
+          help={LAST_INITIAL_HELP}
+          schema={lastInitialField}
+          serverError={serverErrorFor("lastInitial")}
+          maxLength={1}
+          className="sm:w-56"
+        />
+      </div>
+      <CityField form={form} id={idFor("city")} serverError={serverErrorFor("city")} />
+      <TextField
+        form={form}
+        name="fullName"
+        id={idFor("fullName")}
+        label={FULL_NAME_LABEL}
+        help={FULL_NAME_HELP}
+        schema={fullNameField}
+        serverError={serverErrorFor("fullName")}
+        autoComplete="name"
+        maxLength={LIMITS.fullName}
+      />
+    </FieldSet>
+  );
+}
+
+export function ContactGroup({ form, idFor, serverErrorFor }: GroupProps) {
+  return (
+    <FieldSet id={FIELD_GROUP_IDS.contact}>
+      <FieldLegend>{CONTACT_LEGEND}</FieldLegend>
+      <FieldDescription>{CONTACT_VISIBILITY}</FieldDescription>
+      <TextField
+        form={form}
+        name="phone"
+        id={idFor("phone")}
+        label={PHONE_LABEL}
+        help={PHONE_HELP}
+        schema={phoneField}
+        serverError={serverErrorFor("phone")}
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel-national"
+      />
+    </FieldSet>
+  );
+}
+
+export function MoreGroup({ form, machine, idFor, serverErrorFor, photoNote }: GroupProps) {
+  return (
+    <FieldSet id={FIELD_GROUP_IDS.more}>
+      <FieldLegend>{MORE_LEGEND}</FieldLegend>
+      <FieldDescription>{MORE_VISIBILITY}</FieldDescription>
+      <AboutField form={form} id={idFor("about")} serverError={serverErrorFor("about")} />
+      <WorkHistoryFields
+        form={form}
+        groupId={idFor("workHistory")}
+        idFor={(index) => idFor("workHistory", index)}
+        serverErrorFor={(index) => serverErrorFor("workHistory", index)}
+        hydrated={machine.hydrated}
+      />
+      {photoNote ?? <PhotoNote />}
+    </FieldSet>
+  );
+}
+
+export function ProfileFieldGroups(props: ProfileFieldGroupsProps) {
   return (
     <FieldGroup>
-      <FieldSet id={FIELD_GROUP_IDS.capability}>
-        <FieldLegend>{CAPABILITY_LEGEND}</FieldLegend>
-        <FieldDescription>{CAPABILITY_VISIBILITY}</FieldDescription>
-        <form.Field name="skillSlugs" validators={{ onSubmit: skillSlugsField }}>
-          {(field) => (
-            <SkillPicker
-              id={idFor("skillSlugs")}
-              vocabulary={vocabulary}
-              selected={field.state.value}
-              onChange={field.handleChange}
-              onBlur={field.handleBlur}
-              error={messageOf(field.state.meta.errors) ?? serverErrorFor("skillSlugs")}
-              hydrated={machine.hydrated}
-            />
-          )}
-        </form.Field>
-        <TextField
-          form={form}
-          name="headline"
-          id={idFor("headline")}
-          label={HEADLINE_LABEL}
-          help={HEADLINE_HELP}
-          schema={headlineField}
-          serverError={serverErrorFor("headline")}
-          maxLength={LIMITS.headline}
-        />
-      </FieldSet>
-
+      <CapabilityGroup {...props} />
       <Separator />
-
-      <FieldSet id={FIELD_GROUP_IDS.identity}>
-        <FieldLegend>{IDENTITY_LEGEND}</FieldLegend>
-        <FieldDescription>{IDENTITY_VISIBILITY}</FieldDescription>
-        <div className="grid gap-6 sm:grid-cols-[1fr_auto]">
-          <TextField
-            form={form}
-            name="firstName"
-            id={idFor("firstName")}
-            label={FIRST_NAME_LABEL}
-            help={FIRST_NAME_HELP}
-            schema={firstNameField}
-            serverError={serverErrorFor("firstName")}
-            autoComplete="given-name"
-            maxLength={LIMITS.firstName}
-          />
-          <TextField
-            form={form}
-            name="lastInitial"
-            id={idFor("lastInitial")}
-            label={LAST_INITIAL_LABEL}
-            help={LAST_INITIAL_HELP}
-            schema={lastInitialField}
-            serverError={serverErrorFor("lastInitial")}
-            maxLength={1}
-            className="sm:w-56"
-          />
-        </div>
-        <CityField form={form} id={idFor("city")} serverError={serverErrorFor("city")} />
-        <TextField
-          form={form}
-          name="fullName"
-          id={idFor("fullName")}
-          label={FULL_NAME_LABEL}
-          help={FULL_NAME_HELP}
-          schema={fullNameField}
-          serverError={serverErrorFor("fullName")}
-          autoComplete="name"
-          maxLength={LIMITS.fullName}
-        />
-      </FieldSet>
-
+      <IdentityGroup {...props} />
       <Separator />
-
-      <FieldSet id={FIELD_GROUP_IDS.contact}>
-        <FieldLegend>{CONTACT_LEGEND}</FieldLegend>
-        <FieldDescription>{CONTACT_VISIBILITY}</FieldDescription>
-        <TextField
-          form={form}
-          name="phone"
-          id={idFor("phone")}
-          label={PHONE_LABEL}
-          help={PHONE_HELP}
-          schema={phoneField}
-          serverError={serverErrorFor("phone")}
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel-national"
-        />
-      </FieldSet>
-
+      <ContactGroup {...props} />
       <Separator />
-
-      <FieldSet id={FIELD_GROUP_IDS.more}>
-        <FieldLegend>{MORE_LEGEND}</FieldLegend>
-        <FieldDescription>{MORE_VISIBILITY}</FieldDescription>
-        <AboutField form={form} id={idFor("about")} serverError={serverErrorFor("about")} />
-        <WorkHistoryFields
-          form={form}
-          groupId={idFor("workHistory")}
-          idFor={(index) => idFor("workHistory", index)}
-          serverErrorFor={(index) => serverErrorFor("workHistory", index)}
-          hydrated={machine.hydrated}
-        />
-        {photoNote ?? <PhotoNote />}
-      </FieldSet>
+      <MoreGroup {...props} />
     </FieldGroup>
   );
 }

@@ -28,14 +28,23 @@ import { useProfileFields } from "@/app/_lib/profile-form/use-profile-fields";
 import { INITIAL_RESULT, useProfileForm } from "@/app/_lib/profile-form/use-profile-form";
 import { updateProfile } from "../actions";
 import { SAVE_FAILED } from "../_lib/messages";
-import { EditLayout } from "./edit-layout";
+import { DEFAULT_VARIANT, type VariantKey, VARIANTS } from "./variants";
 
 export interface EditFormProps {
   readonly vocabulary: readonly VocabularyEntry[];
   readonly defaults: UpdateProfileValues;
+  /** `/prototype` UI: which layout to render. Leaves with the losing variants. */
+  readonly variant?: VariantKey;
+  /** `/prototype` UI: the group `/my-profile` linked into, read by variant B. */
+  readonly openGroup?: string | undefined;
 }
 
-export function EditForm({ vocabulary, defaults }: EditFormProps) {
+export function EditForm({
+  vocabulary,
+  defaults,
+  variant = DEFAULT_VARIANT,
+  openGroup,
+}: EditFormProps) {
   const machine = useProfileForm({
     action: updateProfile,
     initial: INITIAL_RESULT,
@@ -48,6 +57,8 @@ export function EditForm({ vocabulary, defaults }: EditFormProps) {
   const idFor = (field: PublishFieldName, index?: number) =>
     index === undefined ? `${base}-${field}` : `${base}-${field}-${index}`;
 
+  const Layout = VARIANTS[variant].component;
+
   return (
     <form
       action={machine.formAction}
@@ -55,11 +66,12 @@ export function EditForm({ vocabulary, defaults }: EditFormProps) {
       onSubmit={(event) => machine.guardSubmit(event, () => void form.handleSubmit())}
       className="flex flex-col gap-8"
     >
-      <EditLayout
+      <Layout
         form={form}
         machine={machine}
         vocabulary={vocabulary}
         idFor={idFor}
+        openGroup={openGroup}
         serverErrorFor={(field, index) => serverFieldError(machine.serverErrors, field, index)}
       />
     </form>

@@ -23,8 +23,12 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
 import { requireAccountPage } from "@/lib/account";
+import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
 import { EditForm } from "./_components/edit-form";
+import { DEFAULT_VARIANT, isVariantKey, VARIANT_KEYS, VARIANTS } from "./_components/variants";
 import { EDIT_INTRO, EDIT_PAGE_TITLE, EDIT_TITLE } from "./_lib/messages";
+
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 export const metadata: Metadata = {
   title: EDIT_PAGE_TITLE,
@@ -53,16 +57,21 @@ function choosable(
   return [...bySlug.values()].toSorted((a, b) => a.labelEs.localeCompare(b.labelEs, "es-CO"));
 }
 
-async function EditPanel() {
+async function EditPanel({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireAccountPage("/my-profile/edit");
-  const profile = await profiles.findOwn(session.accountId);
+  const [profile, params] = await Promise.all([profiles.findOwn(session.accountId), searchParams]);
 
   if (!profile) redirect("/publish");
 
   const vocabulary = await skills.listActive();
+  const requested = params.variant;
+  const variant = isVariantKey(requested) ? requested : DEFAULT_VARIANT;
+  const group = typeof params.group === "string" ? params.group : undefined;
 
   return (
     <EditForm
+      variant={variant}
+      openGroup={group}
       vocabulary={choosable(vocabulary, profile.skills)}
       defaults={{
         fullName: profile.fullName,
@@ -91,9 +100,9 @@ function PanelSkeleton() {
   );
 }
 
-export default function EditProfilePage() {
+export default function EditProfilePage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10 pb-28">
       <div className="flex flex-col gap-2">
         <h1 className="text-foreground text-2xl leading-8 font-semibold tracking-tight">
           {EDIT_TITLE}
@@ -102,7 +111,13 @@ export default function EditProfilePage() {
       </div>
 
       <Suspense fallback={<PanelSkeleton />}>
-        <EditPanel />
+        <EditPanel searchParams={searchParams} />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <PrototypeSwitcher
+          variants={VARIANT_KEYS.map((key) => ({ key, name: VARIANTS[key].name }))}
+        />
       </Suspense>
     </main>
   );

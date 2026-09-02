@@ -19,6 +19,12 @@ import type { OwnProfile } from "@repo/domain/profiles";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ProfileCard } from "@/app/(site)/_components/profile-card";
+import {
+  CAPABILITY_LEGEND,
+  CONTACT_LEGEND,
+  IDENTITY_LEGEND,
+  MORE_LEGEND,
+} from "@/app/_lib/profile-form/messages";
 import { PublishedConfirmation } from "./published-confirmation";
 import {
   ABOUT_TERM,
@@ -54,12 +60,53 @@ function photoSentence(state: OwnProfile["photoState"]): string {
   }
 }
 
+/**
+ * `/prototype` UI for #142, open decision 2: **one _Cambiar mi perfil_ control
+ * or one link per section.** Variants B and C carry the per-section links and
+ * variant A the single control; the variant travels on the link so flipping the
+ * bar on `/my-profile/edit` and coming back keeps the pair together.
+ *
+ * Prototype copy, deliberately not in a message module — if this wins, the
+ * strings go through the voice guide and the copy test with the rest.
+ */
+const CHANGE_SECTION = "Cambiar";
+
+/**
+ * The ids are `FIELD_GROUP_IDS`, restated rather than imported: that module is
+ * `"use client"`, and importing a constant out of it would drag the whole form
+ * tree into this page's client bundle for four strings.
+ */
+const SECTION_LINKS = [
+  { id: "capability", legend: CAPABILITY_LEGEND },
+  { id: "identity", legend: IDENTITY_LEGEND },
+  { id: "contact", legend: CONTACT_LEGEND },
+  { id: "more", legend: MORE_LEGEND },
+] as const;
+
+function SectionLinks({ variant }: { variant: string }) {
+  return (
+    <nav aria-label={CHANGE_SECTION} className="flex flex-wrap gap-2">
+      {SECTION_LINKS.map(({ id, legend }) => (
+        <Link
+          key={id}
+          href={`/my-profile/edit?variant=${variant}&group=${id}`}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          {`${CHANGE_SECTION}: ${legend}`}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 export interface OwnProfileViewProps {
   readonly profile: OwnProfile;
   /** Arrived from `/publish`: render the confirmation, focused. */
   readonly justPublished: boolean;
   /** Arrived from a saved edit: the same region, a different sentence. */
   readonly justSaved: boolean;
+  /** `/prototype` UI: which way into the edit form to render. Leaves with the losers. */
+  readonly variant?: string;
 }
 
 /**
@@ -171,7 +218,7 @@ function HeldTerms({ profile }: { profile: OwnProfile }) {
   );
 }
 
-function Tiers({ profile, justPublished, justSaved }: OwnProfileViewProps) {
+function Tiers({ profile, justPublished, justSaved, variant = "A" }: OwnProfileViewProps) {
   return (
     <div className="flex flex-col gap-8">
       {justPublished ? <Confirmation /> : null}
@@ -184,12 +231,16 @@ function Tiers({ profile, justPublished, justSaved }: OwnProfileViewProps) {
         changing is the profile, and the tiers are a rule about who sees it
         rather than four things to edit separately.
       */}
-      <Link
-        href="/my-profile/edit"
-        className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
-      >
-        {EDIT_LINK}
-      </Link>
+      {variant === "A" ? (
+        <Link
+          href="/my-profile/edit"
+          className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+        >
+          {EDIT_LINK}
+        </Link>
+      ) : (
+        <SectionLinks variant={variant} />
+      )}
 
       <section className="flex flex-col gap-3" aria-labelledby="public-heading">
         <h2 id="public-heading" className="text-foreground text-lg font-semibold">
