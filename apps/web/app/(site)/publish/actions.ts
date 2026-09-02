@@ -31,22 +31,14 @@
  * success is a redirect too; nothing renders here.
  */
 
-import { type ProfileRefusal, profiles } from "@repo/domain/profiles";
+import { profiles } from "@repo/domain/profiles";
 import { skills } from "@repo/domain/skills";
 import { AppError, projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { redirect } from "next/navigation";
-import { type AccountContext, accountActionClient } from "@/lib/account";
-import { rateLimit, returnActionError } from "@/lib/safe-action";
-import {
-  CITY_REQUIRED,
-  contactDetailRefusal,
-  type PublishFieldName,
-  PHONE_LOOKS_WRONG,
-  SKILL_NO_LONGER_LISTED,
-  SKILL_REQUIRED,
-  SUMMARY_KEPT,
-} from "@/app/_lib/profile-form/messages";
+import { PUBLISH_REFUSED_CODE, SKILL_REQUEST_REFUSED_CODE } from "@/app/_lib/profile-form/codes";
+import { contactDetailRefusal } from "@/app/_lib/profile-form/messages";
+import { refuseWith, treeFromRefusals } from "@/app/_lib/profile-form/refusals";
 import {
   consentVersionsArg,
   publishProfileFields,
@@ -55,73 +47,19 @@ import {
   skillRequestSchema,
   type SkillRequestValues,
 } from "@/app/_lib/profile-form/schema";
-import { PUBLISH_REFUSED_CODE, SKILL_REQUEST_REFUSED_CODE } from "@/app/_lib/profile-form/codes";
 import { type FieldErrorTree, treeFromIssues } from "@/app/_lib/profile-form/summary";
+import { type AccountContext, accountActionClient } from "@/lib/account";
+import { rateLimit, returnActionError } from "@/lib/safe-action";
 
-/**
- * Refuse by return, with the tree and her values. Logged at `warn` because a
- * returned error bypasses `handleServerError`, which is where every thrown one
- * is logged — a refusal nothing records is a failure nothing records.
- */
+/** This surface's refusal, named so the browser can tell it from an edit's. */
 function refuse(errors: FieldErrorTree, values: PublishProfileValues): never {
-  const refusal = new AppError({
+  return refuseWith({
     code: PUBLISH_REFUSED_CODE,
-    status: 422,
     message:
       "The publishing form was refused on one or more fields; the verdict travels back with it.",
-    // The sentence the summary already says; the tree carries the rest.
-    userMessage: SUMMARY_KEPT,
-    // Field names only — identifiers, never what she typed (NFR18).
-    context: { fields: Object.keys(errors).filter((key) => key !== "_errors") },
+    errors,
+    values,
   });
-  logRequestError(refusal, { level: "warn" });
-  return returnActionError({ ...projectClientError(refusal), fieldErrors: errors, input: values });
-}
-
-/**
- * The domain's refusals, as the sentences the surface renders on each field.
- * The mapping is the only place the two vocabularies meet, and it is here rather
- * than in the domain because the sentence is `es-CO` copy under the voice guide
- * and the refusal is an English identifier (ADR-0012).
- */
-function treeFromRefusals(refusals: readonly ProfileRefusal[]): FieldErrorTree {
-  const tree: FieldErrorTree = {};
-  // oxlint-disable-next-line no-underscore-dangle -- the tree's own key
-  const say = (field: Exclude<PublishFieldName, "workHistory">, message: string) => {
-    tree[field] = { _errors: [message] };
-  };
-
-  for (const refusal of refusals) {
-    switch (refusal.code) {
-      case "contact_detail": {
-        const message = contactDetailRefusal(refusal.kind, refusal.fragment);
-        if (refusal.field === "workHistory") {
-          tree.workHistory ??= {};
-          // oxlint-disable-next-line no-underscore-dangle
-          if (refusal.index === undefined) tree.workHistory._errors = [message];
-          // oxlint-disable-next-line no-underscore-dangle
-          else tree.workHistory[refusal.index] = { _errors: [message] };
-        } else {
-          say(refusal.field, message);
-        }
-        break;
-      }
-      case "unknown_skill":
-        say("skillSlugs", SKILL_NO_LONGER_LISTED);
-        break;
-      case "no_skill":
-        say("skillSlugs", SKILL_REQUIRED);
-        break;
-      case "phone_unrecognised":
-        say("phone", PHONE_LOOKS_WRONG);
-        break;
-      case "city_unknown":
-        say("city", CITY_REQUIRED);
-        break;
-    }
-  }
-
-  return tree;
 }
 
 export const publishProfile = accountActionClient

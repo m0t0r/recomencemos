@@ -24,6 +24,7 @@ import {
   ABOUT_TERM,
   EMAIL_TERM,
   FULL_NAME_TERM,
+  EDIT_LINK,
   GATED_HEADING,
   HELD_EXPLANATION,
   HELD_HEADING,
@@ -33,6 +34,8 @@ import {
   PHOTO_PENDING,
   PHOTO_REJECTED,
   PUBLIC_HEADING,
+  SAVED_CONFIRMATION,
+  SAVED_EXPLANATION,
   PUBLISHED_CONFIRMATION,
   PUBLISHED_EXPLANATION,
   publishedOn,
@@ -55,6 +58,26 @@ export interface OwnProfileViewProps {
   readonly profile: OwnProfile;
   /** Arrived from `/publish`: render the confirmation, focused. */
   readonly justPublished: boolean;
+  /** Arrived from a saved edit: the same region, a different sentence. */
+  readonly justSaved: boolean;
+}
+
+/**
+ * **One region, two arrivals.** Publishing and saving are different facts and
+ * say different sentences, but they are the same thing to a screen reader —
+ * the announcement she is waiting for on arrival — so they share the focused
+ * `role="status"` region rather than competing for it. Only one can be true:
+ * each comes from its own redirect.
+ */
+function SavedConfirmation() {
+  return (
+    <PublishedConfirmation>
+      <AlertTitle>{SAVED_CONFIRMATION}</AlertTitle>
+      <AlertDescription>
+        <p>{SAVED_EXPLANATION}</p>
+      </AlertDescription>
+    </PublishedConfirmation>
+  );
 }
 
 function Confirmation() {
@@ -148,10 +171,25 @@ function HeldTerms({ profile }: { profile: OwnProfile }) {
   );
 }
 
-function Tiers({ profile, justPublished }: OwnProfileViewProps) {
+function Tiers({ profile, justPublished, justSaved }: OwnProfileViewProps) {
   return (
     <div className="flex flex-col gap-8">
       {justPublished ? <Confirmation /> : null}
+      {justSaved ? <SavedConfirmation /> : null}
+
+      {/*
+        The way into the edit form. A link rather than a button because it
+        navigates, for the reason `sign-in-link.tsx` sets out — and placed
+        above the tiers rather than beside each one, because what she is
+        changing is the profile, and the tiers are a rule about who sees it
+        rather than four things to edit separately.
+      */}
+      <Link
+        href="/my-profile/edit"
+        className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+      >
+        {EDIT_LINK}
+      </Link>
 
       <section className="flex flex-col gap-3" aria-labelledby="public-heading">
         <h2 id="public-heading" className="text-foreground text-lg font-semibold">

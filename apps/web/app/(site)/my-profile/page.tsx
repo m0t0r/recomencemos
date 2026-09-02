@@ -41,7 +41,13 @@ async function ProfilePanel({ searchParams }: { searchParams: SearchParams }) {
 
   if (!profile) redirect("/publish");
 
-  return <OwnProfileView profile={profile} justPublished={params.published === "1"} />;
+  return (
+    <OwnProfileView
+      profile={profile}
+      justPublished={params.published === "1"}
+      justSaved={params.saved === "1"}
+    />
+  );
 }
 
 function PanelSkeleton() {
