@@ -166,12 +166,10 @@ And the audit record, which two other sections of this spec already assert uncon
     Report lives 24 months.
 
 **Also `Must`, added by amendment (2026-09-02, #139).** Four places in this document already assumed
-editing existed — NFR9's "stable across edits", DD4's `searchText` "written on publish and on edit",
-the **Own profile** row's `success` copy, and the seventh-state copy telling a Worker she can publish
-with the closest Skill and correct it later — and no story, no action and no ticket built it. It is
-`Must` because all four of those are load-bearing today, and because a wrong phone number on a
-published profile is a profile nobody can reach. Story numbers are stable across this document, so
-this one takes the next free number rather than a position in the list above.
+editing existed and none built it; **Further Notes** names all four. It is `Must` because those four
+are load-bearing today, and because a wrong phone number on a published profile is a profile nobody
+can reach. Story numbers are stable across this document, so this one takes the next free number
+rather than a position in the list above.
 
 24. As a Worker, I want to change what my published profile says — my Skills, my work history, the
     line in my own words, my city, my name as it is shown and the number people reach me on — so that
@@ -231,13 +229,13 @@ concerns.
   a Worker completes **every** field except the photo and submitting produces a published profile —
   **and the same holds for a change to one already published.** The photo is the single documented
   exception and the form says so where it appears. _Amended 2026-09-02 with #139: this named publishing
-  alone. She corrects a wrong number on the same phone and the same connection she typed it on, and the
-  edit form is the publish form minus one field, so the exemption had no argument behind it._
-  **Binds:** 2, 4, 24.
+  alone. She corrects a wrong number on the same phone and the same connection she typed it on, over
+  the same fields, so the exemption had no argument behind it — and the photo stays the exception on
+  both paths._ **Binds:** 2, 4, 24.
 - **NFR5 — Browser floor.** Every platform feature on a Worker-critical path is **Baseline Widely
   Available** — 30 months past the date all four core browsers shipped it, verified against web.dev's
   definition rather than recalled. Concretely Chrome on Android 10+, Safari on iOS 16+, current
-  evergreen desktop. Settles `browser-support`. **Binds:** 2, 4, 5, 8.
+  evergreen desktop. Settles `browser-support`. **Binds:** 2, 4, 5, 8, 24.
 - **NFR6 — Nothing unreviewed is reachable.** **0** unmoderated photo **objects** are retrievable by
   an unauthenticated request, and **0** appear on any public or indexable surface. A profile whose
   photo is `pending` or `rejected` renders its initial everywhere except the Worker's own view.
@@ -356,7 +354,8 @@ concerns.
   and **0** Sentry transactions carry a phone number, an email address, a full name, an Offer body or
   a Worker's own-words text. The test drives every logging call site **and** the `beforeSend` /
   `beforeSendTransaction` hooks with the same sentinels, because the shipped redaction list matches
-  key names and contains no `phone`, `email`, `about` or `workDescription`. **Binds:** 1, 2, 6, 8, 9, 17.
+  key names and contains no `phone`, `email`, `about` or `workDescription`. **Binds:** 1, 2, 6, 8, 9,
+  17, 24.
 - **NFR19 — `request.url` carries no credential to any processor.** The magic-link token is a query
   parameter and `CARRIER_PATHS` in `packages/errors/src/redaction.ts` has no `["request","url"]`
   entry — verified in the shipped file, whose own docstring defers the case to "whatever consumes
@@ -490,7 +489,7 @@ concerns.
   string a person reads stays `es-CO` (`docs/policy/ux.md` → `locales`), and a surface that became
   less Spanish to satisfy this requirement has failed it, not met it. See
   [ADR-0012](../../adr/0012-spanish-is-the-interface-english-is-the-code.md).
-  **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21.
+  **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21, 24.
 
 - **NFR30 — Migration integrity, enforced rather than agreed.** Four counts, all machine-checked
   (DD13): **0** entries in `drizzle/meta/_journal.json` are removed, reordered, or mutated once
@@ -694,10 +693,9 @@ _Added 2026-09-02 with #139, on `updateProfile`._ Three things about that row ar
 not fit in a table cell. **The DD3 rejector runs again**, on every edited free-text field, exactly as
 it does at publish — a field checked once and never again is a field with a documented way past the
 consent step. **`searchText` is rewritten** because DD4 already says it is written "on publish and on
-edit", and this is the edit. **`publishedAt` is not stamped**: it orders the Wall
-(`published_at DESC, id DESC`), so stamping it on an edit would make editing a free bump to the top of
-the most-linked surface on the site, and story 20's attention-spread measurement would go on reporting
-a fairness property the site no longer had. The full argument is in **Further Notes**.
+edit", and this is the edit. **`publishedAt` is not stamped**, because it orders the Wall and an edit
+that stamped it would be a free bump to the top of the site's most-linked surface — the argument, and
+what it costs story 20's fairness measurement to get wrong, is in **Further Notes**.
 
 ### Hirer — Account required, `noindex`
 
@@ -3562,7 +3560,7 @@ here. It is filed as a `needs-triage` finding
 ([ADR-0001](../../adr/0001-findings-enter-through-triage.md), issue #143) rather than left in this
 paragraph, because a paragraph is where a question like that gets lost. Two
 further things stay out on purpose: **the photo**, because `attachPhoto` already swaps one and lands
-with story 2b — the two tickets are independent and carry no blocking edge between them; and **a
+with the photo ticket (#18) — the two are independent and carry no blocking edge between them; and **a
 Worker taking her own profile down**, because `taken_down` is Admin-only moderation and the subject's
 own deletion is story 13's Account-level hard delete. DD8's "two deletions, never one mechanism" is
 what keeps a third from being invented here.
