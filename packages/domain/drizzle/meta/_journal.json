@@ -78,6 +78,13 @@
       "when": 1788380690922,
       "tag": "0010_skill_requests_and_promotion",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788386543612,
+      "tag": "0011_update_profile_ceiling",
+      "breakpoints": true
     }
   ]
 }
