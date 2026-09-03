@@ -36,6 +36,9 @@ import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+// Statically imported and cheap: the object-store client is a dynamic import
+// inside that module, so this costs nothing on the paths that never upload.
+import { missingConfig } from "./ui-proof-store.mjs";
 
 const run = promisify(execFile);
 
@@ -93,6 +96,15 @@ export function classify(filename) {
   if (!surface) {
     throw new Error(`"${filename}" names a state but no surface`);
   }
+  // The link block records the surfaces as a ", "-joined list so the expiry step
+  // can read them back after the artifact is gone. A surface carrying that exact
+  // separator would split into two on the way back, so it is refused here rather
+  // than corrupting a body nobody re-reads.
+  if (surface.includes(", ")) {
+    throw new Error(
+      `"${filename}" has a surface containing ", ", which the link block cannot round-trip`,
+    );
+  }
 
   return { file: filename, state, surface, kind: media.kind, type: media.type, ext };
 }
@@ -120,38 +132,54 @@ export function group(entries) {
 }
 
 /**
- * Where an artifact lands. The review prefix carries the pull request number and
- * a random segment: the number so a human can find it, and the random segment so
+ * Where an artifact lands. Both prefixes carry the pull request number and a
+ * random segment: the number so a human can find it, and the random segment so
  * the URL is unguessable, which is the only thing standing between a public
  * bucket and someone enumerating every artifact this repository has produced.
+ * The demo prefix carries one too — it is the artifact that never expires, so it
+ * is the one a guessable name exposes for longest.
  */
 export function prefixFor(state, pullRequest, nonce) {
-  return PREFIX[state] === "demos"
-    ? `demos/pr-${pullRequest}`
-    : `review/pr-${pullRequest}-${nonce}`;
+  return `${PREFIX[state]}/pr-${pullRequest}-${nonce}`;
 }
 
+// Every attribute this file writes is double-quoted, so `'` is not strictly
+// required — it is escaped anyway, because the rule "safe as long as nobody
+// writes a single-quoted attribute" is one a later edit breaks silently.
 const escapeHtml = (s) =>
   s
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 
-const mediaTag = (e) =>
+// **Absolute, always.** A relative `src` resolves against the page, and the page
+// lives under one prefix while the demos live under another — so every demo
+// player on the review report resolved into `review/…` and 404'd. Found by
+// review, not by running it, because a fixture directory has no origin to
+// resolve against.
+const mediaTag = (e, url) =>
   e.kind === "video"
-    ? `<video controls preload="metadata" playsinline src="${escapeHtml(e.file)}"></video>`
-    : `<img loading="lazy" alt="${escapeHtml(e.surface)}, ${escapeHtml(e.state)}" src="${escapeHtml(e.file)}">`;
+    ? `<video controls preload="metadata" playsinline src="${escapeHtml(url)}"></video>`
+    : `<img loading="lazy" alt="${escapeHtml(e.surface)}, ${escapeHtml(e.state)}" src="${escapeHtml(url)}">`;
 
 /**
  * The viewer. Deliberately small: the prose above it is the pull request body
  * rendered by GitHub, and everything this adds is the part a pull request body
  * physically cannot show.
+ *
+ * **`bodyHtml` is inserted unescaped, and that trust is load-bearing.** It is
+ * whatever `POST /markdown` returned, and GitHub sanitises its own output — that
+ * is the same guarantee the pull request page itself relies on. Said out loud
+ * because the page is served from an origin of ours rather than GitHub's, so a
+ * future change that renders Markdown any other way inherits an injection this
+ * one does not have.
  */
-export function renderReport({ title, bodyHtml, comparisons, demos }) {
+export function renderReport({ title, bodyHtml, comparisons, demos, urlFor }) {
   const half = (e, label) =>
     e
-      ? `<figure><figcaption>${label}</figcaption>${mediaTag(e)}</figure>`
+      ? `<figure><figcaption>${label}</figcaption>${mediaTag(e, urlFor(e))}</figure>`
       : `<figure class="missing"><figcaption>${label}</figcaption><p>Not captured. The pull request body says why.</p></figure>`;
 
   const comparisonHtml = comparisons
@@ -164,7 +192,8 @@ export function renderReport({ title, bodyHtml, comparisons, demos }) {
   const demoHtml = demos.length
     ? `<h2>The story, working</h2>${demos
         .map(
-          (d) => `<section class="demo"><h3>${escapeHtml(d.surface)}</h3>${mediaTag(d)}</section>`,
+          (d) =>
+            `<section class="demo"><h3>${escapeHtml(d.surface)}</h3>${mediaTag(d, urlFor(d))}</section>`,
         )
         .join("")}`
     : "";
@@ -239,23 +268,49 @@ export function withBlock(body, inner) {
  * how that step would quietly start writing "expired. It showed ." instead.
  */
 const SHOWED = /<!-- ui-proof:showed (.*?) -->/;
+const DEMO = /<!-- ui-proof:demo (\S+) -->/;
 
-export const linkBlock = (url, surfaces) =>
+/**
+ * Two lines, because there are two lifetimes and the reader has to be able to
+ * tell which link is which. The review link is the one that stops working; the
+ * demo link is the one that does not, so it survives the expiry rewrite intact.
+ *
+ * "after it was published" rather than "after this pull request closes", which
+ * is what this said before: an object-store lifecycle rule counts from upload,
+ * and a pull request open three weeks would otherwise have promised nine more
+ * days than it had.
+ */
+export const linkBlock = ({ url, surfaces, demoUrl, demoSurfaces }) =>
   `<!-- ui-proof:showed ${surfaces.join(", ")} -->\n` +
-  `**Recorded proof** — [${surfaces.join(", ")}, in a player you can scrub](${url}) · expires 30 days after this pull request closes`;
+  (demoUrl ? `<!-- ui-proof:demo ${demoUrl} -->\n` : "") +
+  `**Recorded proof** — [${surfaces.join(", ")}, in a player you can scrub](${url}) · expires 30 days after it was published` +
+  (demoUrl ? `\n\n**The story, kept** — [${demoSurfaces.join(", ")}](${demoUrl})` : "");
 
 // The comment is carried forward rather than consumed, so expiring is idempotent:
 // a pull request closed, reopened and closed again rewrites the same notice
 // instead of degrading it to "expired." with nothing left to name.
-export const expiredBlock = (surfaces) =>
+/**
+ * What the pull request says once the review is over. It is deliberately not the
+ * word "gone": the rewrite runs when the pull request closes, and the object
+ * itself ages out 30 days after it was published — so at this moment the file
+ * usually still exists and only the link has been withdrawn. Saying "expired"
+ * here would have been a sentence that is false for a month.
+ */
+export const expiredBlock = (surfaces, demoUrl) =>
   (surfaces.length > 0 ? `<!-- ui-proof:showed ${surfaces.join(", ")} -->\n` : "") +
-  `**Recorded proof** — expired${
+  (demoUrl ? `<!-- ui-proof:demo ${demoUrl} -->\n` : "") +
+  `**Recorded proof** — no longer linked${
     surfaces.length > 0 ? `. It showed ${surfaces.join(", ")}` : ""
-  }. A review artifact is kept for 30 days after its pull request closes; a durable story demo, where the ticket had one, is not affected.`;
+  }. A review artifact is removed from the store 30 days after it was published.` +
+  (demoUrl ? `\n\n**The story, kept** — [this one does not expire](${demoUrl})` : "");
 
 export function surfacesIn(body) {
   const found = SHOWED.exec(body);
   return found?.[1] ? found[1].split(", ").filter(Boolean) : [];
+}
+
+export function demoUrlIn(body) {
+  return DEMO.exec(body)?.[1];
 }
 
 const gh = async (args, input) => {
@@ -300,7 +355,7 @@ async function main(argv) {
       out(`ui-proof: pull request #${pullRequest} links no artifact — nothing to expire\n`);
       return 0;
     }
-    const next = withBlock(body, expiredBlock(surfacesIn(body)));
+    const next = withBlock(body, expiredBlock(surfacesIn(body), demoUrlIn(body)));
     if (dryRun) {
       out(next.slice(next.indexOf(BEGIN), next.indexOf(END) + END.length) + "\n");
       return 0;
@@ -370,11 +425,7 @@ async function main(argv) {
 
   const { comparisons, demos } = group(entries);
 
-  // The nonce is fixed under --dry-run so the fixture suite can assert on a key
-  // rather than on a pattern. A real publish must never reuse it: the unguessable
-  // segment is the only thing between a public bucket and someone walking every
-  // artifact this repository has produced.
-  const nonce = dryRun ? "0".repeat(16) : randomNonce();
+  const nonce = randomNonce();
   const reviewPrefix = prefixFor("after", pullRequest, nonce);
   const demoPrefix = prefixFor("demo", pullRequest, nonce);
   const keyFor = (e) => `${e.state === "demo" ? demoPrefix : reviewPrefix}/${e.file}`;
@@ -384,10 +435,17 @@ async function main(argv) {
   // no credential — so the naming, the grouping and the two prefixes are drivable
   // from a fixture directory on a machine that has no bucket and no network.
   if (dryRun) {
+    // One page per lifetime, plus the media: the durable half gets an index of
+    // its own beside the clips it renders, so a dry run has to count two when
+    // there are demos or it will disagree with the publish it is previewing.
+    const pages = demos.length > 0 ? 2 : 1;
     out(
-      `ui-proof: would publish ${entries.length + 1} object(s) for pull request #${pullRequest}\n`,
+      `ui-proof: would publish ${entries.length + pages} object(s) for pull request #${pullRequest}\n`,
     );
     out(`  ${reviewPrefix}/index.html  (text/html; charset=utf-8)\n`);
+    if (demos.length > 0) {
+      out(`  ${demoPrefix}/index.html  (text/html; charset=utf-8)\n`);
+    }
     for (const e of entries) {
       out(`  ${keyFor(e)}  (${e.type}, ${e.size} bytes)\n`);
     }
@@ -395,8 +453,29 @@ async function main(argv) {
       if (!c.before) out(`ui-proof: "${c.surface}" has an after and no before\n`);
       if (!c.after) out(`ui-proof: "${c.surface}" has a before and no after\n`);
     }
+    if (demos.length > 0) {
+      out(demoWarning(demos));
+    }
     out(`ui-proof: would link ${reviewPrefix}/index.html from the pull request body\n`);
     return 0;
+  }
+
+  // Everything the store needs is checked before the first network call. The
+  // refusal is exit 1 rather than 2 — an operator who has not worked the runbook
+  // yet is the ordinary state of a machine, not a broken script — and refusing
+  // here rather than after the upload loop saves two round trips and a rendered
+  // report nobody will see.
+  const base = process.env.UI_PROOF_PUBLIC_BASE;
+  const missing = [...missingConfig(), ...(base ? [] : ["UI_PROOF_PUBLIC_BASE"])];
+  if (missing.length > 0) {
+    err(
+      `ui-proof: the artifact store is not configured — ${missing.join(", ")} unset. The bucket, its lifecycle rules and its credential are a human's step; see docs/runbooks/ui-proof-artifacts.md\n`,
+    );
+    return 1;
+  }
+
+  if (demos.length > 0) {
+    out(demoWarning(demos));
   }
 
   const view = JSON.parse(await gh(["pr", "view", pullRequest, "--json", "title,body,url"]));
@@ -421,10 +500,20 @@ async function main(argv) {
     view.body ?? "",
   );
 
-  const report = renderReport({ title: view.title, bodyHtml, comparisons, demos });
+  const origin = base.replace(/\/$/, "");
+  const urlFor = (e) => `${origin}/${keyFor(e)}`;
 
+  // **Two pages, because there are two lifetimes.** The review report renders the
+  // comparisons and lives under the prefix the lifecycle rule empties. The demo
+  // report renders only the durable clips and lives beside them, so the half that
+  // is kept has a viewer that is kept — before this, the only page that rendered a
+  // demo sat under the prefix that deletes.
   const uploads = [
-    { key: `${reviewPrefix}/index.html`, body: report, type: "text/html; charset=utf-8" },
+    {
+      key: `${reviewPrefix}/index.html`,
+      body: renderReport({ title: view.title, bodyHtml, comparisons, demos, urlFor }),
+      type: "text/html; charset=utf-8",
+    },
     ...entries.map((e) => ({
       key: keyFor(e),
       path: join(dir, e.file),
@@ -433,12 +522,19 @@ async function main(argv) {
     })),
   ];
 
-  const base = process.env.UI_PROOF_PUBLIC_BASE;
-  if (!base) {
-    err(
-      "ui-proof: UI_PROOF_PUBLIC_BASE is not set. The bucket and its credentials are a human's step — see docs/runbooks/ui-proof-artifacts.md\n",
-    );
-    return 1;
+  const demoUrl = demos.length > 0 ? `${origin}/${demoPrefix}/index.html` : undefined;
+  if (demoUrl) {
+    uploads.push({
+      key: `${demoPrefix}/index.html`,
+      body: renderReport({
+        title: `${view.title} — the story, kept`,
+        bodyHtml,
+        comparisons: [],
+        demos,
+        urlFor,
+      }),
+      type: "text/html; charset=utf-8",
+    });
   }
 
   const { putObject } = await import("./ui-proof-store.mjs");
@@ -457,14 +553,26 @@ async function main(argv) {
     out(`  uploaded ${u.key}\n`);
   }
 
-  const url = `${base.replace(/\/$/, "")}/${reviewPrefix}/index.html`;
+  const url = `${origin}/${reviewPrefix}/index.html`;
   const surfaces = [...new Set(entries.map((e) => e.surface))].toSorted();
-  const next = withBlock(view.body ?? "", linkBlock(url, surfaces));
+  const demoSurfaces = [...new Set(demos.map((e) => e.surface))].toSorted();
+  const next = withBlock(view.body ?? "", linkBlock({ url, surfaces, demoUrl, demoSurfaces }));
   await gh(["pr", "edit", pullRequest, "--body-file", "-"], next);
 
   out(`ui-proof: published and linked ${url}\n`);
   return 0;
 }
+
+/**
+ * A demo has no expiry, so publishing one is the irreversible half of this
+ * pipeline. The lifetime is decided by whether the ticket has a spec parent, and
+ * this script reads only a filename — it cannot check the ticket graph, so it
+ * says so loudly instead of deciding quietly. Naming the files is the point: a
+ * `demo-` capture on a triage ticket is the mistake, and it is invisible in a
+ * list of five uploads.
+ */
+const demoWarning = (demos) =>
+  `ui-proof: ${demos.length} durable clip(s) — ${demos.map((d) => d.file).join(", ")}. These never expire. Publish them only for a ticket with a spec parent; see ui-evidence-retention in docs/policy/build.md\n`;
 
 /** 16 hex characters of real randomness: enough that the prefix is not walkable. */
 function randomNonce() {

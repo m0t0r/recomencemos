@@ -20,8 +20,11 @@
 // `docs/runbooks/ui-proof-artifacts.md` is that step, and nothing here creates
 // any of them.
 
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
+// The SDK is imported inside `configure`, not at the top. That keeps this module
+// free to be imported statically by the publisher — which is what lets it ask
+// `missingConfig()` *before* it starts calling `gh`, so an absent credential is a
+// refusal that costs nothing rather than one discovered after two network round
+// trips. Nothing loads the client until an object is actually being written.
 const REQUIRED = [
   "UI_PROOF_S3_ENDPOINT",
   "UI_PROOF_S3_BUCKET",
@@ -29,15 +32,26 @@ const REQUIRED = [
   "UI_PROOF_S3_SECRET_ACCESS_KEY",
 ];
 
+/**
+ * The variables this module needs and does not have. The publisher checks this
+ * up front so the refusal is exit 1 — "a refusal the caller must act on" — and
+ * not exit 2, which is reserved for the script failing to run at all. A
+ * credential an operator has not set yet is the ordinary state of a machine
+ * before the runbook has been worked, not a broken script.
+ */
+export const missingConfig = () => REQUIRED.filter((k) => !process.env[k]);
+
 let client;
 
-function configure() {
-  const missing = REQUIRED.filter((k) => !process.env[k]);
+async function configure() {
+  const missing = missingConfig();
   if (missing.length > 0) {
     throw new Error(
       `the object store is not configured: ${missing.join(", ")} unset. See docs/runbooks/ui-proof-artifacts.md`,
     );
   }
+
+  const { S3Client } = await import("@aws-sdk/client-s3");
 
   // R2 has no regions, but the S3 protocol requires one in the signature, so
   // "auto" is what Cloudflare's own documentation specifies. It is not a default
@@ -61,7 +75,8 @@ function configure() {
  * proportional memory cost.
  */
 export async function putObject({ key, body, type, length }) {
-  const s3 = configure();
+  const s3 = await configure();
+  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
   await s3.send(
     new PutObjectCommand({
       Bucket: process.env.UI_PROOF_S3_BUCKET,

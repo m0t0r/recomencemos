@@ -1528,11 +1528,15 @@ proof_file() { # dir filename
   head -c 2048 /dev/zero | tr '\0' 'x' > "$1/.artifacts/ui-proof/$2"
 }
 
-run_proof() { # name expect-exit expect-grep dir
+run_proof() { # name expect-exit expect-grep dir [extra arguments]
   local name="$1" expect="$2" want="$3" dir="$4" out code
-  out=$( (cd "$dir" && node "$PROOF" publish --pr 42 --dry-run) 2>&1 )
+  shift 4
+  out=$( (cd "$dir" && node "$PROOF" "$@") 2>&1 )
   code=$?
-  if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE "$want"; then
+  # `--` before the pattern: a want like "--pr" is a flag to grep otherwise, and
+  # the case fails with grep's usage text rather than with anything about the
+  # script under test.
+  if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE -- "$want"; then
     pass=$((pass+1)); sec_pass=$((sec_pass+1))
     [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit %s\n' "$name" "$code"
   else
@@ -1543,39 +1547,70 @@ run_proof() { # name expect-exit expect-grep dir
   return 0
 }
 
+# The ordinary call: a dry-run publish against pull request 42.
+run_pub() { # name expect-exit expect-grep dir
+  run_proof "$1" "$2" "$3" "$4" publish --pr 42 --dry-run
+}
+
 section "Artifact publisher: the two lifetimes"
 D=$(proof_repo lifetimes)
 proof_file "$D" before-publish-form.png
 proof_file "$D" after-publish-form.png
 proof_file "$D" demo-publish-a-profile.webm
-run_proof "a review capture takes the expiring prefix"  0 "review/pr-42-[0-9a-f]{16}/after-publish-form\.png" "$D"
-run_proof "a demo takes the durable prefix"             0 "demos/pr-42/demo-publish-a-profile\.webm"          "$D"
-run_proof "the report is published beside the media"    0 "review/pr-42-[0-9a-f]{16}/index\.html"             "$D"
-run_proof "the link points at the report"               0 "would link review/pr-42-.*/index\.html"            "$D"
-# The prefixes must not be confused: a demo under the expiring prefix is a demo
-# that expires, which is the whole distinction the retention key draws.
-run_proof "a demo never lands under review/"            0 "^ +demos/pr-42/demo-publish-a-profile" "$D"
+run_pub "a review capture takes the expiring prefix"  0 "review/pr-42-[0-9a-f]{16}/after-publish-form\.png" "$D"
+run_pub "a demo takes the durable prefix"             0 "demos/pr-42-[0-9a-f]{16}/demo-publish-a-profile\.webm" "$D"
+# The durable half needs a viewer that outlives the review prefix: a page under
+# `review/` would be deleted out from under the clips it renders.
+run_pub "the durable half gets a page of its own"     0 "demos/pr-42-[0-9a-f]{16}/index\.html" "$D"
+run_pub "the review half gets its own page too"       0 "review/pr-42-[0-9a-f]{16}/index\.html" "$D"
+run_pub "both pages are counted"                      0 "would publish 5 object" "$D"
+run_pub "the link points at the review page"          0 "would link review/pr-42-.*/index\.html" "$D"
+run_pub "a demo never lands under review/"            0 "^ +demos/pr-42-[0-9a-f]{16}/demo-publish-a-profile" "$D"
+# A demo is the irreversible half, and the script cannot see the ticket graph
+# that decides whether one is owed. So it says so rather than deciding quietly.
+run_pub "publishing a demo is called out"             0 "durable clip.*never expire" "$D"
+# Both prefixes are unguessable. The demo prefix is the one a guessable name
+# would expose for longest, because nothing ever deletes it.
+run_pub "the demo prefix is unguessable too"          0 "demos/pr-42-[0-9a-f]{16}/" "$D"
+
+section "Artifact publisher: no demo, no second page"
+D=$(proof_repo nodemo)
+proof_file "$D" before-publish-form.png
+proof_file "$D" after-publish-form.png
+run_pub "one page when nothing is durable"            0 "would publish 3 object" "$D"
+out=$( (cd "$D" && node "$PROOF" publish --pr 42 --dry-run) 2>&1 )
+if printf '%s' "$out" | grep -q "demos/"; then
+  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+  printf '  FAIL %-51s -> a durable prefix appeared with no demo\n' "no durable prefix is invented"
+else
+  pass=$((pass+1)); sec_pass=$((sec_pass+1))
+  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s\n' "no durable prefix is invented"
+fi
 
 section "Artifact publisher: names it refuses"
 # No separator at all, so there is no state to read -- distinct from a name that
 # has one and gets it wrong, which is the case below.
 D=$(proof_repo nostate); proof_file "$D" screenshot.png
-run_proof "a capture with no state"        1 "no state" "$D"
+run_pub "a capture with no state"        1 "no state" "$D"
 D=$(proof_repo badstate); proof_file "$D" beofre-publish-form.png
-run_proof "a misspelled state"             1 "not one of before, after or demo" "$D"
+run_pub "a misspelled state"             1 "not one of before, after or demo" "$D"
 D=$(proof_repo nosurface); proof_file "$D" after-.png
-run_proof "a state with no surface"        1 "names a state but no surface" "$D"
+run_pub "a state with no surface"        1 "names a state but no surface" "$D"
+# The link block records surfaces as a ", "-joined list so the expiry step can
+# read them back. A surface carrying that separator would split into two.
+D=$(proof_repo commasurface); proof_file "$D" "after-sign, in.png"
+run_pub "a surface the link block cannot round-trip" 1 "round-trip" "$D"
 # A file the script has no opinion about is ignored rather than refused: an
 # operator's scratch notes beside the captures are not an error.
 D=$(proof_repo ignores); proof_file "$D" after-publish-form.png
 printf 'notes\n' > "$D/.artifacts/ui-proof/README.txt"
-run_proof "an unrelated file is ignored, not refused" 0 "would publish 2 object" "$D"
+run_pub "an unrelated file is ignored, not refused" 0 "would publish 2 object" "$D"
 
 section "Artifact publisher: nothing to publish"
 D=$(proof_repo empty)
-run_proof "an empty capture directory"     1 "nothing captured" "$D"
+run_pub "an empty capture directory"     1 "nothing captured" "$D"
 D="$ROOT/proof/absent"; mkdir -p "$D"; git -C "$D" init -q 2>/dev/null
-run_proof "no capture directory at all"    1 "nothing captured" "$D"
+run_pub "no capture directory at all"    1 "nothing captured" "$D"
 
 section "Artifact publisher: a capture that is not one"
 # The ffmpeg failure seen from the other end. `record start` reports success and
@@ -1584,39 +1619,31 @@ section "Artifact publisher: a capture that is not one"
 # which reads to a reviewer as a change that does nothing.
 D=$(proof_repo truncated); proof_file "$D" before-publish-form.png
 printf 'x' > "$D/.artifacts/ui-proof/after-publish-form.webm"
-run_proof "a truncated recording"          1 "not a capture" "$D"
-run_proof "and it names the file"          1 "after-publish-form\.webm" "$D"
+run_pub "a truncated recording"          1 "not a capture" "$D"
+run_pub "and it names the file"          1 "after-publish-form\.webm" "$D"
 D=$(proof_repo zero); : > "$D/.artifacts/ui-proof/after-publish-form.webm"
-run_proof "a zero-byte recording"          1 "not a capture" "$D"
+run_pub "a zero-byte recording"          1 "not a capture" "$D"
 
 section "Artifact publisher: an unpaired comparison"
 # Reported, never refused. A session that captured only one half has to say why
 # in the pull request body, and dropping the file here would take that decision
 # away from it -- so the half is published and the gap is named.
 D=$(proof_repo unpaired); proof_file "$D" after-sign-in.webm
-run_proof "an after with no before is named"   0 "has an after and no before" "$D"
-run_proof "and it is still published"          0 "would publish 2 object"     "$D"
+run_pub "an after with no before is named"   0 "has an after and no before" "$D"
+run_pub "and it is still published"          0 "would publish 2 object"     "$D"
 D=$(proof_repo unpaired2); proof_file "$D" before-sign-in.webm
-run_proof "a before with no after is named"    0 "has a before and no after"  "$D"
+run_pub "a before with no after is named"    0 "has a before and no after"  "$D"
 
 section "Artifact publisher: refusals that are not answers"
 D=$(proof_repo args); proof_file "$D" after-publish-form.png
-out=$( (cd "$D" && node "$PROOF" publish --dry-run) 2>&1 ); code=$?
-if [ "$code" = 2 ]; then
-  pass=$((pass+1)); sec_pass=$((sec_pass+1))
-  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit 2\n' "no pull request number"
-else
-  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
-  printf '  FAIL %-51s -> exit %s (want 2)\n' "no pull request number" "$code"
-fi
-out=$( (cd "$D" && node "$PROOF" ship --pr 42) 2>&1 ); code=$?
-if [ "$code" = 2 ]; then
-  pass=$((pass+1)); sec_pass=$((sec_pass+1))
-  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit 2\n' "a command it does not know"
-else
-  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
-  printf '  FAIL %-51s -> exit %s (want 2)\n' "a command it does not know" "$code"
-fi
+run_proof "no pull request number"      2 "usage|--pr" "$D" publish --dry-run
+run_proof "a command it does not know"  2 "usage"      "$D" ship --pr 42
+run_proof "a pull request that is not a number" 2 "--pr" "$D" publish --pr abc --dry-run
+# A real publish refuses before it makes a single network call, and it refuses
+# with 1 rather than 2: an operator who has not worked the runbook yet is the
+# ordinary state of a machine, not a broken script.
+run_proof "an unconfigured store refuses with 1" 1 "not configured" "$D" publish --pr 42
+run_proof "and it names every missing variable"  1 "UI_PROOF_PUBLIC_BASE" "$D" publish --pr 42
 
 flush_section
 echo

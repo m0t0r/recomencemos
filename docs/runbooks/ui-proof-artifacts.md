@@ -10,10 +10,15 @@ The decision behind it is
 from are `ui-evidence-hosting` and `ui-evidence-retention` in
 [`../policy/build.md`](../policy/build.md), and this runbook sets none of them.
 
-**Nothing in the pipeline creates any of this.** `scripts/ui-proof.mjs` refuses with an exit code and
-names this file when the bucket or its credentials are absent, and `scripts/ui-proof-store.mjs` holds
-the only four variable names involved. Until §1–§5 are done, `pnpm ui-proof publish --dry-run` is the
-only form that works, and it works on a machine with no bucket, no keys and no network.
+**Nothing in the pipeline creates any of this.** `scripts/ui-proof.mjs` refuses with exit 1 and names
+this file when the bucket or its credentials are absent — before it makes a single network call, so the
+refusal costs nothing. Five variables are involved: the four in §4's first block, which
+`scripts/ui-proof-store.mjs` owns, plus `UI_PROOF_PUBLIC_BASE`, which the publisher owns because it is
+where a link is built rather than where an object is written.
+
+Until §1–§5 are done, `pnpm ui-proof publish --pr <number> --dry-run` is the only form that works, and
+it works on a machine with no bucket, no keys and no network. `--pr` is required in every form; without
+it the script exits 2.
 
 ## 1. The bucket
 
@@ -111,8 +116,10 @@ Four things to confirm, in this order:
 2. The page renders the pull request's own prose — if the body is empty, `gh api` sent the wrong flag
    and the report will look structurally fine while saying nothing.
 3. A video, if you captured one, plays with controls. That is the whole reason this store exists.
-4. `npx wrangler r2 object get recomencemos-ui-proof/demos/... ` returns nothing yet, and the
-   `review/` object is there. The prefixes are the lifetimes.
+4. Both prefixes hold what they should: `review/pr-<n>-<nonce>/` has the comparison page and its
+   media, and `demos/pr-<n>-<nonce>/` has a page **of its own** plus the clips. The durable half has
+   its own viewer on purpose — a page under `review/` would be deleted out from under the clips it
+   renders.
 
 Then close the pull request and confirm the body's line rewrites itself to say the artifact expired.
 That is `ui-proof-expire.yml`, and it is the step most likely to be silently misconfigured, because
