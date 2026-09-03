@@ -1497,6 +1497,127 @@ run_ident "a root that is a file"        2 "could not run" "$D/a.ts"
 run_ident "an argument it does not know" 2 "could not run" "$(ident_dir unknownarg)" --wat
 run_ident "a flag with no value"         2 "could not run" "$(ident_dir novalue)" --root
 
+# --- The artifact publisher -------------------------------------------------
+#
+# `ui-proof.mjs` is not a gate: it publishes rather than deciding whether work
+# may proceed. It is driven here anyway, for the reason this suite already
+# drives the audit and the migration gate -- it is repo logic living in
+# `scripts/`, and the alternative is a second test runner for one file.
+#
+# Every case runs `--dry-run`, which is offline by construction: it reaches no
+# pull request, no markdown renderer and no credential, so what is under test is
+# the part that decides *what would be published* -- the naming rule, the
+# grouping into comparisons, and the two prefixes that carry the two lifetimes.
+# The single call that writes to the object store lives in its own module and is
+# never imported on this path.
+PROOF="$REPO/scripts/ui-proof.mjs"
+
+# The script derives its directory from `git rev-parse --show-toplevel`, so a
+# fixture is a repository -- the same reason the migration gate's fixtures are.
+proof_repo() { # name -> path
+  local d="$ROOT/proof/$1"
+  mkdir -p "$d/.artifacts/ui-proof"
+  git -C "$d" init -q 2>/dev/null
+  echo "$d"
+}
+
+# A capture has to be big enough to be one, so fixtures are padded past the
+# floor. A deliberately truncated fixture is written by hand where that is the
+# case under test.
+proof_file() { # dir filename
+  head -c 2048 /dev/zero | tr '\0' 'x' > "$1/.artifacts/ui-proof/$2"
+}
+
+run_proof() { # name expect-exit expect-grep dir
+  local name="$1" expect="$2" want="$3" dir="$4" out code
+  out=$( (cd "$dir" && node "$PROOF" publish --pr 42 --dry-run) 2>&1 )
+  code=$?
+  if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE "$want"; then
+    pass=$((pass+1)); sec_pass=$((sec_pass+1))
+    [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit %s\n' "$name" "$code"
+  else
+    fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+    printf '  FAIL %-51s -> exit %s (want %s matching /%s/)\n' "$name" "$code" "$expect" "$want"
+    printf '       %s\n' "${out:-<empty>}"
+  fi
+  return 0
+}
+
+section "Artifact publisher: the two lifetimes"
+D=$(proof_repo lifetimes)
+proof_file "$D" before-publish-form.png
+proof_file "$D" after-publish-form.png
+proof_file "$D" demo-publish-a-profile.webm
+run_proof "a review capture takes the expiring prefix"  0 "review/pr-42-[0-9a-f]{16}/after-publish-form\.png" "$D"
+run_proof "a demo takes the durable prefix"             0 "demos/pr-42/demo-publish-a-profile\.webm"          "$D"
+run_proof "the report is published beside the media"    0 "review/pr-42-[0-9a-f]{16}/index\.html"             "$D"
+run_proof "the link points at the report"               0 "would link review/pr-42-.*/index\.html"            "$D"
+# The prefixes must not be confused: a demo under the expiring prefix is a demo
+# that expires, which is the whole distinction the retention key draws.
+run_proof "a demo never lands under review/"            0 "^ +demos/pr-42/demo-publish-a-profile" "$D"
+
+section "Artifact publisher: names it refuses"
+# No separator at all, so there is no state to read -- distinct from a name that
+# has one and gets it wrong, which is the case below.
+D=$(proof_repo nostate); proof_file "$D" screenshot.png
+run_proof "a capture with no state"        1 "no state" "$D"
+D=$(proof_repo badstate); proof_file "$D" beofre-publish-form.png
+run_proof "a misspelled state"             1 "not one of before, after or demo" "$D"
+D=$(proof_repo nosurface); proof_file "$D" after-.png
+run_proof "a state with no surface"        1 "names a state but no surface" "$D"
+# A file the script has no opinion about is ignored rather than refused: an
+# operator's scratch notes beside the captures are not an error.
+D=$(proof_repo ignores); proof_file "$D" after-publish-form.png
+printf 'notes\n' > "$D/.artifacts/ui-proof/README.txt"
+run_proof "an unrelated file is ignored, not refused" 0 "would publish 2 object" "$D"
+
+section "Artifact publisher: nothing to publish"
+D=$(proof_repo empty)
+run_proof "an empty capture directory"     1 "nothing captured" "$D"
+D="$ROOT/proof/absent"; mkdir -p "$D"; git -C "$D" init -q 2>/dev/null
+run_proof "no capture directory at all"    1 "nothing captured" "$D"
+
+section "Artifact publisher: a capture that is not one"
+# The ffmpeg failure seen from the other end. `record start` reports success and
+# `record stop` is where it breaks, so the wreckage is a truncated file rather
+# than a missing one -- and an empty file publishes as a player showing nothing,
+# which reads to a reviewer as a change that does nothing.
+D=$(proof_repo truncated); proof_file "$D" before-publish-form.png
+printf 'x' > "$D/.artifacts/ui-proof/after-publish-form.webm"
+run_proof "a truncated recording"          1 "not a capture" "$D"
+run_proof "and it names the file"          1 "after-publish-form\.webm" "$D"
+D=$(proof_repo zero); : > "$D/.artifacts/ui-proof/after-publish-form.webm"
+run_proof "a zero-byte recording"          1 "not a capture" "$D"
+
+section "Artifact publisher: an unpaired comparison"
+# Reported, never refused. A session that captured only one half has to say why
+# in the pull request body, and dropping the file here would take that decision
+# away from it -- so the half is published and the gap is named.
+D=$(proof_repo unpaired); proof_file "$D" after-sign-in.webm
+run_proof "an after with no before is named"   0 "has an after and no before" "$D"
+run_proof "and it is still published"          0 "would publish 2 object"     "$D"
+D=$(proof_repo unpaired2); proof_file "$D" before-sign-in.webm
+run_proof "a before with no after is named"    0 "has a before and no after"  "$D"
+
+section "Artifact publisher: refusals that are not answers"
+D=$(proof_repo args); proof_file "$D" after-publish-form.png
+out=$( (cd "$D" && node "$PROOF" publish --dry-run) 2>&1 ); code=$?
+if [ "$code" = 2 ]; then
+  pass=$((pass+1)); sec_pass=$((sec_pass+1))
+  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit 2\n' "no pull request number"
+else
+  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+  printf '  FAIL %-51s -> exit %s (want 2)\n' "no pull request number" "$code"
+fi
+out=$( (cd "$D" && node "$PROOF" ship --pr 42) 2>&1 ); code=$?
+if [ "$code" = 2 ]; then
+  pass=$((pass+1)); sec_pass=$((sec_pass+1))
+  [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit 2\n' "a command it does not know"
+else
+  fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+  printf '  FAIL %-51s -> exit %s (want 2)\n' "a command it does not know" "$code"
+fi
+
 flush_section
 echo
 echo "passed: $pass  failed: $fail"

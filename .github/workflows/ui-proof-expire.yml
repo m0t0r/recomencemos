@@ -1,0 +1,70 @@
+# The half of the retention answer that runs where the agent is not.
+#
+# A Build session ends at "pull request opened" -- `build-to-deploy-gate.sh` rule
+# F makes merging the human's act -- so the session is gone hours or days before
+# the artifact it published should stop being linked. Expiry can therefore be
+# neither a step the session takes nor a sentence in a policy file somebody is
+# trusted to have followed. It is this.
+#
+# **This workflow deletes nothing.** The bucket's own lifecycle rule on the
+# `review/` prefix is what removes the objects, which is the entire reason
+# `ui-evidence-hosting` in `docs/policy/build.md` is an object store rather than a
+# branch -- git would have kept the blobs and made "removed when merged"
+# cosmetic. What runs here only rewrites the line in the pull request body that
+# pointed at them, so a merged pull request does not spend the rest of its life
+# linking a 404. That is why it needs no credential for the store, and holds none.
+#
+# `closed` covers both endings: merged, and abandoned. An artifact for a pull
+# request nobody merged is the same artifact.
+name: ui-proof-expire
+
+on:
+  pull_request_target:
+    types: [closed]
+
+# The narrowest pair that does the job. `pull_request_target` runs with a
+# writable token by design, so the permissions block is what bounds it rather
+# than the event: this may edit a pull request body and may touch nothing else.
+# It checks out no code and runs no code from the pull request -- the only script
+# it runs is the one on the default branch, reached through `actions/checkout`
+# with the workflow's own ref, which is what keeps a fork's branch from executing
+# here with that token.
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ui-proof-expire-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # No `ref:`. Under `pull_request_target` the default checkout is the
+          # pull request's **base** branch, which is the property that matters
+          # here: a pull request that edited `scripts/ui-proof.mjs` must not get
+          # to run its own version with a token that can write to this
+          # repository. Naming a ref explicitly would only add an interpolation
+          # to get wrong.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      # No `pnpm install`: this path imports nothing outside Node's standard
+      # library and shells out to `gh`, which the runner already has. The object
+      # store client is a dynamic import on the publish path and is never
+      # reached here.
+      # The number reaches the shell through the environment rather than through
+      # interpolation. It is an integer GitHub controls, so this is not the
+      # injection case — but a workflow that interpolates one event field into a
+      # `run:` is the shape that later interpolates a title, and the safe form
+      # costs a line.
+      - run: node scripts/ui-proof.mjs expire --pr "$PR_NUMBER"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
