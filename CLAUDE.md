@@ -669,7 +669,17 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
 - `code-review` — two axes, in parallel subagents: **Standards** (repo conventions plus a Fowler smell baseline) and **Spec** (does the diff do what was asked). It reads the plan comment `/implement` posted on the ticket. `REVIEW.md` is where a project adds its own passes and severity thresholds.
 - `codebase-design` — the deep-module vocabulary `tdd` cites when the shape of an interface is itself the question. A reference, not a session.
 - `resolving-merge-conflicts` — the tax on stacked PRs: a review fix low in a stack rebases everything above it.
-- `diagnosing-bugs` — the Maintain-stage loop that produces what `/triage` promotes.
+- `diagnosing-bugs` — the Maintain-stage loop that produces what `/triage` promotes. Its reproduction
+  **is** the "before" capture for a bug-fix ticket; take it there rather than staging it again later.
+- `show-me` — explanation, not evidence: pseudocode, call trees, component trees, mermaid, and
+  `diff`-shaped structural sketches. It is what writes the structural half of a PR body, and it is
+  bounded by two rules. **Its HTML branch does not apply to PR artifacts** — a local file opened with
+  `Bash(open …)` reaches no reviewer and outlives no session. And **a `show-me` diagram never ticks an
+  acceptance criterion**: it draws what the agent believes, which is exactly the artifact class that
+  can be confidently wrong and look right. It explains; `ui-proof` proves.
+- `ui-proof` — **this repo's**, not vendored. Captures the seam-3 leg as video, a before/after still
+  pair, or an accessibility-tree diff, and carries the `ffmpeg` preflight, the determinism pinning
+  that keeps a pair comparable, and the list of what may never be in frame.
 - `wizard` — generates a bash wizard that walks a human through steps only they can perform:
   provisioning, credentials, a third-party dashboard, a one-off cutover. `scripts/go-live.sh` is
   its committed product here, and it is the shape to copy: the library above the `STAGES` marker is
@@ -767,6 +777,34 @@ it back.
 running dev server — Vitest cannot test `async` Server Components, so a green build there is not a
 verification. Every acceptance criterion gets ticked with the evidence that proves it; a criterion
 ticked with no evidence is a claim.
+
+**And where the change alters what a person sees, that second leg is recorded rather than narrated**
+([ADR-0019](docs/adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md)). Every other row of
+an Evidence table names something a reviewer can re-run — a test file and a test name, or a command.
+The seam-3 row named a narrative, which made the leg carrying the most product risk the only one that
+could not be checked. `ui-proof` is the method, `ui-evidence-*` in `docs/policy/build.md` holds the
+keys, and three things about it are worth knowing before you reach for it:
+
+- **The before is taken first**, right after the worktree opens and before the first edit. The tree is
+  already at `origin/<default>` at that moment and never again — reconstructed at PR time it costs a
+  second checkout and a second dev server against a shared database.
+- **The medium is decided by what changed, not by ticket size**: a change in _time_ (a flow, focus
+  order, a sequence of states) is video, a change in _space_ (layout, spacing, colour, copy) is a
+  before/after still pair, and a change visible only in the accessibility tree is `diff snapshot`
+  output pasted as text. Size is a proxy a session can argue itself out of.
+- **`ffmpeg` fails at `record stop`, not at `record start`.** `agent-browser` shells out to it for
+  video and not for screenshots, so without it a session drives an entire flow, sees
+  `✓ Recording started`, and loses all of it one command later. Preflight it.
+
+**The prose stays in the PR body and the artifact is a media viewer.** The structural half of "what
+changed" is a `show-me` diff sketch or a mermaid diagram written in the body, which renders natively,
+stays in git, and is reviewable against the diff. A hosted page holding the architectural narrative is
+a `plan.md` with better CSS — the second source of truth this repo already refused once when it made
+the plan a comment.
+
+**What is never recorded is in `docs/policy/security.md`**, and it is not a matter of care: a
+recording captures the address bar, `/admin/enrol/[token]` carries a live credential in a path
+segment, and an artifact is fetched by whoever holds the link, later.
 
 **Stacked PRs are opt-in**, through `stacked-prs` in `docs/policy/build.md`. The mechanism is already
 in the data: a chain of blocking edges _is_ a stack. But a stack is a path and the ticket graph is a

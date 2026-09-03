@@ -49,6 +49,13 @@ yarn-error.log*
 .go-live-facts
 .go-live-evidence.md
 
+# ui-proof: captured before/after video, stills and snapshot baselines. An
+# artifact is published to the object store and linked from the PR body; it is
+# never committed. A recording is also the one file in this repo that can carry
+# a face, a phone number or a live token, and the artifact store expires those
+# while git would not.
+.artifacts/
+
 # Impeccable: machine-local config and generated review artifacts.
 # .impeccable/config.json and .impeccable/briefs/ are committed.
 .impeccable/config.local.json
