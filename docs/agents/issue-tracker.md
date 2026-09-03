@@ -156,22 +156,40 @@ and the four conditions that define **done**.
    checks the eventual diff against it"_ — and the Spec axis of `/code-review` is what does the
    checking. A comment rather than a file because the plan is decomposition, not the audit trail:
    the same reason tickets are issues and specs are files.
-4. **Build.** `/tdd` at the seams **the spec already agreed** — they are in the spec's
+4. **Capture the before, if the ticket touches a rendered surface.** The worktree is still at
+   `origin/<default>`, so the before-state is sitting there for free — and only here. Reconstructed at
+   PR time it costs a second checkout, a second `next dev` on another port, and a shared database that
+   may have moved underneath it. `ui-proof` is the method and
+   [`../policy/build.md`](../policy/build.md)'s `ui-evidence-medium` decides what to capture; both
+   answer to [ADR-0019](../adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md). Where the
+   ticket is a bug fix the before **is the reproduction**, so capture it while diagnosing rather than
+   staging it again afterwards. A session that reaches the end with no before says so in the PR body
+   and does not manufacture one by reverting the change — that captures a tree nobody reviewed.
+5. **Build.** `/tdd` at the seams **the spec already agreed** — they are in the spec's
    `## Testing Decisions` section, which `/to-spec` A5 fills in after checking them with the user
    before Phase B. That section is the answer to `tdd`'s "no test is written at an unconfirmed seam",
    so read it rather than re-interviewing the user about something Design settled.
-5. **Verify, with evidence.** Work `build.md`'s definition of done. Tick each acceptance criterion on
+6. **Verify, with evidence.** Work `build.md`'s definition of done. Tick each acceptance criterion on
    the issue and **name what proves it** — the test, or the command and its output. A criterion
-   ticked with no evidence is a claim.
-6. **Open a PR.** Title from the ticket. Body: what changed, the evidence from step 5, and
+   ticked with no evidence is a claim. Take the **after** capture here, against the same session,
+   viewport and fixtures the before used; a pair that differs in anything else diffs on things nobody
+   changed.
+7. **Open a PR.** Title from the ticket. Body: what changed, the evidence from step 6, and
    `Closes #<ticket>` so merging closes it. Never `--fill` from commits alone; the ticket is the
-   contract, and the PR body is what the reviewer compares against.
-7. **Stop.** The agent may open a PR and may not approve or merge one — `build-to-deploy-gate.sh`
+   contract, and the PR body is what the reviewer compares against. Where a capture was taken, the
+   seam-3 row of the Evidence table **links the artifact rather than narrating it** — and the
+   structural half of "what changed" is written as a `show-me` diff sketch or a mermaid diagram in the
+   body itself, which renders natively, stays in git, and is reviewable against the diff. The hosted
+   artifact is a media viewer, never a second copy of the prose.
+8. **Stop.** The agent may open a PR and may not approve or merge one — `build-to-deploy-gate.sh`
    refuses both. Report the PR and the ticket, and say which acceptance criteria carry weak evidence.
 
 Where the ticket came from `/triage` rather than `/to-tickets` there is no parent and no spec. Steps
-1–7 are unchanged except that step 4 has no agreed seam to read, so the seams are confirmed with the
-user in-session, as `tdd` requires.
+1–8 are unchanged except that step 5 has no agreed seam to read, so the seams are confirmed with the
+user in-session, as `tdd` requires — and that the ticket produces **review proof only**. A durable
+story demo answers "what does this story look like working", which is a question a ticket with no
+spec parent was never asked; `ui-evidence-retention` in [`../policy/build.md`](../policy/build.md) is
+where that split is decided, and having the parent decide it means no session has to judge it.
 
 ### Working in a worktree
 

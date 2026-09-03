@@ -114,3 +114,31 @@ mitigating clauses above may hold.
 
 **Go-live runbook §10 carries the bounding step.** Whatever else changes, the enrolment path must not
 reach a third-party drain in the clear before the announcement.
+
+## What a published artifact may never contain
+
+[ADR-0019](../adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md) makes a Build session
+publish recordings of a running app to a URL. That is a new egress, and it is a **stronger** one than
+the log line this file already reasons about: a drain is read by an operator inside a retention
+window, while an artifact is fetched by whoever holds the link, whenever they like.
+
+Three rules, and the first is the reason this section exists rather than a sentence in the skill.
+
+**`GET /admin/enrol/[token]` is never recorded.** A recording captures the address bar, and
+`secrets-in-url-paths` above says that route carries a live credential in a path segment. Every
+clause that bounds the logging exposure — fifteen minutes, spent on confirmation, printed to the
+operator's own terminal, a population that already held the link — fails here: an artifact outlives
+the token's validity and reaches a population that never had it. There is no cropping exception. That
+surface is verified with no camera running.
+
+**Every capture runs against seeded fixtures.** A name, a phone number, a photograph or a message in a
+published artifact is personal data leaving the system.
+[ADR-0009](../adr/0009-a-workers-full-identity-is-gated-and-never-indexed.md) gates a Worker's full
+identity and `compliance-regime` is Ley 1581; neither distinguishes a leak in a page from a leak in a
+video of that page.
+
+**A durable artifact takes the same rules with none of the tolerance.** A review artifact expires
+under `ui-evidence-retention`, which bounds a mistake to thirty days. A story demo is kept, so a
+mistake in one is permanent and its remedy is deletion by hand from the bucket. Where a flow cannot be
+captured without breaching one of the rules above, the artifact is narrowed and the PR body says which
+part could not be shown. A narrowed artifact is worth more than none; a leaked one is worth less.
