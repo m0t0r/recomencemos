@@ -164,18 +164,80 @@ function refusalsFor(input: ProfileFields): ProfileRefusal[] {
   return refusals;
 }
 
+/**
+ * Everything that can be refused before a row is read, plus the two values the
+ * refusals were the price of narrowing.
+ *
+ * **The two re-checks are what buy the types, and they name their own field.**
+ * `refusalsFor` has already refused an unrecognised phone and an unknown city,
+ * so reaching either branch below means the two functions disagree — which is a
+ * defect, not a submission. Returning the empty list `refusalsFor` produced
+ * would hand the surface a refusal with no sentence in it, so each branch says
+ * which field it is about instead.
+ */
+function narrowFields(
+  input: ProfileFields,
+):
+  | { readonly ok: true; readonly phone: string; readonly city: CityId }
+  | { readonly ok: false; readonly refusals: readonly ProfileRefusal[] } {
+  const refusals = refusalsFor(input);
+  if (refusals.length > 0) return { ok: false, refusals };
+
+  const phone = normalizeColombianPhone(input.phone);
+  if (!phone.ok) return { ok: false, refusals: [{ field: "phone", code: "phone_unrecognised" }] };
+  if (!isCityId(input.city))
+    return { ok: false, refusals: [{ field: "city", code: "city_unknown" }] };
+
+  return { ok: true, phone: phone.e164, city: input.city };
+}
+
+/**
+ * What a profile is found by, from whichever path wrote it.
+ *
+ * Shared so the two write paths cannot disagree about what a search reads: an
+ * edit that recomputed a different set of parts from a publish would make a
+ * profile findable by different words after a correction than before one.
+ */
+function searchTextFor(
+  input: ProfileFields,
+  city: CityId,
+  skills: readonly { readonly labelEs: string }[],
+): string {
+  return normalizeSearchText(
+    input.firstName,
+    city,
+    input.headline,
+    ...skills.map((skill) => skill.labelEs),
+  );
+}
+
+/**
+ * Her work history, written from scratch. Empty lines are dropped rather than
+ * stored — the form starts with one and she may leave it — and `position` is
+ * the order she typed, so it is assigned after the drop rather than before.
+ */
+async function writeWorkHistory(
+  tx: Parameters<Parameters<DomainDatabase["transaction"]>[0]>[0],
+  capabilityProfileId: typeof schema.workHistoryEntry.$inferInsert.capabilityProfileId,
+  lines: readonly string[],
+): Promise<void> {
+  const history = lines.map((text) => text.trim()).filter((text) => text.length > 0);
+  if (history.length === 0) return;
+
+  await tx
+    .insert(schema.workHistoryEntry)
+    .values(history.map((text, position) => ({ capabilityProfileId, position, text })));
+}
+
 export async function publishProfile(
   db: DomainDatabase,
   accountId: string,
   input: PublishProfileInput,
 ): Promise<PublishProfileOutcome> {
-  const refusals = refusalsFor(input);
-  if (refusals.length > 0) return { ok: false, reason: "refused", refusals };
+  const narrowed = narrowFields(input);
+  if (!narrowed.ok) return { ok: false, reason: "refused", refusals: narrowed.refusals };
 
-  // Narrowed by `refusalsFor` above; restated here so the types agree without a cast.
-  const phone = normalizeColombianPhone(input.phone);
-  if (!phone.ok || !isCityId(input.city)) return { ok: false, reason: "refused", refusals };
-  const city: CityId = input.city;
+  const { phone, city } = narrowed;
 
   return db.transaction(async (tx) => {
     /**
@@ -233,13 +295,8 @@ export async function publishProfile(
         city,
         headline: input.headline,
         about: input.about,
-        phone: phone.e164,
-        searchText: normalizeSearchText(
-          input.firstName,
-          city,
-          input.headline,
-          ...skills.map((skill) => skill.labelEs),
-        ),
+        phone,
+        searchText: searchTextFor(input, city, skills),
       })
       .returning({ id: schema.capabilityProfile.id });
 
@@ -252,15 +309,7 @@ export async function publishProfile(
       .insert(schema.profileSkill)
       .values(skills.map((skill) => ({ capabilityProfileId: profile.id, skillId: skill.id })));
 
-    const history = input.workHistory.map((text) => text.trim()).filter((text) => text.length > 0);
-
-    if (history.length > 0) {
-      await tx
-        .insert(schema.workHistoryEntry)
-        .values(
-          history.map((text, position) => ({ capabilityProfileId: profile.id, position, text })),
-        );
-    }
+    await writeWorkHistory(tx, profile.id, input.workHistory);
 
     // Last, inside the same transaction, and it throws on a stale version —
     // which rolls back everything above. See `#consent`.
@@ -297,13 +346,10 @@ export async function updateProfile(
   accountId: string,
   input: UpdateProfileInput,
 ): Promise<UpdateProfileOutcome> {
-  const refusals = refusalsFor(input);
-  if (refusals.length > 0) return { ok: false, reason: "refused", refusals };
+  const narrowed = narrowFields(input);
+  if (!narrowed.ok) return { ok: false, reason: "refused", refusals: narrowed.refusals };
 
-  // Narrowed by `refusalsFor` above; restated so the types agree without a cast.
-  const phone = normalizeColombianPhone(input.phone);
-  if (!phone.ok || !isCityId(input.city)) return { ok: false, reason: "refused", refusals };
-  const city: CityId = input.city;
+  const { phone, city } = narrowed;
 
   return db.transaction(async (tx) => {
     const [existing] = await tx
@@ -365,13 +411,8 @@ export async function updateProfile(
         city,
         headline: input.headline,
         about: input.about,
-        phone: phone.e164,
-        searchText: normalizeSearchText(
-          input.firstName,
-          city,
-          input.headline,
-          ...skills.map((skill) => skill.labelEs),
-        ),
+        phone,
+        searchText: searchTextFor(input, city, skills),
         // Explicit: the column defaults on insert, and Postgres does not move it
         // on its own. `published_at` is deliberately absent from this object.
         updatedAt: new Date(),
@@ -390,15 +431,7 @@ export async function updateProfile(
       .delete(schema.workHistoryEntry)
       .where(eq(schema.workHistoryEntry.capabilityProfileId, existing.id));
 
-    const history = input.workHistory.map((text) => text.trim()).filter((text) => text.length > 0);
-
-    if (history.length > 0) {
-      await tx
-        .insert(schema.workHistoryEntry)
-        .values(
-          history.map((text, position) => ({ capabilityProfileId: existing.id, position, text })),
-        );
-    }
+    await writeWorkHistory(tx, existing.id, input.workHistory);
 
     return { ok: true as const };
   });

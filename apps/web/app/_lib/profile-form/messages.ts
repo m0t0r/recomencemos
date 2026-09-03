@@ -1,6 +1,12 @@
 /**
- * Every `es-CO` string `/publish` puts in front of a person, in one module so
- * the same fact reads the same way wherever it appears.
+ * Every `es-CO` string a **profile form** puts in front of a person, in one
+ * module so the same fact reads the same way wherever it appears.
+ *
+ * Since #142 that is two forms rather than one — `/publish` and
+ * `/my-profile/edit` write the same nine fields, so a field that renamed itself
+ * between publishing and editing would be a different field to the person
+ * reading it. Each surface keeps only what is genuinely its own: the consent
+ * step, the button's verb, and where the form goes on success.
  *
  * The authority is [`docs/policy/voice.md`](../../../../../docs/policy/voice.md);
  * `publish-copy.test.ts` enforces its countable rules over every string here.

@@ -59,6 +59,30 @@ describe("CEILINGS", () => {
       ip: { max: 5, windowSeconds: 86_400 },
     });
   });
+
+  /**
+   * **Ten a day, and deliberately not publishing's three.** Both scopes are
+   * asserted for the reason every other row here asserts both: an Account-only
+   * bound is defeated by a second address and an IP-only one by mobile data.
+   *
+   * The number is the assertion. Editing is a repeated act by the same person
+   * on the row she already owns, so a bound chosen to fit a one-off would lock
+   * a Worker out of her own profile for a day for correcting her wording three
+   * times.
+   */
+  it("bounds updateProfile at ten a day per Account and per IP", () => {
+    expect(CEILINGS.updateProfile).toEqual({
+      account: { max: 10, windowSeconds: 86_400 },
+      ip: { max: 10, windowSeconds: 86_400 },
+    });
+  });
+
+  // The two profile write paths do not share an allowance: a Worker who has
+  // published once must not find her first correction already charged.
+  it("counts publishing and editing as two actions", () => {
+    expect(CEILINGS.publishProfile).not.toBe(CEILINGS.updateProfile);
+    expect(CEILINGS.publishProfile.account?.max).not.toBe(CEILINGS.updateProfile.account.max);
+  });
 });
 
 describe("principalKey", () => {

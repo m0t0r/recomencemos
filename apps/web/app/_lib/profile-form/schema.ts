@@ -251,8 +251,6 @@ export type SkillRequestValues = z.output<typeof skillRequestFields>;
  */
 export const updateProfileFields = publishProfileFields.omit({ consent: true });
 
-export type UpdateProfileInput = z.output<typeof updateProfileFields>;
-
 /** The lenient half, the same way round: her values survive a refusal. */
 export const updateProfileValues = publishProfileValues.omit({ consent: true });
 
