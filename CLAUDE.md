@@ -626,7 +626,7 @@ Repo-level surfaces that support it — create them as the work needs them, and 
 - `docs/runbooks/*.md` — **procedure**: what a human does to take something live or recover it, as numbers and commands rather than advice. A runbook step that ends in a decision names the `docs/policy/` key rather than making it. [`observability-go-live.md`](docs/runbooks/observability-go-live.md) is the one that ships: it carries the environment-variable phase split, the vendor's free-tier caps **pinned at a date**, the two control-band numbers and their arithmetic, the go-live check that proves `trace_id` correlation end to end, the breach path from webhook to `needs-triage` issue, and what was verified against the installed SDK rather than recalled.
 - `.claude/agents/<name>.md` — scoped subagents for recurring work such as verification, research, or simplification.
 - `.claude/settings.json` — hooks as deterministic gates (protected paths, formatters, credential scanning, deploy authorization).
-- `REVIEW.md` — the PR review passes beyond `code-review`'s two axes, and the severity threshold that blocks a merge. Under stacked PRs it also says what runs per-PR and what runs once at the top of the stack.
+- `REVIEW.md` — the PR review passes beyond `code-review`'s two axes, and the severity threshold that blocks a merge. Under stacked PRs it also says what runs per-PR and what runs once at the top of the stack. Three passes now, and the third is the one that is deliberately **not** mechanised: recorded proof for a visible change is a reading rather than a run, because a machine can check a link is present and not that the artifact shows the criterion it is cited against.
 
 **The method/policy split is the load-bearing idea.** Mixing them is what turns a skill into a form nobody fills in: a file that says "the WCAG level is your organization's call" teaches the reader that the whole document is negotiable. Put the craft in the skill and the answer in `docs/policy/`, and each half can be judged on its own terms.
 
@@ -784,7 +784,9 @@ ticked with no evidence is a claim.
 an Evidence table names something a reviewer can re-run — a test file and a test name, or a command.
 The seam-3 row named a narrative, which made the leg carrying the most product risk the only one that
 could not be checked. `ui-proof` is the method, `ui-evidence-*` in `docs/policy/build.md` holds the
-keys, and three things about it are worth knowing before you reach for it:
+keys, `pnpm ui-proof publish --pr <n>` is the command, and `REVIEW.md`'s **Recorded proof for a
+visible change** pass is what blocks a merge on it. Three things are worth knowing before you reach
+for it:
 
 - **The before is taken first**, right after the worktree opens and before the first edit. The tree is
   already at `origin/<default>` at that moment and never again — reconstructed at PR time it costs a
