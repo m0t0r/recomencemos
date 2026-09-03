@@ -42,6 +42,8 @@
       "inputs": [
         ".claude/hooks/**",
         "scripts/audit-direct.mjs",
+        "scripts/audit-lib.mjs",
+        "scripts/audit-report.mjs",
         "scripts/migration-integrity.mjs",
         "scripts/spec-identifiers.mjs"
       ],

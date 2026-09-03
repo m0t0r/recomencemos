@@ -495,6 +495,86 @@ run_audit "an audit payload that is not an audit"          2 "could not run"    
 run_audit "an audit payload that is not JSON"              2 "not JSON"            "$AR"        'upstream said no'
 
 
+# The reporting half of the same pair. It shares `audit-lib.mjs` with the gate
+# above, so these reuse that gate's fixtures deliberately: if the two ever
+# disagreed about which dependency is direct, these cases and those would have to
+# disagree too, which is the whole reason the reading lives in one file.
+REPORT="$REPO/scripts/audit-report.mjs"
+
+run_report() { # name expect-exit expect-grep root json
+  local name="$1" expect="$2" want="$3" dir="$4" json="$5" out code
+  printf '%s' "$json" > "$ROOT/audit-input.json"
+  out=$(node "$REPORT" --root "$dir" --input "$ROOT/audit-input.json" 2>&1)
+  code=$?
+  if [ "$code" = "$expect" ] && printf '%s' "$out" | grep -qE "$want"; then
+    pass=$((pass+1)); sec_pass=$((sec_pass+1))
+    [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> exit %s\n' "$name" "$code"
+  else
+    fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+    printf '  FAIL %-51s -> exit %s (want %s matching /%s/)\n' "$name" "$code" "$expect" "$want"
+    printf '       %s\n' "${out:-<empty>}"
+  fi
+  return 0
+}
+
+# Two advisories in one payload, parameterised so the same pair can be fed in
+# either order. That is what the fingerprint stability case needs.
+advs() { jq -nc --arg m1 "$1" --arg s1 "$2" --arg m2 "$3" --arg s2 "$4" \
+  '{advisories:{
+     "1":{module_name:$m1,severity:$s1,title:"one",vulnerable_versions:("<"+$m1),patched_versions:">=1",url:"https://example.test/1"},
+     "2":{module_name:$m2,severity:$s2,title:"two",vulnerable_versions:("<"+$m2),patched_versions:">=2",url:"https://example.test/2"}}}'; }
+
+# The fingerprint of one ordering, read back out of the report itself, so the
+# case below asserts against what the script actually produces rather than
+# against a hash restated here that could drift from it.
+fingerprint_of() { # json
+  printf '%s' "$1" > "$ROOT/audit-fp.json"
+  node "$REPORT" --root "$AR" --input "$ROOT/audit-fp.json" 2>/dev/null \
+    | sed -n 's/.*audit-fingerprint: \([0-9a-f]*\).*/\1/p'
+}
+FP_ONE=$(fingerprint_of "$(advs next high postcss moderate)")
+
+section "Dependency report: what reaches a person"
+run_report "a transitive high the blocking gate lets past"  1 "postcss.*transitively"  "$AR" "$(adv postcss high)"
+run_report "a transitive moderate, below the blocking bar"  1 "moderate"               "$AR" "$(adv postcss moderate)"
+run_report "a direct high says every PR is already red"     1 "already failing"        "$AR" "$(adv next high)"
+run_report "a direct moderate does not claim CI is red"     1 "None of these blocks"   "$AR" "$(adv next moderate)"
+run_report "a direct dependency is named as direct"         1 "next.*directly"         "$AR" "$(adv next high)"
+run_report "a critical is reported, not just high"          1 "critical"               "$AR" "$(adv next critical)"
+run_report "low is below the reporting threshold"           0 "nothing at moderate"    "$AR" "$(adv next low)"
+run_report "info is below it too"                           0 "nothing at moderate"    "$AR" "$(adv next info)"
+run_report "nothing found at all"                           0 "nothing at moderate"    "$AR" '{"advisories":{}}'
+
+# The workflow says nothing when the fingerprint is unchanged, so a fingerprint
+# that moved on its own would post a comment a day about an unchanged finding,
+# and one that never moved would hide a genuinely new advisory.
+section "Dependency report: the fingerprint the workflow deduplicates on"
+run_report "a finding carries one"                          1 "audit-fingerprint: [0-9a-f]{16}" "$AR" "$(adv next high)"
+run_report "the same set in the other order hashes alike"   1 "audit-fingerprint: $FP_ONE"      "$AR" "$(advs postcss moderate next high)"
+
+# Inequality, which no `grep -E` pattern can express: POSIX ERE has no negative
+# lookahead, so this compares the two values instead of matching one.
+fp_differs() { # name other-json
+  local name="$1" other; other=$(fingerprint_of "$2")
+  if [ -n "$other" ] && [ "$other" != "$FP_ONE" ]; then
+    pass=$((pass+1)); sec_pass=$((sec_pass+1))
+    [ "$VERBOSE" = 1 ] && printf '  ok   %-51s -> %s\n' "$name" "$other"
+  else
+    fail=$((fail+1)); sec_fail=$((sec_fail+1)); show_header
+    printf '  FAIL %-51s -> %s (want a value, differing from %s)\n' "$name" "${other:-<none>}" "$FP_ONE"
+  fi
+  return 0
+}
+
+fp_differs "a changed severity is a different finding"     "$(advs next critical postcss moderate)"
+fp_differs "a changed package is a different finding"      "$(advs turbo high postcss moderate)"
+
+section "Dependency report: the ways it must not fail open"
+run_report "a workspace file with no packages: key"         2 "could not run" "$AR_BROKEN" "$(adv next high)"
+run_report "an audit payload that is not an audit"          2 "could not run" "$AR"        '{"error":"registry unreachable"}'
+run_report "an audit payload that is not JSON"              2 "not JSON"      "$AR"        'upstream said no'
+
+
 # The migration-integrity gate is the second non-hook here, and for the same
 # reason as the audit above: repo logic deciding whether work may proceed.
 #

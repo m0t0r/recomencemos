@@ -1,0 +1,195 @@
+# The actor for the half `pnpm audit:direct` deliberately lets past.
+#
+# CI's `audit` job blocks a pull request on `high` or above in a **direct**
+# dependency and never on a transitive one, which is the right blocking rule
+# (`docs/policy/security.md` -> `dependency-policy`). What it leaves is a class
+# of advisory that nothing acts on at all, and the size of that gap was measured
+# rather than predicted: six advisories sat on the default branch, four of them
+# `high`, while every pull request went green.
+#
+# **Dependabot is not the missing actor, which is the thing to know before
+# deleting this workflow as redundant.** Security updates are enabled on this
+# repository and it opened no pull request for any of the six, because
+# dependabot-core does not support updating transitive dependencies for the pnpm
+# ecosystem (dependabot/dependabot-core#13177). All six were transitive. Each
+# needed a scoped `overrides` entry in `pnpm-workspace.yaml` -- a manifest edit
+# no version bump produces.
+#
+# So this workflow reports. It does not fix and it does not block: patching is a
+# judgement about reachability that belongs to a person, and the finding reaches
+# them the way every other finding does, as a `needs-triage` issue
+# (`docs/adr/0001-findings-enter-through-triage.md`, and `alert-destination` in
+# `docs/policy/operability.md`). `needs-triage.yml` is the same shape for the
+# same reason; this is its dependency-side sibling.
+#
+# **It reads `pnpm audit`, not the Dependabot alerts API, and that is a
+# constraint rather than a preference.** The default `GITHUB_TOKEN` can never
+# read Dependabot alerts -- the Actions app cannot be granted that permission --
+# so that route needs a stored personal access token with `security_events`, a
+# credential to rotate and a human step to set up. `pnpm audit` needs neither and
+# reads the same GitHub Advisory data through the registry. Checked rather than
+# assumed on the day this was written: the two agreed on all six advisories,
+# package for package and severity for severity.
+#
+# **A scheduled workflow is disabled automatically after 60 days with no commits
+# to the repository.** That is GitHub's behaviour, not a setting here, and it is
+# the one way this can die quietly. A repository active enough to need a
+# dependency audit is active enough to keep it alive, but if the finding feed
+# ever goes silent for a long stretch, that is the first thing to check.
+name: security-audit
+
+on:
+  # Daily, not weekly. An advisory is published on whatever day it is published,
+  # and a weekly cadence would mean up to seven days between a `high` landing in
+  # the tree and anybody hearing about it. A clean run opens nothing and comments
+  # nothing, so the cost of the extra six runs is six runner-minutes.
+  #
+  # 11:00 UTC is 06:00 in America/Bogota, matching the hour `dependabot.yml`
+  # already uses -- cron has no timezone, so the offset is applied here by hand.
+  # Colombia does not observe daylight saving, so this does not drift.
+  schedule:
+    - cron: "0 11 * * *"
+
+  # So the receiver can be proved without waiting a day, and so a human who
+  # suspects something has the same one-click route as the schedule.
+  workflow_dispatch:
+
+# `issues: write` and read-only on the contents. This job opens an issue; it has
+# no business touching a branch, and a read-only token cannot be made to.
+permissions:
+  contents: read
+  issues: write
+
+# A second run started while the first is mid-flight could read "no open issue"
+# before the first has created one, and open a duplicate. Queued rather than
+# cancelled: a cancelled run is a day nobody was told.
+concurrency:
+  group: security-audit
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # `turbo-cache: "false"` for the reason the `lint` and `audit` jobs set it:
+      # this job calls node directly and runs no Turborepo task, so the cache
+      # would be written once per run and read by nothing.
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache: "false"
+
+      - name: Audit and route the finding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          # Three exit codes, and each is a different answer: 0 nothing to
+          # report, 1 something to report with the issue body on stdout, 2 the
+          # report could not run at all. `|| code=$?` rather than a bare call,
+          # because `set -e` would take 1 for a failure when it is an answer.
+          #
+          # Anything else -- a 127 from a missing node, a signal -- is neither
+          # answer and is refused here rather than falling through into the
+          # finding branch, where it would surface as a confusing complaint
+          # about a missing fingerprint.
+          code=0
+          report=$(node scripts/audit-report.mjs) || code=$?
+
+          if [ "$code" != 0 ] && [ "$code" != 1 ]; then
+            echo "::error::the dependency report could not run (exit $code)"
+            printf '%s\n' "$report" >&2
+            exit 1
+          fi
+
+          # Labels are created if absent for the reason `needs-triage.yml` gives:
+          # `gh issue create --label` fails hard on a label the repository does
+          # not have, and losing a real finding to a missing label would be the
+          # worst available reason not to hear about one. `|| true` because a
+          # parallel run may have just created it.
+          gh label create needs-triage --repo "$REPO" --color fbca04 \
+            --description "Maintainer needs to evaluate this issue" 2>/dev/null || true
+          gh label create security-audit --repo "$REPO" --color d93f0b \
+            --description "Opened by the scheduled dependency audit" 2>/dev/null || true
+
+          # Everything this workflow has ever filed, open and closed. Closed ones
+          # matter: see the dismissal branch at the bottom.
+          history=$(gh issue list --repo "$REPO" --label security-audit --state all \
+            --limit 50 --json number,state,body)
+
+          # **The marker, not the label, is the handle.** A label is something a
+          # human can put on any issue, and this job edits and closes what it
+          # finds -- so keying on the label alone means a mislabelled issue gets
+          # its body overwritten or gets closed. Requiring the fingerprint marker
+          # in the body means it only ever touches an issue it wrote itself.
+          existing=$(printf '%s' "$history" | jq -r \
+            '[.[] | select(.state == "OPEN") | select(.body != null)
+                  | select(.body | test("<!-- audit-fingerprint: "))][0].number // empty')
+
+          if [ "$code" = 0 ]; then
+            printf '%s\n' "$report"
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$REPO" --body \
+                "A later scheduled audit found nothing at or above the reporting threshold. Closing. [Run]($RUN_URL)"
+              gh issue close "$existing" --repo "$REPO"
+              echo "closed #$existing: the tree is clean"
+            else
+              echo "clean, and no open finding to close"
+            fi
+            exit 0
+          fi
+
+          # The fingerprint is over what identifies the advisories, not what
+          # describes them, so an upstream re-wording does not read as a new
+          # finding.
+          fingerprint=$(printf '%s\n' "$report" | sed -n 's/.*audit-fingerprint: \([0-9a-f]*\).*/\1/p')
+          if [ -z "$fingerprint" ]; then
+            echo "::error::the report carried no fingerprint, so it cannot be deduplicated"
+            exit 1
+          fi
+
+          if [ -n "$existing" ]; then
+            seen=$(printf '%s' "$history" | jq -r --argjson n "$existing" \
+              '.[] | select(.number == $n) | .body' \
+              | sed -n 's/.*audit-fingerprint: \([0-9a-f]*\).*/\1/p')
+            # Same set as the open issue already carries -> say nothing. A daily
+            # comment on an unchanged finding is how a feed gets muted.
+            if [ "$seen" = "$fingerprint" ]; then
+              echo "#$existing already describes this exact set; nothing to do"
+              exit 0
+            fi
+            # Edited in place rather than superseded, so the issue keeps one URL
+            # and whatever discussion is already on it.
+            printf '%s\n' "$report" | gh issue edit "$existing" --repo "$REPO" --body-file -
+            gh issue comment "$existing" --repo "$REPO" --body \
+              "The set of advisories changed; the description above has been updated. [Run]($RUN_URL)"
+            echo "updated #$existing"
+            exit 0
+          fi
+
+          # **A dismissal has to be durable, or this becomes a daily re-file.**
+          # Closing the issue is the only way a human can say "we have looked at
+          # these and they do not warrant a patch" -- and without this branch the
+          # next morning's run would see no *open* issue and file a fresh one,
+          # every day, each with a new number and none of the reasoning. That is
+          # exactly the outcome ADR-0001 chose issues to avoid: a dismissal
+          # becoming a closed issue nobody remembers.
+          #
+          # The suppression is per fingerprint, so it is narrow on purpose. A new
+          # advisory, or a severity that moved, changes the hash and opens a
+          # fresh issue rather than hiding behind the old dismissal.
+          dismissed=$(printf '%s' "$history" | jq -r --arg fp "$fingerprint" \
+            '[.[] | select(.state == "CLOSED") | select(.body != null)
+                  | select(.body | test("<!-- audit-fingerprint: " + $fp))][0].number // empty')
+          if [ -n "$dismissed" ]; then
+            echo "#$dismissed carries this exact set and was closed; treating it as dismissed"
+            exit 0
+          fi
+
+          printf '%s\n' "$report" | gh issue create --repo "$REPO" \
+            --label needs-triage --label security-audit \
+            --title "Dependency advisories found by the scheduled audit" \
+            --body-file -
