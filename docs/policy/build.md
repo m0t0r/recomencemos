@@ -85,9 +85,12 @@ definition of done that only a human can evaluate is a definition of done that e
    a green build. Vitest cannot reach `async` Server Components, so a compile is not a verification.
    **And where it alters what a person sees, that verification is recorded** and the Evidence table's
    seam-3 row links the artifact instead of narrating it. `ui-evidence-required` above is the key;
-   `ui-proof` is the method. This is the one clause on this list with no gate behind it yet — the
-   pipeline that publishes and expires an artifact is a separate ticket, and until it lands this is a
-   convention like the other three were before their hooks existed.
+   `ui-proof` is the method; `pnpm ui-proof publish` is the command. **Its gate is a reading, not a
+   run** — the "Recorded proof for a visible change" pass in [`../../REVIEW.md`](../../REVIEW.md),
+   blocking. That is a deliberate asymmetry with the three clauses above it, and the reason is that a
+   machine can check a link is present but not that the artifact shows the criterion it is cited
+   against. A check that passes on any link teaches a session to attach any link. A sixth required
+   check was considered and deferred; `required-checks` is unchanged.
 4. A PR is open and links its ticket. **The agent stops here.** Merging is the human's act.
 
 ## Stacked pull requests

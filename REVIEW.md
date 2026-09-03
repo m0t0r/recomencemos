@@ -99,9 +99,63 @@ other hook is copied into a fixture tree and read, which is what keeps `build-gu
 messages honest. `//#test:gates` already declares `.claude/hooks/**` as an input, so editing one
 re-runs the case.
 
+### Recorded proof for a visible change — blocking
+
+**A change that alters what a person sees carries a recorded artifact, and the Evidence table's
+seam-3 row links it instead of narrating it.** `ui-evidence-required` in
+[`docs/policy/build.md`](docs/policy/build.md) is the rule,
+[ADR-0019](docs/adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md) is why, and
+`ui-proof` is the method. This pass is what makes it blocking.
+
+**Why this is a review pass and not a CI job.** A machine can check that a link is present. It
+cannot check the thing that matters — whether the artifact shows the criterion it is cited against.
+A gate that passes on any link teaches a session to attach any link, which is the failure mode this
+pass exists to prevent rather than to automate. The choice is recorded rather than assumed: a sixth
+required check was considered and deferred, and `required-checks` is unchanged.
+
+Four questions, in order. The first is a fact; the rest are judgements, which is why a person is
+reading.
+
+|     | What to check                                                                                                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Does the diff alter what a person sees?** A rendered surface, its copy, its focus order, its states. If it does not, this pass is satisfied and the rest do not apply                                                                                                                                             |
+| 2   | **Is there an artifact, and does the medium match the change?** A change in _time_ owes video, a change in _space_ owes a before/after still pair, a change the accessibility tree alone can see owes `diff snapshot` output as text. The table lives in the `ui-proof` skill; a change matching two rows owes both |
+| 3   | **Does the artifact show the criterion it is cited against?** Open it. A link beside a criterion it does not demonstrate is worse than prose, because prose does not look like evidence                                                                                                                             |
+| 4   | **Is the pair comparable?** Same viewport, same theme, same seeded fixtures, same entry path. A pair differing in anything else diffs on things nobody changed, and the reviewer stops reading                                                                                                                      |
+
+**Three things are not findings**, and saying so is what keeps this from becoming a ritual:
+
+- **An unpaired half whose absence the body explains.** The publisher reports it rather than refusing
+  it, deliberately: a session that could capture only one side has to say why, and that sentence is
+  the evidence. A missing half with **no** explanation is a finding.
+- **A narrowed artifact that names what it could not show.**
+  [`docs/policy/security.md`](docs/policy/security.md) forbids recording `/admin/enrol/[token]` and
+  anything but seeded fixtures, so some flows cannot be captured whole. Narrowed and named is the
+  correct outcome, not a shortfall.
+- **No artifact on a change with no visible effect.** An empty `diff snapshot` is the proof, and it
+  belongs in the body as a fenced block.
+
+**The failure mode to watch for is the artifact that proves the happy path only.** The states this
+repo cares about are `empty`, `loading`, `partial`, `error`, `permission denied` and `success` — six
+per surface, fixed in [`docs/policy/ux.md`](docs/policy/ux.md) — and a recording naturally captures
+the last one. Where a criterion is about a refusal, a boundary or an empty state, the artifact has to
+reach it.
+
+**And a `demo-` capture is checked against its ticket.** A story demo never expires, so a durable
+artifact published for a ticket with no spec parent is the one mistake here that cannot be undone by
+waiting. `ui-evidence-retention` is the rule; the publisher warns but cannot see the ticket graph, so
+this is the place it is actually checked.
+
 ## Under stacked PRs
 
 `stacked-prs` is **yes** (`docs/policy/build.md`). Both `/code-review` axes run per PR, against each
 PR's own diff. The passes above run once, at the top of the stack, against the whole stack's diff —
 a registry equivalent introduced low in a stack and consumed above it is one finding, not one per
 PR.
+
+**Recorded proof is the exception, and it runs per PR.** The other passes ask a question about the
+stack's final state, so asking it five times wastes a reviewer. This one asks whether _this diff's_
+criteria are evidenced, and each PR in a stack ticks its own — a stack whose artifact sits only at
+the top has four PRs of unevidenced claims and one link that covers a diff nobody can still see. The
+per-PR artifact is also the smaller one: it shows what that slice changed, which is the comparison
+its reviewer needs.
