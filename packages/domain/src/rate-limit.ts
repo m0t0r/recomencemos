@@ -383,14 +383,18 @@ export const CEILING_REFUSALS: Record<
    * A refusal that promised one would have been the dead end the picker's own
    * "not on the list" option was written to avoid, one turn further in.
    *
-   * **Editing exists now**, so the reason above no longer holds and the sentence
-   * is unchanged only because nobody has re-decided it. Adding that clause is a
-   * copy decision, not a merge's to take.
+   * **Editing exists now**, so the reason above no longer holds and adding that
+   * clause is a copy decision nobody has taken. What editing did force is the
+   * other half: the picker is on the edit form too, so the sentence no longer
+   * ends in *y publica* — a Worker changing a profile she published weeks ago
+   * cannot publish it again, and telling her to would name an act she has no way
+   * to take. Leaving her the form she is standing in, which is what that clause
+   * was for, *escoge la más parecida* still does.
    */
   requestSkill: (ceiling, retryAfter) =>
     `Pediste ${ceiling.max} capacidades hoy, que es el máximo. ` +
     "Las que enviaste quedaron en la fila: siguen ahí. " +
-    `Puedes pedir otra ${retryPhrase(retryAfter)}; ahora escoge la más parecida y publica.`,
+    `Puedes pedir otra ${retryPhrase(retryAfter)}; ahora escoge la más parecida.`,
 
   /**
    * **The third sentence is this ceiling's own, and it is the reassurance

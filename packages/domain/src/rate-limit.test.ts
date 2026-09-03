@@ -171,9 +171,16 @@ describe("CEILING_REFUSALS", () => {
    * assertions — the requests already sent are queued and not lost, when she may
    * ask again, and that she can publish now with the closest entry on the list.
    *
-   * The fourth clause the criterion names — and change it later — is deliberately
-   * absent: editing a published profile has no action and no surface, so
-   * promising one would be a refusal pointing at a door that is not there.
+   * The fourth clause the criterion names — and change it later — is still
+   * absent, but no longer because it would be impossible: editing a published
+   * profile has an action and a surface now. It is absent because adding it is a
+   * copy decision nobody has taken.
+   *
+   * What editing did change is the third clause. The Skill picker is rendered by
+   * the edit form as well as the publishing one, so the refusal may not end in
+   * *y publica*: a Worker changing a profile she published weeks ago cannot
+   * publish it again, and a sentence telling her to would name an act she has no
+   * way to take.
    */
   describe("the request a Worker meets mid-publish", () => {
     const refused = CEILING_REFUSALS.requestSkill({ max: 5, windowSeconds: 86_400 }, 720);
@@ -189,7 +196,10 @@ describe("CEILING_REFUSALS", () => {
 
     it("leaves her the way forward that does not wait on anybody", () => {
       expect(refused).toContain("más parecida");
-      expect(refused).toContain("publica");
+    });
+
+    it("names no act that is only available on one of the two forms", () => {
+      expect(refused.toLowerCase()).not.toContain("publica");
     });
 
     it("promises no edit she cannot make", () => {
