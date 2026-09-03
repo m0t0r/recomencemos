@@ -187,7 +187,10 @@ and the four conditions that define **done**.
    seam-3 row of the Evidence table **links the artifact rather than narrating it** — and the
    structural half of "what changed" is written as a `show-me` diff sketch or a mermaid diagram in the
    body itself, which renders natively, stays in git, and is reviewable against the diff. The hosted
-   artifact is a media viewer, never a second copy of the prose.
+   artifact is a media viewer, never a second copy of the prose — `pnpm ui-proof publish --pr <n>`
+   uploads it and edits the body, and it is generated **from** that body, so the order is: write the
+   PR, then publish. Run it with `--dry-run` first; that form reaches nothing and is where a misnamed
+   or truncated capture is named.
 8. **Stop.** The agent may open a PR and may not approve or merge one — `build-to-deploy-gate.sh`
    refuses both. Report the PR and the ticket, and say which acceptance criteria carry weak evidence.
 

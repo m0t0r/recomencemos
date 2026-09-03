@@ -209,6 +209,39 @@ word — and the first word is also what the publish step reads to decide which
 prefix an artifact is uploaded under. A demo named `after-` is a demo that
 expires.
 
+## publishing
+
+Once the pull request exists, one command uploads the captures, builds the
+report and links it from the body:
+
+```bash
+pnpm ui-proof publish --pr <number> --dry-run   # lists the objects, reaches nothing
+pnpm ui-proof publish --pr <number>
+```
+
+`--dry-run` is offline by construction — no pull request, no markdown renderer,
+no credential — so it is the right first call every time: it is where a
+misnamed capture, an unpaired comparison or a truncated recording is named,
+before anything is uploaded.
+
+Three things it will refuse, each because the alternative is worse than a
+refusal:
+
+- **A capture under 1024 bytes.** That is what a recording interrupted by a
+  missing `ffmpeg` leaves behind, and publishing it produces a player that shows
+  nothing — which a reviewer reads as a change that does nothing.
+- **A name it cannot parse.** `beofre-form.webm` is a typo rather than an
+  unrelated file, and quietly ignoring it publishes half a comparison.
+- **An absent bucket or credential.** Provisioning is a human's step, and the
+  refusal names `docs/runbooks/ui-proof-artifacts.md` rather than guessing.
+
+An unpaired half is **reported and still published** — a session that captured
+only a before is a session whose PR body has to say why, and dropping the file
+would take that decision away from it.
+
+Publishing twice edits one block rather than appending a second, so re-running
+after a re-capture is safe.
+
 ## gotchas
 
 - **`record stop` before `close`.** `close` saves cookies; it does not flush a
