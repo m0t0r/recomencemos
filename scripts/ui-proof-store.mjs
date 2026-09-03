@@ -59,6 +59,16 @@ async function configure() {
   client ??= new S3Client({
     region: "auto",
     endpoint: process.env.UI_PROOF_S3_ENDPOINT,
+    // **Path-style, explicitly.** The SDK defaults to virtual-hosted addressing,
+    // which puts the bucket in the hostname — `https://<bucket>.<account>.r2…`
+    // — and R2's S3 endpoint is documented path-style. Two things follow, and
+    // the second is why this line is not merely tidy: an endpoint that is an IP
+    // or `localhost` cannot carry a bucket subdomain at all, so without this the
+    // client resolves a hostname that does not exist and retries until it gives
+    // up. That is not hypothetical — it is how a stub endpoint hung the first
+    // end-to-end test of this module for three minutes with no error, and it is
+    // what makes the whole upload path drivable offline.
+    forcePathStyle: true,
     credentials: {
       accessKeyId: process.env.UI_PROOF_S3_ACCESS_KEY_ID,
       secretAccessKey: process.env.UI_PROOF_S3_SECRET_ACCESS_KEY,
