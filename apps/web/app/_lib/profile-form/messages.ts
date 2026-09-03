@@ -70,9 +70,16 @@ export const SKILL_REQUEST_BUTTON = "Pedir que la agreguen";
  * meanwhile the form she is standing in still needs a Skill on it. Optimism 4 in
  * the tone matrix, and no exclamation mark — she asked for something ordinary and
  * got it.
+ *
+ * **It stops at "escoge la más parecida" and does not say *y publica*.** Since
+ * #142 the picker is on the edit form too, and a Worker changing a profile she
+ * published weeks ago cannot publish it again — a sentence telling her to would
+ * name an act she has no way to take. What the clause was for, leaving her the
+ * form she is standing in rather than sending her away from it, the sentence
+ * still does.
  */
 export const SKILL_REQUEST_SENT =
-  "Lista, ya la tenemos. Mientras la revisamos, escoge la más parecida y publica.";
+  "Lista, ya la tenemos. Mientras la revisamos, escoge la más parecida.";
 
 /**
  * The request is empty or longer than a capability is.

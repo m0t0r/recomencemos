@@ -136,12 +136,20 @@ describe("the sentences the ticket names specifically", () => {
 
   /**
    * **The confirmation leaves the form usable.** An Admin reads the request and
-   * she still needs a Skill on the profile she is publishing, so the sentence
+   * she still needs a Skill on the form she is standing in, so the sentence
    * names the next step rather than stopping at "sent".
+   *
+   * **And the next step is the list, not publishing.** Since #142 that form is
+   * the edit form as often as the publishing one, and a Worker changing a
+   * profile she published weeks ago cannot publish it again — so the sentence
+   * that was true on one surface has to be true on both.
    */
   it("sends her back to the list once the request lands", () => {
     expect(PUBLISH_COPY.SKILL_REQUEST_SENT.toLowerCase()).toContain("más parecida");
-    expect(PUBLISH_COPY.SKILL_REQUEST_SENT.toLowerCase()).toContain("publica");
+  });
+
+  it("names no act that is only available on one of the two forms", () => {
+    expect(PUBLISH_COPY.SKILL_REQUEST_SENT.toLowerCase()).not.toContain("publica");
   });
 
   /**
