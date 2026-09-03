@@ -15,10 +15,14 @@
  * What each surface keeps for itself is what is genuinely its own: the consent
  * step, the button's verb, and where the form goes on success.
  *
- * **Each `<FieldSet>` takes an `id`**, so `/my-profile` can link a person
- * straight to the group she came to change. The ids are part of the contract
- * between those two pages rather than incidental, which is why they are a
- * declared constant rather than strings written twice.
+ * **Each `<FieldSet>` takes an `id`, and nothing links to one yet.** They are a
+ * declared constant rather than strings written twice because the thing that
+ * would use them is a `/prototype` UI variant on `prototype/142-ui-variants` —
+ * per-section *Cambiar* links from `/my-profile` into the group she came to
+ * change — and that decision is the human's, unmade. If it goes the other way
+ * the constant goes with the variants; it is named here rather than deleted
+ * because the anchors are rendered either way and two pages agreeing on their
+ * spelling by accident is the failure worth avoiding.
  */
 
 import {

@@ -22,9 +22,9 @@ import { ProfileCard } from "@/app/(site)/_components/profile-card";
 import { PublishedConfirmation } from "./published-confirmation";
 import {
   ABOUT_TERM,
+  EDIT_LINK,
   EMAIL_TERM,
   FULL_NAME_TERM,
-  EDIT_LINK,
   GATED_HEADING,
   HELD_EXPLANATION,
   HELD_HEADING,
@@ -34,11 +34,11 @@ import {
   PHOTO_PENDING,
   PHOTO_REJECTED,
   PUBLIC_HEADING,
-  SAVED_CONFIRMATION,
-  SAVED_EXPLANATION,
   PUBLISHED_CONFIRMATION,
   PUBLISHED_EXPLANATION,
   publishedOn,
+  SAVED_CONFIRMATION,
+  SAVED_EXPLANATION,
   WALL_LINK,
   WORK_HISTORY_TERM,
 } from "../_lib/messages";

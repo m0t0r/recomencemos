@@ -1,18 +1,17 @@
 /**
  * The half of "nothing you typed was lost" that the unhydrated path depends
  * on: a refusal carries her values back, and the form seeds itself from them.
- * Pure, so it is pinned here; the running check is blocked by a framework
- * fault recorded on the ticket.
+ *
+ * Pure, so it is pinned here. The running half is verified at seam 3 for the
+ * **edit** form — a native POST carrying `Origin`, no JavaScript in the picture
+ * — because that action binds nothing and re-renders normally. `/publish`'s
+ * still cannot: its unhydrated refusal meets the framework fault recorded on
+ * the ticket.
  */
 
 import { publishProfileFields } from "./schema";
 import { treeFromIssues } from "./summary";
 import { refusedValuesOf } from "./use-profile-form";
-
-// The hook module imports the Server Action, whose module carries
-// `server-only`; the function under test needs neither. The factory closes
-// over nothing, so it needs no `vi.hoisted`.
-vi.mock("../actions", () => ({ publishProfile: vi.fn() }));
 
 const VALUES = {
   fullName: "Luisa Fernanda Ortiz",
