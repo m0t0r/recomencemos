@@ -66,18 +66,32 @@ reviewed.
 ## pin the pair, or the diff is noise
 
 A before/after pair that differs in viewport, theme, data or motion diffs on
-things nobody changed, and a reviewer stops looking. Pin all four, on both
-captures:
+things nobody changed, and a reviewer stops looking. Pin each of them on both
+captures — and **read the values, do not invent them**:
+
+- **Viewport.** One width for the pair, at the narrow end of what
+  `browser-support` in `docs/policy/ux.md` says the product runs on. Pick it
+  once and reuse it; the number itself is a product answer, not this skill's.
+- **Theme.** Whatever `theme-parity` in the same file says. If it ever names
+  more than one, the pair is captured in each — a skill that hardcodes one
+  theme goes on capturing it silently after the policy moves.
+- **Seeded fixtures.** Same rows, same order, same names.
+- **Route and entry path.** Arrive the same way both times.
 
 ```bash
-agent-browser set viewport 390 844      # phone-first; the product's floor
-agent-browser set media light           # theme-parity is light only
+agent-browser set viewport <w> <h>      # from browser-support
+agent-browser set media <theme>         # from theme-parity
 ```
 
-- **Same seeded fixtures.** Same rows, same order, same names.
-- **Same route and same entry path.** Arrive the same way both times.
-- **Reduced motion** (`agent-browser set media light reduced-motion`) when the
-  change is not itself about motion. When it is, capture both.
+**Motion is the one axis this skill may not settle.** `motion-policy` in
+`docs/policy/ux.md` is `UNSET`, and it decides both whether
+`prefers-reduced-motion` is honoured and what "reduced" means here — so whether
+a reduced-motion pass is a state that must _also_ be captured is that key's
+answer, not a default to pick. Where a change is about motion and the key is
+still open, raise it as a flagged concern naming the file and the key, capture
+the default-motion pair, and say in the PR body that the second pass is
+unanswered. `agent-browser set media <theme> reduced-motion` is how it is
+captured once there is an answer.
 
 Keep a flow under ~30 seconds and use `--fps 15` unless the point is a
 transition; the file is smaller and every frame still lands.
@@ -91,21 +105,38 @@ session can argue itself out of.
 | --------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
 | **Time** — a flow across screens, focus order, tab sequence, loading → loaded → error, an optimistic update, a submit | **Video**, before and after   | A still cannot show a sequence                                                         |
 | **Space** — the same screen in the same state: layout, spacing, colour, type, copy, an icon                            | **Before/after still pair**   | One frame answers it completely. Most bug fixes land here                               |
-| **Neither** — identical pixels, changed accessibility tree: a role, an accessible name, an announcement                | **`diff snapshot`, as text**  | Free, greppable, permanent, and it is the thing the review passes actually care about |
+| **Neither** — the pixels are unchanged: a role, an accessible name or an announcement moved, or nothing observable did | **`diff snapshot`, as text**  | Free, greppable, permanent, and it is the thing the review passes actually care about |
 
 A change can be in two rows at once — a re-laid-out form whose focus order also
-moved wants the pair *and* the clip. Capture both rather than picking the larger.
+moved wants the pair _and_ the clip. Capture both rather than picking the larger.
+That is the tiebreaker, and it is the only one: this table is a rule rather than
+a judgement call, so a change matching two rows produces two artifacts instead of
+an argument about which row fits better.
 
-**When in doubt between a still and a video, ask what the reviewer would have to
-do to disbelieve you.** If they would have to watch something happen, record it.
+**Row 3 covers a change that turns out to alter nothing observable**, such as a
+refactor of a rendered component. The empty diff is the proof, and it is worth
+more than the prose claiming it — paste it anyway.
 
 ## capture recipes
+
+**Every path is absolute, and this is the one that bites.** A worktree session's
+shell does not reliably keep its working directory between calls, and the same
+relative path exists in both trees — so `./.artifacts/…` silently writes the
+capture into the main checkout. `.artifacts/` is gitignored at any depth, so it
+does not show up in `git status` there either: the file is simply somewhere else,
+and the publish step finds nothing. Derive the directory once, from the tree you
+are actually in:
+
+```bash
+ART="$(git rev-parse --show-toplevel)/.artifacts/ui-proof"
+mkdir -p "$ART"
+```
 
 **Stills.**
 
 ```bash
-agent-browser screenshot ./.artifacts/ui-proof/before-publish.png
-agent-browser screenshot --full ./.artifacts/ui-proof/before-publish-full.png
+agent-browser screenshot "$ART/before-publish.png"
+agent-browser screenshot --full "$ART/before-publish-full.png"
 ```
 
 **Video.** `record start` accepts a URL and will navigate; omit it to record from
@@ -113,7 +144,7 @@ where the browser already is. Always `record stop` before `close`, or the file i
 never flushed.
 
 ```bash
-agent-browser record start ./.artifacts/ui-proof/after-publish.webm --fps 15
+agent-browser record start "$ART/after-publish.webm" --fps 15
 # …drive the flow…
 agent-browser record stop
 ```
@@ -122,8 +153,8 @@ agent-browser record stop
 paste the unified output into the PR body in a fenced block:
 
 ```bash
-agent-browser snapshot > ./.artifacts/ui-proof/before.snapshot     # before the edit
-agent-browser diff snapshot --baseline ./.artifacts/ui-proof/before.snapshot
+agent-browser snapshot > "$ART/before-publish.snapshot"    # before the edit
+agent-browser diff snapshot --baseline "$ART/before-publish.snapshot"
 ```
 
 **Pixel diff** (`agent-browser diff screenshot --baseline <png>`) reports a
@@ -149,12 +180,34 @@ If a flow cannot be captured without one of these in frame, capture the part tha
 can and say in the PR body which part could not, and why. A narrowed artifact is
 worth more than none; a leaked one is worth less.
 
-## naming, so the pipeline can pair them
+## the story demo is a separate capture
 
-`<state>-<surface>.<ext>`, where `<state>` is `before` or `after` and `<surface>`
-is the route or component under review — `before-publish-form.webm`,
-`after-publish-form.webm`. Pairing is by suffix, so the two halves of a comparison
-differ only in their first word.
+Some tickets owe a second artifact with a different lifetime: one clip of the
+finished story working, kept rather than expired.
+`ui-evidence-retention` in `docs/policy/build.md` is what decides which tickets —
+do not judge it here, read it there.
+
+It is **not the "after" clip renamed.** The after clip proves a change; a demo
+shows a story, so it starts from a signed-out or empty state, walks the story end
+to end, and needs no before to sit against. It takes the same pinning, the same
+seeded fixtures and the same list of what may never be in frame — with none of
+the tolerance, because nothing expires it.
+
+## naming, so the pipeline can sort them
+
+`<state>-<surface>.<ext>`, where `<surface>` is the route or component under
+review and `<state>` is one of three:
+
+| `<state>` | Example                     | Lifetime                 |
+| --------- | --------------------------- | ------------------------ |
+| `before`  | `before-publish-form.webm`  | Review proof, expires    |
+| `after`   | `after-publish-form.webm`   | Review proof, expires    |
+| `demo`    | `demo-publish-a-profile.webm` | Durable, kept            |
+
+Pairing is by suffix, so the two halves of a comparison differ only in their first
+word — and the first word is also what the publish step reads to decide which
+prefix an artifact is uploaded under. A demo named `after-` is a demo that
+expires.
 
 ## gotchas
 

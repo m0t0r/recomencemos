@@ -788,10 +788,11 @@ keys, and three things about it are worth knowing before you reach for it:
 - **The before is taken first**, right after the worktree opens and before the first edit. The tree is
   already at `origin/<default>` at that moment and never again — reconstructed at PR time it costs a
   second checkout and a second dev server against a shared database.
-- **The medium is decided by what changed, not by ticket size**: a change in _time_ (a flow, focus
-  order, a sequence of states) is video, a change in _space_ (layout, spacing, colour, copy) is a
-  before/after still pair, and a change visible only in the accessibility tree is `diff snapshot`
-  output pasted as text. Size is a proxy a session can argue itself out of.
+- **The medium is decided by what changed, not by ticket size** — a change in _time_ is video, a
+  change in _space_ is a before/after still pair, and a change the accessibility tree alone can see is
+  `diff snapshot` output pasted as text. Size is a proxy a session can argue itself out of. **The
+  skill owns that table**, deliberately: which artifact a change owes is craft rather than an answer
+  only this organization can give, so it is not a policy key and this summary is not its source.
 - **`ffmpeg` fails at `record stop`, not at `record start`.** `agent-browser` shells out to it for
   video and not for screenshots, so without it a session drives an entire flow, sees
   `✓ Recording started`, and loses all of it one command later. Preflight it.
