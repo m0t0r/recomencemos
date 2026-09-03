@@ -219,10 +219,16 @@ pnpm ui-proof publish --pr <number> --dry-run   # lists the objects, reaches not
 pnpm ui-proof publish --pr <number>
 ```
 
-`--dry-run` is offline by construction — no pull request, no markdown renderer,
-no credential — so it is the right first call every time: it is where a
+`publish --dry-run` is offline by construction — no pull request, no markdown
+renderer, no credential — so it is the right first call every time: it is where a
 misnamed capture, an unpaired comparison or a truncated recording is named,
-before anything is uploaded.
+before anything is uploaded. (`expire --dry-run` does read the pull request, so
+it is offline in neither sense; it prints the block it would write.)
+
+**A `demo-` capture is called out on its own line, and it is the one to read.**
+A demo never expires, so publishing one is the irreversible half — and whether a
+ticket owes one is decided by its spec parent, which the script cannot see. It
+warns rather than deciding.
 
 Three things it will refuse, each because the alternative is worse than a
 refusal:

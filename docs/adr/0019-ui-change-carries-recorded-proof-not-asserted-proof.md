@@ -36,8 +36,12 @@ us, linked from the PR body's Evidence table.**
 Three parts, and the second and third are what keep it from becoming a ritual:
 
 1. **Capture** is `agent-browser`, which `next-dev-loop` already requires at `>= 0.31.1` and which
-   already drives the seam-3 leg. Nothing new enters the toolchain except `ffmpeg`, which the CLI
-   shells out to for video.
+   already drives the seam-3 leg. Two things enter the toolchain with it: **`ffmpeg`**, which the CLI
+   shells out to for video, and an **S3 client** as a root `devDependency`, which is how the publisher
+   writes to the store. The second was not foreseen when this record was first drafted — the
+   alternative was hand-rolling request signing, and a signing implementation is a liability that
+   outlives the dependency it saves. It is dev-only and reaches no bundle, but it is a **direct**
+   dependency, so `dependency-policy` in `docs/policy/security.md` now watches it.
 2. **The medium is chosen by what changed**, not by how big the ticket is — a rule, not a judgement
    call. Size is a proxy a session can argue with; the axis in the skill is not.
 3. **The lifetime is chosen by whether the ticket has a spec parent.** Review proof answers "did you
@@ -105,8 +109,10 @@ So the split is by **lifetime**, and it falls where the media does:
 
 The first two rows are text, so they render natively in a PR body, stay in git, and are reviewable
 against the diff. **The hosted artifact is a media viewer, not a document**, and it is generated from
-the PR body rather than authored beside it — which is what makes drift impossible rather than
-discouraged.
+the PR body rather than authored beside it — which **bounds** drift rather than merely discouraging
+it. Bounds, not eliminates, and the difference is worth stating: the report is the body as it stood at
+publish time, so a body edited afterwards is ahead of the page until someone republishes. What the
+design buys is that nobody ever _writes_ the page, so it cannot say something the body never said.
 
 ## What may never be recorded
 
@@ -172,15 +178,20 @@ greppable, permanent, and closer to what `REVIEW.md` and the accessibility requi
 about than any number of pixels.
 
 **A merged PR must not end up pointing at a 404.** The artifact expires; the link in the permanent
-record does not. Whatever expires an artifact also rewrites the line that pointed at it, to say what it
-showed and that it is gone. A dead permalink in an audit trail is a known failure mode here, and this
-design would otherwise manufacture one per merged PR.
+record does not. So the line is rewritten to say what it showed and that it is no longer linked — not
+that it is _gone_, which is the wording this record carried first and which would have been false for a
+month. A lifecycle rule counts from upload, and the rewrite runs when the pull request closes, so at
+that moment the object usually still exists. A dead permalink in an audit trail is a known failure mode
+here, and this design would otherwise manufacture one per merged PR.
 
 **The agent is not present when the artifact should die.** Rule F means the session ends at "PR
 opened"; merging is the human's act, hours or days later. So expiry can be neither an agent's step nor
-a policy sentence — it is the object store's lifecycle rule plus a `pull_request: closed` workflow,
-which also catches the PRs that are closed rather than merged. That mechanism arrives with the
-pipeline; this record fixes that it may not be a good intention.
+a policy sentence — it is the object store's lifecycle rule plus a `pull_request_target: closed`
+workflow, which also catches the PRs that are closed rather than merged. `pull_request_target` rather
+than `pull_request` because the job needs a token that can edit a pull request body; it checks out the
+base branch and never the pull request's own code, which is what keeps that token away from a diff
+under review. That mechanism arrives with the pipeline; this record fixes that it may not be a good
+intention.
 
 **The bucket is a human's step.** Provisioning, the lifecycle rule and the CI credential are things an
 agent may not do, so they are a runbook obligation and a ticket of their own rather than a paragraph
