@@ -17,17 +17,22 @@ packages:
 publicHoistPattern:
   - "import-in-the-middle"
   - "require-in-the-middle"
+# Releases accepted inside pnpm's supply-chain cooldown, pinned to the exact
+# version that was accepted. An entry is spent the moment the lock stops naming
+# that version, so this list is pruned rather than appended to forever: `grep
+# '<name>@<version>' pnpm-lock.yaml` is the whole test, and an entry with no hit
+# is a line to delete. The name belongs in the pattern — a bare version number
+# matches any unrelated package that happens to sit at it.
+#
+# The ten `16.3.2` entries that used to sit here went that way: nine `@next/*`
+# and a bare `next`, all spent, because the lock resolves 16.3.0 and 16.3.3 and
+# names 16.3.2 in it zero times.
+#
+# Neither entry below needed a companion for the security patches in
+# `overrides`, but only one of them comfortably: `qs@6.16.0` was five days old
+# when it was taken and `fast-uri@3.1.7` was 33 hours, against a 24-hour window.
+# Nine hours earlier that second one would have needed a line here.
 minimumReleaseAgeExclude:
-  - "@next/env@16.3.2"
-  - "@next/swc-darwin-arm64@16.3.2"
-  - "@next/swc-darwin-x64@16.3.2"
-  - "@next/swc-linux-arm64-gnu@16.3.2"
-  - "@next/swc-linux-arm64-musl@16.3.2"
-  - "@next/swc-linux-x64-gnu@16.3.2"
-  - "@next/swc-linux-x64-musl@16.3.2"
-  - "@next/swc-win32-arm64-msvc@16.3.2"
-  - "@next/swc-win32-x64-msvc@16.3.2"
-  - next@16.3.2
   - shadcn@4.19.0
   - resend@6.24.0
 
@@ -90,3 +95,58 @@ allowBuilds:
 # silently pin all three to this range.
 overrides:
   "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+
+  # GHSA-f65p-4m7j-42xc, GHSA-jqff-g426-hqxp, GHSA-5jgf-p345-68v8 and
+  # GHSA-fph4-wmhf-6fwf (fast-uri < 3.1.6, four `high`): host confusion and
+  # server-side request forgery through URI normalisation — a percent-encoded
+  # scheme, a repeatedly percent-decoded hostname, a malformed IPv6 literal, and
+  # IDN canonicalisation skipped on a scheme-relative reference.
+  #
+  # `ajv` is the only package here that depends on it, and it calls it to
+  # resolve `$id`/`$ref` in a JSON Schema. Four chains reach it and none is a
+  # request path: `shadcn -> @modelcontextprotocol/sdk`, `shadcn ->
+  # @dotenvx/dotenvx -> conf -> ajv-formats`, `@sentry/nextjs ->
+  # @sentry/webpack-plugin -> webpack -> schema-utils -> ajv-formats`, and
+  # `react-email -> conf -> ajv-formats`. Each validates its own schemas, so no
+  # attacker-supplied URI reaches the parser — the advisories were already
+  # unreachable, and the override is taken for the reason the esbuild one above
+  # is: it costs a line and leaves nothing for a later reader to re-derive.
+  #
+  # What was checked rather than assumed: `ajv@8.20.0` asks for `^3.0.1`, so the
+  # fix was always in range and only the lock was holding 3.1.5 — but
+  # `pnpm update -r fast-uri` does not move it (the same command reaches `qs`
+  # below and stops short of this), while resolving `ajv@8.20.0` alone in an
+  # empty project picks 3.1.7. The override is therefore what makes the floor
+  # reproducible from config instead of from whatever the lock happens to hold.
+  #
+  # Scoped rather than bare, for the reason the esbuild entry gives: fast-uri's
+  # own latest is 4.x, and a bare `^3.1.6` would hold a future direct consumer
+  # to a major it never asked for.
+  #
+  # Review and remove once `ajv` resolves 3.1.6 or later unaided: drop the line,
+  # run `pnpm install --lockfile-only`, and read `pnpm why fast-uri`.
+  "ajv>fast-uri": "^3.1.6"
+
+  # GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx (qs < 6.16.0, two `medium`):
+  # denial of service through an attacker-controlled `isBuffer`, and an
+  # array-limit bypass through comma parsing inside a bracket key.
+  #
+  # One chain, and it belongs to a CLI: `shadcn -> @modelcontextprotocol/sdk ->
+  # express`, with `body-parser` underneath that same express. `shadcn` is a
+  # runtime `dependencies` entry of `@repo/design-system` — it owns the
+  # `@import "shadcn/tailwind.css"` in `globals.css` — so qs does sit in the
+  # production graph rather than a dev-only one. What it does not sit in is any
+  # code path: no workspace imports express, Next.js parses its own query
+  # strings, and the only surface is the MCP server `shadcn` can start, which
+  # neither `pnpm dev` nor the build ever does.
+  #
+  # Both parents already ask for a range admitting the fix (`express@5.2.1`
+  # wants `^6.14.0`, `body-parser@2.3.0` wants `^6.15.2`), so this is a floor
+  # and not a forced upgrade. Two scoped entries rather than one bare `qs`,
+  # because express and body-parser resolve it separately and a bare override
+  # would silently also catch a consumer nobody has looked at.
+  #
+  # Review and remove once both parents resolve 6.16.0 or later unaided, by the
+  # same three steps as the entry above.
+  "body-parser>qs": "^6.16.0"
+  "express>qs": "^6.16.0"
