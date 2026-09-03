@@ -74,6 +74,15 @@ A page we serve has no sanitizer. `<video controls>` works, and so does a before
 reviewer can scrub. **Self-hosting is not a preference here; it is the only route that leaves rule F
 intact.**
 
+**What decides the store is the lifecycle rule, and the vendor is a policy answer rather than this
+record's.** The requirement is an object store that expires an object on its own — because the thing
+this design promises is deletion, and the alternatives that keep artifacts in git can only promise the
+appearance of it. `ui-evidence-hosting` in `docs/policy/build.md` is where the answer lives and it is
+**Cloudflare R2**, chosen because it is the object store this operator already has credentials for and
+its lifecycle rules are per-prefix, which is exactly the shape the two retention classes need. Another
+store satisfying the same two properties would satisfy this record; changing the value is a policy
+edit, not an amendment here.
+
 ## Why the prose stays in the PR body
 
 The tempting shape is one rich report carrying the architecture, the reasoning and the media

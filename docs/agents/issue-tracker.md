@@ -160,8 +160,10 @@ and the four conditions that define **done**.
    `origin/<default>`, so the before-state is sitting there for free — and only here. Reconstructed at
    PR time it costs a second checkout, a second `next dev` on another port, and a shared database that
    may have moved underneath it. `ui-proof` is the method and
-   [`../policy/build.md`](../policy/build.md)'s `ui-evidence-medium` decides what to capture; both
-   answer to [ADR-0019](../adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md). Where the
+   [`../policy/build.md`](../policy/build.md)'s `ui-evidence-required` decides whether anything is
+   owed at all; the skill's own table decides what to capture, keyed on whether the change is in time,
+   in space, or in the accessibility tree alone. Both answer to
+   [ADR-0019](../adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md). Where the
    ticket is a bug fix the before **is the reproduction**, so capture it while diagnosing rather than
    staging it again afterwards. A session that reaches the end with no before says so in the PR body
    and does not manufacture one by reverting the change — that captures a tree nobody reviewed.
@@ -173,7 +175,12 @@ and the four conditions that define **done**.
    the issue and **name what proves it** — the test, or the command and its output. A criterion
    ticked with no evidence is a claim. Take the **after** capture here, against the same session,
    viewport and fixtures the before used; a pair that differs in anything else diffs on things nobody
-   changed.
+   changed. **A ticket with a spec parent takes one more capture: the story demo**, named `demo-`
+   rather than `after-`, which is what the publish step reads to put it under the durable prefix. It
+   is not the after clip renamed — it starts from an empty or signed-out state and walks the story end
+   to end, because it answers "what does this look like working" rather than "what did this change".
+   `ui-evidence-retention` in [`../policy/build.md`](../policy/build.md) is the rule; the naming is in
+   the `ui-proof` skill.
 7. **Open a PR.** Title from the ticket. Body: what changed, the evidence from step 6, and
    `Closes #<ticket>` so merging closes it. Never `--fill` from commits alone; the ticket is the
    contract, and the PR body is what the reviewer compares against. Where a capture was taken, the
