@@ -44,7 +44,7 @@
     "happy-dom": "^20.11.12",
     "tailwindcss": "^4.2.6",
     "typescript": "7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "//": "`pino` is here even though nothing in this app imports it, and it is not cruft to prune. Its importer arrives with #35, which puts `@repo/observability` on a server path: Next externalises the logger out of the server bundle and then resolves it from this workspace's directory, which pnpm's isolated store has not hoisted it into. It is declared ahead of that importer because #34 owns this manifest and #35 should not have to reopen it, so until #35 lands the failure this guards against cannot be reproduced here. The spec (DD2) names `pino` alone and not the two packages Next externalises alongside it; whether that is sufficient becomes testable at the same moment. Delete this line only together with the last server-side import of `@repo/observability`."
 }

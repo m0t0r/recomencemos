@@ -71,10 +71,23 @@ expect.extend({
   },
 });
 
-interface SchemaMatchers<R = unknown> {
-  toMatchSchema: (schema: StandardSchemaV1) => R;
-}
-
+/**
+ * The augmentation has to restate Vitest's own type parameters **exactly** —
+ * same names, same constraints, same defaults — or declaration merging fails
+ * with "All declarations of 'Matchers' must have identical type parameters".
+ * There are two of them: `R` is what an assertion returns (`void`, or
+ * `Promise<void>` behind `resolves`/`rejects`), and `T` is the type of the
+ * value that was passed to `expect`.
+ *
+ * `T` is deliberately unused here. Constraining the schema by it — say
+ * `StandardSchemaV1<T>` — reads like the stronger contract and is the wrong
+ * one: the negative cases are the point of this matcher, and they pass a value
+ * the schema is *meant* to refuse. `expect(new FormData()).not.toMatchSchema(
+ * requestMagicLinkSchema)` would stop compiling, which would delete the
+ * assertion rather than tighten it.
+ */
 declare module "vitest" {
-  interface Matchers<T = any> extends SchemaMatchers<T> {}
+  interface Matchers<R extends void | Promise<void> = void | Promise<void>, T = unknown> {
+    toMatchSchema: (schema: StandardSchemaV1) => R;
+  }
 }
