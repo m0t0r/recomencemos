@@ -64,8 +64,12 @@ const TOOLS = [{ href: "/admin/sessions", label: SESSIONS_NAV_LABEL }] as const;
  * The registry's `isActive` styles the row and sets a `data-` attribute, which is
  * exactly nothing to a screen-reader user: with five sections and no landing
  * screen, "which one am I on" is a question the tree has to be able to answer.
- * `aria-current="page"` is that answer, and it is kept separate from the styling
- * rather than derived from it — a `data-` attribute is a hook, not a semantic.
+ * `aria-current="page"` is that answer.
+ *
+ * **The highlight is derived from this rather than computed beside it.** A second
+ * `pathname === href` next to the first is a styling hook and a semantic that can
+ * disagree, and the bug that produces — the tree naming one section while the eye
+ * reads another — is invisible to whichever of the two you happen to check.
  */
 function current(pathname: string, href: string): "page" | undefined {
   return pathname === href ? "page" : undefined;
@@ -115,7 +119,7 @@ export function QueueNav({ items }: { items: readonly QueueNavItem[] }) {
                     */}
                     <SidebarMenuButton
                       render={<Link href={item.href} aria-current={current(pathname, item.href)} />}
-                      isActive={pathname === item.href}
+                      isActive={current(pathname, item.href) === "page"}
                     >
                       <span className="truncate">{item.label}</span>
                       {item.badge}
@@ -134,7 +138,7 @@ export function QueueNav({ items }: { items: readonly QueueNavItem[] }) {
                   <SidebarMenuItem key={tool.href}>
                     <SidebarMenuButton
                       render={<Link href={tool.href} aria-current={current(pathname, tool.href)} />}
-                      isActive={pathname === tool.href}
+                      isActive={current(pathname, tool.href) === "page"}
                     >
                       <span className="truncate">{tool.label}</span>
                     </SidebarMenuButton>

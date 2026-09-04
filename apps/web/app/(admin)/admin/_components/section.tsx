@@ -1,11 +1,22 @@
 import { notFound } from "next/navigation";
 import { type ComponentType, Suspense } from "react";
-import { QueueEmpty, SectionNotLive, SourceBranch, SourceFailed, SourceSkeleton } from "./queue";
+import {
+  PastBandMarker,
+  QueueEmpty,
+  SectionNotLive,
+  SourceBranch,
+  SourceFailed,
+  SourceSkeleton,
+} from "./queue";
 import { SkillRequestRow } from "./skill-request-row";
-import { PAST_BAND_MARKER, sectionWaiting } from "../_lib/messages";
+import { sectionWaiting } from "../_lib/messages";
 import { loadSection } from "../_lib/queue-data";
-import { isPastBand, sourceForSegment, type QueueItem } from "../_lib/queue-sources";
-import { TriangleAlertIcon } from "lucide-react";
+import {
+  isPastBand,
+  sourceForSegment,
+  type QueueItem,
+  type QueueSource,
+} from "../_lib/queue-sources";
 
 /**
  * One section, rendered in full.
@@ -37,16 +48,8 @@ const SECTION_ROWS: Record<string, ComponentType<{ readonly item: QueueItem }>> 
   skillRequests: SkillRequestRow,
 };
 
-async function SectionBody({
-  segmentKey,
-  bandHours,
-  label,
-}: {
-  segmentKey: string;
-  bandHours: number | null;
-  label: string;
-}) {
-  const state = await loadSection(segmentKey);
+async function SectionBody({ source }: { source: QueueSource }) {
+  const state = await loadSection(source.key);
 
   /**
    * **The clock is read here, after the gate, and that placement is the fix
@@ -66,22 +69,17 @@ async function SectionBody({
   const now = new Date();
 
   if (state.status === "absent") return <SectionNotLive />;
-  if (state.status === "failed") return <SourceFailed label={label} />;
+  if (state.status === "failed") return <SourceFailed label={source.label} />;
   if (state.branch.total === 0) return <QueueEmpty />;
 
   return (
     <>
       <p className="text-muted-foreground flex items-center gap-2 text-sm leading-5">
         <span className="tabular-nums">{sectionWaiting(state.branch.total)}</span>
-        {isPastBand(state.branch, bandHours, now) ? (
-          <span className="text-destructive flex items-center gap-1 font-medium">
-            <TriangleAlertIcon aria-hidden="true" className="size-4" />
-            {PAST_BAND_MARKER}
-          </span>
-        ) : null}
+        {isPastBand(state.branch, source.bandHours, now) ? <PastBandMarker /> : null}
       </p>
 
-      <SourceBranch branch={state.branch} Item={SECTION_ROWS[segmentKey]} />
+      <SourceBranch branch={state.branch} Item={SECTION_ROWS[source.key]} />
     </>
   );
 }
@@ -103,7 +101,7 @@ export function QueueSection({ segment }: { segment: string }) {
         counts resolve independently of these rows.
       */}
       <Suspense fallback={<SourceSkeleton label={source.label} />}>
-        <SectionBody segmentKey={source.key} bandHours={source.bandHours} label={source.label} />
+        <SectionBody source={source} />
       </Suspense>
     </section>
   );
