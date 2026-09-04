@@ -17,8 +17,15 @@
  * 3. **Auto-submit on completion is an accelerator, never the mechanism.** The
  *    button works with JavaScript unavailable and losing the accelerator costs a
  *    keystroke, not the session.
- * 4. **The field keeps its value in every state.** A code that failed to submit
- *    must not have to be retyped.
+ * 4. **The field keeps its value in every state — with JavaScript.** The value
+ *    lives in this component's state, so a refusal never empties it. On the
+ *    unhydrated path it comes back empty, and that is a decision rather than a
+ *    gap: `ActionError` has an `input` field for handing a refused submission
+ *    back, and a code may not travel in it. It is a credential for the seconds
+ *    it is live, and echoing it into an HTML attribute would put it in the
+ *    response body, in the back-forward cache and in anything between that logs
+ *    one. Retyping six digits is the cheaper of the two, and the digits have
+ *    rotated anyway.
  *
  * **`input-otp` is in the registry and is deliberately not used**, which is worth
  * saying because the registry-equivalents review pass exists to catch the
@@ -31,6 +38,7 @@ import { Button } from "@repo/design-system/components/button";
 import { Card } from "@repo/design-system/components/card";
 import { Field, FieldDescription, FieldLabel } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
+import { cn } from "@repo/design-system/lib/utils";
 import { GENERIC_ERROR_CODE } from "@repo/errors/app-error";
 import { startTransition, useActionState, useEffect, useId, useRef, useState } from "react";
 import { verifyCode } from "../actions";
@@ -235,7 +243,20 @@ export function feedbackFor(result: VerifyResult): Feedback | undefined {
  * `tabIndex={-1}` makes it focusable without putting it in the tab order;
  * `role="status"` carries an implicit `aria-live="polite"`, so a change nobody is
  * focused on is still announced — and it gives the region a name a test can ask
- * for rather than a attribute a `querySelector` has to hunt.
+ * for rather than an attribute a `querySelector` has to hunt.
+ *
+ * **It is always in the DOM and takes no space until it says something.** A live
+ * region inserted at the same moment as its text is frequently not announced at
+ * all — assistive technology has to be watching it before the change happens —
+ * so rendering it conditionally would cost the announcement this element exists
+ * for. But an empty flex child still earns the card's `gap-6`, which on a card
+ * holding a heading, a field and a button reads as a mistake: the screen opens
+ * with a hole under its own title.
+ *
+ * `sr-only` closes both. It is `position: absolute`, so the empty region stops
+ * being laid out by the flex container at all rather than being laid out at zero
+ * height, and it stays in the accessibility tree the whole time. The class comes
+ * off the moment there is something to see.
  */
 function FeedbackRegion({
   announcementRef,
@@ -250,7 +271,10 @@ function FeedbackRegion({
       tabIndex={-1}
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="status"
-      className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
+      className={cn(
+        "focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]",
+        feedback ? undefined : "sr-only",
+      )}
     >
       {feedback ? (
         <div className="border-destructive/30 bg-destructive/5 rounded-lg border p-4">

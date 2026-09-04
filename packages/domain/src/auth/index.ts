@@ -303,7 +303,27 @@ export interface AdminCodeInput {
 
 export type AdminCodeSignInOutcome =
   | { readonly ok: true; readonly setCookie: readonly string[] }
-  | { readonly ok: false; readonly error: AppError };
+  | {
+      readonly ok: false;
+      readonly error: AppError;
+      /**
+       * Seconds until the ceiling's window resets, when the refusal is a
+       * ceiling's. Absent for every other refusal, which is what tells the two
+       * apart without the surface matching on a string.
+       *
+       * **It is a field of its own rather than something dug out of the
+       * sentence**, for the reason `lib/safe-action.ts` gives about the
+       * middleware version: NFR26's third half is that a refusal is legible to
+       * the person who hit it, and C39 asks the surface for the sentence *and*
+       * the number. The sentence already names the wait in words; this is the
+       * same fact as a value, which is what a `<time>` element needs.
+       *
+       * It travels here rather than on the `AppError` because `AppError` has no
+       * such field and adding one would put a rate-limiting concept on the type
+       * every error in this system is.
+       */
+      readonly retryAfter?: number;
+    };
 
 /**
  * What a caller learns about a session, which is less than Better Auth returns.
@@ -662,7 +682,7 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
          */
         if (!(cause instanceof APIError)) throw cause;
 
-        return { ok: false, error: adminCodeRefusal(cause) };
+        return { ok: false, error: adminCodeRefusal(cause), retryAfter: retryAfterOf(cause) };
       }
     },
 
@@ -829,6 +849,20 @@ export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
  * function cannot see which it was without asking the endpoint to tell it, and
  * an endpoint that told it would be an endpoint that could tell anyone.
  */
+/**
+ * The ceiling's seconds, off the refusal the endpoint threw.
+ *
+ * **Read defensively, because the shape is the library's rather than ours.**
+ * `APIError`'s body is whatever the throw site passed, so this is an `unknown`
+ * being validated and not a field being copied — a version that stopped
+ * carrying it must cost the number, never the refusal.
+ */
+function retryAfterOf(cause: unknown): number | undefined {
+  const retryAfter = (cause as { body?: { retryAfter?: unknown } } | null)?.body?.retryAfter;
+
+  return typeof retryAfter === "number" && Number.isFinite(retryAfter) ? retryAfter : undefined;
+}
+
 function adminCodeRefusal(cause: unknown): AppError {
   const body = (cause as { body?: { code?: unknown; message?: unknown } } | null)?.body;
   const limited = body?.code === ADMIN_CODE_RATE_LIMITED_CODE;
