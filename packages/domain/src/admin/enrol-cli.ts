@@ -44,18 +44,39 @@ import {
   completeAdminEnrolment,
   mintAdminEnrolment,
 } from "#admin/enrolment";
-import { authSecret, BASE_URL_VARIABLE } from "#auth/config";
+import { authBaseUrl, authSecret, BASE_URL_VARIABLE } from "#auth/config";
 import { directConfig } from "#config";
 import * as schema from "#schema";
 
-/** Where the printed link points. The same variable every other absolute URL uses. */
+/**
+ * Where the printed link points — resolved the same way the running app resolves
+ * its own origin, so the two cannot disagree about where `/admin/enrol` is.
+ *
+ * **This command is not a child of the dev proxy**, unlike `next dev`, so nothing
+ * sets `PORTLESS_URL` for it and {@link authBaseUrl} falls back to the configured
+ * variable. Under `pnpm dev` that prints a link at an origin the app is no longer
+ * served on, so pass the origin the banner shows:
+ *
+ * ```sh
+ * PORTLESS_URL=https://<branch>.web.recomencemos.localhost pnpm admin:enrol <email>
+ * ```
+ *
+ * It goes through `authBaseUrl` rather than reading the variable directly so that
+ * this stays one decision rather than two — the failure it prevents is a setup
+ * link that resolves nowhere while every other absolute URL in the system is fine.
+ */
 function enrolmentUrl(token: string): string {
-  const baseUrl = process.env[BASE_URL_VARIABLE]?.trim();
+  let baseUrl: string;
 
-  if (!baseUrl) {
+  // Only the missing-origin case is rewritten. A malformed value must surface as
+  // itself rather than as a message telling the reader to set a variable they set.
+  try {
+    baseUrl = authBaseUrl(process.env);
+  } catch {
     throw new Error(
       `${BASE_URL_VARIABLE} is unset, so there is no origin to print a setup link against. ` +
-        "Locally: `cp apps/web/.env.example apps/web/.env.local`.",
+        "Locally: `cp apps/web/.env.example apps/web/.env.local`. Under the dev proxy, set " +
+        "PORTLESS_URL to the origin the `pnpm dev` banner printed.",
     );
   }
 
