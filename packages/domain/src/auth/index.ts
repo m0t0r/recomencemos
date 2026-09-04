@@ -35,9 +35,11 @@ import {
   type AuthDependencies,
   type AuthOptions,
   authOptions,
+  authSecret,
   googleSignInAvailable,
   MAGIC_LINK_TTL_MINUTES,
 } from "#auth/config";
+import { readSignInChallengeFromHeaders } from "#admin/challenge";
 import { ADMIN_CODE_RATE_LIMITED_CODE } from "#auth/admin-door";
 import { safeReturnPath } from "#auth/return-path";
 import type { DomainDatabase } from "#database";
@@ -270,6 +272,26 @@ export interface AuthHandler {
    * a session for would be the door.
    */
   readonly verifyAdminSignInCode: (input: AdminCodeInput) => Promise<AdminCodeSignInOutcome>;
+
+  /**
+   * **Whether this request is halfway through the Admin door**, which is the
+   * one question the surface at {@link SECOND_FACTOR_ROUTE} has to answer
+   * before it renders anything.
+   *
+   * A boolean and not the challenge, and not the Account it names. ADR-0010
+   * withholds the module that can read one, and what a page legitimately needs
+   * is narrower than what that module returns: whether to draw a field, or to
+   * answer 404. Publishing the Account id would put factor one's whole payload
+   * into a render, where nothing needs it.
+   *
+   * Absent, cleared, malformed, forged, expired and signed with another key are
+   * one answer, exactly as they are in the endpoint that checks the code — a
+   * page that could tell them apart would be an oracle reachable with no
+   * credential at all.
+   *
+   * Synchronous, and it touches no database: it is an HMAC over a cookie.
+   */
+  readonly hasSignInChallenge: (headers: Headers) => boolean;
 }
 
 export interface AdminCodeInput {
@@ -602,6 +624,13 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
       }
     },
 
+    hasSignInChallenge(headers) {
+      return (
+        readSignInChallengeFromHeaders(headers, authSecret(dependencies.env ?? process.env)) !==
+        null
+      );
+    },
+
     async verifyAdminSignInCode({ code, headers }) {
       try {
         const { auth } = await resolve();
@@ -755,6 +784,20 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 }
 
 export { googleSignInAvailable, MAGIC_LINK_TTL_MINUTES };
+/**
+ * **Where a granted Account is sent once its link is spent, published so that
+ * the route directory and the redirect cannot drift apart.**
+ *
+ * `#auth/config` throws this as a redirect from inside a database hook, and
+ * `apps/web` has to have a route sitting at exactly that path — two spellings
+ * of one string, in two packages, with nothing between them. Exporting the
+ * constant lets the app assert the agreement instead of hoping for it.
+ *
+ * It names no admin surface, and `#admin/challenge` carries the argument for
+ * why: the redirect is received by whatever consumed the link, which includes
+ * every scanner and preview fetcher between the mail server and the Admin.
+ */
+export { SECOND_FACTOR_ROUTE } from "#admin/challenge";
 export type { AuthDependencies, MagicLinkRequest, AuthLogger, AuthEnv } from "#auth/config";
 export type { AccountSession } from "#auth/sessions";
 export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
