@@ -54,7 +54,18 @@ export const verifyCode = actionClient
        * charged; this one is the surface's half.
        */
       logRequestError(outcome.error, { level: "warn" });
-      return returnActionError(projectClientError(outcome.error));
+
+      /**
+       * **`retryAfter` travels beside the sentence**, which is C39's ask: the
+       * ceiling's own words already name the wait, and this is the same fact as
+       * a number the surface can put in a `<time>`. It is `undefined` for every
+       * refusal that is not a ceiling's, which is how the screen tells a lockout
+       * from a wrong code without matching on a string.
+       */
+      return returnActionError({
+        ...projectClientError(outcome.error),
+        retryAfter: outcome.retryAfter,
+      });
     }
 
     const cookieStore = await cookies();
