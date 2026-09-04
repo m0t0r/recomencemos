@@ -1,5 +1,6 @@
 import { Alert, AlertDescription } from "@repo/design-system/components/alert";
 import { Card } from "@repo/design-system/components/card";
+import { cn } from "@repo/design-system/lib/utils";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import { TriangleAlertIcon } from "lucide-react";
 import type { ComponentType } from "react";
@@ -181,15 +182,33 @@ export function SourceBranch({
 }
 
 /**
+ * A section whose oldest item has passed its band.
+ *
+ * **The word is the marker; the icon and the colour are the redundant halves.**
+ * The acceptance criterion asks for a text equivalent in as many words, and WCAG
+ * 2.2 AA 1.4.1 asks for it again — so a reader who cannot see the red, or the
+ * triangle, still reads _fuera de plazo_.
+ *
+ * **One component for both places it appears** — the nav item and the section's
+ * own page. The two were written separately and had already drifted a size apart,
+ * which is the shape of a marker that eventually drifts a *word* apart.
+ */
+export function PastBandMarker({ className }: { className?: string }) {
+  return (
+    <span className={cn("text-destructive flex items-center gap-1 font-medium", className)}>
+      <TriangleAlertIcon aria-hidden="true" className="size-[1.1em]" />
+      {PAST_BAND_MARKER}
+    </span>
+  );
+}
+
+/**
  * What a nav item says about its section: how much is waiting, and whether the
  * oldest thing in it has passed the band.
  *
- * **Three renderings of two facts, and each one is load-bearing.** The figure is
- * `aria-hidden` and paired with a phrase, because "Propuestas, 12" read aloud is
- * a list position as easily as a backlog. The marker is a **word**, not a colour
- * and not an icon — the acceptance criterion asks for a text equivalent in as
- * many words, and WCAG 2.2 AA 1.4.1 asks for it again. The icon and the colour
- * are the redundant halves.
+ * **The figure is `aria-hidden` and paired with a phrase**, because "Propuestas,
+ * 12" read aloud is a list position as easily as a backlog. One fact rendered
+ * twice rather than two facts that can drift.
  *
  * It renders **inside** the nav link rather than in the registry's badge slot,
  * which is positioned outside the button: a count that is not part of the link's
@@ -197,14 +216,9 @@ export function SourceBranch({
  */
 export function SectionBadge({ total, late }: { total: number; late: boolean }) {
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-1.5">
-      {late ? (
-        <span className="text-destructive flex items-center gap-1 text-xs font-medium">
-          <TriangleAlertIcon aria-hidden="true" className="size-3.5" />
-          {PAST_BAND_MARKER}
-        </span>
-      ) : null}
-      <span aria-hidden="true" className="text-xs tabular-nums">
+    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs">
+      {late ? <PastBandMarker /> : null}
+      <span aria-hidden="true" className="tabular-nums">
         {total}
       </span>
       <span className="sr-only">{sectionWaiting(total)}</span>

@@ -17,14 +17,17 @@
  * the Report already is. This stays the way to reach it without one.
  */
 
-import type { Metadata } from "next";
 import { SessionsPanel } from "../_components/sessions-panel";
-import { SESSIONS_HEADING, sectionPageTitle } from "../_lib/messages";
+import { SESSIONS_HEADING } from "../_lib/messages";
+import { sectionMetadata } from "../_lib/section-metadata";
 
-export const metadata: Metadata = {
-  title: sectionPageTitle(SESSIONS_HEADING),
-  robots: { index: false, follow: false },
-};
+/**
+ * The same helper the five sections use, and it applies here for the reason it
+ * exists: NFR8 wants a `<meta name="robots">` on every route under `/admin`, and
+ * a sixth file writing that object by hand is a sixth chance to forget it. This
+ * route is not a section; its metadata is the same shape regardless.
+ */
+export const metadata = sectionMetadata(SESSIONS_HEADING);
 
 export default function AdminSessionsPage() {
   return (
