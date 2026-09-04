@@ -54,3 +54,8 @@ yarn-error.log*
 .impeccable/config.local.json
 .impeccable/review/
 .impeccable/mocks/
+
+# Vitest 5 centralises reports, attachments and blob output here. Nothing in
+# this repo configures a reporter that writes one today; the entry is a floor,
+# so a `vitest doctor` or `--reporter=json` run cannot leave artifacts staged.
+.vitest

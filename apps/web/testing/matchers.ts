@@ -35,6 +35,22 @@ function describeIssues(result: StandardSchemaV1.FailureResult): string {
     .join("\n");
 }
 
+/**
+ * A thenable check rather than `result instanceof Promise`, and a type predicate
+ * so the narrowing `instanceof` used to give still happens.
+ *
+ * **`instanceof` compares constructor identity, which is per-realm, and this
+ * suite runs in a VM realm** (`pool: "vmThreads"` in `vitest.config.mts`). A
+ * promise built by a module evaluated outside this realm would not match — and
+ * the miss would be silent in the worst direction: execution would fall through
+ * to the `issues` check, a promise has no `issues`, and the matcher would report
+ * a **pass** for a schema it never ran. The thenable contract is what Standard
+ * Schema actually specifies and is realm-independent, so the guard fails closed.
+ */
+function isThenable(value: object): value is PromiseLike<unknown> {
+  return typeof (value as { then?: unknown }).then === "function";
+}
+
 expect.extend({
   /**
    * Asserts that a value satisfies a schema, and says *which rule* refused it
@@ -47,7 +63,7 @@ expect.extend({
   toMatchSchema(received: unknown, schema: StandardSchemaV1) {
     const result = schema["~standard"].validate(received);
 
-    if (result instanceof Promise) {
+    if (isThenable(result)) {
       throw new TypeError(
         "toMatchSchema received a schema that validates asynchronously. Await the " +
           "validation and assert on its result rather than passing the schema here.",
