@@ -106,9 +106,7 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
       <div className="flex flex-col gap-3">
-        <h1 className="text-foreground text-3xl font-semibold tracking-tight text-balance">
-          {BROWSE_TITLE}
-        </h1>
+        <h1 className="page-heading">{BROWSE_TITLE}</h1>
         <p className="text-muted-foreground max-w-prose text-lg text-pretty">{BROWSE_LEAD}</p>
       </div>
 

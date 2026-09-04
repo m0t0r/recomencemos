@@ -1,11 +1,20 @@
 /**
- * The public card: what anyone sees of a CapabilityProfile — first name, last
- * initial, city, Skills, one line, and a photo or the initial in its place.
+ * The public card: what anyone sees of a CapabilityProfile — her one line,
+ * first name, last initial, city, Skills, and a photo or the initial in its
+ * place.
  *
- * Presentational and server-compatible, so `/my-profile` renders it as the
- * proof of what she published and `/publish`'s preview variant renders it live
- * as she types. Story 4's Wall is where it becomes `PublicProfileCard` proper;
- * until then it carries no link, because there is no public route to link to.
+ * Presentational and server-compatible, and **`/my-profile` is its only
+ * consumer**, where it is the proof of what she published. `profile-row.tsx`
+ * renders the same person on the Wall and on `/profiles`; the two share
+ * `displayName` and `initialOf` rather than a component, because a row and a
+ * card are two shapes of one hierarchy rather than one shape twice.
+ *
+ * **Two consumers this comment used to name, and neither ever existed.**
+ * `/publish` was to show it as a live preview beside the form — the layout that
+ * lost at `/prototype` and lives on `prototype/16-ui-variants`, as
+ * `publish-layout.tsx` records. And the Wall was to promote it to a
+ * `PublicProfileCard`, which the ruled page of rows replaced. It carries no
+ * link because nothing that renders it has one to give.
  *
  * **The initial is the approved-photo-absent state, and it is also the
  * pending state** (spec, Wall row): one shape, two causes, never a badge.
@@ -67,18 +76,34 @@ export function ProfileCard({
 }: ProfileCardProps) {
   return (
     <Card className={className}>
+      {/*
+        The same hierarchy as a row on the Wall (`profile-list/profile-row.tsx`):
+        her own words first, in the display face, then who and where. A person's
+        identity should not depend on which surface she was reached through, and
+        this card is how she sees what everyone else sees.
+      */}
       <CardHeader className="flex flex-row items-start gap-4">
         <Avatar size="lg" aria-hidden={photoUrl ? undefined : true}>
           {photoUrl ? <AvatarImage src={photoUrl} alt={photoAlt} /> : null}
           <AvatarFallback>{initialOf(firstName)}</AvatarFallback>
         </Avatar>
         <div className="flex min-w-0 flex-col gap-1">
-          <CardTitle className="truncate">{displayName(firstName, lastInitial)}</CardTitle>
-          <CardDescription>{cityLabel}</CardDescription>
+          {/*
+            Unconditional, as the Wall row renders the same line: `headlineField`
+            is `.trim().min(1)`, so a profile with no headline is a state the
+            boundary cannot produce. The ternary here guarded it anyway, which
+            made the card's title — and so its hierarchy — depend on a value
+            that is always there.
+          */}
+          <CardTitle className="font-heading text-2xl leading-7 font-medium text-pretty">
+            {headline}
+          </CardTitle>
+          <CardDescription className="font-sans">
+            {displayName(firstName, lastInitial)} · {cityLabel}
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {headline ? <p className="text-foreground text-pretty">{headline}</p> : null}
         {/*
           The same chips the public list renders, and for the same reason: a
           Skill label is a verb phrase, and the registry's `Badge` is

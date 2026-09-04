@@ -140,7 +140,7 @@ export default function PrivacyNoticePage() {
   return (
     <main className="mx-auto flex max-w-prose flex-col gap-10 px-6 py-12">
       <header className="flex flex-col gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight text-balance">{NOTICE_TITLE}</h1>
+        <h1 className="page-heading">{NOTICE_TITLE}</h1>
         <p className="text-lg text-pretty">{NOTICE_COPY.INTRO}</p>
         <p className="text-muted-foreground text-sm">
           {noticeVersionLine(CURRENT_CONSENT_VERSIONS.notice)}
