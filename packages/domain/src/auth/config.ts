@@ -183,7 +183,7 @@ function required(env: AuthEnv, variable: string): string {
  * Admin's TOTP secrets and backup codes at rest (DD5) — so the one thing worth
  * refusing outright is the development value reaching a deploy.
  */
-export function authSecret(env: AuthEnv): string {
+export function authSecret(env: AuthEnv = process.env): string {
   const secret = required(env, SECRET_VARIABLE);
 
   if (secret === DEVELOPMENT_SECRET && env.NODE_ENV === "production") {

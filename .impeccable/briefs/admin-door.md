@@ -1,7 +1,31 @@
 # Surface brief: the Admin door
 
-**Target:** `apps/web/app/(admin)/admin/continue/page.tsx` · **Mode:** Operate · **Ticket:**
-[#96](https://github.com/m0t0r/recomencemos/issues/96) · **Shaped:** 2026-08-30
+**Target:** `apps/web/app/(token)/continue/page.tsx` · **Mode:** Operate · **Ticket:**
+[#96](https://github.com/m0t0r/recomencemos/issues/96) · **Shaped:** 2026-08-30 · **Amended:**
+2026-09-04 ([#125](https://github.com/m0t0r/recomencemos/issues/125))
+
+## Amended 2026-09-04 with #125 — the route moved, and two lines below moved with it
+
+This brief was shaped against `/admin/continue`. **#104 moved the route to `/continue`**, and the
+argument is recorded in full at `SECOND_FACTOR_ROUTE` in `packages/domain/src/admin/challenge.ts`: a
+`GET` verify URL is fetched by corporate link scanners, WhatsApp previews and Outlook Safe Links, so
+those clients consume the token and receive this redirect — and `/admin/…` in a `Location` would make
+a granted address distinguishable in a gateway's logs. It is the same disclosure that moved the first
+factor onto the ordinary magic link, arriving one hop later.
+
+Two consequences for what is written below, and neither changes a decision:
+
+- **The target is `app/(token)/continue/page.tsx`.** The group is `(token)` and not `(admin)` because
+  `(admin)/layout.tsx` renders `AdminHeader` — which asks "am I signed in, as whom, how do I leave",
+  three questions with no true answer where no session exists yet, and links a wordmark to the queue,
+  which would tell whoever holds a stolen link that a queue is there.
+- **The `noindex` line under _Constraints_ no longer holds.** Nothing is inherited from
+  `/admin/:path*`, so the page sets `metadata.robots` itself — and the stronger half is that a
+  request with no live challenge is a **404**, so a crawler never reaches a document.
+  `apps/web/lib/gated-routes.ts` carries the reasoning where the list is.
+
+**`docs/efforts/0002-profile-to-contact-exchange/spec.md` still says `GET /admin/continue`** in its
+API contract and in the surface table. That is a spec amendment and a human's call, not this brief's.
 
 The second half of the Admin's sign-in. The first half is an email — requested from the public
 `/sign-in`, which answers identically whichever kind of address it is given — and this is where that
