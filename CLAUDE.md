@@ -80,6 +80,12 @@ Four things follow, and each has a reason rather than a preference behind it:
   `packages/domain/src/auth/config.ts` prefers `PORTLESS_URL` outside production, because the
   hostname carries the branch and no static `.env.local` value can be right for every worktree at
   once. Do not "fix" `.env.local` to match a hostname you saw.
+- **A command run from a second terminal is a child of nothing, so it asks.** `scripts/dev-origin.mjs`
+  puts the question to the proxy — `portless get` for the hostname this tree would register, then
+  `portless list` for whether it is registered — and prints the origin or nothing. `pnpm admin:enrol`
+  is wired to it, which is what makes its setup link open; `pnpm dev:origin` is the same answer by
+  hand. Nothing is printed when no route exists, so `PORTLESS=0` and a stopped server both fall back
+  to `BETTER_AUTH_URL`, and an explicitly set `PORTLESS_URL` still wins over both.
 - **`PORTLESS=0 pnpm dev` is the way back to `:3000`**, and it is what the **Google sign-in door**
   needs — Google will not register a `.localhost` redirect URI. The variable is declared in
   `turbo.json`'s `globalPassThroughEnv`; without that declaration `strict` environment mode filters it

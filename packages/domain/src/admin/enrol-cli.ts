@@ -53,13 +53,15 @@ import * as schema from "#schema";
  * its own origin, so the two cannot disagree about where `/admin/enrol` is.
  *
  * **This command is not a child of the dev proxy**, unlike `next dev`, so nothing
- * sets `PORTLESS_URL` for it and {@link authBaseUrl} falls back to the configured
- * variable. Under `pnpm dev` that prints a link at an origin the app is no longer
- * served on, so pass the origin the banner shows:
- *
- * ```sh
- * PORTLESS_URL=https://<branch>.web.recomencemos.localhost pnpm admin:enrol <email>
- * ```
+ * sets `PORTLESS_URL` for it and {@link authBaseUrl} would fall back to the
+ * configured variable — an origin the app is no longer served on, and one that
+ * cannot be right for two worktrees at once because the proxied hostname carries
+ * the branch. `scripts/dev-origin.mjs` is what closes that: the `admin:enrol`
+ * script asks the proxy where this tree's server actually answers and passes it
+ * in, so the link is right without anybody copying a hostname off a banner. An
+ * explicitly set `PORTLESS_URL` still wins, and where there is no proxied route
+ * — no server, or one started with the proxy bypassed — nothing is passed and
+ * the configured variable is the right answer rather than the stale one.
  *
  * It goes through `authBaseUrl` rather than reading the variable directly so that
  * this stays one decision rather than two — the failure it prevents is a setup
