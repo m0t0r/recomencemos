@@ -25,9 +25,10 @@
  * is the root document and nothing else.
  */
 
+import { requireAdminSession } from "@repo/domain/admin";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { CodeForm } from "./_components/code-form";
 import { CONTINUE_PAGE_TITLE } from "./_lib/messages";
@@ -50,6 +51,26 @@ export const metadata: Metadata = {
 export const instant = false;
 
 export default async function ContinuePage() {
+  const request = await headers();
+
+  /**
+   * **Somebody who is already through this door is sent past it**, which is the
+   * spec's own row for this surface and not a courtesy: an Admin who bookmarked
+   * the page, or came back to it on the browser's history, has nothing to type
+   * and no second factor to present, so a code field would be a dead end and a
+   * 404 would be a lie about a route they can reach.
+   *
+   * **It is not an oracle**, which is the thing to check before adding any
+   * branch to this page. The answer differs only for a caller already holding an
+   * Admin session — who therefore already knows they hold one — and every other
+   * caller, challenge or no challenge, gets exactly what they got before.
+   *
+   * `requireAdminSession` and not `isAdmin`: an Admin session is one that
+   * presented an emailed link *and* a code, and the grant on its own is the
+   * magic-link hole that gate exists to close.
+   */
+  if (requireAdminSession(await auth().getSession(request))) redirect("/admin");
+
   /**
    * **Absent, cleared, malformed, forged, expired and signed with another key
    * are one answer, and it is `notFound()`** — no message, no resend offer, no
@@ -62,7 +83,7 @@ export default async function ContinuePage() {
    * expiry — because a page that had either would be a page that could render
    * one by accident.
    */
-  if (!auth().hasSignInChallenge(await headers())) notFound();
+  if (!auth().hasSignInChallenge(request)) notFound();
 
   return <CodeForm />;
 }

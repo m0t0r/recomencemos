@@ -6,6 +6,17 @@
  * requirement. `/sign-in` is *not* on it — that surface sets
  * `metadata.robots` for its own reasons (#12) and NFR8 never named it.
  *
+ * **`/continue` is the second such route, and it is here in a comment rather
+ * than in the list for the same reason** (#125). It is the Admin door's second
+ * step, and it is not under `/admin`: the redirect that lands a browser there is
+ * received by whatever consumed the emailed link — a corporate scanner, a
+ * WhatsApp preview, Outlook Safe Links — so a path naming the admin surface
+ * would make a granted address distinguishable in a gateway's logs. Adding it
+ * below would be adding a row NFR8 did not write, and the header it would buy is
+ * one nothing needs: **a request to `/continue` with no live challenge is a
+ * `404`**, so there is no document for a crawler to hold in the first place. The
+ * page carries `metadata.robots` for the case where there is one.
+ *
  * **NFR8 asks for both halves and for one particular shape of test:** the header
  * *and* a `<meta name="robots">` equivalent, "asserted by a table-driven test
  * over the route list rather than a per-page attribute". So the list is data

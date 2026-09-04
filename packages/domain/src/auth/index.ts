@@ -645,10 +645,13 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
     },
 
     hasSignInChallenge(headers) {
-      return (
-        readSignInChallengeFromHeaders(headers, authSecret(dependencies.env ?? process.env)) !==
-        null
-      );
+      /**
+       * Resolved per call rather than once at construction, because this factory
+       * memoises into a module-level `built` and a secret read at build time
+       * would be the first process-wide value in here that a test could not
+       * change by passing `env`.
+       */
+      return readSignInChallengeFromHeaders(headers, authSecret(dependencies.env)) !== null;
     },
 
     async verifyAdminSignInCode({ code, headers }) {
@@ -849,22 +852,8 @@ export { DEFAULT_RETURN_PATH, safeReturnPath } from "#auth/return-path";
  * function cannot see which it was without asking the endpoint to tell it, and
  * an endpoint that told it would be an endpoint that could tell anyone.
  */
-/**
- * The ceiling's seconds, off the refusal the endpoint threw.
- *
- * **Read defensively, because the shape is the library's rather than ours.**
- * `APIError`'s body is whatever the throw site passed, so this is an `unknown`
- * being validated and not a field being copied — a version that stopped
- * carrying it must cost the number, never the refusal.
- */
-function retryAfterOf(cause: unknown): number | undefined {
-  const retryAfter = (cause as { body?: { retryAfter?: unknown } } | null)?.body?.retryAfter;
-
-  return typeof retryAfter === "number" && Number.isFinite(retryAfter) ? retryAfter : undefined;
-}
-
 function adminCodeRefusal(cause: unknown): AppError {
-  const body = (cause as { body?: { code?: unknown; message?: unknown } } | null)?.body;
+  const body = apiErrorBody(cause);
   const limited = body?.code === ADMIN_CODE_RATE_LIMITED_CODE;
 
   return new AppError({
@@ -887,4 +876,32 @@ function adminCodeRefusal(cause: unknown): AppError {
     context: {},
     cause,
   });
+}
+
+/**
+ * The ceiling's seconds, off the refusal the endpoint threw.
+ *
+ * **Read defensively, because the shape is the library's rather than ours.**
+ * `APIError`'s body is whatever the throw site passed, so this validates an
+ * `unknown` rather than copying a field — a version that stopped carrying the
+ * number must cost the number and never the refusal.
+ */
+function retryAfterOf(cause: unknown): number | undefined {
+  const retryAfter = apiErrorBody(cause)?.retryAfter;
+
+  return typeof retryAfter === "number" && Number.isFinite(retryAfter) ? retryAfter : undefined;
+}
+
+/**
+ * The one place this package reaches into an `APIError`'s body.
+ *
+ * Two readers wrote the same cast, which is two places to correct on the day the
+ * library changes that shape — and a cast is exactly the thing the compiler
+ * cannot keep honest, so it is the last thing worth having two of.
+ */
+function apiErrorBody(
+  cause: unknown,
+): { code?: unknown; message?: unknown; retryAfter?: unknown } | undefined {
+  return (cause as { body?: { code?: unknown; message?: unknown; retryAfter?: unknown } } | null)
+    ?.body;
 }

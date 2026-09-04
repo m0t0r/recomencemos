@@ -221,6 +221,14 @@ describe("what each outcome says", () => {
 
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain(LOCKED.message));
     expect(screen.getByRole("status").textContent).toContain("respaldo");
+    /*
+      One of the two cases the `querySelector` hatch is for: **the element is not
+      in the accessibility tree at all.** A `<time>` carrying only a `dateTime`
+      has no role and no accessible name by definition — that is the whole reason
+      it is here, as a machine-readable duplicate of a fact the sentence already
+      states — so there is no role query that could find it, and its absence is
+      unassertable any other way.
+    */
     expect(screen.getByRole("status").querySelector("time")?.getAttribute("datetime")).toBe(
       "PT900S",
     );

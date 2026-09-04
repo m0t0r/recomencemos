@@ -34,6 +34,7 @@
  * slot count makes decision 1 unimplementable.
  */
 
+import { Alert, AlertDescription } from "@repo/design-system/components/alert";
 import { Button } from "@repo/design-system/components/button";
 import { Card } from "@repo/design-system/components/card";
 import { Field, FieldDescription, FieldLabel } from "@repo/design-system/components/field";
@@ -257,6 +258,15 @@ export function feedbackFor(result: VerifyResult): Feedback | undefined {
  * being laid out by the flex container at all rather than being laid out at zero
  * height, and it stays in the accessibility tree the whole time. The class comes
  * off the moment there is something to see.
+ *
+ * **The box is the registry's `Alert` with its role overridden, and the override
+ * is the part worth reading.** `Alert` renders `role="alert"` and spreads its
+ * props after it, so `role="status"` here replaces it — which is what this
+ * region needs: `alert` is assertive and interrupts whatever is being read,
+ * `status` is polite, and a refused code is not an interruption. Nesting one
+ * inside the other would announce the same sentence twice. What the registry
+ * buys is the box — the destructive treatment, the radius, the spacing — in the
+ * one place this product defines them.
  */
 function FeedbackRegion({
   announcementRef,
@@ -266,22 +276,27 @@ function FeedbackRegion({
   readonly feedback: Feedback | undefined;
 }) {
   return (
-    <div
+    <Alert
       ref={announcementRef}
       tabIndex={-1}
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="status"
+      variant="destructive"
       className={cn(
-        "focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]",
+        "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
         feedback ? undefined : "sr-only",
       )}
     >
       {feedback ? (
-        <div className="border-destructive/30 bg-destructive/5 rounded-lg border p-4">
-          <p className="text-foreground text-base leading-6">{feedback.message}</p>
+        <>
+          <AlertDescription className="text-foreground text-base leading-6">
+            {feedback.message}
+          </AlertDescription>
           {/*
             The wait as a number as well as a sentence. Not visible text — the
-            sentence already says it — so nothing is said twice.
+            sentence already says it — so nothing is said twice. It is the same
+            shape `/sign-in` renders for a ceiling, deliberately: two surfaces
+            spelling one refusal two ways is how the second one quietly stops.
           */}
           {feedback.retryAfter === undefined ? null : (
             <time
@@ -290,8 +305,8 @@ function FeedbackRegion({
               className="sr-only"
             />
           )}
-        </div>
+        </>
       ) : null}
-    </div>
+    </Alert>
   );
 }
