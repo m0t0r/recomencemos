@@ -103,7 +103,7 @@ mkdir -p "$(git rev-parse --show-toplevel)/.artifacts/ui-proof"
 # Take a real capture rather than a placeholder — the publisher refuses anything
 # under 1024 bytes, because that is what a recording interrupted by a missing
 # ffmpeg leaves behind.
-agent-browser open http://localhost:3000
+agent-browser open "$(pnpm --silent dev:origin)"   # the hostname `pnpm dev` printed for this tree
 agent-browser screenshot "$(git rev-parse --show-toplevel)/.artifacts/ui-proof/before-smoke.png"
 
 pnpm ui-proof publish --pr <a pull request you own> --dry-run   # lists the objects, touches nothing

@@ -38,12 +38,13 @@
  * belongs on the operator's screen and in no drain.
  */
 
-import { createInterface, type Interface } from "node:readline/promises";
+import { createInterface } from "node:readline/promises";
 import {
   ADMIN_SETUP_TOKEN_TTL_MINUTES,
   completeAdminEnrolment,
   mintAdminEnrolment,
 } from "#admin/enrolment";
+import { promptForCode } from "#admin/prompt";
 import { authBaseUrl, authSecret, BASE_URL_VARIABLE } from "#auth/config";
 import { directConfig } from "#config";
 import * as schema from "#schema";
@@ -77,61 +78,13 @@ function enrolmentUrl(token: string): string {
   } catch {
     throw new Error(
       `${BASE_URL_VARIABLE} is unset, so there is no origin to print a setup link against. ` +
-        "Locally: `cp apps/web/.env.example apps/web/.env.local`. Under the dev proxy, set " +
-        "PORTLESS_URL to the origin the `pnpm dev` banner printed.",
+        "Locally: `cp apps/web/.env.example apps/web/.env.local`. The dev proxy's origin is asked " +
+        "for automatically and is not a substitute for it — there is none to find when no dev " +
+        "server is running.",
     );
   }
 
   return new URL(`/admin/enrol/${token}`, baseUrl).toString();
-}
-
-/**
- * The prompt, and the two ways it can stop having anything to read.
- *
- * **One interface for the whole exchange, and that is a fix rather than a
- * preference.** The first version opened and closed a `readline` per prompt,
- * which works exactly once: closing it ends `process.stdin`, so the retry's
- * second prompt never resolved and the command died on an unsettled top-level
- * await. Observed by piping three codes at it, not predicted.
- *
- * **And input can end on its own**, which is what happens the moment this is
- * driven by a pipe rather than by a person — `printf '…' | pnpm admin:enrol …`
- * is a real way to run it, and `readline` closes when its input stream ends.
- * There are two moments it can end, and only one of them announces itself:
- *
- * - **Already ended before the prompt.** `question()` on a closed interface
- *   throws `ERR_USE_AFTER_CLOSE`; that is not an error worth a stack trace, it
- *   is "there is nobody there to ask", so it comes back as `undefined`.
- * - **Ended while the prompt is waiting.** Nothing throws and nothing resolves —
- *   the promise simply never settles, and the command dies on an unsettled
- *   top-level await with no output at all. `printf '' | pnpm admin:enrol …` is
- *   the shortest way to see it, and it is what an empty pipe or a closed
- *   terminal does. The `close` event is the announcement `question()` does not
- *   make, so it aborts the question and the caller stops asking exactly as it
- *   does in the first case.
- *
- * The listener is removed on the way out rather than left to `once`, because
- * three attempts against one interface would otherwise leave two listeners
- * behind that only ever fire together.
- *
- * **Echoed, unlike `admin:grant`'s password prompt, and the difference is the
- * point.** A TOTP code is good for thirty seconds and is worthless the moment it
- * is used, so hiding it buys nothing and costs the person the ability to see
- * that they typed it correctly — which on a six-digit code is the whole
- * interaction.
- */
-function promptForCode(rl: Interface, prompt: string): Promise<string | undefined> {
-  const ended = new AbortController();
-  const abort = () => ended.abort();
-  rl.once("close", abort);
-
-  return rl
-    .question(prompt, { signal: ended.signal })
-    .then(
-      (answer) => answer.trim(),
-      () => undefined,
-    )
-    .finally(() => rl.off("close", abort));
 }
 
 async function main(): Promise<void> {
