@@ -97,9 +97,22 @@ function enrolmentUrl(token: string): string {
  * **And input can end on its own**, which is what happens the moment this is
  * driven by a pipe rather than by a person — `printf '…' | pnpm admin:enrol …`
  * is a real way to run it, and `readline` closes when its input stream ends.
- * `question()` on a closed interface throws `ERR_USE_AFTER_CLOSE`; that is not
- * an error worth a stack trace, it is "there is nobody there to ask", so it
- * comes back as `undefined` and the caller stops asking.
+ * There are two moments it can end, and only one of them announces itself:
+ *
+ * - **Already ended before the prompt.** `question()` on a closed interface
+ *   throws `ERR_USE_AFTER_CLOSE`; that is not an error worth a stack trace, it
+ *   is "there is nobody there to ask", so it comes back as `undefined`.
+ * - **Ended while the prompt is waiting.** Nothing throws and nothing resolves —
+ *   the promise simply never settles, and the command dies on an unsettled
+ *   top-level await with no output at all. `printf '' | pnpm admin:enrol …` is
+ *   the shortest way to see it, and it is what an empty pipe or a closed
+ *   terminal does. The `close` event is the announcement `question()` does not
+ *   make, so it aborts the question and the caller stops asking exactly as it
+ *   does in the first case.
+ *
+ * The listener is removed on the way out rather than left to `once`, because
+ * three attempts against one interface would otherwise leave two listeners
+ * behind that only ever fire together.
  *
  * **Echoed, unlike `admin:grant`'s password prompt, and the difference is the
  * point.** A TOTP code is good for thirty seconds and is worthless the moment it
@@ -108,10 +121,17 @@ function enrolmentUrl(token: string): string {
  * interaction.
  */
 function promptForCode(rl: Interface, prompt: string): Promise<string | undefined> {
-  return rl.question(prompt).then(
-    (answer) => answer.trim(),
-    () => undefined,
-  );
+  const ended = new AbortController();
+  const abort = () => ended.abort();
+  rl.once("close", abort);
+
+  return rl
+    .question(prompt, { signal: ended.signal })
+    .then(
+      (answer) => answer.trim(),
+      () => undefined,
+    )
+    .finally(() => rl.off("close", abort));
 }
 
 async function main(): Promise<void> {
