@@ -2,7 +2,9 @@
 
 /**
  * PROTOTYPE — the floating variant switcher. Throwaway; never ships.
- * Four variants of `/`, switchable via `?variant=`, on the existing route.
+ * Seven variants of `/`, switchable via `?variant=`, on the existing route.
+ * It sits under the header on the right, out of the thumb zone the phone
+ * variants spend on a sticky bar; `?clean=1` hides it for a capture.
  */
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -35,9 +37,10 @@ export function PrototypeSwitcher() {
   });
 
   if (process.env.NODE_ENV === "production") return null;
+  if (params.get("clean") === "1") return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full bg-neutral-900 px-2 py-1 font-mono text-xs text-white shadow-lg">
+    <div className="fixed top-16 right-2 z-50 flex items-center gap-1 rounded-full bg-neutral-900 px-2 py-1 font-mono text-xs text-white shadow-lg">
       <button
         type="button"
         onClick={() => go(-1)}
@@ -45,8 +48,8 @@ export function PrototypeSwitcher() {
       >
         ←
       </button>
-      <span className="px-2">
-        {current} ({VARIANTS[index]?.name})
+      <span className="px-1">
+        {current} · {VARIANTS[index]?.name}
       </span>
       <button
         type="button"

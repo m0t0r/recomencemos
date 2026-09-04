@@ -38,6 +38,10 @@ const nextConfig: NextConfig = {
   // flag to set. See https://nextjs.org/docs/app/getting-started/caching
   cacheComponents: true,
 
+  // PROTOTYPE (#178): the dev badge sits exactly where the phone variants pin a
+  // bar to the bottom of the viewport. Off on this branch, never on `dev`.
+  devIndicators: false,
+
   /**
    * NFR8's header half, for every gated route at once.
    *

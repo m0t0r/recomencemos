@@ -1,7 +1,9 @@
 /**
- * PROTOTYPE — `/` with four variants, switchable via `?variant=`, on the real
- * route with the real reads (#178). A: the index spread. B: the notice board.
- * C: the field of type. D: what is on the branch today.
+ * PROTOTYPE — `/` with seven variants, switchable via `?variant=`, on the real
+ * route with the real reads (#178). E, F, G are the phone-first rethinks of A,
+ * C and B: the index as a thumb rail, the field as a flick with a pinned
+ * action, the board as a snapping deck. A: the index spread. B: the notice
+ * board. C: the field of type. D: what is on the branch today.
  *
  * Throwaway: the winner is folded back into the real page; the rest stay on
  * `prototype/178-ui-variants`.
@@ -22,8 +24,11 @@ import { HowItWorks } from "./_components/wall/how-it-works";
 import { PrototypeSwitcher } from "./_components/wall/prototype/switcher";
 import { variantFrom } from "./_components/wall/prototype/variants";
 import { VariantBoard } from "./_components/wall/prototype/variant-board";
+import { VariantDeck } from "./_components/wall/prototype/variant-deck";
 import { VariantField } from "./_components/wall/prototype/variant-field";
+import { VariantFlick } from "./_components/wall/prototype/variant-flick";
 import { VariantIndex } from "./_components/wall/prototype/variant-index";
+import { VariantRail } from "./_components/wall/prototype/variant-rail";
 import { VocabularyStrip, VocabularyStripPlaceholder } from "./_components/wall/vocabulary-strip";
 import {
   NOBODY_PUBLISHED_BODY,
@@ -63,6 +68,15 @@ async function Variants({ searchParams }: { searchParams: SearchParams }) {
     );
   }
 
+  if (variant === "E") {
+    return <VariantRail profiles={page.items} entries={entries} recent={recent} />;
+  }
+  if (variant === "F") {
+    return <VariantFlick profiles={page.items} entries={entries} recent={recent} />;
+  }
+  if (variant === "G") {
+    return <VariantDeck profiles={page.items} recent={recent} />;
+  }
   if (variant === "A") {
     return <VariantIndex profiles={page.items} entries={entries} recent={recent} />;
   }
