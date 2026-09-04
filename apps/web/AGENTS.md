@@ -30,6 +30,49 @@ hand-rolled equivalent of a component the registry already exports.
 
 `apps/web`'s `check-types` runs `next typegen && tsc --noEmit` — the typegen step generates Next's route types first, so running bare `tsc` in that workspace can report spurious errors.
 
+## A Server Action that changes what the header shows must call `refresh()`
+
+The header lives in a layout, and **the App Router does not re-render a layout on a client
+navigation inside its own subtree**. So every dynamic value the shell reads is fixed at document
+load, and a Server Action that changes one leaves the header saying something that is no longer
+true — on the page it redirects to, and on every page reached by clicking after that. Only a full
+page load corrects it.
+
+That is measured, not predicted (#171). Publishing a profile left the session menu offering
+_Publica lo que sabes hacer_ directly above a page reading _Tu perfil ya está publicado_, while the
+Wall underneath was correct at the same moment: a page segment re-renders and a layout does not.
+
+```ts
+import { refresh } from "next/cache";
+
+// …the mutation…
+refresh();
+redirect("/my-profile?published=1");
+```
+
+**`refresh()` and not `revalidatePath`/`revalidateTag`, because there is no cache to invalidate.**
+The shell's reads are uncached by design (ADR-0011 — a cached session read serves one person's
+identity to the next), so a tag-based API has nothing to name and a path-based one would be reaching
+for a server-cache mechanism to get at what is a client-router effect. `refresh()` refreshes the
+client router, which is what re-runs the layout, and it may **only** be called from a Server Action —
+not a Route Handler, not a Client Component.
+
+**A cookie is the exception.** Next re-renders the current page automatically when a Server Action
+sets or deletes a cookie through `cookies()` (the Server Actions guide under
+`node_modules/next/dist/docs/` says so, and it was observed), so signing in or out already corrects
+the shell without asking. `publishProfile` writes only to the database, which that mechanism cannot
+see. The rule is owed by an action that changes a value the shell reads **and touches no cookie**.
+
+Two further things this is not. It is **not** a licence to cache the shell: `refresh()` is the right
+instrument here precisely because nothing is cached — and `revalidatePath("/account")` in the account
+surface is not the thing to copy either, since that re-renders one page's own data rather than the
+shell above every page. And it is **not** needed for the unhydrated path — without JavaScript a form
+post is a document navigation and the layout re-renders anyway (NFR4), so this closes a gap that only
+exists once the router is in play.
+
+The rule and the observation behind it are in `app/_components/app-header/app-header.tsx`, beside
+the reads they protect.
+
 ## Reading the log stream
 
 `pnpm dev` pretty-prints log lines for a human. **`LOG_FORMAT=json pnpm dev` makes every line parse
