@@ -254,15 +254,29 @@ fi
 # argument need not reach the screen. Always returns 0; the status lands in
 # $RUN_STATUS and the output in $RUN_OUTPUT, so `set -e` cannot end the wizard
 # halfway through a stage.
+# **Two defences against colour, and they are the ones `dev-origin.mjs` already
+# carries** -- this wizard branches on the bytes of a child's output, which is the
+# same shape of parse and the same quiet wrong answer when it breaks. `wrangler`
+# colours when `FORCE_COLOR` is in its environment, which dev shells and CI images
+# set, and an escape landing inside a URL or beside a word turns a match into a
+# no-match. Then the account id is "not found", or the origin is, and the wizard
+# reports a step it did not do.
+#
+#   1. `NO_COLOR` for the child, with `FORCE_COLOR` removed. Clients read
+#      `NO_COLOR` ahead of `FORCE_COLOR` and ahead of any stdio test, so this is a
+#      promise rather than an inference about how a pipe is detected.
+#   2. The escapes are stripped before the output is stored, so a later release
+#      that colours a line it was asked not to still parses.
 run() {
   local shown="$1"; shift
   [[ "${1:-}" == "--" ]] && shift
   local out status
   printf '  %s$ %s%s\n' "$DIM" "$shown" "$RESET"
   set +e
-  out=$("$@" 2>&1)
+  out=$(env -u FORCE_COLOR NO_COLOR=1 "$@" 2>&1)
   status=$?
   set -e
+  out=$(printf '%s' "$out" | sed $'s/\033\\[[0-9;?]*[a-zA-Z]//g')
   printf '%s\n' "$out" | sed 's/^/    /'
   RUN_STATUS=$status
   RUN_OUTPUT="$out"
@@ -608,7 +622,7 @@ if [[ -z "$(ls -A "$CAPTURES" 2>/dev/null)" ]]; then
   warn "1024 bytes is refused, because that is what a recording interrupted by"
   warn "a missing ffmpeg leaves behind."
   step "Start the app in another terminal:  pnpm dev"
-  step "agent-browser open <the URL from the portless banner>"
+  step 'agent-browser open "$(pnpm --silent dev:origin)"'
   step "agent-browser screenshot $CAPTURES/before-smoke.png"
   step "Take an after-smoke.png too, so the comparison page has both halves."
   printf '\n'
