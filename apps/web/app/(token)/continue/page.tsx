@@ -30,6 +30,15 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { CodeForm } from "./_components/code-form";
+// PROTOTYPE — throwaway, `prototype/125-continue-variants` only.
+import { PrototypeForm } from "./_components/prototype/prototype-form";
+import type { VariantKey } from "./_components/prototype/variants";
+
+// PROTOTYPE — spelled here rather than imported. `variants.tsx` is a
+// `"use client"` module, so a *value* imported from it into this Server
+// Component is a client reference proxy: `"B" in VARIANT_NAMES` was false and
+// every variant silently rendered A. A `type` import is erased and is fine.
+const PROTOTYPE_VARIANTS = ["A", "B", "C"];
 import { CONTINUE_PAGE_TITLE } from "./_lib/messages";
 
 export const metadata: Metadata = {
@@ -49,7 +58,11 @@ export const metadata: Metadata = {
  */
 export const instant = false;
 
-export default async function ContinuePage() {
+export default async function ContinuePage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ readonly variant?: string }>;
+}) {
   /**
    * **Absent, cleared, malformed, forged, expired and signed with another key
    * are one answer, and it is `notFound()`** — no message, no resend offer, no
@@ -63,6 +76,13 @@ export default async function ContinuePage() {
    * one by accident.
    */
   if (!auth().hasSignInChallenge(await headers())) notFound();
+
+  // PROTOTYPE — `?variant=A|B|C` picks a layout. Throwaway; `dev` renders
+  // `<CodeForm />` and knows nothing about this.
+  const { variant } = await searchParams;
+  if (variant && PROTOTYPE_VARIANTS.includes(variant)) {
+    return <PrototypeForm variant={variant as VariantKey} />;
+  }
 
   return <CodeForm />;
 }
