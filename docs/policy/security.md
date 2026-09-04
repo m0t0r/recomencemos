@@ -11,7 +11,7 @@ An `UNSET` value is raised as a flagged concern naming this file and the key. It
 | `mfa-requirement`        | **Admin only**                                                                                                                                                                                                                                                    | Which principals must present a second factor, and for which operations                                                                                                                                                                                                                                                                                                                                                          |
 | `threat-model-scope`     | **Anyone on the internet**                                                                                                                                                                                                                                        | Which adversaries are in scope. "Anyone on the internet" is a real answer; so is "authenticated tenants only"                                                                                                                                                                                                                                                                                                                    |
 | `compliance-regime`      | **Ley 1581 de 2012** (Colombia)                                                                                                                                                                                                                                   | SOC 2, HIPAA, GDPR, PCI, none. Drives retention in [data.md](data.md) and what a breach obliges you to do                                                                                                                                                                                                                                                                                                                        |
-| `secret-store`           | **`fly secrets`, mirrored in the operator's password manager. No secret in a repo `.env`**                                                                                                                                                                        | Where secrets live and who can rotate each one. `.env` files are Turborepo build inputs — rotation invalidates cache                                                                                                                                                                                                                                                                                                             |
+| `secret-store`           | **`fly secrets`, mirrored in the operator's password manager. No secret in a committed `.env`; a development-tier credential may sit in gitignored `.env.local`** — see "The two `.env` files" below                                                              | Where secrets live and who can rotate each one. `.env` files are Turborepo build inputs — rotation invalidates cache                                                                                                                                                                                                                                                                                                             |
 | `csp-policy`             | **`default-src 'self'; frame-ancestors 'none'; img-src 'self' <image-host> data:; connect-src 'self' <sentry-ingest>; base-uri 'self'; form-action 'self'`, enforced (not report-only)**                                                                          | The Content-Security-Policy the app ships, or an explicit decision not to ship one                                                                                                                                                                                                                                                                                                                                               |
 | `dependency-policy`      | **CI fails on `high` or above in a direct dependency. No licence allowlist**                                                                                                                                                                                      | What blocks a release: a CVE severity threshold, a licence allowlist, or neither                                                                                                                                                                                                                                                                                                                                                 |
 | `audit-report-threshold` | **`moderate` and above, transitive as well as direct, reported daily as a `needs-triage` issue and never blocking**                                                                                                                                               | The severity at which an advisory the blocking gate lets past still has to reach a person. `dependency-policy` says what stops a release; this says what nobody is allowed to not hear about                                                                                                                                                                                                                                     |
@@ -31,6 +31,39 @@ branch while every pull request went green: each was transitive, so the blocking
 them past, and Dependabot could open no pull request for any of them because dependabot-core does not
 support updating transitive dependencies for the pnpm ecosystem. Nothing was broken. Nobody was
 told. `.github/workflows/security-audit.yml` is the actor this key exists to point at.
+
+### The two `.env` files, and why the rule names only one of them
+
+**This is an amendment, and it is written as one rather than as a clarification.** The key used to
+read _"no secret in a repo `.env`"_, which on its face reaches `apps/web/.env.local` — that file is a
+repo path, and `turbo.json` declares `.env*` a `build` input, which is the reason the key gives. But
+`apps/web/.env.example` has said the opposite in as many words since it was written: of
+`RESEND_API_KEY`, _"To send from a development machine, put it in `.env.local`, which is gitignored"_,
+and of `GOOGLE_CLIENT_SECRET`, _"To try the Google door locally, put both in `.env.local`"_. Two
+committed artifacts disagreed, and the practice followed the example rather than the key. Naming the
+distinction is what closes that, and the alternative — reading the key narrowly in a runbook, where
+nobody looking for the rule would find it — is how a policy becomes something each document decides
+for itself.
+
+The line is **committed or not**, and it is exactly the line git already draws:
+
+| File                    | In git | May hold a real credential                                                                |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------- |
+| `apps/web/.env.example` | Yes    | **Never.** Development-tier values only, and the narrow exception below                   |
+| `apps/web/.env.local`   | No     | **Yes, development-tier.** One machine's own key, for a process that runs on that machine |
+| `fly secrets`           | n/a    | Every production credential. Mirrored in the password manager, and nowhere on disk        |
+
+**Two things the permission does not buy, and both have teeth.** A production credential still never
+reaches `.env.local` — the file is one `git add -f` and one screen-share from being public, and its
+whole safety is that nothing there authorizes anything beyond the machine it sits on. And the cache
+consequence the key names is real for this file: `turbo.json` declares `.env*` a `build` input, so
+editing `apps/web/.env.local` invalidates `web#build`. That is a cost in seconds, paid by the person
+who edited it; it is not a reason to keep a credential somewhere the process cannot read it.
+
+`.claude/hooks/build-guard.sh` rule I is **not** what enforces any of this, and assuming otherwise is
+the mistake to avoid: it matches five unambiguous formats — an AWS access key id, a GitHub token, an
+Anthropic key, a Slack token, a PEM private key — so a credential shaped like anything else passes it.
+What keeps a secret out of git here is `.gitignore`, and the fact that the committed file is reviewed.
 
 ### The one exception to "no secret in a repo `.env`"
 

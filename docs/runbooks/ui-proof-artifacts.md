@@ -87,13 +87,11 @@ becomes true.
 An R2 API token scoped to **this one bucket**, with **Object Read & Write** and nothing else. R2 →
 Manage API tokens → Create.
 
-It goes in the password manager, and then in **one of two places on this machine**. Neither is the
-repository as git sees it: `secret-store` in [`../policy/security.md`](../policy/security.md) is
-`fly secrets` mirrored in a password manager with no secret in a repo `.env`, and that rule is about a
-**committed** file — which is why `apps/web/.env.example` says of `RESEND_API_KEY` and
-`GOOGLE_CLIENT_SECRET` that both must stay absent from it and that a development machine puts them in
-gitignored `.env.local` instead. These five are the same shape, and `pnpm ui-proof` passes
-`--env-file-if-exists=apps/web/.env.local` exactly as `db:migrate` and `admin:enrol` do.
+It goes in the password manager, and then in **one of two places on this machine**. Neither is a
+committed file: `secret-store` in [`../policy/security.md`](../policy/security.md) is the authority,
+and "The two `.env` files" under it is the row that applies — a development-tier credential may sit in
+gitignored `.env.local`, and never in `.env.example`. These five are that shape, and `pnpm ui-proof`
+passes `--env-file-if-exists=apps/web/.env.local` exactly as `db:migrate` and `admin:enrol` do.
 
 **The shell wins where both are set** — Node's env file is a fallback, not an override, verified
 rather than assumed. So the choice is about reach, not precedence:
@@ -119,10 +117,9 @@ export UI_PROOF_S3_SECRET_ACCESS_KEY="<token secret>"
 export UI_PROOF_PUBLIC_BASE="https://<the origin from §3>"
 ```
 
-`.claude/hooks/build-guard.sh` rule I is **not** what holds this line, and it is worth knowing that
-rather than assuming otherwise: it matches unambiguous credential formats — an AWS key id, a GitHub
-token, an Anthropic key, a Slack token, a PEM private key — and an R2 token is bare hex, which matches
-none of them. What keeps these out of git is that both files above are gitignored.
+Editing `.env.local` invalidates `web#build`, because `turbo.json` declares `.env*` a `build` input.
+That is seconds, paid by whoever ran the wizard, and it is named here so it is not mistaken for
+something being wrong.
 
 **No CI secret is needed, and that is deliberate.** The captures are local and gitignored, so CI never
 sees them and never uploads. `.github/workflows/ui-proof-expire.yml` only rewrites a line in a pull
