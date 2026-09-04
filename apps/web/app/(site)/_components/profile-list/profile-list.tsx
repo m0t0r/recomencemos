@@ -29,7 +29,18 @@ export function ProfileList({
         one browser a Worker on an iPhone is using, restating it is the
         difference between "list, 24 items" and no list semantics at all.
       */}
-      <ul className="flex flex-col" role="list">
+      {/*
+        The ruled page: rows separated by the ruling, and the margin line down
+        the left from `sm` up — dropped on a phone rather than shrunk, because at
+        360 px the row wants every pixel (`DESIGN.md` → Layout). The 2 px is the
+        notebook's own margin, which the brief earns, and it sits on the list
+        rather than on a row so it never reads as a row's state.
+      */}
+      <ul
+        className="ruled-page"
+        // oxlint-disable-next-line no-redundant-roles -- see above.
+        role="list"
+      >
         {profiles.map((profile, index) => (
           <li key={profile.slug}>
             <ProfileRow profile={profile} separated={index > 0} />

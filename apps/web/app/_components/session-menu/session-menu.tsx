@@ -173,7 +173,10 @@ export function SessionMenu({ email, action, accountHref, profile }: SessionMenu
             }
           >
             <Avatar size="lg" aria-hidden="true">
-              <AvatarFallback>{initialOf(email)}</AvatarFallback>
+              {/* Her initial in ink: a filled shape is what marks "signed in" here, not a hue on a badge. */}
+              <AvatarFallback className="bg-primary text-primary-foreground text-base font-medium">
+                {initialOf(email)}
+              </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
 

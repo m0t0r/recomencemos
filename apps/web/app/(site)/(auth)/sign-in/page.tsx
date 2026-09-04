@@ -121,7 +121,7 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
 function PanelSkeleton() {
   return (
     <main
-      className="bg-muted flex min-h-svh flex-col items-center justify-center px-4 py-12"
+      className="bg-muted flex grow flex-col items-center justify-center px-4 py-12"
       aria-hidden="true"
     >
       <Card className="flex w-full max-w-md flex-col gap-6 p-6 sm:p-8">

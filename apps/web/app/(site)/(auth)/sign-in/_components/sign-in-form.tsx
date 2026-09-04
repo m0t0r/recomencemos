@@ -111,7 +111,7 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
   const form = useForm({ defaultValues: { email: "" } });
 
   return (
-    <main className="bg-muted flex min-h-svh flex-col items-center justify-center px-4 py-12">
+    <main className="bg-muted flex grow flex-col items-center justify-center px-4 py-12">
       <Card className="flex w-full max-w-md flex-col gap-6 p-6 sm:p-8">
         <h1 className="text-foreground text-2xl leading-8 font-semibold tracking-tight">
           {SIGN_IN_TITLE}

@@ -9,11 +9,17 @@
  */
 
 import { Suspense } from "react";
+import { SiteFooter } from "./_components/site-footer/site-footer";
 import { SiteHeader, SiteHeaderPlaceholder } from "./_components/site-header/site-header";
 
 export default function SiteLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <>
+    /*
+      A column the height of the viewport, so the footer sits at the bottom of a
+      short page rather than halfway up it. The page's own `<main>` is the child
+      that grows; the header and the footer keep their height.
+    */
+    <div className="flex min-h-svh flex-col">
       {/*
         The shell (#80). It reads the session, which is **dynamic** — no
         `use cache` anywhere near it, per ADR-0011 and `apps/web/AGENTS.md`,
@@ -27,7 +33,8 @@ export default function SiteLayout({ children }: Readonly<{ children: React.Reac
       <Suspense fallback={<SiteHeaderPlaceholder />}>
         <SiteHeader />
       </Suspense>
-      {children}
-    </>
+      <div className="flex grow flex-col">{children}</div>
+      <SiteFooter />
+    </div>
   );
 }

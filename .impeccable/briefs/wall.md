@@ -9,6 +9,20 @@ menu and the answer was _"I prefer seeing /prototype and decided visually"_. So 
 below are marked `[open]` and become `?variant=` on the real route, against real data; everything
 else is `[assumed]` from the spec, `PRODUCT.md` and [`voice.md`](../../docs/policy/voice.md).
 
+**Amended 2026-09-04 with [#178](https://github.com/m0t0r/recomencemos/issues/178): the visual
+world changed, the decisions above did not.** `/` now opens on **the cover** — the one region in the
+product painted solid ink (`DESIGN.md` → The world) — carrying the proposition in the display face,
+the same single primary action (hers), a link down to the profiles for him, and the platform's real
+Skill vocabulary drifting slowly beneath. Under it the list is a **ruled page**: rows separated by
+the ruling, a margin line down the left from `sm` up, her headline in Alegreya as the only line in
+the display face, and a real seven-day count of new profiles when it is above zero. Then **how it
+works**, as the three-step sequence it is, and a footer. Everything the table under "The decisions,
+taken visually" settled — one primary, rows not cards, chips, the ordering named once over the list
+on `/profiles` — survives; what changed is the world the page is drawn in. The vocabulary strip is
+the product's one authored motion and stops under `prefers-reduced-motion`; `motion-policy` is still
+`UNSET`, so that is a habit rather than a requirement. Story 11's notices keep their slot above the
+list.
+
 ## Job and audience
 
 **A Hirer with no account**, arriving cold — from a link someone sent him, from the news, from a
