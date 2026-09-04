@@ -41,6 +41,6 @@
     "happy-dom": "^20.11.12",
     "tailwindcss": "^4.2.6",
     "typescript": "7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   }
 }
