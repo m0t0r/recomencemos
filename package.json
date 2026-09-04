@@ -20,7 +20,8 @@
     "dev:origin": "node scripts/dev-origin.mjs",
     "admin:enrol": "PORTLESS_URL=${PORTLESS_URL:-$(node scripts/dev-origin.mjs)} node --env-file-if-exists=apps/web/.env.local packages/domain/src/admin/enrol-cli.ts",
     "migrations:check": "node scripts/migration-integrity.mjs",
-    "ui-proof": "node scripts/ui-proof.mjs",
+    "ui-proof": "node --env-file-if-exists=apps/web/.env.local scripts/ui-proof.mjs",
+    "ui-proof:setup": "bash scripts/ui-proof-setup.sh",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --check",
     "format:fix": "oxfmt"

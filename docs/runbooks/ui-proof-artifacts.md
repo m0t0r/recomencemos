@@ -20,6 +20,13 @@ Until §1–§5 are done, `pnpm ui-proof publish --pr <number> --dry-run` is the
 it works on a machine with no bucket, no keys and no network. `--pr` is required in every form; without
 it the script exits 2.
 
+**§1–§5 have a wizard: [`scripts/ui-proof-setup.sh`](../../scripts/ui-proof-setup.sh), or
+`pnpm ui-proof:setup`.** It opens each dashboard, runs every `wrangler` call itself, and **reads the
+output back** rather than asking whether a step was done — the lifecycle listing, the public origin,
+the unauthenticated `curl` at the published link, and the dry run before the upload. It is idempotent:
+stop with Ctrl-C and re-run, and every value already in `apps/web/.env.local` is offered back as the
+default. §6 and §7 are diagnosis and teardown and are walked by hand.
+
 ## 1. The bucket
 
 One bucket, in the Cloudflare account that already holds this product's other infrastructure.
@@ -41,9 +48,14 @@ are not symmetric. **`review/` expires; `demos/` has no rule at all.**
 | `review/` | Delete 30 days after upload | Review proof answers "did you check this", and that answer is spent once the pull request is merged |
 | `demos/`  | **None**                    | A story demo answers "what does this look like working", which is a question that starts at merge   |
 
+**The rule's name and its prefix are positional arguments, not flags.** Written as `--name` and
+`--prefix` the call fails, which is a friendlier way to be wrong than the alternative — but the same
+mistake made in the dashboard leaves the prefix field blank, and a blank prefix is the failure the
+paragraph below is about.
+
 ```sh
 npx wrangler r2 bucket lifecycle add recomencemos-ui-proof \
-  --name expire-review-artifacts --prefix review/ --expire-days 30
+  expire-review-artifacts review/ --expire-days 30
 npx wrangler r2 bucket lifecycle list recomencemos-ui-proof   # confirm: one rule, prefix review/
 ```
 
@@ -75,19 +87,42 @@ becomes true.
 An R2 API token scoped to **this one bucket**, with **Object Read & Write** and nothing else. R2 →
 Manage API tokens → Create.
 
-It goes in the operator's shell environment and in the password manager, never in the repository:
-`secret-store` in [`../policy/security.md`](../policy/security.md) is `fly secrets` mirrored in a
-password manager with no secret in a repo `.env`, and `.claude/hooks/build-guard.sh` rule I refuses a
-credential written into the tree. `.artifacts/` is gitignored; a credential file would not be.
+It goes in the password manager, and then in **one of two places on this machine**. Neither is the
+repository as git sees it: `secret-store` in [`../policy/security.md`](../policy/security.md) is
+`fly secrets` mirrored in a password manager with no secret in a repo `.env`, and that rule is about a
+**committed** file — which is why `apps/web/.env.example` says of `RESEND_API_KEY` and
+`GOOGLE_CLIENT_SECRET` that both must stay absent from it and that a development machine puts them in
+gitignored `.env.local` instead. These five are the same shape, and `pnpm ui-proof` passes
+`--env-file-if-exists=apps/web/.env.local` exactly as `db:migrate` and `admin:enrol` do.
+
+**The shell wins where both are set** — Node's env file is a fallback, not an override, verified
+rather than assumed. So the choice is about reach, not precedence:
 
 ```sh
-# ~/.zshrc, a direnv file outside the repo, or the shell the session runs in.
+# Either: apps/web/.env.local, which is gitignored and per-tree. What the wizard
+# writes. A *fresh worktree has none*, and `pnpm ui-proof publish` runs from the
+# worktree — so this route is one `cp` per tree.
+UI_PROOF_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+UI_PROOF_S3_BUCKET=recomencemos-ui-proof
+UI_PROOF_S3_ACCESS_KEY_ID=<token access key id>
+UI_PROOF_S3_SECRET_ACCESS_KEY=<token secret>
+UI_PROOF_PUBLIC_BASE=https://<the origin from §3>
+```
+
+```sh
+# Or: ~/.zshrc, or a direnv file outside the repo. Every worktree sees it, and
+# it survives a tree being deleted. The wizard prints this block once for it.
 export UI_PROOF_S3_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
 export UI_PROOF_S3_BUCKET="recomencemos-ui-proof"
 export UI_PROOF_S3_ACCESS_KEY_ID="<token access key id>"
 export UI_PROOF_S3_SECRET_ACCESS_KEY="<token secret>"
 export UI_PROOF_PUBLIC_BASE="https://<the origin from §3>"
 ```
+
+`.claude/hooks/build-guard.sh` rule I is **not** what holds this line, and it is worth knowing that
+rather than assuming otherwise: it matches unambiguous credential formats — an AWS key id, a GitHub
+token, an Anthropic key, a Slack token, a PEM private key — and an R2 token is bare hex, which matches
+none of them. What keeps these out of git is that both files above are gitignored.
 
 **No CI secret is needed, and that is deliberate.** The captures are local and gitignored, so CI never
 sees them and never uploads. `.github/workflows/ui-proof-expire.yml` only rewrites a line in a pull
