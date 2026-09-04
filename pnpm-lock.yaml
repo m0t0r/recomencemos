@@ -114,6 +114,9 @@ importers:
       happy-dom:
         specifier: ^20.11.12
         version: 20.11.12
+      portless:
+        specifier: 0.15.6
+        version: 0.15.6
       tailwindcss:
         specifier: ^4.2.6
         version: 4.3.3
@@ -4610,6 +4613,12 @@ packages:
     resolution: {integrity: sha512-nDywThFk1i4BQK4twPQ6TA4RT8bDY96yeuCVBWL3ePARCiEKDRSrNGbFIgUJpLp+XeIR65v8ra7WuJOFUBtkMA==}
     engines: {node: '>=8'}
 
+  portless@0.15.6:
+    resolution: {integrity: sha512-uOAwWLF32rmyEGFASzSO0VOaqb/AQxFCCzyZbPGd82UNNOfIEvc09zy92nroNibE5HNfzV4oVB0ObKbPXgkM9A==}
+    engines: {node: '>=24'}
+    os: [darwin, linux, win32]
+    hasBin: true
+
   postal-mime@2.7.5:
     resolution: {integrity: sha512-GNEXKvWFQnbgO5NlrGzVa0FmWzBZ24PersAWErttSg1Hjpf0ATxTwS5DOMGaOpTG6bUh5cTr7xi0jAD942wCJA==}
 
@@ -8926,6 +8935,8 @@ snapshots:
   pkg-up@3.1.0:
     dependencies:
       find-up: 3.0.0
+
+  portless@0.15.6: {}
 
   postal-mime@2.7.5: {}
 

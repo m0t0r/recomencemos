@@ -210,10 +210,17 @@ session before:
   `pnpm run` does not, which is why the stop gate checks for the directory and names the fix.
 - **`.env.local`.** Gitignored, so it is absent. `cp apps/web/.env.example apps/web/.env.local`
   again, or `pnpm dev` fails in a way that looks like a code problem.
-- **The database and the ports.** `docker-compose.yaml` binds one Postgres on 5432 and one PgBouncer
-  on 6432 for the whole machine, and `next dev` wants 3000. Two trees share all three. Before
-  trusting what a dev server serves, confirm the process answering the port is yours — `next dev`
-  writes its PID to `apps/web/.next/dev/lock`, and `lsof -i :3000` settles it otherwise.
+- **The database.** `docker-compose.yaml` binds one Postgres on 5432 and one PgBouncer on 6432 for
+  the whole machine, and every tree writes into them. Two sessions working the same tables will see
+  each other's rows.
+- **The dev server is the exception, and it is isolated deliberately**
+  ([ADR-0018](../adr/0018-a-dev-server-is-reached-by-name-not-by-port.md)). `pnpm dev` runs through
+  `portless`, which serves this worktree at `https://<branch>.web.recomencemos.localhost` on a port
+  it picks. Read the URL off the banner it prints above Next's own, and use `portless list` rather
+  than `lsof` to see what else is running — the route is named for the branch, so ownership is no
+  longer something a session has to establish by PID. If the banner reports no proxy, the fix is
+  [`docs/runbooks/portless-setup.md`](../runbooks/portless-setup.md), a one-time step a human runs;
+  it is not a `--port` flag put back in `apps/web/package.json`.
 - **The stash.** One stack, shared by every tree and every session. Prefer a WIP commit.
 
 **Before starting, check the tree is not already mid-task** — `git status --short` in the main

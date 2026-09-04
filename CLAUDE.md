@@ -30,7 +30,9 @@ Three things follow immediately, and each has cost a session:
   ticket) before writing anything, because a branch that does not match those patterns is one neither
   the frontier query nor the PR linkage can read.
 - **A worktree isolates git and nothing else.** No `node_modules` until you run `pnpm install` in it,
-  no `.env.local`, and the Docker database and port 3000 are shared with every other tree.
+  no `.env.local`, and the Docker database on 5432/6432 is shared with every other tree. The **dev
+  server is not** — see the `pnpm dev` paragraph under **Commands**, which is what
+  [ADR-0018](docs/adr/0018-a-dev-server-is-reached-by-name-not-by-port.md) bought.
 - **Use absolute paths.** The shell's working directory does not reliably persist between calls, and
   the same relative path exists in both trees — so a relative write lands in the main checkout
   silently, and the tests pass identically either way.
@@ -51,7 +53,41 @@ the fix and the record; use it in any new hook that touches the repository.
 
 ## Commands
 
-Run from the repo root; `turbo` fans out to every workspace — the scripts are in `package.json`. pnpm 11 is pinned via `packageManager`; do not use npm/yarn. `pnpm dev` puts web on `:3000`.
+Run from the repo root; `turbo` fans out to every workspace — the scripts are in `package.json`. pnpm 11 is pinned via `packageManager`; do not use npm/yarn.
+
+**`pnpm dev` serves each worktree at its own HTTPS hostname, and there is no port to hold in your
+head** ([ADR-0018](docs/adr/0018-a-dev-server-is-reached-by-name-not-by-port.md)). `apps/web`'s `dev`
+script is `portless`, which assigns an ephemeral port, injects it as `PORT`, and runs `dev:app`
+(`next dev`) behind a proxy on 443. In a linked worktree it prepends the **branch name**, so parallel
+sessions cannot collide and a URL says which tree produced it:
+
+```
+https://web.recomencemos.localhost                 # the main checkout
+https://124-add-widget.web.recomencemos.localhost  # ticket/124-add-widget
+```
+
+Four things follow, and each has a reason rather than a preference behind it:
+
+- **Read the URL off the banner `portless` prints**, above Next's own. `portless list` is what answers
+  "is the server on this route mine" — it replaced `lsof -i :3000`, which could not tell two trees
+  apart.
+- **The origin is HTTPS, and that is load-bearing rather than cosmetic.** `secureCookies()` and Better
+  Auth's `useSecureCookies` both derive `Secure` from whether the base URL is `https://`, so
+  development now exercises the cookie path production uses. It did not at `http://localhost:3000`,
+  and that gap already cost this repo one real bug — the comment above
+  `SIGN_IN_CHALLENGE_COOKIE_ATTRIBUTES` in `packages/domain/src/admin/challenge.ts` is the record.
+- **`BETTER_AUTH_URL` is not what the app runs at under the proxy.** `authBaseUrl` in
+  `packages/domain/src/auth/config.ts` prefers `PORTLESS_URL` outside production, because the
+  hostname carries the branch and no static `.env.local` value can be right for every worktree at
+  once. Do not "fix" `.env.local` to match a hostname you saw.
+- **`PORTLESS=0 pnpm dev` is the way back to `:3000`**, and it is what the **Google sign-in door**
+  needs — Google will not register a `.localhost` redirect URI. The variable is declared in
+  `turbo.json`'s `globalPassThroughEnv`; without that declaration `strict` environment mode filters it
+  out and the bypass fails silently.
+
+The proxy is installed once per machine by a human, because binding 443 needs privilege an agent does
+not have: [`docs/runbooks/portless-setup.md`](docs/runbooks/portless-setup.md). If `pnpm dev` reports
+no running proxy, that runbook is the fix — not a `--port` flag added back to the script.
 
 Scope to one workspace with a filter (the workspace name, not the directory):
 
@@ -598,7 +634,23 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
 
 **Editing a vendored skill means forking it**, because `skills-lock.json` is an install manifest — `skills update` pulls latest and `skills experimental_install` restores from it, so either overwrites local changes. A fork leaves the lock and gains a row in `docs/agents/forked-skills.md` recording its upstream path and the hash it forked at. **Do not fork for a small diff**: put the coupling in an artifact this repo owns (the spec template, `docs/policy/`, `CONTEXT.md`) so the vendored skill picks it up through what it already reads. Fork only when the procedure itself differs.
 
-- `next-dev-loop` — the runtime foundation. Use it to verify a change actually _works_ against a running dev server, not merely that it compiles. Reach for it after edits to `apps/web`.
+- `next-dev-loop` — the runtime foundation. Use it to verify a change actually _works_ against a
+  running dev server, not merely that it compiles. Reach for it after edits to `apps/web`.
+
+  **Its two views now sit at two addresses, and the skill is unmodified — this is the coupling it
+  reads from here** ([ADR-0018](docs/adr/0018-a-dev-server-is-reached-by-name-not-by-port.md)). The
+  skill's preflight already says to read the port off the banner and set `NEXT_MCP_URL` when it is
+  not 3000; these are the values:
+  - **`agent-browser` opens the proxied HTTPS URL** — `$PORTLESS_URL`, or `portless list`. That is
+    the origin the cookies, the `Secure` flag and the CSRF check see, so it is the only one worth
+    asserting a user-visible behaviour against.
+  - **`/_next/mcp` is probed at `http://127.0.0.1:$PORT`**, the ephemeral port from the banner. Same
+    process, same MCP state, and it avoids handing `curl` a private CA for nothing.
+
+  It also blunts that skill's worst gotcha. _"A stale or misdirected browser session"_ was hard to
+  spot because every tree answered on one origin; now the hostname names the tree, and
+  `agent-browser`'s `--scope worktree` session id lines up with it.
+
 - `next-partial-prefetching-adoption` — moves the app onto Partial Prefetching (one shared App Shell). Requires Cache Components, which is already on. This is a workflow, not a lookup: it audits `<Link prefetch>` calls with the user first.
 - `turborepo` — task graph, caching, and filtering reference.
 - `implement` — the Build session. Vendored **thin on purpose**: it delegates to `/tdd` and `/code-review` and knows nothing of the frontier query, the ticket claim, or the PR. That is this repo's, and it lives in `docs/agents/issue-tracker.md`. Do not fork the skill to add it.
