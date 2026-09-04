@@ -13,15 +13,23 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { OldestItem, QueueEmpty, SourceBranch, SourceFailed, SourceSkeleton } from "./queue";
-import { QUEUE_EMPTY_TITLE } from "../_lib/messages";
-import type { QueueBranch, QueueSource } from "../_lib/queue-sources";
-
-const source: QueueSource = {
-  key: "offers",
-  label: "Ofertas sin revisar",
-  load: async () => ({ items: [], total: 0, oldestArrivedAt: null }),
-};
+import {
+  OldestItem,
+  QueueEmpty,
+  SectionBadge,
+  SectionBadgeAbsent,
+  SectionNotLive,
+  SourceBranch,
+  SourceFailed,
+  SourceSkeleton,
+} from "./queue";
+import {
+  PAST_BAND_MARKER,
+  QUEUE_EMPTY_TITLE,
+  SECTION_NOT_LIVE_ANNOUNCEMENT,
+  SECTION_NOT_LIVE_TITLE,
+} from "../_lib/messages";
+import type { QueueBranch } from "../_lib/queue-sources";
 
 describe("the oldest item", () => {
   it("renders the age in hours", () => {
@@ -102,24 +110,85 @@ describe("a loaded source", () => {
     oldestArrivedAt: new Date("2026-08-29T09:00:00Z"),
   };
 
-  /**
-   * **The branch's total, never `items.length`.** This is C55 as a test: a card
-   * reporting the capped length would say 2 while 412 Offers wait, which is NFR7's
-   * depth detector reading a number that cannot exceed the display cap.
-   */
-  it("reports the whole branch's count, not the capped page's", () => {
-    render(<SourceBranch source={source} branch={branch} />);
-    expect(screen.getByText("412")).toBeInTheDocument();
-    expect(screen.queryByText("2")).not.toBeInTheDocument();
-  });
-
   it("lists the items it was given", () => {
-    render(<SourceBranch source={source} branch={branch} />);
+    render(<SourceBranch branch={branch} />);
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("names the source as a heading, so the queue is navigable by them", () => {
-    render(<SourceBranch source={source} branch={branch} />);
-    expect(screen.getByRole("heading", { name: source.label })).toBeInTheDocument();
+  it("renders each item's summary in full, so nothing is acted on unread", () => {
+    render(<SourceBranch branch={branch} />);
+    expect(screen.getByText("Oferta de Ana")).toBeInTheDocument();
+    expect(screen.getByText("Oferta de Luis")).toBeInTheDocument();
+  });
+});
+
+describe("a section's figure in the nav", () => {
+  /**
+   * **The branch's total, never `items.length`.** This is C55 as a test: a nav
+   * item reporting the capped length would say 20 while 412 Offers wait, which is
+   * NFR7's depth detector reading a number that cannot exceed the display cap.
+   * The figure moved here from the branch card when the queue became five routes,
+   * and this is the assertion following it.
+   */
+  it("reports the whole branch's count", () => {
+    render(<SectionBadge total={412} late={false} />);
+    expect(screen.getByText("412")).toBeInTheDocument();
+  });
+
+  /**
+   * A bare number read aloud beside a section name is a list position as easily
+   * as a backlog. The visible figure is `aria-hidden` and this phrase is what is
+   * announced — one fact rendered twice rather than two that can drift.
+   */
+  it("announces the count as a phrase rather than as a bare number", () => {
+    render(<SectionBadge total={412} late={false} />);
+    expect(screen.getByText("412 pendientes")).toBeInTheDocument();
+  });
+
+  it("says one pendiente rather than one pendientes", () => {
+    render(<SectionBadge total={1} late={false} />);
+    expect(screen.getByText("1 pendiente")).toBeInTheDocument();
+  });
+
+  /**
+   * **The urgency marker is a word, not a colour** — the acceptance criterion in
+   * as many words, and WCAG 2.2 AA 1.4.1 again. Asserted as text rather than as a
+   * class, because a class assertion would pass on the day somebody replaced the
+   * word with a red dot.
+   */
+  it("marks a late section with text and not with colour alone", () => {
+    render(<SectionBadge total={3} late />);
+    expect(screen.getByText(PAST_BAND_MARKER)).toBeInTheDocument();
+  });
+
+  it("says nothing about lateness when the section is inside its band", () => {
+    render(<SectionBadge total={3} late={false} />);
+    expect(screen.queryByText(PAST_BAND_MARKER)).not.toBeInTheDocument();
+  });
+
+  /**
+   * **A section with no resolver has no count, and never a zero.** Zero is the
+   * good news an Admin scans for; reporting it for a branch nobody queried is the
+   * instrument that lies. The dash is what a sighted reader sees and the phrase is
+   * what is announced, because "—" alone is punctuation or silence.
+   */
+  it("shows a dash rather than a zero for a section that is not counting", () => {
+    render(<SectionBadgeAbsent />);
+    expect(screen.getByText(SECTION_NOT_LIVE_ANNOUNCEMENT)).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+});
+
+describe("a section that is not live", () => {
+  /**
+   * **It must not read as the empty state**, which is the whole reason it is a
+   * second component. Empty means everything was read; this means nothing was
+   * ever asked, and an Admin who read one as the other would conclude a branch
+   * was clear while it is not being counted at all.
+   */
+  it("says it is not counting rather than that there is nothing", () => {
+    render(<SectionNotLive />);
+    expect(screen.getByText(SECTION_NOT_LIVE_TITLE)).toBeInTheDocument();
+    expect(screen.queryByText(QUEUE_EMPTY_TITLE)).not.toBeInTheDocument();
   });
 });

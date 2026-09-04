@@ -1,35 +1,30 @@
 /**
- * The queue's sources, as a registry the shell renders and later stories plug
- * into.
+ * The queue's five sections, as a registry the shell renders and each section
+ * ticket plugs into.
+ *
+ * **One route per concern, behind one shell** — the shape #96 settled, replacing
+ * the single page that held all five. What that buys is that a section is
+ * independently buildable: the shell below already knows how to count a branch,
+ * age it, mark it late and say it is missing, so a section arrives by gaining a
+ * `load` and nothing else.
  *
  * **No `import "server-only"`, and that is ADR-0013's table applied rather than
- * skipped.** Mechanism 2 is for a module that is Next-only; this one holds three
- * types, an empty array and a pure function over dates. What actually needs
- * guarding is the database read inside a future `load`, and that is guarded where
- * it lives — `@repo/domain`'s `exports` map withholds the connection outright
- * (mechanism 1, the strongest form), and `#connection` carries the marker itself.
- * A marker here would add no guard and would make `oldestAgeInHours` untestable at
- * `web:test`, since a Node-environment Vitest run sets no `react-server` condition
- * and `server-only` throws there. Which is how this comment came to exist.
+ * skipped.** Mechanism 2 is for a module that is Next-only; this one holds types,
+ * a registry and pure functions over dates. What needs guarding is the database
+ * read inside a `load`, and that is guarded where it lives — `@repo/domain`'s
+ * `exports` map withholds the connection outright (mechanism 1, the strongest
+ * form), and `#connection` carries the marker itself. A marker here would add no
+ * guard and would make the arithmetic below untestable at `web:test`, since a
+ * Node-environment Vitest run sets no `react-server` condition and `server-only`
+ * throws there. `queue-data.ts` beside this file is where the gate goes.
  *
- * **It holds one source, and the other four are still absent rather than
- * stubbed.** Unreviewed Offers, unreviewed photos, Reports and profiles awaiting
- * takedown review read tables that stories 7, 8 and 10 create, so there is
- * nothing to list and nothing here pretending otherwise. A stubbed source
- * returning invented rows would make this screen look finished while showing an
- * Admin data that is not there, which is the one thing a moderation queue must
- * never do.
- *
- * **Skill requests are here because story 3 carries both halves of its own
- * loop.** The story's own argument is that a queue item whose resolver is a
- * lower-priority story is a queue item that accumulates — so the source and the
- * promotion that empties it arrived together, and the shell it plugs into was
- * already built and already tested.
- *
- * **The shape is what the registry publishes.** A source declares its name and a
- * `load` that answers its items plus the two figures the queue's health is
- * measured on. The per-source skeletons, the named failure state and the empty
- * state come with it.
+ * **Four of the five have no `load`, and they are absent rather than stubbed.**
+ * Offers, photos, Reports and bounced addresses read tables that stories 6, 8, 10
+ * and 15 create. A source with no resolver reports **no count and no age** —
+ * never a zero. Zero is the good news an Admin scans for, and reporting it for a
+ * branch nobody queried is the instrument that lies about exactly the thing this
+ * surface exists to prevent. `coverageNotice` is the visible half of the same
+ * fact.
  *
  * **Each branch is `LIMIT`-capped for display while its count and age-of-oldest
  * are computed over the whole branch** (C55). That is a property of a `load`
@@ -40,7 +35,13 @@
  */
 
 import { skills } from "@repo/domain/skills";
-import { SKILL_REQUESTS_LABEL } from "./messages";
+import {
+  BOUNCES_LABEL,
+  OFFERS_LABEL,
+  PHOTOS_LABEL,
+  REPORTS_LABEL,
+  SKILL_REQUESTS_LABEL,
+} from "./messages";
 
 /** One row a person acts on. `id` is what an Admin action names as its target. */
 export interface QueueItem {
@@ -74,22 +75,73 @@ export interface QueueBranch {
 export interface QueueSource {
   /** English identifier, per ADR-0012 — it is a key, not a heading. */
   readonly key: string;
-  /** The Spanish heading, and the noun `sourceFailed` puts in its sentence. */
+  /**
+   * The route segment under `/admin`. English, per ADR-0012 — a URL is an
+   * identifier and not UI copy — and deliberately not the same string as
+   * {@link QueueSource.key}: the Skill requests branch is keyed `skillRequests`
+   * and routed `skills`, because the key names the thing waiting and the segment
+   * names the section.
+   */
+  readonly segment: string;
+  /** The Spanish nav label, page heading, and the noun `sourceFailed` uses. */
   readonly label: string;
-  readonly load: () => Promise<QueueBranch>;
+  /**
+   * The hours this section's oldest item may reach before it is late, or `null`
+   * where nothing states one.
+   *
+   * **Only Offers have a band, and inventing one for the other four would be a
+   * spec amendment.** NFR7 states a single number and states it per Offer;
+   * `.impeccable/briefs/admin-queue.md` says the rest of it in as many words —
+   * _"a Report or a Skill request has no equivalent clock"_. A section with no
+   * band is never marked late, which is the honest answer rather than a lenient
+   * one.
+   */
+  readonly bandHours: number | null;
+  /**
+   * How this section reads its branch, or **absent** while the story that
+   * creates its table has not landed. Absence is rendered as absence; see the
+   * class comment.
+   */
+  readonly load?: () => Promise<QueueBranch>;
 }
 
 /**
- * The sources, in the order they render.
+ * The five, in the order they appear in the nav and in the order an Admin works
+ * them.
  *
- * Skill requests are the first, because story 3 ships both halves of its own
- * loop. Unreviewed Offers, photos, Reports and profiles awaiting takedown review
- * arrive with the stories that create them.
+ * **Offers lead, and the redirect at `/admin` follows from it**: they are the
+ * only branch with a deadline attached, because NFR7's band is per Offer. A
+ * Report or a Skill request has no equivalent clock, so nothing else competes for
+ * the first position.
+ *
+ * A sixth section is a spec amendment, not a ticket — the same rule the four
+ * signals are held to.
  */
 export const QUEUE_SOURCES: readonly QueueSource[] = [
   {
+    key: "offers",
+    segment: "offers",
+    label: OFFERS_LABEL,
+    // NFR7: age of the oldest undelivered Offer ≤ 24 h.
+    bandHours: 24,
+  },
+  {
+    key: "photos",
+    segment: "photos",
+    label: PHOTOS_LABEL,
+    bandHours: null,
+  },
+  {
+    key: "reports",
+    segment: "reports",
+    label: REPORTS_LABEL,
+    bandHours: null,
+  },
+  {
     key: "skillRequests",
+    segment: "skills",
     label: SKILL_REQUESTS_LABEL,
+    bandHours: null,
     async load(): Promise<QueueBranch> {
       const branch = await skills.pendingRequests(SKILL_REQUEST_DISPLAY_CAP);
 
@@ -104,7 +156,28 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
       };
     },
   },
+  {
+    key: "bounces",
+    segment: "bounces",
+    label: BOUNCES_LABEL,
+    bandHours: null,
+  },
 ];
+
+/** The section a URL segment names, or `undefined` — which is a 404, not a 403. */
+export function sourceForSegment(segment: string): QueueSource | undefined {
+  return QUEUE_SOURCES.find((source) => source.segment === segment);
+}
+
+/** The sections that have a resolver, in nav order. */
+export function liveSources(): readonly QueueSource[] {
+  return QUEUE_SOURCES.filter((source) => source.load !== undefined);
+}
+
+/** The sections that do not, in nav order. */
+export function pendingSources(): readonly QueueSource[] {
+  return QUEUE_SOURCES.filter((source) => source.load === undefined);
+}
 
 /**
  * How many requests render at once (C55).
@@ -117,8 +190,19 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
 export const SKILL_REQUEST_DISPLAY_CAP = 20;
 
 /**
- * The age of the oldest item across every source, in whole hours — NFR7's number,
- * and the one that renders first.
+ * The age of one instant, in whole hours.
+ *
+ * Never negative: clock skew between the app server and Postgres can put an
+ * arrival marginally in the future, and "-1 h" reads as a bug in the queue rather
+ * than in a clock.
+ */
+export function ageInHours(at: Date, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - at.getTime()) / 3_600_000));
+}
+
+/**
+ * The age of the oldest item across every source, in whole hours — NFR7's
+ * number, and the one that renders first.
  *
  * **An empty queue is `0`, not "no answer", and the acceptance criterion is
  * explicit about it**: _"queue empty is a real and good state and **says the
@@ -130,11 +214,12 @@ export const SKILL_REQUEST_DISPLAY_CAP = 20;
  * where a number belongs breaks the scan and contradicts the criterion.
  *
  * **A source that failed is not zero either, and that is why it is not this
- * function's problem.** The page passes only the branches that loaded, and the
- * `SourceFailed` card beside this figure is what says the depth is unknown — one
- * fact per element, rather than a number that has to mean two things.
+ * function's problem.** The shell passes only the branches that loaded, and the
+ * failure card beside this figure is what says the depth is unknown — one fact
+ * per element, rather than a number that has to mean two things. A source with no
+ * resolver is absent for the same reason.
  *
- * The clock is a parameter so the page reads it once and every figure on the
+ * The clock is a parameter so the shell reads it once and every figure on the
  * screen agrees — and so that under Cache Components nothing below this reads the
  * current time, which is what fails a prerender with
  * `blocking-prerender-current-time`.
@@ -147,8 +232,24 @@ export function oldestAgeInHours(branches: readonly QueueBranch[], now: Date): n
 
   if (!oldest) return 0;
 
-  // Never negative: clock skew between the app server and Postgres can put an
-  // arrival marginally in the future, and "-1 h" reads as a bug in the queue
-  // rather than in a clock.
-  return Math.max(0, Math.floor((now.getTime() - oldest.getTime()) / 3_600_000));
+  return ageInHours(oldest, now);
+}
+
+/**
+ * Whether this section's oldest item has passed the band it is held to.
+ *
+ * **`false` where there is no band and `false` where there is nothing waiting**,
+ * and the two are the same answer for different reasons — nothing is late against
+ * a clock nobody set, and an empty branch has nothing to be late. Only a section
+ * with both a band and an item can be marked, which is why the marker cannot
+ * appear on the four sections whose stories have not landed.
+ *
+ * The comparison is `>=` on whole hours: an item that has reached the band has
+ * reached it, and a detector that waited for the twenty-fifth hour would report
+ * green for the whole of the hour the requirement is about.
+ */
+export function isPastBand(branch: QueueBranch, bandHours: number | null, now: Date): boolean {
+  if (bandHours === null || branch.oldestArrivedAt === null) return false;
+
+  return ageInHours(branch.oldestArrivedAt, now) >= bandHours;
 }

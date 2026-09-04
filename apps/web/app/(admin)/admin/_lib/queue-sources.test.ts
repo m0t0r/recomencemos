@@ -7,7 +7,15 @@
  * against the wall clock.
  */
 
-import { oldestAgeInHours, QUEUE_SOURCES, type QueueBranch } from "./queue-sources";
+import {
+  isPastBand,
+  liveSources,
+  oldestAgeInHours,
+  pendingSources,
+  QUEUE_SOURCES,
+  type QueueBranch,
+  sourceForSegment,
+} from "./queue-sources";
 
 const NOW = new Date("2026-08-29T12:00:00.000Z");
 
@@ -73,30 +81,104 @@ describe("oldestAgeInHours", () => {
   });
 });
 
-describe("the source registry", () => {
+describe("the band", () => {
+  const late = (hours: number): QueueBranch => branch(new Date(NOW.getTime() - hours * 3_600_000));
+
   /**
-   * **It holds the sources whose data exists, and no others.**
-   *
-   * This assertion was `toEqual([])` while every branch read a table no story had
-   * created yet, and the reason has not changed — only the count has. A source
-   * stubbed to return invented rows would make `/admin` look finished while
-   * showing a moderator data that is not there, which is the one thing a
-   * moderation queue must never do. Unreviewed Offers, photos, Reports and
-   * profiles awaiting takedown review are still absent, and the story that adds
-   * each one edits this list in the same commit that makes it true.
+   * **Only Offers have a band, and inventing one for the other four would be a
+   * spec amendment.** NFR7 states one number and states it per Offer; the surface
+   * brief says the rest of it — a Report or a Skill request has no equivalent
+   * clock. A section with no band is never marked, which is the honest answer
+   * rather than a lenient one.
    */
-  it("holds one source per branch whose data exists", () => {
-    expect(QUEUE_SOURCES.map((source) => source.key)).toEqual(["skillRequests"]);
+  it("never marks a section that is held to no band", () => {
+    expect(isPastBand(late(400), null, NOW)).toBe(false);
   });
 
   /**
-   * Spanish heading, English key (ADR-0012) — the key reaches a `Record` lookup
-   * and a `<Suspense>` boundary, the label is read by a person.
+   * `>=`, not `>`. An item that has reached the band has reached it, and a
+   * detector that waited for the twenty-fifth hour would report green for the
+   * whole of the hour the requirement is about.
    */
-  it("names every source in Spanish under an English key", () => {
+  it("marks a section whose oldest item has reached the band", () => {
+    expect(isPastBand(late(24), 24, NOW)).toBe(true);
+    expect(isPastBand(late(23), 24, NOW)).toBe(false);
+    expect(isPastBand(late(48), 24, NOW)).toBe(true);
+  });
+
+  /** Nothing is late when nothing is waiting. */
+  it("never marks a section with nothing in it", () => {
+    expect(isPastBand(branch(null, 0), 24, NOW)).toBe(false);
+  });
+});
+
+describe("the source registry", () => {
+  /**
+   * **Five, and a sixth is a spec amendment rather than a ticket.** Story 7 names
+   * them: unreviewed Offers, unreviewed photos, Reports, Skill requests and
+   * bounced addresses. Frozen Hirers are deliberately absent — a freeze is reached
+   * *from* a Report, so it lives on those rows.
+   */
+  // Story 7 names the five: unreviewed Offers, unreviewed photos, Reports,
+  // Skill requests and bounced addresses.
+  it("holds the five kinds of pending work, in nav order", () => {
+    expect(QUEUE_SOURCES.map((source) => source.segment)).toEqual([
+      "offers",
+      "photos",
+      "reports",
+      "skills",
+      "bounces",
+    ]);
+  });
+
+  /**
+   * **English segments and keys, Spanish labels** (ADR-0012). The URL is an
+   * identifier and not UI copy; the label is the only one of the three a person
+   * reads. This is the assertion that would have caught the spec routing the whole
+   * product in Spanish before a human did.
+   */
+  it("routes in English and speaks in Spanish", () => {
     for (const source of QUEUE_SOURCES) {
+      expect(source.segment).toMatch(/^[a-z][a-z-]*$/);
       expect(source.key).toMatch(/^[a-zA-Z]+$/);
       expect(source.label.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  /**
+   * **Only Offers carry a band today**, for the reason the band cases above
+   * record. This is what makes adding one elsewhere a deliberate edit rather than
+   * something that arrives with a copy-pasted row.
+   */
+  // NFR7's 24 hours is the one band this product states, and it states it per
+  // Offer.
+  it("holds the twenty-four-hour band on Offers and on nothing else", () => {
+    const banded = QUEUE_SOURCES.filter((source) => source.bandHours !== null);
+    expect(banded.map((source) => source.segment)).toEqual(["offers"]);
+    expect(banded[0]?.bandHours).toBe(24);
+  });
+
+  /**
+   * **A source without a resolver is absent, not stubbed.** A stubbed source
+   * returning invented rows would make the queue look finished while showing an
+   * Admin data that is not there, which is the one thing a moderation queue must
+   * never do. The story that adds each resolver edits this list in the same commit
+   * that makes it true — and #111 deletes the coverage line when the last one
+   * lands.
+   */
+  it("has a resolver only where the data exists", () => {
+    expect(liveSources().map((source) => source.segment)).toEqual(["skills"]);
+    expect(pendingSources().map((source) => source.segment)).toEqual([
+      "offers",
+      "photos",
+      "reports",
+      "bounces",
+    ]);
+  });
+
+  it("finds a section by the segment its route carries", () => {
+    expect(sourceForSegment("skills")?.key).toBe("skillRequests");
+    // A segment nobody routed is a 404 from the router, never a section.
+    expect(sourceForSegment("hirers")).toBeUndefined();
   });
 });
