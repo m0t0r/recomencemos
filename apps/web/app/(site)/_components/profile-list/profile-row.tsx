@@ -60,7 +60,12 @@ export function ProfileRow({
 
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex min-w-0 flex-col gap-0.5">
-            <h2 className="text-foreground text-lg leading-6 font-medium text-pretty">
+            {/*
+              Her own words, in the display face — the one line on the page
+              nobody else could have written, and the only thing in a row set in
+              Alegreya (`DESIGN.md` → Typography). 24 px is the `h3` step.
+            */}
+            <h2 className="font-heading text-foreground text-2xl leading-7 font-medium text-pretty">
               {profile.headline}
             </h2>
             <p className="text-muted-foreground text-sm">

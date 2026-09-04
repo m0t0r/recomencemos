@@ -224,7 +224,13 @@
  *
  * `ruled-page`: a column of rows with the margin line down its left from `sm` up. On a
  * phone the line is dropped rather than shrunk — at 360 px a row wants every pixel.
- * `page-heading`: the `<h1>` of a page, in the display face at the 32 px step. */
+ * `page-heading`: the display face at the 32 px step.
+ *
+ * It names a **step, not an element**, and that is the whole reason there is one of it rather than
+ * two. A page's `<h1>` sits on it, and so does the `<h2>` over the Wall's ruled page and the one
+ * over *Cómo funciona* — those two carry a page heading's weight without being the page's heading.
+ * Naming a `section-heading` beside it would have meant a second utility with a byte-identical
+ * body, which is the duplication this block exists to prevent, one indirection further out. */
 @utility ruled-page {
   @apply border-margin flex flex-col;
   @variant sm {

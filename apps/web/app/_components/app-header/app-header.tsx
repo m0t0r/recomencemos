@@ -167,7 +167,7 @@ export async function AppHeader({
         <Link
           href={homeHref}
           aria-label={homeLabel}
-          className="focus-visible:ring-ring rounded-sm text-base font-semibold tracking-tight whitespace-nowrap focus-visible:ring-2 focus-visible:outline-none"
+          className="font-heading focus-visible:ring-ring rounded-sm text-xl font-semibold tracking-[-0.01em] whitespace-nowrap focus-visible:ring-2 focus-visible:outline-none"
         >
           {PRODUCT_NAME}
         </Link>
@@ -215,7 +215,7 @@ export async function AppHeader({
 export function AppHeaderPlaceholder() {
   return (
     <HeaderRow aria-hidden="true">
-      <span className="text-base font-semibold tracking-tight whitespace-nowrap opacity-0">
+      <span className="font-heading text-xl font-semibold tracking-[-0.01em] whitespace-nowrap opacity-0">
         {PRODUCT_NAME}
       </span>
     </HeaderRow>

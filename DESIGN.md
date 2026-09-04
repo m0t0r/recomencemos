@@ -205,8 +205,10 @@ no chart ships today, and the first surface that draws one re-derives the four n
 A display face never appears in a button, a label, a chip or a table cell. When something is set in
 Alegreya, that is the signal that it is a heading or that she wrote it.
 
-- **Fixed rem scale, not fluid.** No `clamp()` on UI type. The cover's headline is the one exception
-  and it is a step of the ladder at each breakpoint, not a fluid value.
+- **Fixed rem scale, not fluid.** No `clamp()` on UI type. The cover's headline is the one type in
+  the product above the ladder — 36 px on a phone, 48 and 60 at the two breakpoints above — because
+  the cover is the one place display type has a region to fill. It is fixed per breakpoint, not
+  fluid, and no second surface may borrow those sizes.
 - **Tight scale ratio** — roughly 1.11–1.2 between steps. The ladder is `14 · 16 · 18 · 20 · 24 ·
 28 · 32 · 36`, enumerated as `typography.scale` in the frontmatter so it is machine-readable.
   Tailwind's `text-3xl` is re-pointed at 32 px in `globals.css` so the utility a page heading

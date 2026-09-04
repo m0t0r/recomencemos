@@ -138,7 +138,7 @@ function PanelSkeleton() {
 
 export default function AccountPage() {
   return (
-    <main className="bg-muted flex min-h-svh flex-col items-center px-4 py-12">
+    <main className="bg-muted flex grow flex-col items-center px-4 py-12">
       <div className="w-full max-w-md">
         <Suspense fallback={<PanelSkeleton />}>
           <AccountPanel />
