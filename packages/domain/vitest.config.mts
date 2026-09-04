@@ -16,6 +16,12 @@ import { defineConfig } from "vitest/config";
 // The filename is the seam. `*.integration.test.ts` is seam 2 and everything else
 // is seam 1 — the same convention the file layout already used, now enforced by
 // the runner rather than by reading.
+//
+// Neither project restates `resolve.tsconfigPaths`, and that is Vitest 5 rather
+// than an omission: `extends` now defaults to `true` for an inline project, so
+// the root's Vite config — plugins and aliases included — is inherited. Both
+// projects carried a copy of it before, which was three chances for the copies
+// to disagree.
 const shared = {
   globals: true,
 } as const;
@@ -27,7 +33,6 @@ export default defineConfig({
   test: {
     projects: [
       {
-        resolve: { tsconfigPaths: true },
         test: {
           ...shared,
           name: "seam-1",
@@ -36,7 +41,6 @@ export default defineConfig({
         },
       },
       {
-        resolve: { tsconfigPaths: true },
         test: {
           ...shared,
           name: "seam-2",
