@@ -27,8 +27,8 @@ function RowSkeleton() {
       <Skeleton className="size-12 shrink-0 rounded-full" />
       <div className="flex min-w-0 grow flex-col gap-2">
         <div className="flex flex-col gap-1.5">
-          {/* Two lines of headline at the row's leading, then the name line. */}
-          <Skeleton className="h-5 w-full max-w-lg" />
+          {/* One line of headline at the row's 28 px leading, then the name line. */}
+          <Skeleton className="h-6 w-full max-w-lg" />
           <Skeleton className="h-4 w-40" />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -47,7 +47,7 @@ function RowSkeleton() {
  */
 export function ProfileListSkeleton({ count = 6 }: { readonly count?: number }) {
   return (
-    <div className="flex flex-col" aria-hidden="true">
+    <div className="ruled-page" aria-hidden="true">
       {Array.from({ length: count }, (_, index) => (
         <div key={index}>
           {index > 0 ? <Separator /> : null}
