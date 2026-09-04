@@ -24,7 +24,7 @@
  * connection for `apps/web`, which ADR-0010 leaves with no handle of its own.
  */
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray } from "drizzle-orm";
 import { recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
 import type { DomainDatabase } from "#database";
@@ -450,6 +450,40 @@ export async function hasProfile(db: DomainDatabase, accountId: string): Promise
 }
 
 /**
+ * How many profiles were published since a given instant — the arithmetic behind
+ * the Admin queue's platform signal (C24).
+ *
+ * **It counts the act, not the row's present state**, and the unfiltered `WHERE`
+ * is the whole decision. The signal exists to notice somebody publishing faster
+ * than displaced people plausibly arrive; a flooder who publishes fifty and takes
+ * forty-nine down inside the hour has done exactly the thing being watched for,
+ * and a `state = 'published'` predicate would hand them the way out. So the
+ * window is the only condition, and `state` is deliberately absent.
+ *
+ * **The price is that this read uses no index**, because the two indexes on this
+ * column are partial on `state = 'published'` (DD2) and a count over every state
+ * cannot use either. That is accepted rather than overlooked: the table holds one
+ * row per Account across three municipalities, and this runs once per Admin page
+ * render — a few times a day, by one person. A partial index on `published_at`
+ * alone is the fix if it ever appears in a slow-query log; it is not worth a
+ * migration before then.
+ *
+ * **`since` is a parameter, like every instant in this package**, so the window
+ * is the caller's arithmetic and seam 2 can fix both ends of it rather than wait
+ * an hour.
+ */
+export async function countPublishedSince(db: DomainDatabase, since: Date): Promise<number> {
+  const [row] = await db
+    .select({ total: count() })
+    .from(schema.capabilityProfile)
+    .where(gte(schema.capabilityProfile.publishedAt, since));
+
+  // `COUNT(*)` with no `GROUP BY` always returns one row; `?? 0` keeps the figure
+  // honest rather than optimistic if it somehow does not.
+  return row?.total ?? 0;
+}
+
+/**
  * What the publishing form may prefill: the name Google handed over, when she
  * came in through that door. A magic-link Account has an empty name, so the
  * field is simply empty. Editable either way — prefilled is not the same as
@@ -593,6 +627,19 @@ export const profiles = {
   async browse(options?: ListOptions): Promise<ProfileListPage> {
     const { db } = await import("#connection");
     return listBrowse(db(), options);
+  },
+
+  /**
+   * How many profiles were published since `since` — the Admin queue's platform
+   * signal, and the one read on this facade that answers a question about the
+   * platform rather than about one profile.
+   *
+   * The caller supplies the instant so that one clock reading governs every
+   * figure on the screen it renders into.
+   */
+  async publishedSince(since: Date): Promise<number> {
+    const { db } = await import("#connection");
+    return countPublishedSince(db(), since);
   },
 };
 
