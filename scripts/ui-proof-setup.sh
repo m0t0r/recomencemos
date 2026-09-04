@@ -224,6 +224,18 @@ ENV_FILE="${ENV_FILE:-$ROOT/apps/web/.env.local}"
 BUCKET_DEFAULT="recomencemos-ui-proof"
 RULE_NAME="expire-review-artifacts"
 
+# The five, named once. Both the env write and the printed block iterate this, so
+# a sixth value is added in one place and cannot end up in the file while missing
+# from the block a worktree depends on -- which is the shape of the bug a hand
+# copy of a five-item list eventually has.
+KEYS=(
+  UI_PROOF_S3_ENDPOINT
+  UI_PROOF_S3_BUCKET
+  UI_PROOF_S3_ACCESS_KEY_ID
+  UI_PROOF_S3_SECRET_ACCESS_KEY
+  UI_PROOF_PUBLIC_BASE
+)
+
 RUN_STATUS=0
 RUN_OUTPUT=""
 
@@ -268,16 +280,10 @@ wr() { run "wrangler $*" -- "${WRANGLER[@]}" "$@"; }
 # worktree starts with no `.env.local`, and the publish step runs from there.
 show_exports() {
   printf '\n  %s%s╔══ the five values — shown once ══%s\n' "$BOLD" "$YELLOW" "$RESET"
-  printf '  %s%s║%s  export UI_PROOF_S3_ENDPOINT="%s"\n' \
-    "$BOLD" "$YELLOW" "$RESET" "${UI_PROOF_S3_ENDPOINT:-}"
-  printf '  %s%s║%s  export UI_PROOF_S3_BUCKET="%s"\n' \
-    "$BOLD" "$YELLOW" "$RESET" "${UI_PROOF_S3_BUCKET:-}"
-  printf '  %s%s║%s  export UI_PROOF_S3_ACCESS_KEY_ID="%s"\n' \
-    "$BOLD" "$YELLOW" "$RESET" "${UI_PROOF_S3_ACCESS_KEY_ID:-}"
-  printf '  %s%s║%s  export UI_PROOF_S3_SECRET_ACCESS_KEY="%s"\n' \
-    "$BOLD" "$YELLOW" "$RESET" "${UI_PROOF_S3_SECRET_ACCESS_KEY:-}"
-  printf '  %s%s║%s  export UI_PROOF_PUBLIC_BASE="%s"\n' \
-    "$BOLD" "$YELLOW" "$RESET" "${UI_PROOF_PUBLIC_BASE:-}"
+  local key
+  for key in "${KEYS[@]}"; do
+    printf '  %s%s║%s  export %s="%s"\n' "$BOLD" "$YELLOW" "$RESET" "$key" "${!key:-}"
+  done
   printf '  %s%s╚══════════════════════════════════%s\n\n' "$BOLD" "$YELLOW" "$RESET"
 }
 
@@ -318,13 +324,36 @@ if (( RUN_STATUS != 0 )); then
   warn "wrangler could not say who you are."
   step "Run 'wrangler login' in another terminal, then come back."
   pause "Press Enter when it reports an account."
+  # Asked again rather than read again. $RUN_OUTPUT still holds the *failure*,
+  # and parsing that would take the id from the one output guaranteed not to
+  # carry it -- losing the endpoint precisely when the operator had just fixed
+  # the thing that produces it.
+  say "Asking again:"
+  wr whoami
 fi
 
 # The id is 32 hex characters, and `whoami` prints it in a table whose columns
 # have moved between wrangler majors — so it is offered rather than taken. A
 # single unambiguous match becomes the fallback for an empty answer.
-ACCOUNT_GUESS=$(printf '%s' "$RUN_OUTPUT" | grep -oE '[0-9a-f]{32}' | sort -u | head -n1)
-[[ -n "$ACCOUNT_GUESS" ]] && note "an account id in that output: $ACCOUNT_GUESS"
+#
+# `|| true` is load-bearing rather than defensive, and it is the exact case this
+# grep exists for: under `pipefail` a no-match `grep` fails the pipeline, an
+# assignment takes the substitution's status, and `set -e` then ends the wizard
+# where a *missing* id is the ordinary state -- not signed in, or a wrangler
+# whose table no longer prints a bare one. Without it the run dies with nothing
+# on screen, one line after telling the operator to come back.
+ACCOUNT_GUESS=$(printf '%s' "$RUN_OUTPUT" | grep -oE '[0-9a-f]{32}' | sort -u | head -n1) || true
+
+# A re-run has no CF_ACCOUNT_ID in the env file -- it is not one of the five --
+# but it does have the endpoint that was built from it, so the id is recovered
+# from there rather than retyped. `ask`'s own default only reaches keys the file
+# holds, which this one deliberately is not.
+PRIOR_ENDPOINT=$(_existing UI_PROOF_S3_ENDPOINT || true)
+if [[ -z "$ACCOUNT_GUESS" && -n "$PRIOR_ENDPOINT" ]]; then
+  ACCOUNT_GUESS=$(printf '%s' "$PRIOR_ENDPOINT" | grep -oE '[0-9a-f]{32}' | head -n1) || true
+  [[ -n "$ACCOUNT_GUESS" ]] && note "recovered from the endpoint already in $ENV_FILE"
+fi
+[[ -n "$ACCOUNT_GUESS" ]] && note "an account id to use: $ACCOUNT_GUESS"
 ask CF_ACCOUNT_ID "Cloudflare account id:"
 [[ -z "$CF_ACCOUNT_ID" ]] && CF_ACCOUNT_ID="$ACCOUNT_GUESS"
 
@@ -375,6 +404,11 @@ printf '\n'
 # The rule name and the prefix are POSITIONAL arguments, not flags. The runbook
 # wrote them as `--name` and `--prefix` until this wizard was authored, and
 # wrangler's own help is what corrected it; that correction ships with this file.
+# `--force` skips wrangler's own confirmation, and that is required rather than
+# impatient: this call runs inside `run`, whose output is captured in a command
+# substitution, so an interactive prompt there would block on a terminal it
+# cannot reach. The gate is the wizard's own confirm above, which a person
+# answers on a screen that is theirs.
 if confirm "Add the 30-day expiry rule on the review/ prefix?"; then
   wr r2 bucket lifecycle add "$UI_PROOF_S3_BUCKET" "$RULE_NAME" "review/" \
     --expire-days 30 --force
@@ -385,21 +419,39 @@ fi
 
 say "Reading the rules back:"
 wr r2 bucket lifecycle list "$UI_PROOF_S3_BUCKET"
-if printf '%s' "$RUN_OUTPUT" | grep -q 'review/'; then
-  say "A rule in that listing names the review/ prefix."
+
+# A listing that could not be produced is not a listing of no rules, and the two
+# would otherwise reach the operator as the same warning. This stage is the one
+# whose failure cannot be undone by waiting, so it refuses to reach an answer it
+# does not have.
+if (( RUN_STATUS != 0 )); then
+  warn "The rules could not be read, so nothing here has been checked."
+  warn "That is not the same as finding no rules, and it is not a pass."
+  SKIPPED+=("verifying the lifecycle rules — the listing could not be read")
+elif printf '%s' "$RUN_OUTPUT" | grep -q 'review/'; then
+  say "Something in that listing names review/. That is all the grep proves:"
+  say "it cannot tell you whether a SECOND rule is also there with no prefix."
 else
-  warn "No rule there names review/, so review proof would never expire."
+  warn "Nothing there names review/, so review proof would never expire."
 fi
 
 # The listing's exact layout is a wrangler detail this wizard has not pinned, so
-# the grep above is a hint and the human's read is the check. It is asked as a
-# question about what is on screen rather than about what was intended.
-if ! confirm "Does that listing show exactly one rule, and is its prefix review/ ?"; then
-  warn "Fix it before you leave this stage."
+# the grep above is a hint and the human's read is the check -- which is what the
+# runbook means by the list call being the check rather than a formality. Two
+# questions, because one compound question is answered about its easier half:
+# a blank-prefix rule is the unrecoverable failure, and it hides *beside* a
+# correct one rather than instead of it.
+if ! confirm "Is every rule listed above scoped to a prefix, with none left blank?"; then
+  warn "A blank prefix expires the story demos, which have no second copy."
   step "Dashboard: R2 → the bucket → Settings → Object lifecycle rules."
-  step "Delete any rule whose prefix is empty or does not begin with review/."
-  SKIPPED+=("the lifecycle rules — the listing did not read as expected")
-  pause "Press Enter when the listing shows one rule, on review/."
+  step "Delete any rule whose prefix is empty."
+  SKIPPED+=("the lifecycle rules — a rule with no prefix was still listed")
+  pause "Press Enter when every rule shows a prefix."
+fi
+if ! confirm "Is the one that expires objects scoped to review/ ?"; then
+  warn "Fix it before you leave this stage."
+  SKIPPED+=("the lifecycle rules — the expiry rule is not scoped to review/")
+  pause "Press Enter when the expiry rule shows the review/ prefix."
 fi
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -419,29 +471,53 @@ note "against seeded fixtures because a name or a face in a published artifact i
 note "personal data leaving the system, and a mistake in a durable artifact is"
 note "permanent — its only remedy is deletion by hand from the bucket."
 printf '\n'
+ENABLED_THIS_RUN=0
 if confirm "Have you read that section, and enable public read now?"; then
   wr r2 bucket dev-url enable "$UI_PROOF_S3_BUCKET"
-  (( RUN_STATUS == 0 )) || SKIPPED+=("enable public read on $UI_PROOF_S3_BUCKET")
+  if (( RUN_STATUS == 0 )); then
+    ENABLED_THIS_RUN=1
+  else
+    SKIPPED+=("enable public read on $UI_PROOF_S3_BUCKET")
+  fi
 else
   SKIPPED+=("enable public read on $UI_PROOF_S3_BUCKET — every published link would 404")
 fi
 
 say "Reading the public origin back:"
 wr r2 bucket dev-url get "$UI_PROOF_S3_BUCKET"
-DEV_URL=$(printf '%s' "$RUN_OUTPUT" | grep -oE 'https://[A-Za-z0-9.-]+\.r2\.dev' | head -n1)
+# `|| true` for the reason given at the account id above, and this site is the
+# worse of the two: a custom domain rather than an r2.dev one matches nothing,
+# which is a supported answer to the question this stage asks -- and a run that
+# ended here would lose the token stage 5 has not collected yet.
+DEV_URL=$(printf '%s' "$RUN_OUTPUT" | grep -oE 'https://[A-Za-z0-9.-]+\.r2\.dev' | head -n1) || true
 
 # An origin in that output is not the same fact as a bucket that serves it: the
 # subcommand reports the URL and its status together, so a disabled bucket still
-# prints a hostname. Taken as the answer it produces the one failure the runbook
-# calls hardest to diagnose -- an upload that reports success behind a link that
-# 404s -- so a listing that says disabled forfeits the guess rather than
-# supplying it.
-if [[ -n "$DEV_URL" ]] && printf '%s' "$RUN_OUTPUT" | grep -qi 'disabled\|not enabled'; then
-  warn "That output names an origin AND says public access is off."
-  warn "A link built on it would 404 while the upload reported success."
-  DEV_URL=""
+# prints a hostname. Offered as the default it produces the one failure the
+# runbook calls hardest to diagnose -- an upload reporting success behind a link
+# that 404s.
+#
+# So the guess needs a POSITIVE signal, and matching the word "disabled" is not
+# one: that is a denylist over output this wizard has not pinned, and every
+# spelling it has not thought of ("Public access: off") reads as permission. The
+# two signals it will accept are an `enable` that returned 0 in this same run, or
+# a listing that says enabled and does not also say otherwise. Anything else
+# keeps the URL on screen as information and refuses to prefill it.
+if [[ -n "$DEV_URL" ]]; then
+  SAYS_ENABLED=0
+  if printf '%s' "$RUN_OUTPUT" | grep -qi 'enabled' &&
+    ! printf '%s' "$RUN_OUTPUT" | grep -qi 'not enabled\|disabled'; then
+    SAYS_ENABLED=1
+  fi
+  if (( ENABLED_THIS_RUN == 1 || SAYS_ENABLED == 1 )); then
+    note "origin found, and that output reads as enabled: $DEV_URL"
+  else
+    warn "That output names an origin but does not say public access is on."
+    warn "Not prefilling it: a link built on a private bucket 404s while the"
+    warn "upload reports success. Paste it yourself if you know it is served."
+    DEV_URL=""
+  fi
 fi
-[[ -n "$DEV_URL" ]] && note "origin found in that output: $DEV_URL"
 say "A custom domain works too; whichever you chose, its origin is the value."
 ask UI_PROOF_PUBLIC_BASE "Public base URL, no trailing slash:"
 [[ -z "$UI_PROOF_PUBLIC_BASE" ]] && UI_PROOF_PUBLIC_BASE="$DEV_URL"
@@ -494,19 +570,14 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 if [[ -f "$ENV_FILE" ]]; then
-  [[ -n "${UI_PROOF_S3_ENDPOINT:-}" ]] &&
-    write_env UI_PROOF_S3_ENDPOINT "$UI_PROOF_S3_ENDPOINT"
-  [[ -n "${UI_PROOF_S3_BUCKET:-}" ]] &&
-    write_env UI_PROOF_S3_BUCKET "$UI_PROOF_S3_BUCKET"
-  [[ -n "${UI_PROOF_S3_ACCESS_KEY_ID:-}" ]] &&
-    write_env UI_PROOF_S3_ACCESS_KEY_ID "$UI_PROOF_S3_ACCESS_KEY_ID"
-  [[ -n "${UI_PROOF_S3_SECRET_ACCESS_KEY:-}" ]] &&
-    write_env UI_PROOF_S3_SECRET_ACCESS_KEY "$UI_PROOF_S3_SECRET_ACCESS_KEY"
-  [[ -n "${UI_PROOF_PUBLIC_BASE:-}" ]] &&
-    write_env UI_PROOF_PUBLIC_BASE "$UI_PROOF_PUBLIC_BASE"
+  for KEY in "${KEYS[@]}"; do
+    [[ -n "${!KEY:-}" ]] && write_env "$KEY" "${!KEY}"
+  done
   chmod 600 "$ENV_FILE" 2>/dev/null || true
   note "That file is gitignored, and the publisher reads it because the pnpm"
   note "script passes --env-file-if-exists, the same way db:migrate does."
+  note "Editing it invalidates the web build cache, which costs seconds and is"
+  note "not a sign anything is wrong: turbo declares .env* a build input."
 else
   SKIPPED+=("writing the five values — there is no env file in this tree")
 fi
@@ -546,11 +617,13 @@ if [[ -z "$(ls -A "$CAPTURES" 2>/dev/null)" ]]; then
   pause "Press Enter when there is a real capture in that directory."
 fi
 
+DRY_RUN_STATUS=1
 ask PR_NUMBER "A pull request number you own, to publish against:"
 if [[ -n "$PR_NUMBER" ]]; then
   run "pnpm ui-proof publish --pr $PR_NUMBER --dry-run" -- \
     pnpm ui-proof publish --pr "$PR_NUMBER" --dry-run
-  (( RUN_STATUS == 0 )) ||
+  DRY_RUN_STATUS=$RUN_STATUS
+  (( DRY_RUN_STATUS == 0 )) ||
     warn "That refused. Fix what it named before the real publish below."
 else
   SKIPPED+=("the end-to-end proof — no pull request number was given")
@@ -566,6 +639,13 @@ PUBLISHED_STATUS=1
 if [[ -z "${PR_NUMBER:-}" ]]; then
   warn "No pull request number, so there is nothing to publish against."
   note "Re-run this wizard once you have one; every value above is remembered."
+elif (( DRY_RUN_STATUS != 0 )); then
+  # The dry run answers naming, grouping and the capture floor, and it reaches
+  # nothing. Offering the upload after it refused would spend a real credential
+  # and a real pull request body to be told the same thing again.
+  warn "The dry run refused, so there is nothing worth uploading yet."
+  note "Fix what it named, then re-run this wizard; the values are remembered."
+  SKIPPED+=("the real publish — the dry run refused first")
 else
   say "This uploads, then edits the pull request body. It is the only call in"
   say "the whole pipeline that touches the store."
@@ -582,22 +662,41 @@ if (( PUBLISHED_STATUS == 0 )); then
   say "Four things to confirm, in this order. The first one is a command."
   ask ARTIFACT_URL "Paste the link from the pull request body:"
   if [[ -n "$ARTIFACT_URL" ]]; then
-    run "curl -sS -o /dev/null -w '%{http_code}' $ARTIFACT_URL" -- \
-      curl -sS -o /dev/null -w '%{http_code}' "$ARTIFACT_URL"
-    if [[ "$RUN_OUTPUT" == "200" ]]; then
+    run "curl -sSL -o /dev/null -w '%{http_code}' $ARTIFACT_URL" -- \
+      curl -sSL -o /dev/null -w '%{http_code}' "$ARTIFACT_URL"
+    # The code is taken from the END of the captured output rather than compared
+    # to the whole of it: `run` merges stderr, and `-sS` keeps curl quiet only
+    # while nothing goes wrong -- so a single diagnostic line would otherwise
+    # turn a 200 into a failure report. `-L` because a public bucket origin is
+    # entitled to redirect.
+    HTTP_CODE=$(printf '%s' "$RUN_OUTPUT" | tr -d '[:space:]' | grep -oE '[0-9]{3}$') || true
+    if [[ "$HTTP_CODE" == "200" ]]; then
       say "200 — a request carrying no credential can read it."
     else
       warn "That did not answer 200. Either the bucket is still private, or the"
       warn "public base is not the origin that public access produced."
+      SKIPPED+=("the unauthenticated read — the published link did not answer 200")
     fi
     open_url "$ARTIFACT_URL"
+  else
+    SKIPPED+=("the unauthenticated read — no link was pasted to check")
   fi
-  confirm "Does the page render the pull request's own prose?" ||
+
+  # Each of the three records its own No. A question whose only consequence is a
+  # warning that scrolls away is a question the closing summary reports as done,
+  # which is the failure this whole stage exists to be the opposite of.
+  confirm "Does the page render the pull request's own prose?" || {
     warn "An empty body means gh sent the wrong flag: the report looks structurally fine and says nothing."
-  confirm "If you captured a video, does it play with controls?" ||
-    note "That is the whole reason this store exists."
-  confirm "Do both prefixes hold what they should, each with its own page?" ||
+    SKIPPED+=("the report renders the pull request's prose — it did not")
+  }
+  confirm "If you captured a video, does it play with controls?" || {
+    note "If you captured no video, this one is not a finding."
+    SKIPPED+=("a video plays with controls — unanswered or no")
+  }
+  confirm "Do both prefixes hold what they should, each with its own page?" || {
     warn "The durable half has a viewer of its own on purpose: a page under review/ would be deleted out from under the clips it renders."
+    SKIPPED+=("both prefixes hold what they should — they did not")
+  }
 fi
 pause
 
