@@ -79,6 +79,12 @@ export const GOOGLE_CLIENT_ID_VARIABLE = "GOOGLE_CLIENT_ID";
 export const GOOGLE_CLIENT_SECRET_VARIABLE = "GOOGLE_CLIENT_SECRET";
 
 /**
+ * Written by the named local proxy that fronts `next dev`, and read by nothing
+ * in a deployed environment — see {@link authBaseUrl}.
+ */
+export const PROXY_URL_VARIABLE = "PORTLESS_URL";
+
+/**
  * The value `apps/web/.env.example` ships so a fresh clone can run the whole
  * sign-in loop, and the one value this configuration refuses in production.
  *
@@ -198,6 +204,36 @@ export function authSecret(env: AuthEnv): string {
 }
 
 /**
+ * **The origin this app is configured at, read in one place.**
+ *
+ * It is the origin Better Auth is configured with, the origin it trusts, and the
+ * base the Admin link is built against. Three separate reads would be three
+ * chances for those to stop being the same origin, so there is one function and
+ * every caller goes through it.
+ *
+ * **Development is served under a name rather than a port** (ADR-0018), and the
+ * name is not knowable when `.env.local` is written: it carries the branch, so
+ * each worktree gets `<branch>.web.<project>.localhost` and a static file cannot
+ * hold the right answer for all of them at once. The proxy writes the origin it
+ * is actually serving into the child's environment, so that is what this reads.
+ *
+ * **Outside production only, and that is the whole safety argument.** A deployed
+ * environment has no proxy and never sets the variable — but "never sets it" is
+ * an assumption about an environment rather than a property of this code, and the
+ * failure it would cause is the worst kind: `trustedOrigins` and every magic link
+ * silently pointing at somewhere else. So the guard is explicit here, the same
+ * shape {@link authSecret} uses to refuse the committed development secret and
+ * `responsibleParty()` uses to refuse its placeholders. With `PORTLESS=0` there
+ * is no proxy and no variable, and the configured value is what stands.
+ */
+export function authBaseUrl(env: AuthEnv): string {
+  const proxied = env[PROXY_URL_VARIABLE]?.trim();
+  if (proxied && env.NODE_ENV !== "production") return proxied;
+
+  return required(env, BASE_URL_VARIABLE);
+}
+
+/**
  * Google ships only when both halves are configured.
  *
  * A fresh clone has neither — they are credentials, so NFR24 keeps them out of
@@ -261,13 +297,8 @@ export function authOptions({
 }: AuthDependencies & { db: DomainDatabase }): AuthOptions {
   const google = googleCredentials(env);
 
-  /**
-   * Read once. It is the origin Better Auth is configured with, the origin it
-   * trusts, and the base the Admin link is built against — and three separate
-   * reads of one variable is three chances for them to stop being the same
-   * origin.
-   */
-  const baseUrl = required(env, BASE_URL_VARIABLE);
+  /** Read once, through the one function that decides it. */
+  const baseUrl = authBaseUrl(env);
 
   return {
     appName: "Recomencemos",
