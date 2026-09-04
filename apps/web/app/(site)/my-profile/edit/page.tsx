@@ -95,9 +95,7 @@ export default function EditProfilePage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
       <div className="flex flex-col gap-2">
-        <h1 className="text-foreground text-2xl leading-8 font-semibold tracking-tight">
-          {EDIT_TITLE}
-        </h1>
+        <h1 className="page-heading">{EDIT_TITLE}</h1>
         <p className="text-muted-foreground text-pretty">{EDIT_INTRO}</p>
       </div>
 

@@ -91,9 +91,7 @@ async function AccountPanel() {
         the thing the avatar in the corner is for. Repeating it here said nothing
         the corner of the same screen was not already saying.
       */}
-      <h1 className="text-foreground text-2xl leading-8 font-semibold tracking-tight">
-        {ACCOUNT_TITLE}
-      </h1>
+      <h1 className="page-heading">{ACCOUNT_TITLE}</h1>
 
       <Separator />
 
