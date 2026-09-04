@@ -25,6 +25,13 @@
         "jsx-a11y/prefer-tag-over-role": "off",
         "react/no-array-index-key": "off"
       }
+    },
+    {
+      "files": ["src/hooks/use-mobile.ts", "src/components/sidebar.tsx"],
+      "rules": {
+        "react/set-state-in-effect": "off",
+        "no-shadow": "off"
+      }
     }
   ]
 }
