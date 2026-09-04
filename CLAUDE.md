@@ -699,11 +699,22 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
   pair, or an accessibility-tree diff, and carries the `ffmpeg` preflight, the determinism pinning
   that keeps a pair comparable, and the list of what may never be in frame.
 - `wizard` — generates a bash wizard that walks a human through steps only they can perform:
-  provisioning, credentials, a third-party dashboard, a one-off cutover. `scripts/go-live.sh` is
-  its committed product here, and it is the shape to copy: the library above the `STAGES` marker is
-  generated and never hand-edited, and the stages below it are authored through `/wizard`. The
+  provisioning, credentials, a third-party dashboard, a one-off cutover. `scripts/go-live.sh` and
+  `scripts/ui-proof-setup.sh` (`pnpm ui-proof:setup`, the artifact store) are its two committed
+  products here, and they are the shape to copy: the library above the `STAGES` marker is generated
+  and never hand-edited — byte-identical in both, and a `diff` against `template.sh` is how that is
+  checked — and the stages below it are authored through `/wizard`. The
   other one, `scripts/setup.sh`, was deleted with the template framing — it walked a human through
   claiming a fresh clone, which is not a procedure this repository has any more.
+
+  **The two differ on where a captured secret goes, and the difference is the rule rather than an
+  inconsistency.** `go-live.sh` writes no env file at all, because its secrets belong to a deploy and
+  `fly secrets` is where a deploy reads them. `ui-proof-setup.sh` writes `apps/web/.env.local`,
+  because its five values are read by a script running on one operator's own machine — which is the
+  case `.env.example` already sanctions for `RESEND_API_KEY` and `GOOGLE_CLIENT_SECRET`. A wizard
+  that captures a secret answers "which process reads this, and where does that process run", and
+  the answer decides the destination.
+
 - `impeccable` — interface design at depth: `shape` (brief before code), `critique`/`audit`, `polish`/`harden`, `live`. It owns `PRODUCT.md`, `DESIGN.md`, and the surface briefs under `.impeccable/briefs/`. The Design stage's `ux-design` routes into it rather than restating it.
 
 **`impeccable` is vendored by its own installer, not the `skills` CLI**, which is why `skills-lock.json` does not track it. It is installed twice on purpose — `.agents/skills/impeccable/` (Codex flavor, with `agents/*.toml`) and `.claude/skills/impeccable/` (Claude flavor, with `user-invocable`, `argument-hint`, and `allowed-tools`). They differ in more than paths, so the usual vendor-and-symlink convention does not apply; do not "fix" the duplication. Its design detector runs as a `PostToolUse` and `Stop` hook in both `.claude/settings.json` and `.codex/hooks.json`.
