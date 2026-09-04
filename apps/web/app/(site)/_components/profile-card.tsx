@@ -67,18 +67,29 @@ export function ProfileCard({
 }: ProfileCardProps) {
   return (
     <Card className={className}>
+      {/*
+        The same hierarchy as a row on the Wall (`profile-list/profile-row.tsx`):
+        her own words first, in the display face, then who and where. A person's
+        identity should not depend on which surface she was reached through, and
+        this card is how she sees what everyone else sees.
+      */}
       <CardHeader className="flex flex-row items-start gap-4">
         <Avatar size="lg" aria-hidden={photoUrl ? undefined : true}>
           {photoUrl ? <AvatarImage src={photoUrl} alt={photoAlt} /> : null}
           <AvatarFallback>{initialOf(firstName)}</AvatarFallback>
         </Avatar>
         <div className="flex min-w-0 flex-col gap-1">
-          <CardTitle className="truncate">{displayName(firstName, lastInitial)}</CardTitle>
-          <CardDescription>{cityLabel}</CardDescription>
+          {headline ? (
+            <CardTitle className="font-heading text-2xl leading-7 font-medium text-pretty">
+              {headline}
+            </CardTitle>
+          ) : null}
+          <CardDescription className="font-sans">
+            {displayName(firstName, lastInitial)} · {cityLabel}
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {headline ? <p className="text-foreground text-pretty">{headline}</p> : null}
         {/*
           The same chips the public list renders, and for the same reason: a
           Skill label is a verb phrase, and the registry's `Badge` is

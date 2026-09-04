@@ -13,9 +13,9 @@
 
 import { AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
 import { buttonVariants } from "@repo/design-system/components/button";
-import { Separator } from "@repo/design-system/components/separator";
 import { cityLabel, formatColombianPhone } from "@repo/domain/policy";
 import type { OwnProfile } from "@repo/domain/profiles";
+import { DoorOpenIcon, GlobeIcon, LockKeyholeIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ProfileCard } from "@/app/(site)/_components/profile-card";
@@ -191,34 +191,57 @@ function Tiers({ profile, justPublished, justSaved }: OwnProfileViewProps) {
         {EDIT_LINK}
       </Link>
 
-      <section className="flex flex-col gap-3" aria-labelledby="public-heading">
-        <h2 id="public-heading" className="text-foreground text-lg font-semibold">
-          {PUBLIC_HEADING}
-        </h2>
-        <Card profile={profile} />
-        <p className="text-muted-foreground text-sm">{photoSentence(profile.photoState)}</p>
-        <p className="text-muted-foreground text-sm">{publishedOn(profile.publishedAt)}</p>
-      </section>
+      {/*
+        Three sheets, one per shape of the profile (`PRODUCT.md` → three shapes
+        of one profile, differing by exactly the fields that must not leak).
+        The margin line runs beside all three from `sm` up, each opens on a
+        ruling, and the icon in the margin says who reaches it — the world at
+        large, someone who opened her profile, someone she accepted. The icon
+        is a mark beside the heading rather than a state on it, and it is
+        `aria-hidden` because the heading already says the same thing in words.
+      */}
+      <div className="ruled-page">
+        <Tier id="public-heading" heading={PUBLIC_HEADING} icon={GlobeIcon}>
+          <Card profile={profile} />
+          <p className="text-muted-foreground text-sm">{photoSentence(profile.photoState)}</p>
+          <p className="text-muted-foreground text-sm">{publishedOn(profile.publishedAt)}</p>
+        </Tier>
 
-      <Separator />
+        <Tier id="gated-heading" heading={GATED_HEADING} icon={DoorOpenIcon}>
+          <GatedTerms profile={profile} />
+        </Tier>
 
-      <section className="flex flex-col gap-3" aria-labelledby="gated-heading">
-        <h2 id="gated-heading" className="text-foreground text-lg font-semibold">
-          {GATED_HEADING}
-        </h2>
-        <GatedTerms profile={profile} />
-      </section>
-
-      <Separator />
-
-      <section className="flex flex-col gap-3" aria-labelledby="held-heading">
-        <h2 id="held-heading" className="text-foreground text-lg font-semibold">
-          {HELD_HEADING}
-        </h2>
-        <p className="text-muted-foreground text-sm text-pretty">{HELD_EXPLANATION}</p>
-        <HeldTerms profile={profile} />
-      </section>
+        <Tier id="held-heading" heading={HELD_HEADING} icon={LockKeyholeIcon}>
+          <p className="text-muted-foreground text-sm text-pretty">{HELD_EXPLANATION}</p>
+          <HeldTerms profile={profile} />
+        </Tier>
+      </div>
     </div>
+  );
+}
+
+function Tier({
+  id,
+  heading,
+  icon: Icon,
+  children,
+}: {
+  id: string;
+  heading: string;
+  icon: LucideIcon;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={id}
+      className="border-border grid grid-cols-[1.5rem_1fr] gap-x-3 gap-y-4 border-t py-7 first:border-t-0 first:pt-0 sm:gap-x-4"
+    >
+      <Icon aria-hidden="true" className="text-primary mt-1 size-6" />
+      <h2 id={id} className="font-heading text-foreground text-2xl leading-8 font-medium">
+        {heading}
+      </h2>
+      <div className="col-start-2 flex flex-col gap-3">{children}</div>
+    </section>
   );
 }
 
