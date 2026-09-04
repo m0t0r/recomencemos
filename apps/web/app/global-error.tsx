@@ -25,8 +25,8 @@
  * `apps/web/design-tokens.test.ts` is what keeps all three in step.
  *
  * **It still clears WCAG 2.2 AA on its own**, because it cannot borrow the token
- * layer's guarantee: 18.04:1 for body text, 5.04:1 for the muted reference line,
- * and 6.51:1 for the button. Those are the same three numbers the email palette
+ * layer's guarantee: 16.49:1 for body text, 5.86:1 for the muted reference line,
+ * and 7.42:1 for the button. Those are the same three numbers the email palette
  * tabulates, which is what being one palette means.
  *
  * `color-scheme: light` is now stated rather than `light dark`, so form controls
@@ -48,18 +48,18 @@ const styles = `
     /* The product's palette, from globals.css. Custom properties with inline
      * var() fallbacks below, so a browser that drops this block still renders
      * legible text rather than transparent-on-transparent. */
-    --bg: #ffffff;          /* --background      oklch(1 0 0)          */
-    --fg: #12171b;          /* --foreground      oklch(0.2 0.012 248)  */
-    --muted: #66707a;       /* --muted-foreground oklch(0.54 0.02 248) */
-    --surface: #f3f5f8;     /* --muted           oklch(0.97 0.004 248) */
-    --button-bg: #10619e;   /* --primary         oklch(0.48 0.122 248) */
-    --button-fg: #ffffff;   /* --primary-foreground oklch(1 0 0)       */
+    --bg: #fafcfe;          /* --background      oklch(0.99 0.004 250)  */
+    --fg: #161c2d;          /* --foreground      oklch(0.23 0.035 268)  */
+    --muted: #58637b;       /* --muted-foreground oklch(0.5 0.04 265)   */
+    --surface: #eff4fa;     /* --muted           oklch(0.965 0.01 250)  */
+    --button-bg: #334db0;   /* --primary         oklch(0.46 0.16 268)   */
+    --button-fg: #ffffff;   /* --primary-foreground oklch(1 0 0)        */
   }
 
   body {
     margin: 0;
-    background: var(--bg, #ffffff);
-    color: var(--fg, #12171b);
+    background: var(--bg, #fafcfe);
+    color: var(--fg, #161c2d);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 1rem;
     line-height: 1.5;
@@ -97,7 +97,7 @@ const styles = `
   }
 
   .muted {
-    color: var(--muted, #66707a);
+    color: var(--muted, #58637b);
   }
 
   .reference {
@@ -105,14 +105,14 @@ const styles = `
   }
 
   .reference code {
-    background: var(--surface, #f3f5f8);
+    background: var(--surface, #eff4fa);
     border-radius: 0.25rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     padding: 0.125rem 0.375rem;
   }
 
   .boundary button {
-    background: var(--button-bg, #10619e);
+    background: var(--button-bg, #334db0);
     border: 1px solid transparent;
     border-radius: 0.375rem;
     color: var(--button-fg, #ffffff);
@@ -128,7 +128,7 @@ const styles = `
   .boundary button:focus-visible {
     /* Offset so the indicator sits on the page background rather than on the
        button it outlines, where it would have the button's own contrast. */
-    outline: 2px solid var(--fg, #12171b);
+    outline: 2px solid var(--fg, #161c2d);
     outline-offset: 2px;
   }
 `;

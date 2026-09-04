@@ -184,14 +184,17 @@ that is warm, well-meant, fluent, and describes the person reading it as someone
 things happened to.
 
 **The visual authority is [`DESIGN.md`](DESIGN.md)**, and
-`packages/design-system/src/styles/globals.css` holds the values it names. Eleven
-`--brand-*` shades at hue 248 carry the whole palette behind a semantic seam; swapping the
-brand hue is one edit. Typefaces are Inter and Geist Mono. **Light only — there is no dark
-mode.** The palette and the icon set came from a preset and from
-[`m0t0r/workforpereira`](https://github.com/m0t0r/workforpereira) rather than from a brand
-exercise, which is why `README.md` still lists them as open.
+`packages/design-system/src/styles/globals.css` holds the values it names. The world is
+**the ruled notebook** — ink on paper, chosen with
+[#178](https://github.com/m0t0r/recomencemos/issues/178) from candidates grounded in the
+audience's own world. Eleven `--brand-*` shades at hue 268 (ballpoint ink) carry the whole
+palette behind a semantic seam; swapping the brand hue is one edit. Typefaces are Alegreya
+for display and for her own words, Inter for everything a person operates, Geist Mono for
+code. **Light only — there is no dark mode.** The icon set (`lucide`) still came with a
+preset, which is why `README.md` lists it as open.
 
-**The name is Recomencemos.** There is no logo and no wordmark yet.
+**The name is Recomencemos.** The wordmark is the name set in the display face; there is
+no pictorial mark yet.
 
 ## Evidence on Hand
 

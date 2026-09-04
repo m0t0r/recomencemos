@@ -25,34 +25,34 @@
  *
  * | Pair                              | Ratio | WCAG 2.2 AA (4.5:1) |
  * | --------------------------------- | ----- | ------------------- |
- * | `foreground` on `background`      | 18.04 | pass                |
- * | `foreground` on `muted`           | 16.52 | pass                |
- * | `primary` on `background`         |  6.51 | pass                |
- * | `primaryForeground` on `primary`  |  6.51 | pass                |
- * | `mutedForeground` on `background` |  5.04 | pass                |
- * | `mutedForeground` on `muted`      |  4.62 | pass                |
+ * | `foreground` on `background`      | 16.49 | pass                |
+ * | `foreground` on `muted`           | 15.34 | pass                |
+ * | `primary` on `background`         |  7.22 | pass                |
+ * | `primaryForeground` on `primary`  |  7.42 | pass                |
+ * | `mutedForeground` on `background` |  5.86 | pass                |
+ * | `mutedForeground` on `muted`      |  5.45 | pass                |
  *
- * `mutedForeground` on `muted` is the tight one at 4.62. It is the footer, and a
+ * `mutedForeground` on `muted` is the tight one at 5.45. It is the footer, and a
  * template that puts smaller or lighter text there has spent the margin — which
  * is why the number is written down rather than left to be re-measured.
  */
 export const palette = {
-  /** `oklch(1 0 0)` */
-  background: "#ffffff",
-  /** `oklch(0.2 0.012 248)` */
-  foreground: "#12171b",
-  /** `oklch(0.48 0.122 248)` */
-  primary: "#10619e",
+  /** `oklch(0.99 0.004 250)` */
+  background: "#fafcfe",
+  /** `oklch(0.23 0.035 268)` */
+  foreground: "#161c2d",
+  /** `oklch(0.46 0.16 268)` */
+  primary: "#334db0",
   /** `oklch(1 0 0)` */
   primaryForeground: "#ffffff",
-  /** `oklch(0.955 0.008 248)` */
-  secondary: "#ecf1f5",
-  /** `oklch(0.97 0.004 248)` */
-  muted: "#f3f5f8",
-  /** `oklch(0.54 0.02 248)` */
-  mutedForeground: "#66707a",
-  /** `oklch(0.915 0.006 248)` */
-  border: "#e0e3e7",
+  /** `oklch(0.95 0.02 255)` */
+  secondary: "#e6effc",
+  /** `oklch(0.965 0.01 250)` */
+  muted: "#eff4fa",
+  /** `oklch(0.5 0.04 265)` */
+  mutedForeground: "#58637b",
+  /** `oklch(0.895 0.03 240)` */
+  border: "#cbe0ef",
 } as const;
 
 /**

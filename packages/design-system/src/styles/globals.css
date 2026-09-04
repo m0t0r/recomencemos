@@ -13,62 +13,74 @@
 @source "../**/*.{ts,tsx}";
 @source "../../../../apps/**/*.{ts,tsx}";
 
-/* Tokens copied from m0t0r/workforpereira@dev (packages/design-system), which
- * derived and audited them. Three things to know before editing this file.
+/* The notebook: ink on ruled paper. `DESIGN.md` is the authority on why; this file holds
+ * the values it names. Three things to know before editing it.
  *
  * 1. The `--brand-*` ramp below is the private source; the semantic tokens under it are the seam.
  *    Only the semantic names reach Tailwind through `@theme inline`, so a component can never
  *    reach past the semantic layer into a raw shade. Swapping the hue is one edit to the ramp.
- * 2. Contrast is a property of the LIGHTNESS ramp, not the hue. Every L below is fixed and was
- *    audited in the source repo; hue and chroma are free. The `check-contrast` script that
- *    re-proves it was NOT copied here, so a change to these values is currently unverified —
- *    port `scripts/check-contrast.mjs` from that repo before editing any L value.
- * 3. There is no dark mode. The source repo decided that (its ADR-0029) and this repo followed
- *    when the tokens were adopted, removing `next-themes`, the provider and the toggle. That
- *    decision is not yet recorded as an ADR here. Do not add a `.dark` block; add the mode
- *    deliberately or not at all.
+ * 2. Contrast is a property of the LIGHTNESS ramp, not the hue. Every L below is asserted by
+ *    `apps/web/design-tokens.test.ts`, which re-derives each semantic pair from this file and
+ *    fails under WCAG 2.2 AA — so a change to an L value is red before it is reviewed, and the
+ *    numbers in the comments are re-measured rather than recalled.
+ * 3. There is no dark mode. The paper is the product's one ground, and `DESIGN.md` says why.
+ *    Do not add a `.dark` block; add the mode deliberately or not at all.
  */
 
 :root {
-  /* Brand ramp — H 248, "civic blue". Private: never referenced outside this file. */
-  --brand-50: oklch(0.975 0.012 248);
-  --brand-100: oklch(0.945 0.026 248);
-  --brand-200: oklch(0.885 0.057 248);
-  --brand-300: oklch(0.81 0.094 248);
-  --brand-400: oklch(0.715 0.114 248);
-  --brand-500: oklch(0.62 0.13 248);
-  --brand-600: oklch(0.545 0.13 248);
-  --brand-700: oklch(0.48 0.122 248);
-  --brand-800: oklch(0.41 0.109 248);
-  --brand-900: oklch(0.33 0.089 248);
-  --brand-950: oklch(0.235 0.066 248);
+  /* Brand ramp — H 268, ballpoint ink. Private: never referenced outside this file. */
+  --brand-50: oklch(0.975 0.012 262);
+  --brand-100: oklch(0.94 0.04 262);
+  --brand-200: oklch(0.88 0.08 264);
+  --brand-300: oklch(0.79 0.12 266);
+  --brand-400: oklch(0.68 0.15 268);
+  --brand-500: oklch(0.62 0.16 268);
+  --brand-600: oklch(0.54 0.17 268);
+  --brand-700: oklch(0.46 0.16 268);
+  --brand-800: oklch(0.38 0.14 268);
+  --brand-900: oklch(0.28 0.1 268);
+  --brand-950: oklch(0.22 0.07 268);
 
-  /* Ground and ink */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.2 0.012 248);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.012 248);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.012 248);
+  /* Paper and ink. The paper is not pure white: a faint cool cast is what separates a sheet
+   * from a screen, and the ink is blue-black rather than neutral black for the same reason a
+   * written page never is. */
+  --background: oklch(0.99 0.004 250);
+  --foreground: oklch(0.23 0.035 268);
+  --card: oklch(0.99 0.004 250);
+  --card-foreground: oklch(0.23 0.035 268);
+  --popover: oklch(0.99 0.004 250);
+  --popover-foreground: oklch(0.23 0.035 268);
 
-  /* Brand roles. `--primary` is shade 700, not 600: the register is institutional, and 700
-   * carries white at 6.5:1 rather than 4.9:1. */
+  /* Brand roles. `--primary` is shade 700: it carries white at 7.4:1 and reads as ink on
+   * paper rather than as a coloured button sitting on a page. */
   --primary: var(--brand-700);
   --primary-foreground: oklch(1 0 0);
 
-  --secondary: oklch(0.955 0.008 248);
-  --secondary-foreground: oklch(0.2 0.012 248);
-  --accent: oklch(0.955 0.008 248);
-  --accent-foreground: oklch(0.2 0.012 248);
-  --muted: oklch(0.97 0.004 248);
-  --muted-foreground: oklch(0.54 0.02 248);
+  /* The cover: a solid field of ink that owns a whole region — the landing's first viewport
+   * and nothing smaller. The same shade as the ink a button is painted in — one ink — and a lighter tint for
+   * secondary text on it, tinted from the same hue rather than greyed. */
+  --ink: var(--brand-700);
+  --ink-foreground: oklch(1 0 0);
+  --ink-muted: oklch(0.92 0.05 262);
 
-  /* `--border` and `--input` are DIFFERENT JOBS and must not be collapsed back into one value.
-   * A divider identifies nothing, so it may be faint. An input's boundary is the only thing
-   * identifying the control, so WCAG 2.2 SC 1.4.11 requires 3:1 against the page. */
-  --border: oklch(0.915 0.006 248);
-  --input: oklch(0.65 0.02 248);
+  --secondary: oklch(0.95 0.02 255);
+  --secondary-foreground: oklch(0.23 0.035 268);
+  --accent: oklch(0.95 0.02 255);
+  --accent-foreground: oklch(0.23 0.035 268);
+  --muted: oklch(0.965 0.01 250);
+  --muted-foreground: oklch(0.5 0.04 265);
+
+  /* `--border` is the ruling: the light blue line a notebook prints between rows, and every
+   * divider in the product is one. `--input` is a DIFFERENT JOB and must not be collapsed into
+   * it: a ruling identifies nothing, so it may be faint, while an input's boundary is the only
+   * thing identifying the control, so WCAG 2.2 SC 1.4.11 requires 3:1 against the page. */
+  --border: oklch(0.895 0.03 240);
+  --input: oklch(0.6 0.06 265);
   --ring: var(--brand-700);
+
+  /* The margin: the vertical line down the left of a ruled page. Decorative and structural,
+   * never a state — it is rose rather than red so that it can never be read as `destructive`. */
+  --margin: oklch(0.78 0.09 18);
 
   /* Semantic triads. Each state carries a foreground, a surface and a border — the border
    * because four prototypes each needed one, invented it inline, and disagreed.
@@ -90,57 +102,36 @@
   --destructive-surface: oklch(0.965 0.016 22);
   --destructive-border: oklch(0.82 0.078 22);
 
-  /* Chart series. Five slots, a FIXED ORDER, assigned in sequence and never cycled — the
-   * order is what makes the palette colour-vision-safe, so re-ordering it is a change to
-   * the decision, not a preference.
+  /* Chart series. Five slots, a FIXED ORDER, assigned in sequence and never cycled.
    *
    * Slot 1 is `--brand-600` verbatim: cohesion with `--primary` by construction, and one
    * step off it so a data mark never reads as a button. The other four are >= 45 degrees
-   * apart in hue from each other and from the brand, so a legend is readable, and >= 25
-   * degrees clear of every semantic hue, so a series can never impersonate a state — a
-   * red at a lighter step clears a distance check on lightness alone while still reading
-   * as `destructive`, which is exactly what the reserved-status rule exists to prevent.
+   * apart in hue from each other and from the brand, and >= 25 degrees clear of every
+   * semantic hue, so a series can never impersonate a state. Every slot clears 3:1 on the
+   * page (SC 1.4.11), asserted in `apps/web/design-tokens.test.ts`.
    *
-   * Derived against the data-visualisation checks: on the ADJACENT pairlist, which is the
-   * gate for bars, lines and stacked segments, the worst pair is deltaE 14.1 under
-   * simulated protanopia/deuteranopia against a target of 8, and 25.4 under normal vision
-   * against a floor of 15. Every slot clears 3:1 on the page (SC 1.4.11), so a mark stays
-   * legible without relying on a label.
-   *
-   * On the ALL-PAIRS list — scatter, bubble, map, small multiples, where any two marks can
-   * touch — five slots cannot pass and no ordering can fix that. Those forms carry TWO
-   * series from this palette; more means facets, or folding the tail into "Other". */
+   * The ramp moved with the brand hue and its colour-vision distances have NOT been re-measured
+   * against the data-visualisation checks — no chart ships in this product today. The first
+   * surface that draws one re-derives the four non-brand slots before it does. */
   --chart-1: var(--brand-600);
   --chart-2: oklch(0.64 0.16 50);
   --chart-3: oklch(0.64 0.103 200);
-  --chart-4: oklch(0.48 0.16 295);
-  --chart-5: oklch(0.68 0.16 355);
+  --chart-4: oklch(0.52 0.14 110);
+  --chart-5: oklch(0.68 0.16 340);
 
-  /* Sidebar. ADR-0031 gave these real values: the operator surface is the first — and in v1 the
-   * only — persistent navigation in the product, which is the day this block was parked against.
-   *
-   * The sidebar sits ONE STEP off the page rather than becoming a second palette: same hue, same
-   * ink, a deeper ground. Three tokens stop being aliases and each for a stated reason.
-   *   - `--sidebar` deepens 0.985 -> 0.975, because a nav that only just leaves the page reads as
-   *     a rendering artefact rather than a region.
-   *   - `--sidebar-accent` deepens 0.955 -> 0.94: the page value was chosen against white and is
-   *     nearly invisible on the sidebar's own ground, which would leave hover and the current item
-   *     distinguished by almost nothing.
-   *   - `--sidebar-border` deepens 0.915 -> 0.90 for the same reason — it divides the nav from the
-   *     page, so it is measured against the darker of the two.
-   * The rest stay aliases deliberately: the ink and the brand do not change because the ground did.
-   *
-   * `--sidebar-primary` marks the CURRENT item, never a call to action. */
-  --sidebar: oklch(0.975 0.008 248);
+  /* Sidebar: the operator surface, one step off the page rather than a second palette —
+   * same hue, same ink, a deeper ground. `--sidebar-primary` marks the CURRENT item, never a
+   * call to action. */
+  --sidebar: oklch(0.975 0.012 255);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--brand-700);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.94 0.016 248);
+  --sidebar-accent: oklch(0.94 0.025 255);
   --sidebar-accent-foreground: var(--accent-foreground);
-  --sidebar-border: oklch(0.9 0.01 248);
+  --sidebar-border: oklch(0.88 0.03 245);
   --sidebar-ring: var(--brand-700);
 
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 }
 
 @theme inline {
@@ -152,6 +143,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-ink-muted: var(--ink-muted);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -161,6 +155,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-margin: var(--margin);
 
   --color-success: var(--success);
   --color-success-surface: var(--success-surface);
@@ -196,19 +191,84 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
+  /* Two families, clearly distinct. `--font-sans` and `--font-display` are set on `<html>` by
+   * `next/font` in the app's root layout; the heading role points at the display face, so a
+   * registry component's title picks it up without naming it. */
   --font-sans: var(--font-sans);
-  --font-heading: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-heading: var(--font-display);
+
+  /* Tailwind's `text-3xl` is 30 px, which is not a step of `DESIGN.md`'s ladder
+   * (14 · 16 · 18 · 20 · 24 · 28 · 32 · 36). It is re-pointed at 32 px so that the
+   * utility a page heading naturally reaches for lands on the ladder rather than
+   * beside it. */
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 1.25;
+
+  /* The one authored motion in the product: the vocabulary strip on the landing drifts. It is
+   * defined here rather than in the app so that a second surface reaches for the same keyframes
+   * rather than a slightly different set. Stilled under reduced motion in the base layer. */
+  --animate-drift: drift 300s linear infinite;
+
+  @keyframes drift {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
+
+/* The two shapes every surface repeats, named once so that three files cannot drift.
+ *
+ * `ruled-page`: a column of rows with the margin line down its left from `sm` up. On a
+ * phone the line is dropped rather than shrunk — at 360 px a row wants every pixel.
+ * `page-heading`: the `<h1>` of a page, in the display face at the 32 px step. */
+@utility ruled-page {
+  @apply border-margin flex flex-col;
+  @variant sm {
+    @apply -ml-5 border-l-2 pl-5;
+  }
+  @variant lg {
+    @apply -ml-8 pl-8;
+  }
+}
+
+@utility page-heading {
+  @apply font-heading text-foreground text-3xl font-medium tracking-[-0.01em] text-balance;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* The parts of the page nobody draws still carry the palette: the scrollbar, the caret
+     * and the selection are ink and paper too. */
+    scrollbar-color: var(--brand-300) transparent;
+  }
   body {
     @apply bg-background text-foreground;
+    caret-color: var(--primary);
+    font-feature-settings: "kern", "liga", "calt";
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--brand-200);
+    color: var(--brand-950);
+  }
+  a {
+    text-underline-offset: 0.16em;
+    text-decoration-thickness: from-font;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-drift {
+      animation: none;
+    }
   }
 }

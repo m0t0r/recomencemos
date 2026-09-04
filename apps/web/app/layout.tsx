@@ -22,13 +22,34 @@
  */
 
 import type { Metadata } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Alegreya, Geist_Mono, Inter } from "next/font/google";
 import { cn } from "@repo/design-system/lib/utils";
 import "@repo/design-system/globals.css";
 
+/**
+ * Two families, clearly distinct, and `DESIGN.md` → Typography is why.
+ *
+ * Inter is the working face: forms, labels, data, the Admin queue. Alegreya
+ * carries the display role and her own words — the one line on a card nobody
+ * else could have written. It is a Latin American face (Huerta Tipográfica,
+ * Buenos Aires) drawn for long Spanish reading, with a calligraphic rhythm that
+ * says "written by a person" without the costume of a handwriting font.
+ *
+ * Both are self-hosted by `next/font`, so no request leaves for a font host and
+ * neither counts against NFR3, which measures scripts. Alegreya ships the two
+ * weights the ramp uses and both styles; the italic is the voice of a quotation,
+ * which is what a headline on a card is.
+ */
 const fontSans = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
+});
+
+const fontDisplay = Alegreya({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-display",
 });
 
 const fontMono = Geist_Mono({
@@ -58,9 +79,27 @@ export default function RootLayout({
   return (
     <html
       lang="es-CO"
-      className={cn("font-sans antialiased", fontSans.variable, fontMono.variable)}
+      className={cn(
+        "font-sans antialiased",
+        fontSans.variable,
+        fontDisplay.variable,
+        fontMono.variable,
+      )}
     >
-      <body>{children}</body>
+      <body>
+        {/*
+          impeccable:direction d843eaaf
+          WORLD: the ruled notebook — the cuaderno a tienda in Risaralda keeps,
+          where the barrio's names and work are written by hand and one person
+          keeps the book. Ink blue on paper white, light rulings, a rose margin.
+          FIRST VIEWPORT: a solid ink cover carrying the proposition and one
+          action, hers; under it the ruled page of the newest profiles.
+          VISITOR PATH: cover → the vocabulary drifting → the page → how it works.
+          SIGNATURE: her own words in Alegreya, as the only line nobody else wrote.
+          REACH: every list is a ruled page with a margin; every state is a mark.
+        */}
+        {children}
+      </body>
     </html>
   );
 }
