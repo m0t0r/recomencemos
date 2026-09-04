@@ -96,6 +96,17 @@ pnpm exec turbo dev --filter=web
 pnpm exec turbo check-types --filter=@repo/design-system
 ```
 
+**`pnpm page-weight` is how NFR3's byte budget is checked, and it is the only way it may be quoted.**
+`scripts/first-load-bytes.mjs` reads a production build — run `pnpm build` first — and prints, per
+route, every `<script src>` the prerendered document requests, each chunk compressed on its own and
+summed, in gzip and brotli, with the `noModule` polyfill bundle excluded and reported separately
+because no browser inside NFR5's floor fetches it. Pass route paths (`pnpm page-weight / /publish`)
+to narrow it. It blocks nothing and exits `2` rather than `0` when it cannot reach an answer — a
+route with no prerendered document, a chunk the build does not contain, a script served from
+somewhere else. **A figure quoted from memory is how three documents came to carry numbers 39 KB too
+high for two efforts** (#157): re-take it rather than repeat it, and name the compression wherever it
+is written down.
+
 `lint` and `format` are Turborepo **root tasks** (`//#lint`, `//#format`), not per-package scripts — oxlint and oxfmt are fast enough to cover the whole repo in one pass, so `apps/web` and `packages/design-system` have no `lint` script of their own. `pnpm exec turbo run quality` runs both checks; `quality:fix` runs `lint:fix` then `format:fix` (in that order, so the formatter has the last word).
 
 ## Toolchain
