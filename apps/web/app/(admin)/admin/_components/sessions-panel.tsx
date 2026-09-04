@@ -42,7 +42,6 @@ const INITIAL: Result = {};
 
 export function SessionsPanel() {
   const [result, formAction, pending] = useActionState(revokeSessions, INITIAL);
-  const headingId = useId();
   const emailId = useId();
   const errorId = useId();
   const announcementRef = useRef<HTMLParagraphElement>(null);
@@ -90,11 +89,19 @@ export function SessionsPanel() {
     : (result.serverError?.message ?? fieldError);
 
   return (
-    <Card className="flex flex-col gap-4 p-6" aria-labelledby={headingId}>
+    /*
+      **The card carried `aria-labelledby` and no role, and the attribute was
+      doing nothing.** `Card` renders a plain `<div>`, whose implicit role is
+      `generic`, and ARIA forbids naming a generic element — axe flags it, which
+      is how it was found: this panel only got audited once it had a route of its
+      own. Adding a role to make the name legal is the wrong repair. The heading
+      below already names this content in the document outline, which is how a
+      screen-reader user reaches it, and the page around it is one `<section>`
+      holding only this. So the label is gone rather than propped up.
+    */
+    <Card className="flex flex-col gap-4 p-6">
       <div className="flex flex-col gap-1">
-        <h2 id={headingId} className="text-foreground text-lg font-semibold">
-          {SESSIONS_HEADING}
-        </h2>
+        <h2 className="text-foreground text-lg font-semibold">{SESSIONS_HEADING}</h2>
         {/*
           "Queda registrado quién lo hizo y cuándo" is not reassurance — it is the
           Admin being told that NFR33 applies to them too. An audit nobody knows

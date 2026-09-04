@@ -22,6 +22,25 @@
 export const ADMIN_PAGE_TITLE = "Fila — Recomencemos";
 export const ADMIN_TITLE = "Fila";
 
+/** One section's tab. The heading is the section's own label. */
+export const sectionPageTitle = (label: string) => `${label} — Fila — Recomencemos`;
+
+/**
+ * The five section names.
+ *
+ * **`CONTEXT.md`'s vocabulary, not a synonym of it** — an Offer is a _Propuesta_
+ * and a Report is a _Reporte_, and the glossary's `_Avoid_` lists exist because
+ * a queue that calls the same thing two names is a queue whose operator has to
+ * translate before deciding.
+ *
+ * **Each names what is waiting rather than what to do to it.** An Admin scanning
+ * five nav items is reading a list of backlogs, not a list of verbs.
+ */
+export const OFFERS_LABEL = "Propuestas";
+export const PHOTOS_LABEL = "Fotos";
+export const REPORTS_LABEL = "Reportes";
+export const BOUNCES_LABEL = "Correos rebotados";
+
 /**
  * The refusal, for a page and for an action alike.
  *
@@ -38,16 +57,38 @@ export const ADMIN_TITLE = "Fila";
 export const ADMIN_SESSION_REQUIRED = "No tienes acceso a esta página.";
 
 /**
- * The empty queue.
+ * A section with nothing waiting.
  *
  * **It is a good state and the copy has to say so**, which is the acceptance
- * criterion in as many words. A queue at zero means every Offer has been read and
- * nobody is waiting behind NFR7's 24-hour band — the best this screen can report.
+ * criterion in as many words. A section at zero means everything in it has been
+ * read and nobody is waiting behind the band — the best this screen can report.
  * The default empty state ("no hay nada") reads as an absence of data, which on
  * this surface would be indistinguishable from a source that failed to load.
+ *
+ * **The body states the age as zero**, which the criterion asks for outright:
+ * _"a real and good state, saying the oldest-item age is zero"_. The figure in
+ * the shell says the same thing about the whole queue; this says it about the
+ * section the Admin is looking at, which is the one they are deciding about.
  */
-export const QUEUE_EMPTY_TITLE = "La fila está vacía.";
-export const QUEUE_EMPTY_BODY = "No hay nada esperando revisión.";
+export const QUEUE_EMPTY_TITLE = "Aquí no hay nada esperando.";
+export const QUEUE_EMPTY_BODY = "Todo está revisado: lo más antiguo en esta sección es 0 h.";
+
+/**
+ * A section whose story has not landed.
+ *
+ * **It is not the empty state and must never read as one.** Zero means everything
+ * was read; this means nothing was ever asked. Saying "no hay nada" here would be
+ * the instrument that lies — an Admin would conclude the branch was clear when it
+ * is not being counted at all, which is the unreviewed Offer this whole surface
+ * exists to prevent. So the copy says what is true: there is no count and no
+ * antiquity to show, because nothing is being recorded yet.
+ *
+ * It is temporary by construction and leaves with the section that replaces it.
+ */
+export const SECTION_NOT_LIVE_TITLE = "Esta sección todavía no está funcionando.";
+export const SECTION_NOT_LIVE_BODY =
+  "Todavía no estamos guardando nada aquí, así que no hay cuenta ni antigüedad que mostrar. " +
+  "No quiere decir que esté vacía.";
 
 /**
  * The age of the oldest item, which renders before anything else (story 7) —
@@ -61,10 +102,87 @@ export const QUEUE_EMPTY_BODY = "No hay nada esperando revisión.";
  * band, and 0 is the good value an Admin scans for. A sentence where a number
  * belongs breaks the scan.
  */
-export const OLDEST_ITEM_LABEL = "Lo más antiguo";
+export const OLDEST_ITEM_LABEL = "Lo más antiguo en la fila";
 
 /** `19 h`. The unit is the one NFR7 states the requirement in. */
 export const oldestItemHours = (hours: number) => `${hours} h`;
+
+/**
+ * The nav, and the control that hides it.
+ *
+ * **The toggle's name says what it does to the sections, not "sidebar".** The
+ * person reading it is looking for their work, and the registry's own word for
+ * the element is not a word anybody here would use.
+ */
+export const QUEUE_NAV_LABEL = "Secciones de la fila";
+export const QUEUE_NAV_GROUP_LABEL = "Secciones";
+export const SIDEBAR_TOGGLE_LABEL = "Mostrar u ocultar las secciones";
+export const SIDEBAR_MOBILE_TITLE = "Secciones de la fila";
+export const SIDEBAR_MOBILE_DESCRIPTION = "Las cinco secciones, con lo que espera en cada una.";
+
+/**
+ * How much is waiting in one section, announced.
+ *
+ * **The number alone is what a sighted Admin scans and is not enough on its
+ * own** — read out, "Propuestas, 12" is a list position as easily as a backlog.
+ * The visible figure is `aria-hidden` and this is what is announced beside the
+ * name, which is one fact rendered twice rather than two facts that can drift.
+ */
+export const sectionWaiting = (total: number) =>
+  `${total} ${total === 1 ? "pendiente" : "pendientes"}`;
+
+/** A section with no resolver has no figure, and the dash is not a zero. */
+export const SECTION_NOT_LIVE_SHORT = "—";
+export const SECTION_NOT_LIVE_ANNOUNCEMENT = "todavía sin datos";
+
+/**
+ * A section whose oldest item has passed its band.
+ *
+ * **Text, not a colour**, which is the acceptance criterion and WCAG 2.2 AA's
+ * 1.4.1 in the same sentence: the marker is a word an Admin reads and a screen
+ * reader announces, and the icon and the colour beside it are the redundant
+ * halves rather than the message.
+ *
+ * Only Offers can reach it today, because NFR7 states the one band this product
+ * has and states it per Offer.
+ */
+export const PAST_BAND_MARKER = "Fuera de plazo";
+
+/**
+ * What the shell still cannot see.
+ *
+ * **Deliberate and temporary.** While four of the five sections have no resolver,
+ * a shell that reported the four it has would be an instrument that lies — an
+ * Admin would read the queue as shallow because most of it is not being counted.
+ * So the coverage is stated where it is read, and the ticket that lands the fifth
+ * section deletes this line rather than updating it.
+ *
+ * `Intl.ListFormat` rather than a hand-rolled join: Spanish takes _e_ rather than
+ * _y_ before a word starting with the *i* sound, and a joiner that did not know
+ * that would be wrong the first time a section is named _Imágenes_.
+ */
+const spanishList = (items: readonly string[]) =>
+  new Intl.ListFormat("es-CO", { style: "long", type: "conjunction" }).format(items);
+
+export const coverageNotice = (live: readonly string[], pending: readonly string[]) =>
+  `Por ahora la fila solo cuenta ${spanishList(live)}. ` +
+  `Todavía faltan ${spanishList(pending)}: lo que haya ahí no aparece en estos números.`;
+
+/**
+ * The platform signal: profiles published faster than people plausibly arrive.
+ *
+ * **It is not a queue item and carries nothing to press**, which is the whole of
+ * what it is — publishing is never refused, and the queue simply says the rate is
+ * unusual. The last sentence says so out loud, because an operator who found a
+ * warning with no action would go looking for the action.
+ *
+ * It says a number rather than "mucho": the Admin decides what to do with it, and
+ * eleven and ninety are different days.
+ */
+export const PUBLISH_SIGNAL_TITLE = "Se están publicando perfiles más rápido de lo habitual.";
+export const publishSignalBody = (count: number) => `${count} perfiles en la última hora.`;
+export const PUBLISH_SIGNAL_NOTE =
+  "No hay nada que hacer aquí, y no frenamos ninguna publicación. Es solo para que lo sepas.";
 
 /**
  * A source that failed to load, named.
@@ -77,7 +195,18 @@ export const oldestItemHours = (hours: number) => `${hours} h`;
 export const sourceFailed = (source: string) =>
   `No pudimos cargar ${source}. Puede haber elementos sin revisar aquí.`;
 
-/** The panel that ends an Account's sessions (NFR13). */
+/**
+ * The panel that ends an Account's sessions (NFR13), and the nav row that reaches
+ * it.
+ *
+ * **Its own group, below the five sections, because it is a tool and not a
+ * backlog.** Nothing accumulates here, so it has no count, no oldest item and no
+ * band — and a row in the queue's own list would be a control sitting inside an
+ * instrument. The nav label is the verb; the heading on the page is the full
+ * sentence, because a nav row is scanned and a heading is read.
+ */
+export const TOOLS_NAV_LABEL = "Herramientas";
+export const SESSIONS_NAV_LABEL = "Cerrar sesiones";
 export const SESSIONS_HEADING = "Cerrar sesiones de una cuenta";
 export const SESSIONS_EXPLANATION =
   "Cierra todas las sesiones abiertas de una cuenta. Queda registrado quién lo hizo y cuándo.";
