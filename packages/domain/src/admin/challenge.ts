@@ -199,3 +199,42 @@ export const SIGN_IN_CHALLENGE_COOKIE_ATTRIBUTES = {
 export function secureCookies(baseUrl: string | undefined): boolean {
   return (baseUrl ?? "").startsWith("https://");
 }
+
+/**
+ * The same read, from the request's own headers.
+ *
+ * **It exists so that `apps/web` can answer "is this page a 404" without being
+ * handed anything else.** The route that asks for the code has to refuse a
+ * browser holding no live challenge — no message, no resend offer, no route
+ * onward — and the only honest way to decide that is with the key. ADR-0010
+ * withholds this module, so what crosses the boundary is a boolean built from
+ * this: not the Account id, not the expiry, and not the cookie's value.
+ *
+ * **Splitting each pair on its first `=` is the rule, and it is not
+ * incidental.** `=` terminates a cookie's name, so a scan for the name anywhere
+ * in the line would let `x.recomencemos.sign_in_challenge` — a cookie any site
+ * on a parent domain can set — vouch for a challenge this product never signed.
+ * The name is compared whole.
+ *
+ * A cleared cookie arrives as `<name>=` and reads as an empty value, which
+ * {@link readSignInChallenge} already answers `null` to. That is the ordinary
+ * case rather than an edge: the door writes exactly that on success.
+ */
+export function readSignInChallengeFromHeaders(
+  headers: Headers,
+  key: string,
+  now: Date = new Date(),
+): string | null {
+  const line = headers.get("cookie");
+  if (!line) return null;
+
+  for (const pair of line.split(";")) {
+    const separator = pair.indexOf("=");
+    if (separator === -1) continue;
+    if (pair.slice(0, separator).trim() !== SIGN_IN_CHALLENGE_COOKIE) continue;
+
+    return readSignInChallenge(pair.slice(separator + 1).trim(), key, now);
+  }
+
+  return null;
+}

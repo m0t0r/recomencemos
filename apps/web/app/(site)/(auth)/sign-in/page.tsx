@@ -18,9 +18,12 @@
 
 import { Card } from "@repo/design-system/components/card";
 import { Skeleton } from "@repo/design-system/components/skeleton";
+import { safeReturnPath } from "@repo/domain/auth-handler";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { googleSignInAvailable } from "@/lib/auth";
+import { auth, googleSignInAvailable } from "@/lib/auth";
 import { SignInForm } from "./_components/sign-in-form";
 
 export const metadata: Metadata = {
@@ -44,6 +47,27 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
 
   const returnPathParam = params.returnPath;
   const errorParam = params.error;
+
+  /**
+   * **A live session is sent onward rather than shown the form** (the brief's
+   * `signed_in` state, amended in with #96). It is a redirect and not a message
+   * because there is nothing to tell somebody about a problem they do not have.
+   *
+   * **Every session alike, and that is the load-bearing half.** An Admin session
+   * is *not* sent to `/admin`: this page has no business knowing what kind of
+   * session it turned away, and a redirect that differed by grant would make
+   * this public form an oracle for which Accounts hold one — reachable by anyone
+   * who has a cookie, on the surface whose whole design is that the Admin's door
+   * looks like everybody else's.
+   *
+   * The target is `safeReturnPath`'s answer rather than a second rule. It
+   * *coerces* rather than refuses, so an unsafe `?returnPath=` lands on `/`
+   * instead of erroring — which is the right shape here, where the person did
+   * nothing wrong and there is nothing to report.
+   */
+  if (await auth().getSession(await headers())) {
+    redirect(safeReturnPath(typeof returnPathParam === "string" ? returnPathParam : undefined));
+  }
 
   return (
     <SignInForm

@@ -517,6 +517,17 @@ describe("the method apps/web holds", () => {
       new Request(links.at(-1)?.url as string, { redirect: "manual" }),
     );
 
+    /**
+     * **The page's own question, asked of the same headers the code is about to
+     * be checked against.** It is what decides whether the surface at
+     * `SECOND_FACTOR_ROUTE` draws a field or answers 404, and it reads the key
+     * out of the same `env` this handler was built with — so an agreement
+     * between the two that held only in a unit test would still leave the page
+     * refusing every real Admin.
+     */
+    expect(handler.hasSignInChallenge(carrying(opened))).toBe(true);
+    expect(handler.hasSignInChallenge(new Headers())).toBe(false);
+
     const verified = await handler.verifyAdminSignInCode({
       code: await totp(secret),
       headers: carrying(opened),
