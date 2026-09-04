@@ -13,9 +13,17 @@
  * import `@repo/observability`: that package depends on `pino` and its stream
  * packages, and pulling it onto a `"use client"` path would ship them to every
  * visitor.
+ *
+ * **The SDK is handed to this module; this module does not import it** (#157).
+ * That is the same move `packages/errors/src/ambient-request-id.ts` makes and
+ * for the same reason: the value crosses and the module does not. A static
+ * `import * as Sentry` here is a static import on a `"use client"` path, so
+ * Turbopack put `getClient`, `captureException` and the `@sentry/core`
+ * machinery under them — **21 KB gzip** — into the first-load JavaScript of
+ * every route, which is 21 KB of monitoring on a page that has not failed.
+ * Deferring the SDK in `instrumentation-client.ts` and leaving this import
+ * behind would have moved the large half and left the visible half.
  */
-
-import * as Sentry from "@sentry/nextjs";
 
 /**
  * The error an App Router error boundary receives.
@@ -26,6 +34,77 @@ import * as Sentry from "@sentry/nextjs";
  * survives the crossing.
  */
 export type BoundaryError = Error & { digest?: string };
+
+/**
+ * The two functions this module needs from the SDK.
+ *
+ * `typeof import(...)` in a **type** position is erased by the compiler, so this
+ * keeps the vendor's own signatures without putting one byte of the vendor in
+ * the bundle. Naming the two rather than the whole module is also the honest
+ * description of what a report site uses.
+ */
+type Reporter = Pick<typeof import("@sentry/nextjs"), "getClient" | "captureException">;
+
+let reporter: Reporter | undefined;
+
+/**
+ * What was thrown before the SDK arrived, waiting for it.
+ *
+ * **Five, and then it stops.** An error inside a render loop or a retrying
+ * fetch produces hundreds before the first idle callback runs, and an unbounded
+ * array would hold every one and then spend a month's event allowance replaying
+ * them. Five is enough to see what broke.
+ *
+ * On a deployment with no DSN nothing ever attaches, so up to five errors are
+ * held for the life of the page and replayed into nothing. That is deliberate
+ * rather than overlooked: five error objects is not a leak worth a second
+ * condition, and the module that knows whether a DSN exists is the one that
+ * would have to tell this one, which is a coupling for no gain.
+ */
+const PENDING_LIMIT = 5;
+const pending: unknown[] = [];
+
+/**
+ * The hint on a replayed event.
+ *
+ * **The timestamp is the replay's, not the throw's**, because neither a browser
+ * `ErrorEvent` nor a boundary hands over an event time the SDK would take. The
+ * tag is what tells an operator that the moment on the event is when monitoring
+ * arrived rather than when the page broke, so nobody correlates it against a
+ * server line and concludes the clocks disagree.
+ */
+const REPLAYED = { captureContext: { tags: { buffered_before_load: "true" } } };
+
+/**
+ * Hold an error until there is something to report it to.
+ *
+ * Called by the boundary path below and by the two `window` listeners in
+ * `instrumentation-client.ts`, so there is one buffer rather than one per
+ * caller — which is what keeps the limit above a limit on events rather than on
+ * events per source.
+ */
+export function bufferThrown(error: unknown): void {
+  if (pending.length < PENDING_LIMIT) pending.push(error);
+}
+
+/**
+ * Hand this module the SDK, and replay what was thrown before it arrived.
+ *
+ * `instrumentation-client.ts` is the only caller, immediately after `init` — so
+ * every replayed event passes through the same three redaction hooks every
+ * other event does.
+ */
+export function attachReporter(sdk: Reporter): void {
+  reporter = sdk;
+
+  for (const error of pending.splice(0)) {
+    try {
+      sdk.captureException(error, REPLAYED);
+    } catch {
+      // Nothing here escapes, for the reason `reportClientError` gives below.
+    }
+  }
+}
 
 /**
  * Reports a boundary's error if it has not already been reported, and returns
@@ -75,14 +154,25 @@ export function reportClientError(error: BoundaryError): string | undefined {
     // no event anywhere while suppressing the report that would have.
     if (error.digest !== undefined && error.digest.trim() !== "") return error.digest;
 
+    // **A boundary that fires before the SDK arrives still reports, and still
+    // shows no reference.** The error is held and replayed, so the incident is
+    // not lost; the reference is genuinely unavailable, because the identifier
+    // the SDK returns is minted by the call this cannot make yet. Inventing one
+    // would put a string on the page that resolves to no event anywhere — the
+    // same reason the no-DSN path below renders no reference line either.
+    if (reporter === undefined) {
+      bufferThrown(error);
+      return undefined;
+    }
+
     // The same check `reportError` makes on the server, for the same reason:
     // with no client initialised the SDK still mints an event id and sends
     // nothing, so returning it would put a reference on the page that resolves
     // to no event anywhere. On the no-DSN path a fresh clone runs, and the
     // boundary simply renders no reference line.
-    if (Sentry.getClient() === undefined) return undefined;
+    if (reporter.getClient() === undefined) return undefined;
 
-    return Sentry.captureException(error);
+    return reporter.captureException(error);
   } catch {
     return undefined;
   }

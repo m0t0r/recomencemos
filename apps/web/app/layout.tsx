@@ -7,15 +7,22 @@
  * to sit here, above every route. A nested `app/admin/layout.tsx` cannot remove a
  * parent's chrome, so the only way for `/admin` to have a shell of its own was for
  * this file to stop having one: `(site)` carries the public header, `(admin)`
- * carries the queue's, and what is left here is `<html>`, the fonts, and the toast
- * region both need.
+ * carries the queue's, and what is left here is `<html>` and the fonts.
  *
  * Neither group adds a URL segment, so nothing a person can see or link to moved.
+ *
+ * **The toast region went the same way for a different reason** (#157). It was
+ * the last thing here that belonged to a page rather than to the document, and
+ * because it sat above every route, sonner shipped to `/` and `/privacy` — where
+ * nothing toasts, and where nothing anywhere in this app toasts, because there is
+ * not one caller of `toast` in the tree yet. A live region with no producers,
+ * downloaded by every visitor. `packages/design-system/src/components/sonner.tsx`
+ * carries the note about mounting exactly one of them, which is where the first
+ * surface that needs a toast will be looking.
  */
 
 import type { Metadata } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
-import { Toaster } from "@repo/design-system/components/sonner";
 import { cn } from "@repo/design-system/lib/utils";
 import "@repo/design-system/globals.css";
 
@@ -53,15 +60,7 @@ export default function RootLayout({
       lang="es-CO"
       className={cn("font-sans antialiased", fontSans.variable, fontMono.variable)}
     >
-      <body>
-        {children}
-        {/*
-          The toast region stays here rather than moving into `(site)`, because
-          both groups render into it and one `<Toaster />` per group would mean
-          two live regions on a page — which a screen reader announces as two.
-        */}
-        <Toaster />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

@@ -45,6 +45,7 @@
         "scripts/audit-direct.mjs",
         "scripts/audit-lib.mjs",
         "scripts/audit-report.mjs",
+        "scripts/first-load-bytes.mjs",
         "scripts/migration-integrity.mjs",
         "scripts/spec-identifiers.mjs",
         "scripts/ui-proof.mjs",
