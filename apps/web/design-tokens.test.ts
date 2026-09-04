@@ -279,7 +279,7 @@ describe("the root error boundary against the stylesheet", () => {
  *
  * The table in that file is the reason a template author does not re-measure,
  * so a stale number there is worse than no number. `mutedForeground` on `muted`
- * is the tight one — the footer, at 4.62 — and it is the row that would go red
+ * is the tight one — the footer, at 5.45 — and it is the row that would go red
  * first if the ramp moved.
  */
 describe("the contrast table in palette.ts", () => {
@@ -290,12 +290,12 @@ describe("the contrast table in palette.ts", () => {
   );
 
   const documented = [
-    ["foreground", "background", 18.04],
-    ["foreground", "muted", 16.52],
-    ["primary", "background", 6.51],
-    ["primaryForeground", "primary", 6.51],
-    ["mutedForeground", "background", 5.04],
-    ["mutedForeground", "muted", 4.62],
+    ["foreground", "background", 16.49],
+    ["foreground", "muted", 15.34],
+    ["primary", "background", 7.22],
+    ["primaryForeground", "primary", 7.42],
+    ["mutedForeground", "background", 5.86],
+    ["mutedForeground", "muted", 5.45],
   ] as const;
 
   it.each(documented)("%s on %s is the documented %s", (fg, bg, expected) => {
@@ -308,6 +308,80 @@ describe("the contrast table in palette.ts", () => {
 
     expect(measured).toBeCloseTo(expected, 1);
     expect(measured, "every documented pair must clear WCAG 2.2 AA").toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+/**
+ * Every semantic pair in the stylesheet, under WCAG 2.2 AA — the token layer's
+ * own guarantee, asserted where it is declared rather than remembered.
+ *
+ * `globals.css` used to carry a note saying its lightness ramp had been audited
+ * in another repository by a script that was never copied here, so any change
+ * to an `L` value was unverified until somebody noticed. This is that audit,
+ * run on every `pnpm test`: each pair is resolved from the `:root` block, so a
+ * new value is measured before it is reviewed. Text pairs clear 4.5:1; the
+ * non-text pairs — an input's boundary, a chart mark, the margin line — clear
+ * SC 1.4.11's 3:1.
+ *
+ * The pairs are the ones components actually paint. `border` on `background`
+ * is deliberately absent: a ruling identifies nothing, so it may be faint, and
+ * that is written beside `--border` in the stylesheet.
+ */
+describe("the stylesheet's semantic pairs against WCAG 2.2 AA", () => {
+  const tokens = semanticTokens();
+
+  const text = [
+    ["foreground", "background"],
+    ["foreground", "muted"],
+    ["foreground", "secondary"],
+    ["card-foreground", "card"],
+    ["popover-foreground", "popover"],
+    ["secondary-foreground", "secondary"],
+    ["accent-foreground", "accent"],
+    ["sidebar-accent-foreground", "sidebar-accent"],
+    ["muted-foreground", "background"],
+    ["muted-foreground", "muted"],
+    ["muted-foreground", "secondary"],
+    ["primary", "background"],
+    ["primary-foreground", "primary"],
+    ["ink-foreground", "ink"],
+    ["ink-muted", "ink"],
+    ["success", "background"],
+    ["success", "success-surface"],
+    ["warning", "background"],
+    ["warning", "warning-surface"],
+    ["destructive", "background"],
+    ["destructive", "destructive-surface"],
+    ["destructive-foreground", "destructive"],
+    ["sidebar-foreground", "sidebar"],
+    ["sidebar-primary-foreground", "sidebar-primary"],
+  ] as const;
+
+  const nonText = [
+    ["input", "background"],
+    ["ring", "background"],
+    ["chart-1", "background"],
+    ["chart-2", "background"],
+    ["chart-3", "background"],
+    ["chart-4", "background"],
+    ["chart-5", "background"],
+  ] as const;
+
+  const hexOf = (name: string): string => {
+    const value = tokens.get(name);
+    expect(value, `--${name} is not declared in globals.css`).toBeDefined();
+    const oklch = parseOklch(value as string);
+    expect(oklch, `--${name} is ${value}, not a plain oklch() triple`).toBeDefined();
+    const [l, c, h] = oklch as readonly [number, number, number];
+    return oklchToHex(l, c, h);
+  };
+
+  it.each(text)("%s on %s clears 4.5:1", (fg, bg) => {
+    expect(contrastRatio(hexOf(fg), hexOf(bg))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(nonText)("%s on %s clears 3:1", (fg, bg) => {
+    expect(contrastRatio(hexOf(fg), hexOf(bg))).toBeGreaterThanOrEqual(3);
   });
 });
 
