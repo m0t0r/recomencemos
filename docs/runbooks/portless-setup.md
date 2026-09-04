@@ -89,15 +89,16 @@ working.
 
 ## Living with it
 
-| Situation                                   | What to do                                                                                                                         |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| "Which server is mine?"                     | `portless list` — routes by name, so the branch answers it. This replaced `lsof -i :3000`                                          |
-| Testing the **Google sign-in door**         | `PORTLESS=0 pnpm dev`. Back on `:3000`, where the registered redirect URI works. Google will not register a `.localhost` URI       |
-| Anything at all looks wrong                 | `portless doctor` first. It checks the Node version, the state directory, the proxy, OpenSSL and the trust store                   |
-| Dev servers left behind by a killed session | `portless prune`                                                                                                                   |
-| Safari, or a tool that bypasses system DNS  | `portless hosts sync`. Chrome and Firefox resolve `*.localhost` to loopback on their own; Safari does not                          |
-| After a `portless` upgrade                  | `portless doctor`. The state-directory format may change between releases and `portless trust` may need re-running — it is pre-1.0 |
-| A worktree is removed                       | Nothing. The route is per-branch and disappears with the server                                                                    |
+| Situation                                   | What to do                                                                                                                                                                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Which server is mine?"                     | `portless list` — routes by name, so the branch answers it. This replaced `lsof -i :3000`                                                                                                                                                         |
+| Testing the **Google sign-in door**         | `PORTLESS=0 pnpm dev`. Back on `:3000`, where the registered redirect URI works. Google will not register a `.localhost` URI                                                                                                                      |
+| Anything at all looks wrong                 | `portless doctor` first. It checks the Node version, the state directory, the proxy, OpenSSL and the trust store                                                                                                                                  |
+| Dev servers left behind by a killed session | `portless prune`                                                                                                                                                                                                                                  |
+| Running `pnpm admin:enrol`                  | It is not a child of the proxy, so pass the origin the `pnpm dev` banner printed: `PORTLESS_URL=https://<branch>.web.recomencemos.localhost pnpm admin:enrol <email>`. Without it the setup link points at `BETTER_AUTH_URL` and resolves nowhere |
+| Safari, or a tool that bypasses system DNS  | `portless hosts sync`. Chrome and Firefox resolve `*.localhost` to loopback on their own; Safari does not                                                                                                                                         |
+| After a `portless` upgrade                  | `portless doctor`. The state-directory format may change between releases and `portless trust` may need re-running — it is pre-1.0                                                                                                                |
+| A worktree is removed                       | Nothing. The route is per-branch and disappears with the server                                                                                                                                                                                   |
 
 **The database is not covered by any of this.** `docker-compose.yaml` still binds one Postgres on
 5432 and one PgBouncer on 6432 for the whole machine, and every worktree writes into them. ADR-0018
