@@ -1833,6 +1833,54 @@ Active routes:
 ')
 run_origin "and it is picked out of several"          0 '^https://124-add-widget\.web\.example\.localhost$' EMPTY "$MINE"
 
+# **A stub that answers helpfully hides the bug the code exists for.** The real
+# client colours its output when `FORCE_COLOR` is in its environment -- which dev
+# shells and CI images set -- and it wraps the arrow in the route line, so a
+# naive line match finds nothing and reports "no route": the stale origin this
+# whole script exists to stop, arrived at silently. Measured against the real
+# client, not imagined.
+COLOUR=$(origin_app colour web.example 'https://web.example.localhost' '
+Active routes:
+
+  https://web.example.localhost  '$'\033''[2m->'$'\033''[22m  localhost:53321  '$'\033''[2m(pid 4242)'$'\033''[22m
+')
+run_origin "a coloured route line is still a route"   0 '^https://web\.example\.localhost$' EMPTY "$COLOUR"
+
+# The other half of that fix, and the one the real client actually promises:
+# `NO_COLOR` is read ahead of `FORCE_COLOR` and ahead of any stdio test, so this
+# stub colours exactly when the real one would and stays plain when asked.
+HONOURS="$ROOT/origin/honours"
+mkdir -p "$HONOURS/node_modules/.bin"
+printf '{"name":"web","portless":{"name":"web.example"}}\n' > "$HONOURS/package.json"
+cat > "$HONOURS/node_modules/.bin/portless" <<'STUB'
+#!/usr/bin/env bash
+arrow="->"
+[ -n "${NO_COLOR:-}" ] || arrow=$'\033[2m->\033[22m'
+case "$1" in
+  get) echo "https://web.example.localhost" ;;
+  list) printf '\nActive routes:\n\n  https://web.example.localhost  %s  localhost:53321  (pid 4242)\n' "$arrow" ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod +x "$HONOURS/node_modules/.bin/portless"
+run_origin "the colour opt-out reaches the client"    0 '^https://web\.example\.localhost$' EMPTY "$HONOURS"
+
+section "Dev origin: a production shell is not asked at all"
+# The same command enrols an Admin against a deployed database from an operator's
+# laptop, where a dev server may well be running. Adopting its route there would
+# print a setup link at a host reading an entirely different database. Exported
+# rather than written as a prefix on the call: these runners are shell functions,
+# and whether a prefix assignment outlives one is a bash setting rather than
+# something a test should rest on.
+NOBIN="$ROOT/origin/nobin"
+mkdir -p "$NOBIN"
+printf '{"name":"web","portless":{"name":"web.example"}}\n' > "$NOBIN/package.json"
+
+export NODE_ENV=production
+run_origin "production is answered with nothing"      0 EMPTY EMPTY "$LIVE"
+run_origin "and a machine with no client is quiet"    0 EMPTY EMPTY "$NOBIN"
+unset NODE_ENV
+
 section "Dev origin: no answer is not the same as no route"
 NONE=$(origin_app none web.example 'https://web.example.localhost' 'No active routes.
 ')
@@ -1848,10 +1896,8 @@ run_origin "a proxy that cannot list its routes"      2 EMPTY 'could not' "$LIST
 NONAME=$(origin_app noname '' 'https://web.example.localhost' '')
 run_origin "an app that declares no proxied name"     2 EMPTY 'could not' "$NONAME"
 
-NOBIN="$ROOT/origin/nobin"
-mkdir -p "$NOBIN"
-printf '{"name":"web","portless":{"name":"web.example"}}\n' > "$NOBIN/package.json"
 run_origin "an app with no proxy client installed"    2 EMPTY 'could not' "$NOBIN"
+run_origin "and a refusal names what happens instead" 2 EMPTY 'falls back to the configured origin' "$NOBIN"
 
 run_origin "an app directory that is not there"       2 EMPTY 'could not' "$ROOT/origin/absent"
 run_origin "an argument it does not know"             2 EMPTY 'could not' "$LIVE" --wat

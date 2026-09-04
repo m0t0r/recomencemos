@@ -112,17 +112,40 @@ function client(app) {
   return join(app, "node_modules", ".bin", "portless");
 }
 
+/**
+ * **`NO_COLOR` is set for the child, and it is load-bearing rather than tidy.**
+ * The client colourises when `FORCE_COLOR` is in its environment, which is a
+ * thing dev shells and CI images set, and it wraps the arrow in the route line
+ * in escapes when it does. Piping both streams happens to switch colour off
+ * today, but that is an inference about the client's stdio test rather than
+ * anything it promises; `NO_COLOR` is the promise, and it is read ahead of
+ * `FORCE_COLOR` and ahead of any stdio test. Without it a coloured line matches
+ * nothing, which reads as "no route" — the stale link this script exists to
+ * stop, arrived at silently and with a note saying the opposite of what
+ * happened.
+ */
 function ask(app, args) {
   try {
     return execFileSync(client(app), args, {
       cwd: app,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, NO_COLOR: "1" },
     });
   } catch (error) {
     throw new LookupError(`\`portless ${args.join(" ")}\` did not answer: ${error.message}`);
   }
 }
+
+// Belt and braces on the paragraph above: the escapes are stripped before the
+// line is read, so the parse holds even if a later release colours a line it
+// was asked not to. Two cheap defences rather than one, because the way this
+// fails is by quietly answering "no route".
+//
+// A control character is the thing being matched — `ESC [ … m` is what a colour
+// sequence is, and there is no spelling of it that does not name the escape.
+// oxlint-disable-next-line no-control-regex
+const ANSI = /\x1b\[[0-9;]*m/g;
 
 // `portless list` prints one indented line per route: the URL, an arrow, the
 // port it forwards to, and whose it is. Only the URL is wanted, and it is
@@ -132,6 +155,7 @@ const ROUTE_LINE = /^\s*(https?:\/\/\S+)\s+->\s/;
 
 function activeRoutes(app) {
   return ask(app, ["list"])
+    .replace(ANSI, "")
     .split("\n")
     .map((line) => ROUTE_LINE.exec(line)?.[1])
     .filter((url) => url !== undefined);
@@ -139,7 +163,21 @@ function activeRoutes(app) {
 
 function main() {
   const { app } = parseArgs(process.argv.slice(2));
-  const url = ask(app, ["get", proxiedName(app)]).trim();
+
+  // **A production invocation is answered with nothing, and it is answered
+  // quietly.** The same command enrols an Admin against a deployed database,
+  // run from a shell by whoever holds the migration credential — and that shell
+  // is often a laptop with a dev server up, whose route would otherwise be
+  // adopted and print a setup link at a `.localhost` host that reads a different
+  // database entirely. `authBaseUrl` carries the identical guard for the
+  // identical reason; this one exists because it is cheaper to refuse to look
+  // than to look and be overruled, and because on a machine with no dev
+  // dependencies looking at all writes a refusal the operator has to interpret.
+  if (process.env.NODE_ENV === "production") return;
+
+  const url = ask(app, ["get", proxiedName(app)])
+    .replace(ANSI, "")
+    .trim();
 
   if (url === "") throw new LookupError("the proxy named no URL for this app");
 
@@ -154,6 +192,14 @@ function main() {
 try {
   main();
 } catch (error) {
-  process.stderr.write(`The dev origin could not be resolved: ${error.message}\n`);
+  // **The consequence is stated, not just the cause.** The caller is a command
+  // substitution, which collapses this exit code and an empty answer into the
+  // same empty string — so `2` is a signal to a person reading the terminal and
+  // to nothing else, and a person needs to be told that the link they are about
+  // to be shown was built the other way.
+  process.stderr.write(
+    `The dev origin could not be resolved: ${error.message}\n` +
+      "Anything asking for it falls back to the configured origin.\n",
+  );
   process.exit(2);
 }
