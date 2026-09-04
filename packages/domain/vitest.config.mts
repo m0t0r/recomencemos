@@ -19,9 +19,11 @@ import { defineConfig } from "vitest/config";
 //
 // Neither project restates `resolve.tsconfigPaths`, and that is Vitest 5 rather
 // than an omission: `extends` now defaults to `true` for an inline project, so
-// the root's Vite config — plugins and aliases included — is inherited. Both
-// projects carried a copy of it before, which was three chances for the copies
-// to disagree.
+// the root's `resolve` block below reaches both. One setting is declared once
+// instead of three times, which is three chances for the copies to disagree
+// removed. (This package resolves its own modules through the `imports` field
+// rather than tsconfig `paths`, so the inherited setting is carrying little
+// here — but "declared once" is the property worth keeping either way.)
 const shared = {
   globals: true,
 } as const;
