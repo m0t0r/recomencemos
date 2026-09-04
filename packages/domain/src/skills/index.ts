@@ -29,7 +29,7 @@
  * than publishing a key.
  */
 
-import { asc, count, eq, inArray, min } from "drizzle-orm";
+import { and, asc, count, eq, inArray, min } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-details";
 import * as schema from "#schema";
@@ -76,6 +76,36 @@ export async function listActiveSkills(db: DomainDatabase): Promise<VocabularyEn
     .select(ENTRY)
     .from(schema.skill)
     .where(eq(schema.skill.active, true))
+    .orderBy(RENDERED_ORDER);
+}
+
+/** PROTOTYPE (#178 UI variants): an active entry with how many published profiles hold it. */
+export interface VocabularyEntryWithCount extends VocabularyEntry {
+  readonly count: number;
+}
+
+/**
+ * PROTOTYPE (#178 UI variants). The vocabulary with a real count per entry —
+ * published profiles only, so the number matches what the Wall can show. A
+ * public count per Skill names nobody, which is what keeps it inside the rule
+ * that no public surface counts how many Offers anyone received.
+ */
+export async function listActiveSkillsWithCounts(
+  db: DomainDatabase,
+): Promise<VocabularyEntryWithCount[]> {
+  return db
+    .select({ ...ENTRY, count: count(schema.capabilityProfile.id) })
+    .from(schema.skill)
+    .leftJoin(schema.profileSkill, eq(schema.profileSkill.skillId, schema.skill.id))
+    .leftJoin(
+      schema.capabilityProfile,
+      and(
+        eq(schema.capabilityProfile.id, schema.profileSkill.capabilityProfileId),
+        eq(schema.capabilityProfile.state, "published"),
+      ),
+    )
+    .where(eq(schema.skill.active, true))
+    .groupBy(schema.skill.id)
     .orderBy(RENDERED_ORDER);
 }
 
@@ -245,6 +275,12 @@ export const skills = {
   async listActive(): Promise<VocabularyEntry[]> {
     const { db } = await import("#connection");
     return listActiveSkills(db());
+  },
+
+  /** PROTOTYPE (#178 UI variants). */
+  async listActiveWithCounts(): Promise<VocabularyEntryWithCount[]> {
+    const { db } = await import("#connection");
+    return listActiveSkillsWithCounts(db());
   },
 
   async findBySlug(slugs: readonly string[]): Promise<VocabularyEntry[]> {
