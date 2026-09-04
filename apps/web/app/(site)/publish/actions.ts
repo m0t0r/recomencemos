@@ -35,6 +35,7 @@ import { profiles } from "@repo/domain/profiles";
 import { skills } from "@repo/domain/skills";
 import { AppError, projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
+import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { PUBLISH_REFUSED_CODE, SKILL_REQUEST_REFUSED_CODE } from "@/app/_lib/profile-form/codes";
 import { contactDetailRefusal } from "@/app/_lib/profile-form/messages";
@@ -96,6 +97,28 @@ export const publishProfile = accountActionClient
 
       return refuse(treeFromRefusals(outcome.refusals), values);
     }
+
+    /**
+     * **The shell has to be told, and this is the observation rather than a
+     * precaution.** Driven through the real form against `next dev`: she
+     * publishes, lands on `/my-profile` reading _Tu perfil ya está publicado_,
+     * and the session menu 56 px above that sentence still offers the row that
+     * sends her to `/publish` — on that page, and on every page she reaches by
+     * clicking afterwards, for the rest of the document's life. A full page load
+     * was the only thing that corrected it.
+     *
+     * The header is rendered by `(site)`'s layout, and the App Router does not
+     * re-render a layout on a client navigation inside its own subtree — the
+     * redirect below is one. So the two halves of one screen disagreed: the Wall
+     * list re-rendered because it is a page segment, and the menu did not because
+     * it is in the layout. Both were read out of the same snapshot.
+     *
+     * The rule this is one instance of — why `refresh()` rather than any revalidate
+     * API, and why _Salir_ needs none of it — is in
+     * `app/_components/app-header/app-header.tsx`, beside the reads it protects.
+     * What is written here is what was measured here.
+     */
+    refresh();
 
     /**
      * `redirect` throws a framework interrupt that next-safe-action re-throws

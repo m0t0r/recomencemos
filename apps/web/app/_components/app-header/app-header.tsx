@@ -32,6 +32,45 @@
  * `/admin` with a 403, and the page calls it. What the session read here decides
  * is only whether there is a menu to draw.
  *
+ * **A Server Action that changes what this header shows must call `refresh()`
+ * from `next/cache` before it returns or redirects.** This is the rule, and it is
+ * written here because this is where the values it protects are read.
+ *
+ * The App Router does not re-render a layout on a client navigation inside its own
+ * subtree, and this header is rendered by a layout. So every dynamic value below
+ * is fixed at document load, and an action that changes one leaves the shell
+ * saying something that is no longer true — on the page it redirects to, and on
+ * every page reached by clicking after that. It was observed rather than predicted
+ * (#171): publishing a profile left the menu offering _publish a profile_ above a
+ * page reading _your profile is published_, and the Wall underneath it was correct
+ * at the same moment, because a page segment re-renders and a layout does not.
+ *
+ * **`refresh()` rather than a revalidate API, and the reason is that there is no
+ * cache to invalidate.** Everything this header reads is uncached by design — that
+ * is what "the session read is dynamic and must stay that way" above forbids — so
+ * `cacheTag`/`revalidateTag` have nothing to name, and `revalidatePath` would be
+ * reaching for a server-cache API to get at what is a client-router effect. It is
+ * also why `/account`'s `revalidatePath("/account")` is not the instrument to copy
+ * here: that call re-renders one page's own data, and this is about the shell above
+ * every page. `refresh()` refreshes the client router, which is what re-runs the
+ * layout, and it may only be called from a Server Action.
+ *
+ * **A cookie is the exception, and knowing why stops the wrong conclusion being
+ * drawn from _Salir_.** Next re-renders the current page automatically when a
+ * Server Action sets or deletes a cookie through `cookies()`, so `endSession`
+ * already corrects this header without asking for anything — observed, and stated
+ * in the version-matched docs at `node_modules/next/dist/docs/` under Server
+ * Actions. `publishProfile` writes only to the database, which is invisible to that
+ * mechanism. So the rule is owed by an action that changes a value this row depends
+ * on **and touches no cookie**; an action that signs somebody in or out is already
+ * covered.
+ *
+ * Today `profileRow` is the only such value that can change inside a document's
+ * life, so publishing is the only caller. Taking a profile down and deleting an
+ * Account are the next two, and each would rediscover this bug rather than inherit
+ * the fix. The unhydrated path needs nothing either: without JavaScript a form post
+ * is a document navigation and the layout re-renders anyway (NFR4).
+ *
  * **The header's height is fixed and identical in every state.** That is not
  * styling: it is acceptance criterion 6. A person who signs in from a gated
  * redirect and lands back on the page she started from must see nothing move, and
