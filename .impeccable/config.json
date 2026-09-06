@@ -5,10 +5,17 @@
     "ignoreValues": [
       {
         "rule": "design-system-font",
-        "value": "*",
+        "value": "Roboto",
         "files": ["apps/web/app/global-error.tsx"],
         "createdAt": "2026-09-06T15:30:56.592Z",
-        "reason": "This boundary replaces the root layout, so next/font never runs and no stylesheet is mounted: the only faces it can name are system fallback stacks (Roboto, SFMono-Regular are stack members, not chosen faces). DESIGN.md makes the same argument for email keeping Inter alone."
+        "reason": "A member of the system fallback stack, not a chosen face. This boundary replaces the root layout, so next/font never runs and no stylesheet is mounted — the only faces it can name are ones the browser already has. DESIGN.md makes the same argument for email keeping Inter alone. Scoped per value rather than to the whole file, so naming Alegreya here — the mistake that file's docblock argues against — is still reported."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "Sfmono-Regular",
+        "files": ["apps/web/app/global-error.tsx"],
+        "createdAt": "2026-09-06T15:30:56.592Z",
+        "reason": "The monospace half of the same system fallback stack, for the same reason: the reference line's code span cannot reach Geist Mono without a stylesheet."
       }
     ]
   }

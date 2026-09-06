@@ -7,6 +7,13 @@
  * `(token)/admin/enrol/[token]/page.tsx` and `(admin)/admin/_components/section.tsx`.
  * Plus every mistyped URL.
  *
+ * **Those callers do not sit against C51.** That concern is about a `404` costing
+ * a Sentry event — *"every `404` is a returned response, not a thrown error"* —
+ * and `notFound()` is a framework interrupt of the same class as `redirect()` and
+ * `forbidden()`, caught by the router before `onRequestError`. It is what
+ * `lib/admin.ts` already relies on for the 403. What C51 refuses is a hand-thrown
+ * `Error` used to mean "missing", and there is none in the tree.
+ *
  * **Root, and one page for all three route groups, because that is what the copy
  * requires rather than what the file convention makes easy.** Three of those four
  * callers are the spec's `permission denied` cell answered as a 404 deliberately
@@ -43,8 +50,23 @@ import {
 } from "@/app/_lib/boundary/messages";
 
 /**
- * Without this the tab reads `Recomencemos` — the root layout's title, which is
- * what a working page says. The title is the one part of this surface a person
+ * **One limit, measured rather than assumed.** This title lands for an unmatched
+ * URL and for a `notFound()` thrown from a route whose own metadata has not
+ * resolved — which covers both token routes: `/admin/enrol/<spent>` and
+ * `/continue` with no challenge each answer *No encontramos esta página* in the
+ * tab as well as on the page, and those are the two the spec calls oracles,
+ * because their path segment carries a credential.
+ *
+ * It does **not** land for `/my-profile` signed out: that route streams, its
+ * metadata resolves before the segment throws, and the tab keeps reading *Tu
+ * perfil*. That is a cosmetic inconsistency rather than a leak — the path is
+ * fixed and public, so it discloses no secret and says nothing about whether a
+ * profile exists or whose it is. Closing it would mean making that route's
+ * metadata depend on the session, which is a change to the page and not to this
+ * file.
+ *
+ * Without this export the tab reads `Recomencemos` — the root layout's title,
+ * which is what a working page says. The title is the one part of this surface a person
  * sees before the page paints and the only part that survives into their history,
  * so it carries the same sentence the heading does.
  *
@@ -57,7 +79,13 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex w-full max-w-prose grow flex-col items-start gap-4 px-6 py-16">
+    /*
+      No `grow`: this renders under the root layout's bare `<body>`, and the
+      `flex min-h-svh flex-col` wrapper that would give `grow` something to grow
+      inside belongs to `(site)/layout.tsx` — deliberately not in this tree, since
+      the page answers for all three route groups.
+    */
+    <main className="mx-auto flex w-full max-w-prose flex-col items-start gap-4 px-6 py-16">
       <h1 className="page-heading">{NOT_FOUND_TITLE}</h1>
 
       <p className="text-muted-foreground text-pretty">{NOT_FOUND_EXPLANATION}</p>

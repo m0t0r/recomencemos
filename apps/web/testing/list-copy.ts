@@ -1,6 +1,5 @@
 /**
- * The voice suite the two public lists share, as one function each surface
- * calls with its own strings.
+ * The **list-specific** half of the voice suite the two public lists share.
  *
  * `/` and `/profiles` are two surfaces with two `_lib`s and the prior art is one
  * copy suite per surface — `publish-copy`, `my-profile-copy`, `sign-in-copy`.
@@ -9,68 +8,20 @@
  * renders. A string that reaches a screen and appears in neither list is the
  * failure this shape is guarding against.
  *
- * The rules themselves are `testing/voice.ts`'s. What is **not** here is the
- * half no test reaches: whether the care is aimed at the process rather than at
- * the person, which is a reading a person does.
+ * **The countable rules moved to `testing/surface-copy.ts`** when a fourth suite
+ * copied them verbatim; this delegates and adds the three cases that are true of
+ * a *list* and of nothing else. Callers are unchanged.
+ *
+ * What is **not** here is the half no test reaches: whether the care is aimed at
+ * the process rather than at the person, which is a reading a person does.
  */
 
-import {
-  EMPTY_LINK_TEXT,
-  LABEL_WORD_CEILING,
-  NEVER_SAY,
-  SENTENCE_WORD_CEILING,
-  sentencesOf,
-  shoutedWords,
-  wordCount,
-} from "./voice";
+import { describeSurfaceCopy, type SurfaceCopy } from "./surface-copy";
 
-export interface ListCopy {
-  /** Everything a person reads on the surface, named so a failure says which string. */
-  readonly copy: readonly (readonly [string, string])[];
-  /** The subset that is a link or a button, held to the five-word ceiling. */
-  readonly labels: readonly (readonly [string, string])[];
-}
+export type ListCopy = SurfaceCopy;
 
 export function describeListCopy({ copy, labels }: ListCopy): void {
-  describe.each(copy)("%s", (_name, value) => {
-    it("is not empty", () => {
-      expect(value.trim().length).toBeGreaterThan(0);
-    });
-
-    it("has no ALL CAPS word", () => {
-      expect(shoutedWords(value)).toEqual([]);
-    });
-
-    it("carries no exclamation mark", () => {
-      expect(value).not.toContain("!");
-      expect(value).not.toContain("¡");
-    });
-
-    it.each(NEVER_SAY)("does not say %o", (banned) => {
-      expect(value.toLowerCase()).not.toContain(banned);
-    });
-
-    it.each(EMPTY_LINK_TEXT)("does not say %o", (phrase) => {
-      expect(value.toLowerCase()).not.toContain(phrase);
-    });
-
-    /** A promise the platform cannot make, in either construction. */
-    it("does not say seguro", () => {
-      expect(value.toLowerCase()).not.toMatch(/\bsegur[oa]\b/);
-    });
-
-    it("keeps every sentence to twenty words", () => {
-      for (const sentence of sentencesOf(value)) {
-        expect(wordCount(sentence)).toBeLessThanOrEqual(SENTENCE_WORD_CEILING);
-      }
-    });
-  });
-
-  describe("the links and buttons", () => {
-    it.each(labels)("%s is five words or fewer", (_name, value) => {
-      expect(wordCount(value)).toBeLessThanOrEqual(LABEL_WORD_CEILING);
-    });
-  });
+  describeSurfaceCopy({ copy, labels });
 
   /**
    * **Neither list claims anything about verification or money.** Those are

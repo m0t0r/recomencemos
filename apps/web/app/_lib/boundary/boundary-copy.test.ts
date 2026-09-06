@@ -2,74 +2,28 @@
  * The countable half of the voice guide over the three app-wide boundaries,
  * plus the two rules that are this surface's alone.
  *
- * The shared cases are the same set the seven other `*-copy.test.ts` suites run,
- * out of `@/testing/voice`, so a rule added to the guide reaches every surface
- * from one place rather than from eight hand-kept mirrors.
+ * The shared cases come from `@/testing/surface-copy`, which is where they live
+ * for every suite — this file is the fourth caller and the reason that function
+ * was extracted. What is added below is what only this surface can be asked:
+ * whether its refusal is an oracle, and whether the root boundary's own document
+ * title survived the translation.
  */
 
-import {
-  EMPTY_LINK_TEXT,
-  LABEL_WORD_CEILING,
-  NEVER_SAY,
-  sentencesOf,
-  SENTENCE_WORD_CEILING,
-  shoutedWords,
-  wordCount,
-} from "@/testing/voice";
+import { describeSurfaceCopy } from "@/testing/surface-copy";
 import {
   BOUNDARY_COPY,
   BOUNDARY_LABELS,
   NOT_FOUND_EXPLANATION,
+  NOT_FOUND_LINK,
   NOT_FOUND_ONWARD,
   NOT_FOUND_PAGE_TITLE,
   NOT_FOUND_TITLE,
   ROOT_ERROR_PAGE_TITLE,
 } from "./messages";
 
-const copy = Object.entries(BOUNDARY_COPY);
-
-describe.each(copy)("%s", (_name, value) => {
-  it("is not empty", () => {
-    expect(value.trim().length).toBeGreaterThan(0);
-  });
-
-  it("has no ALL CAPS word", () => {
-    expect(shoutedWords(value)).toEqual([]);
-  });
-
-  // Never a refusal, never a notice — and every string here is one or the other.
-  it("carries no exclamation mark", () => {
-    expect(value).not.toContain("!");
-    expect(value).not.toContain("¡");
-  });
-
-  it.each(NEVER_SAY)("does not say %o", (banned) => {
-    expect(value.toLowerCase()).not.toContain(banned);
-  });
-
-  it.each(EMPTY_LINK_TEXT)("does not say %o", (phrase) => {
-    expect(value.toLowerCase()).not.toContain(phrase);
-  });
-
-  it("does not say seguro", () => {
-    expect(value.toLowerCase()).not.toMatch(/\bsegur[oa]\b/);
-  });
-
-  it("keeps every sentence to twenty words", () => {
-    for (const sentence of sentencesOf(value)) {
-      expect(wordCount(sentence)).toBeLessThanOrEqual(SENTENCE_WORD_CEILING);
-    }
-  });
-});
-
-describe("labels", () => {
-  it.each(Object.entries(BOUNDARY_LABELS))("%s is five words or fewer", (_name, value) => {
-    expect(wordCount(value)).toBeLessThanOrEqual(LABEL_WORD_CEILING);
-  });
-
-  it.each(Object.entries(BOUNDARY_LABELS))("%s has no ALL CAPS word", (_name, value) => {
-    expect(shoutedWords(value)).toEqual([]);
-  });
+describeSurfaceCopy({
+  copy: Object.entries(BOUNDARY_COPY),
+  labels: Object.entries(BOUNDARY_LABELS),
 });
 
 /**
@@ -88,10 +42,22 @@ describe("labels", () => {
  * a route only one population was reaching for.
  */
 describe("the not-found copy is not an oracle", () => {
-  // The document title is in the set: it is read before the page paints and is
-  // what survives into a browser's history, so it leaks exactly as loudly as the
-  // heading would.
-  const notFound = [NOT_FOUND_TITLE, NOT_FOUND_PAGE_TITLE, NOT_FOUND_EXPLANATION, NOT_FOUND_ONWARD];
+  /**
+   * Every string the surface puts on screen, and two that are easy to leave out.
+   *
+   * The **document title** is read before the page paints and survives into a
+   * browser's history, so it leaks exactly as loudly as the heading. The **link
+   * text** is the one string here that could name a destination only one of the
+   * four populations was reaching for — *Ir a tu perfil* would be an oracle in a
+   * single phrase.
+   */
+  const notFound = [
+    NOT_FOUND_TITLE,
+    NOT_FOUND_PAGE_TITLE,
+    NOT_FOUND_EXPLANATION,
+    NOT_FOUND_ONWARD,
+    NOT_FOUND_LINK,
+  ];
 
   const authorization = [
     "sesión",
