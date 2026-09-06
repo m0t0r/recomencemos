@@ -35,11 +35,14 @@ export default function MyProfileError({
       aria-busy={isRetrying}
       className="text-foreground mx-auto flex w-full max-w-2xl flex-col items-start gap-4 px-4 py-10"
     >
-      <h1
-        ref={headingRef}
-        tabIndex={-1}
-        className="text-2xl font-semibold tracking-tight focus:outline-none"
-      >
+      {/*
+        `page-heading`, the same step `my-profile/page.tsx` renders, because this
+        replaces that page rather than sitting beside it — a failed read should
+        not change the size or the face of the heading a person was reading a
+        second ago. `focus:outline-none` because the heading takes focus on mount
+        and is not in the tab order.
+      */}
+      <h1 ref={headingRef} tabIndex={-1} className="page-heading focus:outline-none">
         {LOAD_FAILED_TITLE}
       </h1>
       <p className="text-muted-foreground text-pretty">{LOAD_FAILED_EXPLANATION}</p>
