@@ -469,4 +469,3 @@ constrained connections are the ones who pay for it.
 | The product's written voice | `docs/policy/ux.md` → `voice-guide`       | `UNSET` **by decision** (C2). A `brand-voice` session sets it, and it blocks the first ticket rendering `es-CO` copy — not Build as a whole |
 | Reduced motion              | `docs/policy/ux.md` → `motion-policy`     | Not raised by effort 0002                                                                                                                   |
 | Analytics consent           | `docs/policy/ux.md` → `analytics-consent` | Out of scope for 0002 — under Ley 1581 that gate precedes instrumentation                                                                   |
-| Coverage floor              | `docs/policy/build.md` → `coverage-floor` | Not raised by effort 0002                                                                                                                   |

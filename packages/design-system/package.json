@@ -13,6 +13,7 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "happy-dom": "^20.11.12",
     "tailwindcss": "^4.2.6",
     "typescript": "7.0.2",
