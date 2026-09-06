@@ -110,8 +110,8 @@ matches() { # pattern text
 expect_run() {
   local name="$1" expect="$2" want_out="$3" want_err="" split=0 out err="" code good=1
   shift 3
-  if [ "$1" != "--" ]; then want_err="$1"; split=1; shift; fi
-  [ "$1" = "--" ] || { ko "$name" "expect_run needs -- before the command"; return 0; }
+  if [ "${1:-}" != "--" ]; then want_err="${1:-}"; split=1; shift || true; fi
+  [ "${1:-}" = "--" ] || { ko "$name" "expect_run needs -- before the command"; return 0; }
   shift
   if [ "$split" = 1 ]; then
     out=$("$@" 2>"$ROOT/.expect-run.err")
