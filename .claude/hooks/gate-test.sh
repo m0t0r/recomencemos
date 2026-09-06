@@ -69,6 +69,7 @@ export HOOKS REPO VERBOSE
 # rather than the sum -- and this suite runs inside every `pnpm test` and every
 # Stop hook, so the sum was paid many times a session.
 WORK=$(mktemp -d)
+pids=()
 for n in "${names[@]}"; do
   ROOT="$WORK/$n"
   mkdir -p "$ROOT"
@@ -83,8 +84,22 @@ for n in "${names[@]}"; do
     . "$TESTS/$n.sh"
     flush_section
   ) > "$WORK/$n.out" 2>&1 &
+  pids+=("$!")
 done
-wait
+
+# A file that died before its cases ran -- a syntax error, an unbound variable
+# under `set -u`, a fixture that could not be built -- has written no results,
+# and a tally that only counts what was written would read it as clean. So each
+# subshell's exit is read, and a file that exited non-zero or reported nothing
+# is a refusal: the suite exits 2, the way every gate here does when it cannot
+# reach an answer, rather than 0 with a smaller number.
+broken=()
+i=0
+for n in "${names[@]}"; do
+  wait "${pids[$i]}" || broken+=("$n")
+  [ -s "$WORK/$n.results" ] || broken+=("$n")
+  i=$((i + 1))
+done
 
 for n in "${names[@]}"; do
   cat "$WORK/$n.out"
@@ -95,4 +110,8 @@ rm -rf "$WORK"
 
 echo
 echo "passed: $pass  failed: $fail"
+if [ ${#broken[@]} -gt 0 ]; then
+  echo "gate-test.sh: could not reach an answer for: ${broken[*]} (exited non-zero or ran no case)" >&2
+  exit 2
+fi
 [ "$fail" -eq 0 ]

@@ -47,8 +47,16 @@ const REPORT = join(dirname(fileURLToPath(import.meta.url)), "audit-report.mjs")
 // `gh issue create --label` fails hard on a label the repository does not
 // have, and losing a real finding to a missing label would be the worst
 // available reason not to hear about one.
-const NEEDS_TRIAGE = ["needs-triage", "fbca04", "Maintainer needs to evaluate this issue"];
-const SECURITY_AUDIT = ["security-audit", "d93f0b", "Opened by the scheduled dependency audit"];
+const NEEDS_TRIAGE = {
+  name: "needs-triage",
+  color: "fbca04",
+  description: "Maintainer needs to evaluate this issue",
+};
+const SECURITY_AUDIT = {
+  name: "security-audit",
+  color: "d93f0b",
+  description: "Opened by the scheduled dependency audit",
+};
 
 // **The marker, not the label, is the handle.** A label is something a person
 // can put on any issue, and `audit` edits and closes what it finds -- so keying
@@ -71,7 +79,7 @@ function gh(args, stdin) {
 }
 
 /** Idempotent, and quiet about it: a parallel run may have just created it. */
-function ensureLabel(repo, [name, color, description]) {
+function ensureLabel(repo, { name, color, description }) {
   spawnSync(
     "gh",
     ["label", "create", name, "--repo", repo, "--color", color, "--description", description],
@@ -150,9 +158,12 @@ function audit(reportArgs) {
   const runLink = runUrl ? ` [Run](${runUrl})` : "";
 
   const report = spawnSync(process.execPath, [REPORT, ...reportArgs], { encoding: "utf8" });
+  // The report's stderr reaches the job log on every path, as it did when the
+  // workflow ran the report itself; only its stdout is the finding.
+  if (report.stderr) process.stderr.write(report.stderr);
   if (report.status !== 0 && report.status !== 1) {
     throw new FindingError(
-      `the dependency report could not run (exit ${report.status ?? report.signal})\n${report.stdout ?? ""}${report.stderr ?? ""}`.trim(),
+      `the dependency report could not run (exit ${report.status ?? report.signal})\n${report.stdout ?? ""}`.trim(),
     );
   }
 

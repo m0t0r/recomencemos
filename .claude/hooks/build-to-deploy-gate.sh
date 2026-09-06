@@ -41,8 +41,9 @@ cmd=$(printf '%s' "$raw" | strip_heredocs)
 # worktree as a push to the default branch (#174). tree_for() in gate-lib.sh
 # carries the measurement; `-C` is not honoured here, the way it is for rule K,
 # because a push aimed at another checkout by flag is a shape no session has
-# produced, and the heuristic stays as narrow as its cases.
-tree=$(tree_for "$(printf '%s' "$input" | jq -r '.cwd // ""')") || tree=""
+# produced, and the heuristic stays as narrow as its cases. Resolved inside rule
+# G rather than up here, so the one command in a hundred that is a push is the
+# only one that pays for a `git rev-parse`.
 
 # Rule F. Three ways to pass the gate, all refused. A stack merge is a merge, so
 # stacks change how work is published and never who ships it.
@@ -67,7 +68,7 @@ fi
 # that renames it stays protected without editing this hook. Outside any
 # repository there is nothing to push from, so there is nothing to refuse.
 if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+push([[:space:]]|$)"; then
-  [ -n "$tree" ] || exit 0
+  tree=$(tree_for "$(printf '%s' "$input" | jq -r '.cwd // ""')") || exit 0
   default=$(default_branch_of "$tree")
 
   # `git push [flags] [remote] [refspec]`. Drop flags and anything after a shell

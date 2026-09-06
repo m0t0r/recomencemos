@@ -89,11 +89,11 @@ $out"
 # here too or a session could report done with the new gate red -- the drift
 # CLAUDE.md names for CI in the same words. Two turbo invocations instead of
 # one cost a fraction of a second; a list in two places cost a gate.
-out=$(pnpm check-types 2>&1) || block "\`pnpm check-types\` fails, so this change is not done.
+out=$(pnpm check-types --output-logs=errors-only 2>&1) || block "\`pnpm check-types\` fails, so this change is not done.
 
 $out"
 
-out=$(pnpm test 2>&1) || block "\`pnpm test\` fails, so this change is not done. It runs the package suites, the gate suite, the spec-identifier reader and migration integrity; the output names which.
+out=$(pnpm test --output-logs=errors-only 2>&1) || block "\`pnpm test\` fails, so this change is not done. It runs the package suites, the gate suite, the spec-identifier reader and migration integrity; the output names which.
 
 $out"
 
