@@ -49,6 +49,7 @@ import {
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
 import { Label } from "@repo/design-system/components/label";
+import { cn } from "@repo/design-system/lib/utils";
 import { InfoIcon, TriangleAlertIcon } from "lucide-react";
 import { useId } from "react";
 import { useFormStatus } from "react-dom";
@@ -343,18 +344,36 @@ function GoogleButton() {
  * `container.querySelector('[aria-live="polite"]')` was the tell that this
  * element was invisible to the accessibility tree the surface is judged on.
  *
- * **It is a note on the sheet now, and the mark is what carries the tone**
+ * **It is a note on the sheet now, and the mark is what carries the outcome**
  * (#182). It used to be a tinted, rounded panel — a filled `destructive` wash
  * for a problem and a grey one otherwise — which is the one thing `DESIGN.md`
  * says state may never be: a hue. The sentence sits in the working face beside
- * a `lucide` mark in the margin column, over a ruling, which is the shape
- * `/my-profile`'s tiers already use.
+ * a `lucide` mark in the margin column, over a ruling: the shape
+ * `/my-profile`'s tiers use, at body scale rather than heading scale, so the
+ * mark is sized to the line it sits against.
+ *
+ * **The registry's `Alert` is the near-miss, and it is the wrong component
+ * here for three reasons rather than one.** It is `rounded-lg border px-4 py-3`
+ * — the boxed panel this ticket removes. It carries `role="alert"`, which would
+ * nest an assertive live region inside this polite one, so one outcome would be
+ * announced by two. And its `destructive` variant colours the whole message
+ * `text-destructive`, which is the hue rule again from the other side.
  *
  * **`destructive` reaches the mark and only the mark, and only where the
- * outcome is a limit of the platform** — a ceiling, or a send that failed. A
- * consumed link is neither: it arrives here as `success` because a scanner
- * opening her link first is our problem rather than her error, and it takes the
- * same neutral mark the confirmation does.
+ * outcome is a limit of the platform** — a ceiling, or a send that failed.
+ * Two of the three things `tone === "problem"` covers are neither, and both are
+ * reachable:
+ *
+ * - A **wrong-shaped address** is her input, not our limit, and it is the state
+ *   NFR4 lands in: with JavaScript unavailable no client validator runs, so
+ *   every refusal is the server's and arrives here. It is already marked where
+ *   it can be fixed — `aria-invalid` and a `FieldError` on the field — so the
+ *   note takes the neutral mark and says what happened.
+ * - A **consumed link** arrives as `success` rather than as a problem at all,
+ *   because a scanner opening her link first is our problem and not her error.
+ *
+ * So the mark is decided by `emailRejected` beside the tone, not by the tone
+ * alone. Widening it back to `tone` is what review caught the first draft doing.
  */
 function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) {
   // Unpacked rather than reached through `machine` member by member, because
@@ -362,9 +381,9 @@ function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) 
   // `machine` itself as a ref object and refuse every sibling read as a ref
   // access during render. The reads are of ordinary state and always were; this
   // separates the one binding that genuinely is a ref from the ones that are not.
-  const { announcementRef, feedback } = machine;
-  const problem = feedback?.tone === "problem";
-  const Mark = problem ? TriangleAlertIcon : InfoIcon;
+  const { announcementRef, emailRejected, feedback } = machine;
+  const platformLimit = feedback?.tone === "problem" && !emailRejected;
+  const Mark = platformLimit ? TriangleAlertIcon : InfoIcon;
 
   return (
     <div
@@ -387,7 +406,7 @@ function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) 
           <Mark
             aria-hidden="true"
             /* Centred on the first line: a 20 px mark against a 24 px line is 2 px down. */
-            className={problem ? "text-destructive mt-0.5 size-5" : "text-primary mt-0.5 size-5"}
+            className={cn("mt-0.5 size-5", platformLimit ? "text-destructive" : "text-primary")}
           />
           <p className="text-foreground text-base leading-6 text-pretty">{feedback.message}</p>
           {feedback.hint ? (

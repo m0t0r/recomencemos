@@ -77,11 +77,14 @@ Three consequences for this brief, and the first two are anti-goals:
 
 ## Amended 2026-09-06 with #182 — the door on the ruled page
 
-**Nothing above changes.** The two doors, their order, the one checkbox governing both, the sent
+**No decision above changes.** The two doors, their order, the one checkbox governing both, the sent
 state that keeps the form, the `signed_in` redirect and every string are exactly as #12 and #96 left
 them. What this amendment settles is the material the surface is made of, which was inherited from a
 starter kit and never chosen: a card with a shadow, floating on a grey field, in a product whose
 world is ink on paper.
+
+**One sentence below is superseded rather than preserved**, and it is marked where it sits: the
+layout section's _vertically centred with room to grow_. Point 1 replaces it.
 
 `DESIGN.md` → **The world** is the authority, and it answers this surface without needing a fork.
 The composition is the one `/my-profile` already shipped with #178 and the one
@@ -122,7 +125,8 @@ state (#80 criterion 6), and either door's behaviour with JavaScript unavailable
 
 ## Interaction and layout
 
-Single column, `max-w` around a comfortable form measure, vertically centred with room to grow. One
+Single column, `max-w` around a comfortable form measure, ~~vertically centred with room to
+grow~~ — superseded 2026-09-06 with #182, which starts the sheet at the top margin. One
 `<h1>`. Order: heading → Google button + its account notice → `o` separator → email precondition →
 field → send → separator → shared-device row. Feedback lands **above** the form in a live region so a
 screen reader hears the outcome without hunting for it.
