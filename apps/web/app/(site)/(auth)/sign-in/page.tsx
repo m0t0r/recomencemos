@@ -16,7 +16,6 @@
  * one row #12 owns.
  */
 
-import { Card } from "@repo/design-system/components/card";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import { safeReturnPath } from "@repo/domain/auth-handler";
 import type { Metadata } from "next";
@@ -25,6 +24,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { auth, googleSignInAvailable } from "@/lib/auth";
 import { SignInForm } from "./_components/sign-in-form";
+import { SIGN_IN_TITLE } from "./_lib/messages";
 
 export const metadata: Metadata = {
   title: "Entrar — Recomencemos",
@@ -75,12 +75,14 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
    * a real `307`, and it was built, measured and reverted. It costs two things
    * that are worth more than the second: the route stops being prerendered, so
    * **`pnpm page-weight` can no longer measure it at all** — it exits `2`, and
-   * `/sign-in`'s 298 KB is a figure `README.md` carries and NFR3's leading
-   * indicator is checked with — and every signed-out visitor, who is nearly all
-   * of them and is the Worker on a slow phone, waits a session query before
-   * anything paints. What the second costs is a wordless skeleton on a rare
-   * arrival. Reversing that judgement is one `export const instant = false` and
-   * moving these lines above the `<Suspense>`.
+   * this route's first-load figure is one `README.md` carries and NFR3's leading
+   * indicator is checked with — **308 KB gzip**, re-taken with
+   * `pnpm page-weight /sign-in` at #182, which is the only way that number may
+   * be quoted — and every signed-out visitor, who is nearly all of them and is
+   * the Worker on a slow phone, waits a session query before anything paints.
+   * What the second costs is a wordless skeleton on a rare arrival. Reversing
+   * that judgement is one `export const instant = false` and moving these lines
+   * above the `<Suspense>`.
    */
   if (await auth().getSession(await headers())) {
     redirect(safeReturnPath(typeof returnPathParam === "string" ? returnPathParam : undefined));
@@ -114,31 +116,42 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
 }
 
 /**
- * The fallback holds the card's shape rather than showing a spinner, so nothing
- * moves when the panel resolves. The wrappers are the same `main` classes and
- * the same `Card` the form renders, so the two cannot drift apart in outline.
+ * The fallback holds the doors' shape rather than showing a spinner, so nothing
+ * moves when the panel resolves.
+ *
+ * **It is the panel's shape and nothing else**, which is what moving the sheet
+ * and the heading out of the boundary bought. The fallback used to restate the
+ * `main` classes and the `Card`, kept in agreement with the form by a comment
+ * saying they must be; now there is one wrapper, written once, above the
+ * `<Suspense>`.
  */
 function PanelSkeleton() {
   return (
-    <main
-      className="bg-muted flex grow flex-col items-center justify-center px-4 py-12"
-      aria-hidden="true"
-    >
-      <Card className="flex w-full max-w-md flex-col gap-6 p-6 sm:p-8">
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-9 w-full" />
-      </Card>
-    </main>
+    <div className="flex flex-col gap-6" aria-hidden="true">
+      <Skeleton className="h-9 w-full" />
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-9 w-full" />
+    </div>
   );
 }
 
+/**
+ * The sheet, and the one line of display type on it.
+ *
+ * Both sit **above** the boundary rather than inside the panel: neither depends
+ * on the query string or on the session, so the heading paints with the shell
+ * instead of waiting behind a read it does not need. It is the shape `/publish`
+ * already uses.
+ */
 export default function SignInPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <Suspense fallback={<PanelSkeleton />}>
-      <SignInPanel searchParams={searchParams} />
-    </Suspense>
+    <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-10 sm:py-14">
+      <h1 className="page-heading">{SIGN_IN_TITLE}</h1>
+
+      <Suspense fallback={<PanelSkeleton />}>
+        <SignInPanel searchParams={searchParams} />
+      </Suspense>
+    </main>
   );
 }
