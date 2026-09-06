@@ -26,9 +26,6 @@
 # See README "The Build stage".
 set -uo pipefail
 
-root="${CLAUDE_PROJECT_DIR:-.}"
-cd "$root" 2>/dev/null || true
-
 # shellcheck source=./gate-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/gate-lib.sh"
 
@@ -36,6 +33,16 @@ input=$(cat)
 [ "$(printf '%s' "$input" | jq -r '.tool_name // ""')" = "Bash" ] || exit 0
 raw=$(printf '%s' "$input" | jq -r '.tool_input.command // ""')
 cmd=$(printf '%s' "$raw" | strip_heredocs)
+
+# WHICH CHECKOUT rule G asks about comes from the payload, never from
+# CLAUDE_PROJECT_DIR. That variable keeps naming the main checkout after the
+# session enters a worktree, and the main checkout has the default branch out by
+# construction -- so a gate reading it refused every bare `git push` from every
+# worktree as a push to the default branch (#174). tree_for() in gate-lib.sh
+# carries the measurement; `-C` is not honoured here, the way it is for rule K,
+# because a push aimed at another checkout by flag is a shape no session has
+# produced, and the heuristic stays as narrow as its cases.
+tree=$(tree_for "$(printf '%s' "$input" | jq -r '.cwd // ""')") || tree=""
 
 # Rule F. Three ways to pass the gate, all refused. A stack merge is a merge, so
 # stacks change how work is published and never who ships it.
@@ -57,11 +64,11 @@ if printf '%s' "$cmd" |
 fi
 
 # Rule G. The default branch is read from the remote, so a fork of this template
-# that renames it stays protected without editing this hook.
+# that renames it stays protected without editing this hook. Outside any
+# repository there is nothing to push from, so there is nothing to refuse.
 if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+push([[:space:]]|$)"; then
-  default=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
-  [ -n "$default" ] || default=$(git config --get init.defaultBranch 2>/dev/null) || true
-  [ -n "$default" ] || default="main"
+  [ -n "$tree" ] || exit 0
+  default=$(default_branch_of "$tree")
 
   # `git push [flags] [remote] [refspec]`. Drop flags and anything after a shell
   # operator, then the second positional is the refspec: "main", "HEAD:main",
@@ -81,7 +88,7 @@ if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+push([[:space:]]|$)
   if [ -n "$refspec" ]; then
     dst="${refspec##*:}"
   else
-    dst=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+    dst=$(branch_of "$tree")
   fi
 
   if [ "$dst" = "$default" ]; then

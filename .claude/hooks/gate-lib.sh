@@ -80,7 +80,11 @@ CMD_START='(^|[;&|(]|&&|\|\|)[[:space:]]*'
 tree_for() { # dir-or-file-hint
   local hint="$1" top
   [ -n "$hint" ] || hint="${CLAUDE_PROJECT_DIR:-.}"
-  [ -d "$hint" ] || hint=$(dirname "$hint")
+  # A Write names a file that may not exist yet, in a directory that may not
+  # either, so climb until something does. Stop at the root rather than loop.
+  while [ ! -d "$hint" ] && [ "$hint" != "/" ] && [ "$hint" != "." ]; do
+    hint=$(dirname "$hint")
+  done
   top=$(git -C "$hint" rev-parse --show-toplevel 2>/dev/null) || return 1
   [ -n "$top" ] || return 1
   printf '%s' "$top"

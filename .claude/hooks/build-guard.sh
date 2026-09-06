@@ -35,8 +35,6 @@
 # See README "The Build stage".
 set -uo pipefail
 
-root="${CLAUDE_PROJECT_DIR:-.}"
-
 # shellcheck source=./gate-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/gate-lib.sh"
 
@@ -48,6 +46,12 @@ esac
 
 path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // ""')
 incoming=$(printf '%s' "$input" | jq -r '.tool_input.content // .tool_input.new_string // ""')
+
+# Rule H reads the install manifest of the tree the write lands in, which in a
+# worktree session is not the tree CLAUDE_PROJECT_DIR names -- tree_for() in
+# gate-lib.sh carries the measurement. The launch directory is the fallback only
+# where the path is in no repository at all.
+root=$(tree_for "$path") || root="${CLAUDE_PROJECT_DIR:-.}"
 
 # Rule H.
 case "$path" in

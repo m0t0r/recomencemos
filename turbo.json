@@ -44,19 +44,7 @@
       "persistent": true
     },
     "//#test:gates": {
-      "inputs": [
-        ".claude/hooks/**",
-        "scripts/audit-direct.mjs",
-        "scripts/audit-lib.mjs",
-        "scripts/audit-report.mjs",
-        "scripts/coverage-merge.mjs",
-        "scripts/dev-origin.mjs",
-        "scripts/first-load-bytes.mjs",
-        "scripts/migration-integrity.mjs",
-        "scripts/spec-identifiers.mjs",
-        "scripts/ui-proof.mjs",
-        "scripts/ui-proof-store.mjs"
-      ],
+      "inputs": [".claude/hooks/**", "scripts/**"],
       "outputs": []
     },
     "//#spec-identifiers": {
