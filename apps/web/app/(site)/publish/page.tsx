@@ -24,6 +24,8 @@ import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
+import { treatmentFor, VARIANT_KEYS, VARIANTS } from "@/app/_components/profile-form/variants";
 import { requireAccountPage } from "@/lib/account";
 import { PublishForm } from "./_components/publish-form";
 import { PUBLISH_INTRO, PUBLISH_PAGE_TITLE, PUBLISH_TITLE } from "@/app/_lib/profile-form/messages";
@@ -33,27 +35,39 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
 /**
  * The dynamic half: the session, whether she already has a profile, the
  * vocabulary, and the Google-door prefill. All uncached, so the boundary is
  * `[stream]` from Cache Components' own menu — the heading paints first.
  */
-async function PublishPanel() {
+async function PublishPanel({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireAccountPage("/publish");
 
   if (await profiles.has(session.accountId)) redirect("/my-profile");
 
-  const [vocabulary, prefill] = await Promise.all([
+  const [vocabulary, prefill, params] = await Promise.all([
     skills.listActive(),
     profiles.prefill(session.accountId),
+    searchParams,
   ]);
 
   return (
-    <PublishForm
-      vocabulary={vocabulary}
-      prefill={prefill}
-      consentVersions={CURRENT_CONSENT_VERSIONS}
-    />
+    <>
+      <PublishForm
+        vocabulary={vocabulary}
+        prefill={prefill}
+        consentVersions={CURRENT_CONSENT_VERSIONS}
+        treatment={treatmentFor(params.variant)}
+      />
+      {params.clean === "1" ? null : (
+        <PrototypeSwitcher
+          variants={VARIANT_KEYS.map((key) => ({ key, name: VARIANTS[key].name }))}
+          current={String(params.variant ?? "")}
+        />
+      )}
+    </>
   );
 }
 
@@ -70,16 +84,16 @@ function PanelSkeleton() {
   );
 }
 
-export default function PublishPage() {
+export default function PublishPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
       <div className="flex flex-col gap-2">
         <h1 className="page-heading">{PUBLISH_TITLE}</h1>
         <p className="text-muted-foreground text-pretty">{PUBLISH_INTRO}</p>
       </div>
 
       <Suspense fallback={<PanelSkeleton />}>
-        <PublishPanel />
+        <PublishPanel searchParams={searchParams} />
       </Suspense>
     </main>
   );

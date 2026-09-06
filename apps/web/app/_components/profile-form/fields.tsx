@@ -27,6 +27,7 @@ import { Button } from "@repo/design-system/components/button";
 import { Input } from "@repo/design-system/components/input";
 import { RadioGroup, RadioGroupItem } from "@repo/design-system/components/radio-group";
 import { Textarea } from "@repo/design-system/components/textarea";
+import { cn } from "@repo/design-system/lib/utils";
 import { useId } from "react";
 import {
   ABOUT_HELP,
@@ -53,6 +54,7 @@ import {
   type TextFieldName,
 } from "@/app/_lib/profile-form/use-profile-fields";
 import type { z } from "zod";
+import type { FormTreatment } from "./treatment";
 
 /** Proper nouns read the same in both languages; restated here so the browser needs no domain import. */
 export const CITY_LABELS: Record<(typeof CITY_IDS)[number], string> = {
@@ -176,7 +178,8 @@ export function CityField({
   id,
   serverError,
   layout = "column",
-}: FieldProps & { layout?: "column" | "row" }) {
+  treatment,
+}: FieldProps & { layout?: "column" | "row"; treatment: FormTreatment }) {
   const errorId = useId();
   const baseId = useId();
 
@@ -204,7 +207,18 @@ export function CityField({
                   <FieldLabel
                     key={city}
                     htmlFor={radioId}
-                    className="border-border w-full rounded-md border px-3 py-2 font-normal"
+                    /*
+                      The registry's `FieldLabel` already washes a checked
+                      control in the ink at 5%. The ink treatment is that same
+                      wash at the strength `DESIGN.md` asks for — *a chosen item
+                      is a filled ink shape* — rather than a second mechanism,
+                      so the unchosen state is untouched either way.
+                    */
+                    className={cn(
+                      "border-border w-full rounded-md border px-3 py-2 font-normal",
+                      treatment.inkControls &&
+                        "has-data-checked:border-primary has-data-checked:bg-primary/10",
+                    )}
                   >
                     <RadioGroupItem id={radioId} value={city} />
                     {CITY_LABELS[city]}

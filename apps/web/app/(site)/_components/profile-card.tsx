@@ -3,18 +3,19 @@
  * first name, last initial, city, Skills, and a photo or the initial in its
  * place.
  *
- * Presentational and server-compatible, and **`/my-profile` is its only
- * consumer**, where it is the proof of what she published. `profile-row.tsx`
- * renders the same person on the Wall and on `/profiles`; the two share
- * `displayName` and `initialOf` rather than a component, because a row and a
- * card are two shapes of one hierarchy rather than one shape twice.
+ * Presentational and server-compatible, with **two consumers**: `/my-profile`,
+ * where it is the proof of what she published, and the preview sheet on
+ * `/publish` and `/my-profile/edit`, where it is the same card built from what
+ * she has typed so far (#181). `profile-row.tsx` renders the same person on the
+ * Wall and on `/profiles`; the two share `displayName` and `initialOf` rather
+ * than a component, because a row and a card are two shapes of one hierarchy
+ * rather than one shape twice.
  *
- * **Two consumers this comment used to name, and neither ever existed.**
- * `/publish` was to show it as a live preview beside the form — the layout that
- * lost at `/prototype` and lives on `prototype/16-ui-variants`, as
- * `publish-layout.tsx` records. And the Wall was to promote it to a
- * `PublicProfileCard`, which the ruled page of rows replaced. It carries no
- * link because nothing that renders it has one to give.
+ * **The second consumer is why every field it takes is optional-tolerant.** On
+ * `/my-profile` it is fed a persisted `OwnProfile` and every value is present;
+ * on the preview it is fed a half-typed form, so a missing city has to render
+ * as a missing city rather than as a dangling separator. It carries no link
+ * because nothing that renders it has one to give.
  *
  * **The initial is the approved-photo-absent state, and it is also the
  * pending state** (spec, Wall row): one shape, two causes, never a badge.
@@ -98,8 +99,14 @@ export function ProfileCard({
           <CardTitle className="font-heading text-2xl leading-7 font-medium text-pretty">
             {headline}
           </CardTitle>
+          {/*
+            Joined rather than interpolated around a literal `·`, because the
+            preview feeds this card a form that is still being filled in: a
+            person with a headline and no city yet used to render *"· "* and a
+            separator with nothing on one side of it.
+          */}
           <CardDescription className="font-sans">
-            {displayName(firstName, lastInitial)} · {cityLabel}
+            {[displayName(firstName, lastInitial), cityLabel].filter(Boolean).join(" · ")}
           </CardDescription>
         </div>
       </CardHeader>

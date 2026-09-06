@@ -21,6 +21,7 @@
 
 import { useId } from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
+import type { FormTreatment } from "@/app/_components/profile-form/treatment";
 import type { PublishFieldName } from "@/app/_lib/profile-form/messages";
 import { type UpdateProfileValues, updateProfileSchema } from "@/app/_lib/profile-form/schema";
 import { serverFieldError } from "@/app/_lib/profile-form/summary";
@@ -33,9 +34,11 @@ import { EditLayout } from "./edit-layout";
 export interface EditFormProps {
   readonly vocabulary: readonly VocabularyEntry[];
   readonly defaults: UpdateProfileValues;
+  /** Prototype only: how far the notebook world is taken. Leaves with the losing variants. */
+  readonly treatment: FormTreatment;
 }
 
-export function EditForm({ vocabulary, defaults }: EditFormProps) {
+export function EditForm({ vocabulary, defaults, treatment }: EditFormProps) {
   const machine = useProfileForm({
     action: updateProfile,
     initial: INITIAL_RESULT,
@@ -61,6 +64,7 @@ export function EditForm({ vocabulary, defaults }: EditFormProps) {
         vocabulary={vocabulary}
         idFor={idFor}
         serverErrorFor={(field, index) => serverFieldError(machine.serverErrors, field, index)}
+        treatment={treatment}
       />
     </form>
   );

@@ -21,7 +21,9 @@ import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
+import { treatmentFor, VARIANT_KEYS, VARIANTS } from "@/app/_components/profile-form/variants";
 import { requireAccountPage } from "@/lib/account";
 import { EditForm } from "./_components/edit-form";
 import { EDIT_INTRO, EDIT_PAGE_TITLE, EDIT_TITLE } from "./_lib/messages";
@@ -30,6 +32,8 @@ export const metadata: Metadata = {
   title: EDIT_PAGE_TITLE,
   robots: { index: false, follow: false },
 };
+
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 /**
  * **What she may choose from: the active vocabulary plus what she already
@@ -53,29 +57,38 @@ function choosable(
   return [...bySlug.values()].toSorted((a, b) => a.labelEs.localeCompare(b.labelEs, "es-CO"));
 }
 
-async function EditPanel() {
+async function EditPanel({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireAccountPage("/my-profile/edit");
   const profile = await profiles.findOwn(session.accountId);
 
   if (!profile) redirect("/publish");
 
-  const vocabulary = await skills.listActive();
+  const [vocabulary, params] = await Promise.all([skills.listActive(), searchParams]);
 
   return (
-    <EditForm
-      vocabulary={choosable(vocabulary, profile.skills)}
-      defaults={{
-        fullName: profile.fullName,
-        firstName: profile.firstName,
-        lastInitial: profile.lastInitial,
-        city: profile.city,
-        headline: profile.headline,
-        about: profile.about,
-        phone: profile.phone,
-        skillSlugs: profile.skills.map((skill) => skill.slug),
-        workHistory: [...profile.workHistory],
-      }}
-    />
+    <>
+      <EditForm
+        treatment={treatmentFor(params.variant)}
+        vocabulary={choosable(vocabulary, profile.skills)}
+        defaults={{
+          fullName: profile.fullName,
+          firstName: profile.firstName,
+          lastInitial: profile.lastInitial,
+          city: profile.city,
+          headline: profile.headline,
+          about: profile.about,
+          phone: profile.phone,
+          skillSlugs: profile.skills.map((skill) => skill.slug),
+          workHistory: [...profile.workHistory],
+        }}
+      />
+      {params.clean === "1" ? null : (
+        <PrototypeSwitcher
+          variants={VARIANT_KEYS.map((key) => ({ key, name: VARIANTS[key].name }))}
+          current={String(params.variant ?? "")}
+        />
+      )}
+    </>
   );
 }
 
@@ -91,16 +104,16 @@ function PanelSkeleton() {
   );
 }
 
-export default function EditProfilePage() {
+export default function EditProfilePage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
       <div className="flex flex-col gap-2">
         <h1 className="page-heading">{EDIT_TITLE}</h1>
         <p className="text-muted-foreground text-pretty">{EDIT_INTRO}</p>
       </div>
 
       <Suspense fallback={<PanelSkeleton />}>
-        <EditPanel />
+        <EditPanel searchParams={searchParams} />
       </Suspense>
     </main>
   );

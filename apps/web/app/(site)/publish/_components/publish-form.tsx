@@ -19,6 +19,7 @@
 import type { ConsentVersions } from "@repo/domain/consent";
 import { useId } from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
+import type { FormTreatment } from "@/app/_components/profile-form/treatment";
 import { type PublishFieldName, PUBLISH_FAILED } from "@/app/_lib/profile-form/messages";
 import { publishProfileSchema } from "@/app/_lib/profile-form/schema";
 import { serverFieldError } from "@/app/_lib/profile-form/summary";
@@ -31,9 +32,11 @@ export interface PublishFormProps {
   readonly vocabulary: readonly VocabularyEntry[];
   readonly prefill: { readonly fullName: string };
   readonly consentVersions: ConsentVersions;
+  /** Prototype only: how far the notebook world is taken. Leaves with the losing variants. */
+  readonly treatment: FormTreatment;
 }
 
-export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFormProps) {
+export function PublishForm({ vocabulary, prefill, consentVersions, treatment }: PublishFormProps) {
   const machine = useProfileForm({
     /**
      * **Bound here, not hidden, and bound *here* rather than inside the
@@ -67,6 +70,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
         vocabulary={vocabulary}
         idFor={idFor}
         serverErrorFor={(field, index) => serverFieldError(machine.serverErrors, field, index)}
+        treatment={treatment}
       />
     </form>
   );

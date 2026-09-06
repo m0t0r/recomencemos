@@ -168,8 +168,32 @@ export const REMOVE_WORK_HISTORY_BUTTON = "Quitar";
 export const PHOTO_NOTE =
   "La foto la subes después de publicar. Tu perfil queda publicado sin ella.";
 
-/** Variant B's card heading: what a stranger sees, as she types it. */
+/**
+ * The preview sheet's heading: what a stranger sees, as she types it.
+ *
+ * Written for #16's variant B and left unused when the two-column layout it
+ * belonged to lost at `/prototype`. #181 puts the card back as a **sheet at the
+ * close of the page** rather than a column beside the fields, which is the
+ * composition that lost.
+ *
+ * **It is not in `PUBLISH_LABELS`, and that is the same call `/my-profile`
+ * already made.** The voice guide holds a *label* to five words, and this is
+ * six. A label names a control; this heading sits over a card and there is no
+ * control under it — which is exactly why `PUBLIC_HEADING`, `GATED_HEADING` and
+ * `HELD_HEADING` are six words each and are body copy in that surface's own
+ * copy test rather than labels in it. The group legends beside this one *are*
+ * labels, they name a group of controls, and they are registered as labels.
+ */
 export const PREVIEW_HEADING = "Así te ve todo el mundo";
+
+/**
+ * The sheet before there is anything to show.
+ *
+ * It names the field that fills it rather than describing the card, because the
+ * useful thing to tell her is what to do next — and because *her line* is the
+ * card's whole hierarchy, so it is genuinely the thing the card is waiting on.
+ */
+export const PREVIEW_EMPTY = "Cuando escribas tu línea, aquí ves cómo te ve todo el mundo.";
 
 /** The button says the verb of its action. Three words. */
 export const PUBLISH_BUTTON = "Publicar mi perfil";
@@ -309,6 +333,7 @@ export const PUBLISH_COPY = {
   REMOVE_WORK_HISTORY_BUTTON,
   PHOTO_NOTE,
   PREVIEW_HEADING,
+  PREVIEW_EMPTY,
   PUBLISH_BUTTON,
   FULL_NAME_REQUIRED,
   FULL_NAME_TOO_LONG,

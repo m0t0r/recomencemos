@@ -7,6 +7,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { DEFAULT_VARIANT, VARIANTS } from "@/app/_components/profile-form/variants";
 import { PublishForm } from "./publish-form";
 import {
   CONSENT_REQUIRED,
@@ -45,6 +46,7 @@ function renderForm() {
       vocabulary={vocabulary}
       prefill={{ fullName: "" }}
       consentVersions={{ notice: "2026-08-30", authorization: "2026-08-30" }}
+      treatment={VARIANTS[DEFAULT_VARIANT].treatment}
     />,
   );
 }

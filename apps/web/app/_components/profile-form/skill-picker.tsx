@@ -65,6 +65,7 @@ import {
 } from "@/app/_lib/profile-form/messages";
 import { LIMITS } from "@/app/_lib/profile-form/schema";
 import { useSkillRequest } from "@/app/_lib/profile-form/use-skill-request";
+import { CURRENT, type FormTreatment } from "./treatment";
 
 export interface VocabularyEntry {
   readonly slug: string;
@@ -82,6 +83,12 @@ export interface SkillPickerProps {
   readonly hydrated: boolean;
   /** The entries as a scrolling list, or as a wrapping grid of chips. */
   readonly layout?: "list" | "grid";
+  /**
+   * How far the notebook world is taken here. It defaults to what `dev`
+   * renders so a caller that has no opinion — a test, a prototype variant
+   * asking for the control — gets the untreated control rather than a crash.
+   */
+  readonly treatment?: FormTreatment;
 }
 
 const MOVEMENT_KEYS = new Set(["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Home", "End"]);
@@ -102,6 +109,7 @@ export function SkillPicker({
   error,
   hydrated,
   layout = "list",
+  treatment = CURRENT,
 }: SkillPickerProps) {
   const helpId = useId();
   const errorId = useId();
@@ -261,9 +269,17 @@ export function SkillPicker({
       ) : (
         <div
           className={cn(
-            layout === "grid"
-              ? "flex flex-wrap gap-2"
-              : "border-border flex max-h-80 flex-col gap-1 overflow-y-auto rounded-md border p-2",
+            layout === "grid" && "flex flex-wrap gap-2",
+            layout === "list" && "border-border max-h-80 overflow-y-auto rounded-md border",
+            /*
+              Ninety-one things a person can do is a list, and `DESIGN.md` says
+              a list here is separated by the ruling rather than by a gap. The
+              container keeps its border because that border is the boundary of
+              a *scrolling region* rather than a card — without it there is
+              nothing saying the list continues past the fold.
+            */
+            layout === "list" && treatment.sheets && "divide-border divide-y",
+            layout === "list" && !treatment.sheets && "flex flex-col gap-1 p-2",
           )}
         >
           {shown.map((entry) => {
@@ -277,7 +293,10 @@ export function SkillPicker({
                   "font-normal",
                   layout === "grid"
                     ? "border-border rounded-full border px-3 py-1.5 text-sm"
-                    : "w-full rounded-md px-2 py-2 text-sm",
+                    : "w-full px-3 py-2.5 text-sm",
+                  layout === "list" && !treatment.sheets && "rounded-md",
+                  treatment.inkControls &&
+                    "has-data-checked:border-primary has-data-checked:bg-primary/10",
                 )}
               >
                 <Checkbox
