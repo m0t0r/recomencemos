@@ -21,14 +21,21 @@
  * a project whose `main` lived in the replaced page renders one in its own
  * copy of this file.
  *
- * **The copy here is still English, and that is an open row.** It was settled at
- * Design before `docs/policy/voice.md` existed; rewriting it in `es-CO` under the
- * voice guide is listed in the repo README under "Still to replace". Keep the
- * shape when it is rewritten — the reference line is what support asks for.
+ * **The copy is `es-CO` and lives in `_lib/boundary/messages.ts`**, beside the
+ * root boundary's and the not-found page's, under the voice guide's `A refusal`
+ * row: the failure is our rule and never her mistake. The shape is unchanged from
+ * the English it replaced — the reference line is what support asks for.
  */
 
 import { Button } from "@repo/design-system/components/button";
 
+import {
+  APP_ERROR_EXPLANATION,
+  APP_ERROR_RETRY,
+  APP_ERROR_RETRYING,
+  APP_ERROR_TITLE,
+  REFERENCE_TERM,
+} from "./_lib/boundary/messages";
 import type { BoundaryError } from "../lib/report-client-error";
 import { useErrorBoundary } from "../lib/use-error-boundary";
 
@@ -48,17 +55,11 @@ export default function AppError({ error, retry }: { error: BoundaryError; retry
       {/* `focus:outline-none` because the heading takes focus on mount and is
           not in the tab order: no indicator is owed for it, and one drawn
           around a heading reads as a rendering fault rather than as focus. */}
-      <h1
-        ref={headingRef}
-        tabIndex={-1}
-        className="text-2xl font-semibold tracking-tight focus:outline-none"
-      >
-        Something went wrong
+      <h1 ref={headingRef} tabIndex={-1} className="page-heading focus:outline-none">
+        {APP_ERROR_TITLE}
       </h1>
 
-      <p className="text-muted-foreground">
-        We hit an unexpected problem. Trying again may fix it.
-      </p>
+      <p className="text-muted-foreground text-pretty">{APP_ERROR_EXPLANATION}</p>
 
       {/*
         Not disabled while the retry is in flight: disabling the element that
@@ -67,11 +68,11 @@ export default function AppError({ error, retry }: { error: BoundaryError; retry
         label carry the state instead, and a second click during a transition
         costs nothing.
       */}
-      <Button onClick={onRetry}>{isRetrying ? "Trying again…" : "Try again"}</Button>
+      <Button onClick={onRetry}>{isRetrying ? APP_ERROR_RETRYING : APP_ERROR_RETRY}</Button>
 
       {reference !== undefined && (
         <p className="text-muted-foreground text-sm">
-          Reference: <code className="font-mono">{reference}</code>
+          {REFERENCE_TERM} <code className="font-mono">{reference}</code>
         </p>
       )}
     </section>

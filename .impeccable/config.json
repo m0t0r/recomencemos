@@ -1,0 +1,15 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": ["apps/web/app/global-error.tsx"],
+        "createdAt": "2026-09-06T15:30:56.592Z",
+        "reason": "This boundary replaces the root layout, so next/font never runs and no stylesheet is mounted: the only faces it can name are system fallback stacks (Roboto, SFMono-Regular are stack members, not chosen faces). DESIGN.md makes the same argument for email keeping Inter alone."
+      }
+    ]
+  }
+}

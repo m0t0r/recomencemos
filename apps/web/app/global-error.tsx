@@ -33,11 +33,26 @@
  * and scrollbars match the page instead of following the OS on a page that does
  * not.
  *
- * **The copy here is still English.** That row stays open in the repo README
- * under "Still to replace"; it is rewritten in `es-CO` under
- * `docs/policy/voice.md`.
+ * **The copy is `es-CO` and is imported like any other module's.** What this
+ * boundary loses by replacing the root layout is the *stylesheet* and the fonts,
+ * not the module graph — so the colours below have to be literal and the words do
+ * not. `_lib/boundary/messages.ts` holds them beside the other two boundaries'.
+ *
+ * **The heading stays in the system stack, and that is honest rather than
+ * unfinished.** Alegreya is self-hosted by `next/font`, which injects it through
+ * the stylesheet this file replaces, so a display face named here would render as
+ * whatever serif the browser happened to have. It is the same argument `DESIGN.md`
+ * already makes for email keeping Inter alone.
  */
 
+import {
+  REFERENCE_TERM,
+  ROOT_ERROR_EXPLANATION,
+  ROOT_ERROR_PAGE_TITLE,
+  ROOT_ERROR_RETRY,
+  ROOT_ERROR_RETRYING,
+  ROOT_ERROR_TITLE,
+} from "./_lib/boundary/messages";
 import type { BoundaryError } from "../lib/report-client-error";
 import { useErrorBoundary } from "../lib/use-error-boundary";
 
@@ -106,7 +121,10 @@ const styles = `
 
   .reference code {
     background: var(--surface, #eff4fa);
-    border-radius: 0.25rem;
+    /* DESIGN.md's rounded.sm. It was 0.25rem — Tailwind's step, not this
+       product's — which is the same class of drift as the zinc palette that used
+       to be here, and the design hook caught it for the same reason. */
+    border-radius: 0.3rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     padding: 0.125rem 0.375rem;
   }
@@ -140,7 +158,14 @@ export default function GlobalError({ error, retry }: { error: BoundaryError; re
   );
 
   return (
-    <html lang="en">
+    /*
+      `es-CO`, for the reason the root layout carries it: every string below is
+      Spanish, and `lang` is what a screen reader takes its phonemes from. It said
+      `en` while the copy was English and would have gone on saying it — the two
+      had to move together, and this is the one file where nothing else would have
+      caught the mismatch.
+    */
+    <html lang="es-CO">
       <body>
         {/*
           A document with no title fails WCAG 2.4.2, and this boundary replaces
@@ -149,7 +174,7 @@ export default function GlobalError({ error, retry }: { error: BoundaryError; re
           Component anyway; React's own `title` element is what Next's reference
           points to here.
         */}
-        <title>Something went wrong</title>
+        <title>{ROOT_ERROR_PAGE_TITLE}</title>
 
         {/* In the body rather than a head this boundary does not own: a `style`
             element applies wherever it is parsed, and the root layout that
@@ -164,19 +189,19 @@ export default function GlobalError({ error, retry }: { error: BoundaryError; re
         <main className="boundary">
           <div ref={containerRef} role="alert" aria-busy={isRetrying} className="boundary-alert">
             <h1 ref={headingRef} tabIndex={-1}>
-              Something went wrong
+              {ROOT_ERROR_TITLE}
             </h1>
 
-            <p className="muted">This page could not be loaded. Reloading may fix it.</p>
+            <p className="muted">{ROOT_ERROR_EXPLANATION}</p>
 
             {/* See `app/error.tsx` for why this is not disabled while busy. */}
             <button type="button" onClick={onRetry}>
-              {isRetrying ? "Trying again…" : "Reload"}
+              {isRetrying ? ROOT_ERROR_RETRYING : ROOT_ERROR_RETRY}
             </button>
 
             {reference !== undefined && (
               <p className="reference muted">
-                Reference: <code>{reference}</code>
+                {REFERENCE_TERM} <code>{reference}</code>
               </p>
             )}
           </div>
