@@ -52,7 +52,7 @@ import {
   ROOT_ERROR_RETRY,
   ROOT_ERROR_RETRYING,
   ROOT_ERROR_TITLE,
-} from "./_lib/boundary/messages";
+} from "@/app/_lib/boundary/messages";
 import type { BoundaryError } from "../lib/report-client-error";
 import { useErrorBoundary } from "../lib/use-error-boundary";
 
@@ -94,9 +94,18 @@ const styles = `
     gap: 1rem;
   }
 
+  /* The 32px step, which is the one page-heading renders and therefore what both
+     sibling boundaries now show. This was 24px, one step down, from before either
+     of them was on the ladder; the face cannot be shared here but the size can,
+     and a failure screen a size smaller than the one beside it reads as a
+     different product rather than as a quieter one. 1.25 is the ladder's heading
+     line-height.
+
+     No backticks in a comment inside this template literal: one closes it, and
+     the failure is a parse error thirty lines further down. */
   .boundary h1 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 2rem;
     line-height: 1.25;
   }
 
@@ -122,8 +131,8 @@ const styles = `
   .reference code {
     background: var(--surface, #eff4fa);
     /* DESIGN.md's rounded.sm. It was 0.25rem — Tailwind's step, not this
-       product's — which is the same class of drift as the zinc palette that used
-       to be here, and the design hook caught it for the same reason. */
+       product's — the same class of drift as the zinc palette that used to be
+       here, and the design hook caught it for the same reason. */
     border-radius: 0.3rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     padding: 0.125rem 0.375rem;
@@ -132,7 +141,12 @@ const styles = `
   .boundary button {
     background: var(--button-bg, #334db0);
     border: 1px solid transparent;
-    border-radius: 0.375rem;
+    /* DESIGN.md's rounded.md, which is what button-primary resolves to. This was
+       0.375rem, Tailwind's step — the same drift as the code radius above, and it
+       survived the first pass because only one of the two sat on a line the
+       design hook happened to report. The radius cases in design-tokens.test.ts
+       are what stop a third from having to be found by eye. */
+    border-radius: 0.4rem;
     color: var(--button-fg, #ffffff);
     cursor: pointer;
     font: inherit;

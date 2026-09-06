@@ -470,3 +470,54 @@ describe("literal font sizes against DESIGN.md's ramp", () => {
     );
   });
 });
+
+/**
+ * The corner language, on the one surface that cannot read the stylesheet.
+ *
+ * **A third axis, added for the reason the second was: something drifted and
+ * nothing caught it.** The root boundary carried `0.25rem` and `0.375rem` —
+ * Tailwind's `rounded-sm` and `rounded-md`, not this product's `0.3rem` and
+ * `0.4rem` — which is exactly the class of mistake the zinc palette was, one
+ * property over. The impeccable design hook reported one of the two and not the
+ * other, because it reports what it happens to scan; a suite reports every
+ * literal in the file.
+ *
+ * The email templates are deliberately **not** included. `pixelBasedPreset`
+ * renders their radii in px through Tailwind class names rather than as literal
+ * `border-radius` declarations, so there is nothing here to read — a case
+ * asserting over an empty set would pass while checking nothing, which is the
+ * failure the `finds sizes on every surface` case above exists to prevent.
+ */
+describe("literal radii against DESIGN.md's rounded scale", () => {
+  const frontmatter = read("DESIGN.md").split("---")[1] ?? "";
+
+  // Sliced to the `rounded:` block, exactly as the type ramp slices to
+  // `typography:` — the neighbouring blocks are bare rem values one indent down
+  // too, and unsliced they would make any spacing step a legal radius.
+  const rounded = frontmatter.slice(
+    frontmatter.indexOf("\nrounded:"),
+    frontmatter.indexOf("\nspacing:"),
+  );
+
+  const scale = new Set(
+    [...rounded.matchAll(/^\s+\w[\w-]*:\s*"([\d.]+)rem"$/gm)].map(([, size]) => Number(size)),
+  );
+
+  it("enumerates the four steps rather than none", () => {
+    expect([...scale].toSorted((a, b) => a - b)).toEqual([0.3, 0.4, 0.5, 0.7]);
+  });
+
+  const source = read("apps/web/app/global-error.tsx");
+  const radii = [...source.matchAll(/border-radius:\s*([\d.]+)rem\s*;/g)].map(([, value]) => ({
+    written: `${value}rem`,
+    rem: Number(value),
+  }));
+
+  it("finds radii at all, so a rewrite cannot silently empty this suite", () => {
+    expect(radii.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it.each(radii)("$written is a step in the rounded scale", ({ rem, written }) => {
+    expect(scale.has(rem), `${written} is not a step in DESIGN.md's rounded scale`).toBe(true);
+  });
+});

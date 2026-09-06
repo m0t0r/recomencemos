@@ -35,7 +35,7 @@ import {
   APP_ERROR_RETRYING,
   APP_ERROR_TITLE,
   REFERENCE_TERM,
-} from "./_lib/boundary/messages";
+} from "@/app/_lib/boundary/messages";
 import type { BoundaryError } from "../lib/report-client-error";
 import { useErrorBoundary } from "../lib/use-error-boundary";
 

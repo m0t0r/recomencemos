@@ -112,7 +112,15 @@ export const APP_ERROR_RETRYING = "Intentando";
 export const ROOT_ERROR_RETRY = "Recargar";
 export const ROOT_ERROR_RETRYING = "Recargando";
 
-/** Body copy — everything under the twenty-word sentence ceiling. */
+/**
+ * Every string a person reads here.
+ *
+ * **The labels are in this set as well as in the one below**, and that overlap
+ * is the point rather than an oversight: the label set buys the five-word
+ * ceiling and the caps check and nothing else, so a link left out of this one
+ * would never meet `EMPTY_LINK_TEXT` — which is the rule that governs link text
+ * and only link text. That is precisely how *aquí* would ship.
+ */
 export const BOUNDARY_COPY = {
   APP_ERROR_TITLE,
   APP_ERROR_EXPLANATION,
@@ -123,9 +131,15 @@ export const BOUNDARY_COPY = {
   NOT_FOUND_PAGE_TITLE,
   NOT_FOUND_EXPLANATION,
   NOT_FOUND_ONWARD,
+  NOT_FOUND_LINK,
+  REFERENCE_TERM,
+  APP_ERROR_RETRY,
+  APP_ERROR_RETRYING,
+  ROOT_ERROR_RETRY,
+  ROOT_ERROR_RETRYING,
 } as const;
 
-/** Labels and buttons — everything under the five-word ceiling. */
+/** The subset that is a link or a button, held to the five-word ceiling. */
 export const BOUNDARY_LABELS = {
   NOT_FOUND_LINK,
   REFERENCE_TERM,
