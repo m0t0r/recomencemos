@@ -296,6 +296,17 @@ above wherever it sits, blocks nothing, and is run daily by
 closes it again when a later run comes back clean. The threshold is
 `docs/policy/security.md` → `audit-report-threshold`, not a number chosen in the script.
 
+**The routing is `scripts/findings.mjs`, and the workflow is one line calling it**
+([ADR-0020](docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md)). Its
+`audit` subcommand runs the report and performs the lifecycle — file, edit in place when the set
+changes, close when clean, honour a closed issue as a dismissal of that exact fingerprint — and its
+`breach` subcommand is what `needs-triage.yml` calls with a control-band payload. Both are driven
+by `.claude/hooks/tests/findings.sh` with `gh` stubbed on `PATH` and its call log asserted, which is
+the rule that ADR sets for every gate and automation here: **the decision is a script with a test
+file named for it; a workflow `run:` line and a `settings.json` entry are wiring and hold no
+branching.** The script imports nothing outside Node's standard library because
+`needs-triage.yml` runs it with no `pnpm install`.
+
 Two things make that workflow load-bearing rather than belt-and-braces, and both were measured:
 six advisories — four of them `high` — sat on the default branch while every pull request went
 green, and **Dependabot opened no pull request for any of them** even with security updates enabled,
