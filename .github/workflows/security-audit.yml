@@ -31,6 +31,13 @@
 # assumed on the day this was written: the two agreed on all six advisories,
 # package for package and severity for severity.
 #
+# **The lifecycle -- file, edit in place, close when clean, honour a closed
+# issue as a dismissal -- is `scripts/findings.mjs audit`**, driven case by case
+# in `.claude/hooks/tests/findings.sh` with `gh` stubbed. It used to be a hundred
+# lines of bash here that nothing ran until the day it ran for real; this file
+# is now the wiring and nothing else
+# (`docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md`).
+#
 # **A scheduled workflow is disabled automatically after 60 days with no commits
 # to the repository.** That is GitHub's behaviour, not a setting here, and it is
 # the one way this can die quietly. A repository active enough to need a
@@ -74,7 +81,9 @@ jobs:
       - uses: actions/checkout@v7
       # `turbo-cache: "false"` for the reason the `lint` and `audit` jobs set it:
       # this job calls node directly and runs no Turborepo task, so the cache
-      # would be written once per run and read by nothing.
+      # would be written once per run and read by nothing. The install is needed
+      # here, unlike in `needs-triage.yml`: `pnpm audit` reads the lockfile and
+      # the store.
       - uses: ./.github/actions/setup
         with:
           turbo-cache: "false"
@@ -84,112 +93,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-
-          # Three exit codes, and each is a different answer: 0 nothing to
-          # report, 1 something to report with the issue body on stdout, 2 the
-          # report could not run at all. `|| code=$?` rather than a bare call,
-          # because `set -e` would take 1 for a failure when it is an answer.
-          #
-          # Anything else -- a 127 from a missing node, a signal -- is neither
-          # answer and is refused here rather than falling through into the
-          # finding branch, where it would surface as a confusing complaint
-          # about a missing fingerprint.
-          code=0
-          report=$(node scripts/audit-report.mjs) || code=$?
-
-          if [ "$code" != 0 ] && [ "$code" != 1 ]; then
-            echo "::error::the dependency report could not run (exit $code)"
-            printf '%s\n' "$report" >&2
-            exit 1
-          fi
-
-          # Labels are created if absent for the reason `needs-triage.yml` gives:
-          # `gh issue create --label` fails hard on a label the repository does
-          # not have, and losing a real finding to a missing label would be the
-          # worst available reason not to hear about one. `|| true` because a
-          # parallel run may have just created it.
-          gh label create needs-triage --repo "$REPO" --color fbca04 \
-            --description "Maintainer needs to evaluate this issue" 2>/dev/null || true
-          gh label create security-audit --repo "$REPO" --color d93f0b \
-            --description "Opened by the scheduled dependency audit" 2>/dev/null || true
-
-          # Everything this workflow has ever filed, open and closed. Closed ones
-          # matter: see the dismissal branch at the bottom.
-          history=$(gh issue list --repo "$REPO" --label security-audit --state all \
-            --limit 50 --json number,state,body)
-
-          # **The marker, not the label, is the handle.** A label is something a
-          # human can put on any issue, and this job edits and closes what it
-          # finds -- so keying on the label alone means a mislabelled issue gets
-          # its body overwritten or gets closed. Requiring the fingerprint marker
-          # in the body means it only ever touches an issue it wrote itself.
-          existing=$(printf '%s' "$history" | jq -r \
-            '[.[] | select(.state == "OPEN") | select(.body != null)
-                  | select(.body | test("<!-- audit-fingerprint: "))][0].number // empty')
-
-          if [ "$code" = 0 ]; then
-            printf '%s\n' "$report"
-            if [ -n "$existing" ]; then
-              gh issue comment "$existing" --repo "$REPO" --body \
-                "A later scheduled audit found nothing at or above the reporting threshold. Closing. [Run]($RUN_URL)"
-              gh issue close "$existing" --repo "$REPO"
-              echo "closed #$existing: the tree is clean"
-            else
-              echo "clean, and no open finding to close"
-            fi
-            exit 0
-          fi
-
-          # The fingerprint is over what identifies the advisories, not what
-          # describes them, so an upstream re-wording does not read as a new
-          # finding.
-          fingerprint=$(printf '%s\n' "$report" | sed -n 's/.*audit-fingerprint: \([0-9a-f]*\).*/\1/p')
-          if [ -z "$fingerprint" ]; then
-            echo "::error::the report carried no fingerprint, so it cannot be deduplicated"
-            exit 1
-          fi
-
-          if [ -n "$existing" ]; then
-            seen=$(printf '%s' "$history" | jq -r --argjson n "$existing" \
-              '.[] | select(.number == $n) | .body' \
-              | sed -n 's/.*audit-fingerprint: \([0-9a-f]*\).*/\1/p')
-            # Same set as the open issue already carries -> say nothing. A daily
-            # comment on an unchanged finding is how a feed gets muted.
-            if [ "$seen" = "$fingerprint" ]; then
-              echo "#$existing already describes this exact set; nothing to do"
-              exit 0
-            fi
-            # Edited in place rather than superseded, so the issue keeps one URL
-            # and whatever discussion is already on it.
-            printf '%s\n' "$report" | gh issue edit "$existing" --repo "$REPO" --body-file -
-            gh issue comment "$existing" --repo "$REPO" --body \
-              "The set of advisories changed; the description above has been updated. [Run]($RUN_URL)"
-            echo "updated #$existing"
-            exit 0
-          fi
-
-          # **A dismissal has to be durable, or this becomes a daily re-file.**
-          # Closing the issue is the only way a human can say "we have looked at
-          # these and they do not warrant a patch" -- and without this branch the
-          # next morning's run would see no *open* issue and file a fresh one,
-          # every day, each with a new number and none of the reasoning. That is
-          # exactly the outcome ADR-0001 chose issues to avoid: a dismissal
-          # becoming a closed issue nobody remembers.
-          #
-          # The suppression is per fingerprint, so it is narrow on purpose. A new
-          # advisory, or a severity that moved, changes the hash and opens a
-          # fresh issue rather than hiding behind the old dismissal.
-          dismissed=$(printf '%s' "$history" | jq -r --arg fp "$fingerprint" \
-            '[.[] | select(.state == "CLOSED") | select(.body != null)
-                  | select(.body | test("<!-- audit-fingerprint: " + $fp))][0].number // empty')
-          if [ -n "$dismissed" ]; then
-            echo "#$dismissed carries this exact set and was closed; treating it as dismissed"
-            exit 0
-          fi
-
-          printf '%s\n' "$report" | gh issue create --repo "$REPO" \
-            --label needs-triage --label security-audit \
-            --title "Dependency advisories found by the scheduled audit" \
-            --body-file -
+        run: node scripts/findings.mjs audit

@@ -39,6 +39,11 @@ concurrency:
 
 jobs:
   coverage:
+    # A version bump changes no line this measures, and this is the single
+    # largest job in the repository -- 251 runner-seconds on run 34041028217,
+    # a full second run of every suite beside the `test` job's. Dependabot's
+    # pull requests keep their six checks and skip the comment.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
