@@ -7,7 +7,7 @@
     "check-types": "turbo run check-types",
     "test": "turbo run test test:gates spec-identifiers migrations:check",
     "test:coverage": "turbo run test:coverage && node scripts/coverage-merge.mjs",
-    "test:gates": "bash .claude/hooks/gate-test.sh \"$PWD/.claude/hooks\"",
+    "test:gates": "bash .claude/hooks/gate-test.sh",
     "spec-identifiers": "node scripts/spec-identifiers.mjs",
     "page-weight": "node scripts/first-load-bytes.mjs",
     "lint": "oxlint . --max-warnings 0",
