@@ -519,7 +519,7 @@ new rule gets a prose case in `gate-test.sh`.
 | [`.claude/agents/<name>.md`](./.claude/agents/)         | **Included** — four Design advisors and the fidelity checker. Yours go here too: verification, research, whatever recurs                                                                     |
 | [`.claude/settings.json`](./.claude/settings.json)      | **Included.** Both stage gates as `PreToolUse` hooks, plus impeccable's design detector. Yours go here too: protected paths, formatters, credential scanning, deploy authorization           |
 | `REVIEW.md`                                             | **Not written.** The review passes beyond `code-review`'s two axes, the severity that blocks a merge, and — `stacked-prs` being `yes` — what runs per-PR versus once at the top of the stack |
-| [`.github/workflows/`](./.github/workflows/)            | **Included** — `ci.yml` runs the required checks on every PR, one job per entry in `required-checks`, `needs-triage.yml` files findings. The non-interactive eval suite is not written                                          |
+| [`.github/workflows/`](./.github/workflows/)            | **Included** — `ci.yml` runs the required checks on every PR, one job per entry in `required-checks`, `needs-triage.yml` files findings. The non-interactive eval suite is not written       |
 
 The two still open are open on purpose. Each is worth writing when the need for it shows up rather than upfront — `REVIEW.md` when a review pass beyond the two axes is actually wanted, the eval suite when there is an incident to turn into one.
 
