@@ -61,28 +61,37 @@ for n in "${names[@]}"; do
   fi
 done
 
-RESULTS=$(mktemp)
-export HOOKS REPO VERBOSE RESULTS
+export HOOKS REPO VERBOSE
 
+# Every file at once, each in its own subshell with its own fixture root and its
+# own output file, then the outputs replayed in name order. The files share
+# nothing but the scripts under test, so the wall clock is the slowest file
+# rather than the sum -- and this suite runs inside every `pnpm test` and every
+# Stop hook, so the sum was paid many times a session.
+WORK=$(mktemp -d)
 for n in "${names[@]}"; do
-  ROOT=$(mktemp -d)
+  ROOT="$WORK/$n"
+  mkdir -p "$ROOT"
   # The hooks that still fall back to the launch directory get the fixture root,
   # so a case that passes no cwd is judged against the fixture and never against
   # this repository.
-  export ROOT CLAUDE_PROJECT_DIR="$ROOT"
   (
+    export ROOT CLAUDE_PROJECT_DIR="$ROOT" RESULTS="$WORK/$n.results"
     # shellcheck source=./tests/lib.sh
     . "$TESTS/lib.sh"
     # shellcheck source=/dev/null
     . "$TESTS/$n.sh"
     flush_section
-  )
-  rm -rf "$ROOT"
+  ) > "$WORK/$n.out" 2>&1 &
 done
+wait
 
-pass=$(grep -c '^ok$' "$RESULTS" || true)
-fail=$(grep -c '^fail$' "$RESULTS" || true)
-rm -f "$RESULTS"
+for n in "${names[@]}"; do
+  cat "$WORK/$n.out"
+done
+pass=$(cat "$WORK"/*.results 2>/dev/null | grep -c '^ok$' || true)
+fail=$(cat "$WORK"/*.results 2>/dev/null | grep -c '^fail$' || true)
+rm -rf "$WORK"
 
 echo
 echo "passed: $pass  failed: $fail"
