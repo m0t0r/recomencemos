@@ -3,14 +3,14 @@
 /**
  * The two doors, and the one choice that governs both.
  *
- * Variant B ("Framed card"), locked after `/prototype` UI — the losing variants
- * live on `prototype/12-sign-in-variants`, and the shaping is
+ * Variant B, locked after `/prototype` UI — the losing variants live on
+ * `prototype/12-sign-in-variants`, and the shaping is
  * `.impeccable/briefs/sign-in.md`. Four decisions are load-bearing here and are
  * not free to drift:
  *
  * 1. **Google leads and the email door is fully present below it**, never
  *    behind a disclosure. Where Google is unconfigured the email form is the
- *    whole card, with no dead button and no dangling separator.
+ *    whole sheet, with no dead button and no dangling separator.
  * 2. **The Google button wears Google's own treatment** — recognition is the
  *    whole reason that door exists. See the hierarchy note on the button.
  * 3. **The shared-device checkbox sits outside both forms**, because it governs
@@ -28,11 +28,17 @@
  * **There are no hidden inputs.** `returnPath` and `sharedDevice` are bound
  * arguments — see `_lib/schema.ts`. `"use client"` remains for the checkbox's
  * state, the per-door pending states, and the focus move on every outcome.
+ *
+ * **The card and the grey field are gone, and that is #182** — the surface is a
+ * sheet of the ruled page now, and the brief's amendment carries the argument.
+ * Nothing above changed with it: the order, the strings, the two forms and the
+ * one checkbox that governs both are exactly as they were. What moved out of
+ * this file is the wrapper and the heading, which belong to the page rather
+ * than to the doors.
  */
 
 import { useForm } from "@tanstack/react-form";
 import { Button } from "@repo/design-system/components/button";
-import { Card } from "@repo/design-system/components/card";
 import { Checkbox } from "@repo/design-system/components/checkbox";
 import {
   Field,
@@ -43,6 +49,7 @@ import {
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
 import { Label } from "@repo/design-system/components/label";
+import { InfoIcon, TriangleAlertIcon } from "lucide-react";
 import { useId } from "react";
 import { useFormStatus } from "react-dom";
 import {
@@ -56,7 +63,6 @@ import {
   SEND_LINK_BUTTON,
   SHARED_DEVICE_HELP,
   SHARED_DEVICE_LABEL,
-  SIGN_IN_TITLE,
 } from "../_lib/messages";
 import { emailField, emailFieldOnBlur, requestMagicLinkSchema } from "../_lib/schema";
 import { useSignIn } from "../_lib/use-sign-in";
@@ -111,13 +117,19 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
   const form = useForm({ defaultValues: { email: "" } });
 
   return (
-    <main className="bg-muted flex grow flex-col items-center justify-center px-4 py-12">
-      <Card className="flex w-full max-w-md flex-col gap-6 p-6 sm:p-8">
-        <h1 className="page-heading">{SIGN_IN_TITLE}</h1>
+    /*
+      **One sheet, and its rows are the two doors** (#182). The `ruled-page`
+      utility is the same one the Wall's list and `/my-profile`'s three tiers
+      are drawn on: the margin line runs down the left from `sm` up and is
+      dropped on a phone, where a row wants every pixel. What divides the rows
+      is the ruling — including the one carrying the `o`, which is why the two
+      doors read as two without either being boxed.
+    */
+    <div className="ruled-page">
+      <FeedbackRegion machine={machine} />
 
-        <FeedbackRegion machine={machine} />
-
-        {googleAvailable ? (
+      {googleAvailable ? (
+        <>
           <div className="flex flex-col gap-2">
             {/*
               A form rather than a click handler, so the door survives with no
@@ -131,143 +143,150 @@ export function SignInForm({ googleAvailable, returnPath, error }: SignInFormPro
 
             <p className="text-muted-foreground text-sm leading-5">{GOOGLE_ACCOUNT_NOTICE}</p>
           </div>
-        ) : null}
 
-        {googleAvailable ? (
-          <FieldSeparator aria-hidden="true">{DOOR_DIVIDER}</FieldSeparator>
-        ) : null}
+          {/*
+            The ruling between the doors, with the word already on it. `my-6`
+            replaces the component's own `-my-2` through `twMerge`, so the two
+            rows sit an even distance from the line rather than tight against
+            it.
+          */}
+          <FieldSeparator aria-hidden="true" className="my-6">
+            {DOOR_DIVIDER}
+          </FieldSeparator>
+        </>
+      ) : null}
 
-        <form
-          action={machine.formAction}
-          /*
-            Runs before the action, and answers with **the same schema, over the
-            same bytes**: `new FormData(event.currentTarget)` is what the Server
-            Action is about to receive, and `requestMagicLinkSchema` is what it
-            will parse it with. So an address the browser already knows is wrong
-            costs her no round trip, and a valid one is never intercepted — the
-            server still performs the parse that actually decides.
+      <form
+        action={machine.formAction}
+        /*
+          Runs before the action, and answers with **the same schema, over the
+          same bytes**: `new FormData(event.currentTarget)` is what the Server
+          Action is about to receive, and `requestMagicLinkSchema` is what it
+          will parse it with. So an address the browser already knows is wrong
+          costs her no round trip, and a valid one is never intercepted — the
+          server still performs the parse that actually decides.
 
-            Reading the form rather than `form.state.values` is deliberate. The
-            two agree today because the input is controlled, but they are two
-            sources for one question, and the one that matters is the one that
-            will be posted. Review named the divergence; this removes it rather
-            than documenting it.
-          */
-          onSubmit={(event) => {
-            if (requestMagicLinkSchema.safeParse(new FormData(event.currentTarget)).success) {
-              return;
-            }
+          Reading the form rather than `form.state.values` is deliberate. The
+          two agree today because the input is controlled, but they are two
+          sources for one question, and the one that matters is the one that
+          will be posted. Review named the divergence; this removes it rather
+          than documenting it.
+        */
+        onSubmit={(event) => {
+          if (requestMagicLinkSchema.safeParse(new FormData(event.currentTarget)).success) {
+            return;
+          }
 
-            event.preventDefault();
-            void form.handleSubmit();
-          }}
-          className="flex flex-col gap-4"
-        >
-          <Field>
-            <FieldLabel htmlFor={emailId}>{EMAIL_LABEL}</FieldLabel>
-            {/*
-              Before she types anything, which is the ticket's own criterion: she
-              needs to know she needs a mailbox she can open *now*, not after
-              committing to this door.
-            */}
-            <FieldDescription>{EMAIL_DOOR_PRECONDITION}</FieldDescription>
-            <form.Field
-              name="email"
-              /*
-                **The validator is on the field, not on the form**, so the error
-                lands where it is rendered instead of relying on the library
-                mapping a schema's paths down to fields.
+          event.preventDefault();
+          void form.handleSubmit();
+        }}
+        className="flex flex-col gap-4"
+      >
+        <Field>
+          <FieldLabel htmlFor={emailId}>{EMAIL_LABEL}</FieldLabel>
+          {/*
+            Before she types anything, which is the ticket's own criterion: she
+            needs to know she needs a mailbox she can open *now*, not after
+            committing to this door.
+          */}
+          <FieldDescription>{EMAIL_DOOR_PRECONDITION}</FieldDescription>
+          <form.Field
+            name="email"
+            /*
+              **The validator is on the field, not on the form**, so the error
+              lands where it is rendered instead of relying on the library
+              mapping a schema's paths down to fields.
 
-                `onBlur` lets an empty field alone — she has not finished, and
-                telling her an empty box is wrong while she is still filling it
-                in is the form nagging rather than helping. `onSubmit` has no
-                such exemption. Both are schemas from `_lib/schema.ts`, and the
-                sentence inside them is `docs/policy/voice.md`'s rather than
-                Zod's.
-              */
-              validators={{ onBlur: emailFieldOnBlur, onSubmit: emailField }}
-            >
-              {(field) => {
-                // The server's verdict and the client's are the same schema, so
-                // either one marks the field. Hers arrives instantly; the
-                // server's is the one that counts.
-                const clientError = field.state.meta.errors[0];
-
-                /**
-                 * **The message and the invalid flag are derived from the same
-                 * thing, and that is a fix rather than a simplification.** They
-                 * used to be computed separately: `invalid` counted the server's
-                 * verdict, `message` did not, and a server rejection with no
-                 * client error therefore set `aria-describedby` to the id of an
-                 * element that was never rendered. A screen reader following it
-                 * finds nothing — NFR20 is WCAG 2.2 AA, and a dangling
-                 * `aria-describedby` fails it while looking correct in the DOM.
-                 *
-                 * That state is reachable: with JavaScript unavailable no client
-                 * validator ever runs, so every refusal is the server's.
-                 */
-                const message =
-                  (typeof clientError === "string" ? clientError : clientError?.message) ??
-                  (machine.emailRejected ? EMAIL_LOOKS_WRONG : undefined);
-
-                const invalid = message !== undefined;
-
-                return (
-                  <>
-                    <Input
-                      id={emailId}
-                      name="email"
-                      type="email"
-                      inputMode="email"
-                      autoComplete="email"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                      required
-                      value={field.state.value}
-                      onChange={(event) => field.handleChange(event.target.value)}
-                      onBlur={field.handleBlur}
-                      aria-invalid={invalid}
-                      aria-describedby={invalid ? emailErrorId : undefined}
-                    />
-                    {message === undefined ? null : (
-                      <FieldError id={emailErrorId}>{message}</FieldError>
-                    )}
-                  </>
-                );
-              }}
-            </form.Field>
-          </Field>
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={machine.emailPending}
-            aria-busy={machine.emailPending}
+              `onBlur` lets an empty field alone — she has not finished, and
+              telling her an empty box is wrong while she is still filling it
+              in is the form nagging rather than helping. `onSubmit` has no
+              such exemption. Both are schemas from `_lib/schema.ts`, and the
+              sentence inside them is `docs/policy/voice.md`'s rather than
+              Zod's.
+            */
+            validators={{ onBlur: emailFieldOnBlur, onSubmit: emailField }}
           >
-            {machine.awaitingLink ? RESEND_LINK_BUTTON : SEND_LINK_BUTTON}
-          </Button>
-        </form>
+            {(field) => {
+              // The server's verdict and the client's are the same schema, so
+              // either one marks the field. Hers arrives instantly; the
+              // server's is the one that counts.
+              const clientError = field.state.meta.errors[0];
 
-        <div className="border-border flex items-start gap-3 border-t pt-5">
-          <Checkbox
-            id={sharedDeviceId}
-            checked={machine.sharedDevice}
-            onCheckedChange={(checked) => machine.setSharedDevice(checked === true)}
-            aria-describedby={helpId}
-            className="mt-1"
-          />
-          <div className="flex flex-col gap-1">
-            <Label htmlFor={sharedDeviceId} className="font-normal">
-              {SHARED_DEVICE_LABEL}
-            </Label>
-            {/* Hours, not policy language. What it does, in the unit she thinks in. */}
-            <p id={helpId} className="text-muted-foreground text-sm leading-5">
-              {SHARED_DEVICE_HELP}
-            </p>
-          </div>
+              /**
+               * **The message and the invalid flag are derived from the same
+               * thing, and that is a fix rather than a simplification.** They
+               * used to be computed separately: `invalid` counted the server's
+               * verdict, `message` did not, and a server rejection with no
+               * client error therefore set `aria-describedby` to the id of an
+               * element that was never rendered. A screen reader following it
+               * finds nothing — NFR20 is WCAG 2.2 AA, and a dangling
+               * `aria-describedby` fails it while looking correct in the DOM.
+               *
+               * That state is reachable: with JavaScript unavailable no client
+               * validator ever runs, so every refusal is the server's.
+               */
+              const message =
+                (typeof clientError === "string" ? clientError : clientError?.message) ??
+                (machine.emailRejected ? EMAIL_LOOKS_WRONG : undefined);
+
+              const invalid = message !== undefined;
+
+              return (
+                <>
+                  <Input
+                    id={emailId}
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    required
+                    value={field.state.value}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    onBlur={field.handleBlur}
+                    aria-invalid={invalid}
+                    aria-describedby={invalid ? emailErrorId : undefined}
+                  />
+                  {message === undefined ? null : (
+                    <FieldError id={emailErrorId}>{message}</FieldError>
+                  )}
+                </>
+              );
+            }}
+          </form.Field>
+        </Field>
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={machine.emailPending}
+          aria-busy={machine.emailPending}
+        >
+          {machine.awaitingLink ? RESEND_LINK_BUTTON : SEND_LINK_BUTTON}
+        </Button>
+      </form>
+
+      {/* The third row: one answer, governing both doors, under its own ruling. */}
+      <div className="border-border mt-6 flex items-start gap-3 border-t pt-6">
+        <Checkbox
+          id={sharedDeviceId}
+          checked={machine.sharedDevice}
+          onCheckedChange={(checked) => machine.setSharedDevice(checked === true)}
+          aria-describedby={helpId}
+          className="mt-1"
+        />
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={sharedDeviceId} className="font-normal">
+            {SHARED_DEVICE_LABEL}
+          </Label>
+          {/* Hours, not policy language. What it does, in the unit she thinks in. */}
+          <p id={helpId} className="text-muted-foreground text-sm leading-5">
+            {SHARED_DEVICE_HELP}
+          </p>
         </div>
-      </Card>
-    </main>
+      </div>
+    </div>
   );
 }
 
@@ -323,6 +342,19 @@ function GoogleButton() {
  * region a name a test can ask for. Reaching for it by attribute through
  * `container.querySelector('[aria-live="polite"]')` was the tell that this
  * element was invisible to the accessibility tree the surface is judged on.
+ *
+ * **It is a note on the sheet now, and the mark is what carries the tone**
+ * (#182). It used to be a tinted, rounded panel — a filled `destructive` wash
+ * for a problem and a grey one otherwise — which is the one thing `DESIGN.md`
+ * says state may never be: a hue. The sentence sits in the working face beside
+ * a `lucide` mark in the margin column, over a ruling, which is the shape
+ * `/my-profile`'s tiers already use.
+ *
+ * **`destructive` reaches the mark and only the mark, and only where the
+ * outcome is a limit of the platform** — a ceiling, or a send that failed. A
+ * consumed link is neither: it arrives here as `success` because a scanner
+ * opening her link first is our problem rather than her error, and it takes the
+ * same neutral mark the confirmation does.
  */
 function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) {
   // Unpacked rather than reached through `machine` member by member, because
@@ -331,6 +363,8 @@ function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) 
   // access during render. The reads are of ordinary state and always were; this
   // separates the one binding that genuinely is a ref from the ones that are not.
   const { announcementRef, feedback } = machine;
+  const problem = feedback?.tone === "problem";
+  const Mark = problem ? TriangleAlertIcon : InfoIcon;
 
   return (
     <div
@@ -349,16 +383,17 @@ function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) 
       className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
     >
       {feedback ? (
-        <div
-          className={
-            feedback.tone === "success"
-              ? "border-border bg-muted rounded-lg border p-4"
-              : "border-destructive/30 bg-destructive/5 rounded-lg border p-4"
-          }
-        >
-          <p className="text-foreground text-base leading-6">{feedback.message}</p>
+        <div className="border-border mb-6 grid grid-cols-[1.25rem_1fr] gap-x-3 border-b pb-6">
+          <Mark
+            aria-hidden="true"
+            /* Centred on the first line: a 20 px mark against a 24 px line is 2 px down. */
+            className={problem ? "text-destructive mt-0.5 size-5" : "text-primary mt-0.5 size-5"}
+          />
+          <p className="text-foreground text-base leading-6 text-pretty">{feedback.message}</p>
           {feedback.hint ? (
-            <p className="text-muted-foreground mt-2 text-sm leading-5">{feedback.hint}</p>
+            <p className="text-muted-foreground col-start-2 mt-2 text-sm leading-5 text-pretty">
+              {feedback.hint}
+            </p>
           ) : null}
           {/*
             C39 asks the surface to render the `userMessage` **and** the

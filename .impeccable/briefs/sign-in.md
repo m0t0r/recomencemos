@@ -2,7 +2,8 @@
 
 **Target:** `apps/web/app/(site)/(auth)/sign-in/page.tsx` · **Mode:** Operate · **Ticket:**
 [#12](https://github.com/m0t0r/recomencemos/issues/12) · **Shaped:** 2026-08-27 · **Amended:**
-2026-08-30 ([#96](https://github.com/m0t0r/recomencemos/issues/96))
+2026-08-30 ([#96](https://github.com/m0t0r/recomencemos/issues/96)), 2026-09-06
+([#182](https://github.com/m0t0r/recomencemos/issues/182))
 
 ## Job and audience
 
@@ -74,6 +75,51 @@ Three consequences for this brief, and the first two are anti-goals:
    is not sent to `/admin`, because this page has no business knowing what kind of session it turned
    away.
 
+## Amended 2026-09-06 with #182 — the door on the ruled page
+
+**Nothing above changes.** The two doors, their order, the one checkbox governing both, the sent
+state that keeps the form, the `signed_in` redirect and every string are exactly as #12 and #96 left
+them. What this amendment settles is the material the surface is made of, which was inherited from a
+starter kit and never chosen: a card with a shadow, floating on a grey field, in a product whose
+world is ink on paper.
+
+`DESIGN.md` → **The world** is the authority, and it answers this surface without needing a fork.
+The composition is the one `/my-profile` already shipped with #178 and the one
+[`account.md`](account.md) is written against: **a sheet on the ruled page, not a card on a grey
+field.**
+
+Four consequences, and each is downstream of that sentence:
+
+1. **The page is the sheet.** The ground is paper (`background`), not `muted`, and there is no card
+   and no shadow — the one region in the product painted a solid field is the landing's cover, and a
+   second one would make the first ordinary. It is a single column at the form's measure, and it
+   starts at the top of the page rather than being centred in the viewport: a page starts at its top
+   margin, and a panel floating in the middle of a field is the idiom this is replacing.
+2. **The doors are rows of one ruled page.** The margin line runs down the left from `sm` up and is
+   dropped on a phone, exactly as it is beside every list in the product; the divisions between the
+   note, the two doors and the shared-device row are rulings. **The two doors are clearly two
+   because the sheet says so** — a ruling between them, carrying the `o` that was already there —
+   rather than because each is boxed.
+3. **Feedback is a note in the margin, not a tinted panel.** The live region keeps its role, its
+   focus behaviour and its position above the doors, and it is set as a row of the sheet: a `lucide`
+   mark in the margin column and the sentence in the working face beside it, over a ruling. The mark
+   is what says which kind of outcome this is; the tint that used to say it is gone, because state
+   here is a mark and never a hue. `destructive` reaches only the mark, and only where the outcome
+   genuinely is a limit of the platform — a ceiling or a send that failed. A consumed link is not
+   one, and does not get one.
+4. **The heading is the only display type on the surface.** It moves out of the streamed panel and
+   onto the page itself, so it paints with the shell rather than with the session read; everything
+   below it — labels, buttons, the notice, the help — is the working face, which is what an Operate
+   surface asks a form to be.
+
+**The fallback is written once.** The heading and the sheet live in `page.tsx` and the boundary wraps
+only what reads `searchParams`, so the skeleton is the panel's shape and nothing else — there is no
+second copy of the wrapper to keep in agreement, which is what the old fallback needed a comment to
+promise.
+
+**What this amendment may not touch**, beyond the constraints below: the header's height in any
+state (#80 criterion 6), and either door's behaviour with JavaScript unavailable.
+
 ## Interaction and layout
 
 Single column, `max-w` around a comfortable form measure, vertically centred with room to grow. One
@@ -90,12 +136,14 @@ hydration (NFR4's discipline, though NFR4 binds `/publish`). The Google button n
 
 ## Constraints a builder must not invent
 
-- Every string comes from `app/sign-in/messages.ts`, under `docs/policy/voice.md`. No copy is written
-  at a render site.
+- Every string comes from `app/(site)/(auth)/sign-in/_lib/messages.ts`, under
+  `docs/policy/voice.md`. No copy is written at a render site.
 - Semantic tokens only — `bg-background`, `text-muted-foreground`, `border-border`. No colour value,
   no `dark:` override; `theme-parity` is light only.
-- Registry components only: `button`, `input`, `label`, `field`, `checkbox`, `separator`. Nothing new
-  is built here; the Skill picker and the two standing notices are other tickets' scope.
+- Registry components only: `button`, `input`, `label`, `field`, `checkbox`, `separator`, plus the
+  `ruled-page` and `page-heading` utilities and a `lucide` mark, which are the world's own and are
+  named in `DESIGN.md`. Nothing new is built here; the Skill picker and the two standing notices are
+  other tickets' scope.
 - `/sign-in` is `noindex`.
 - WCAG 2.2 AA, `es-CO`, including every state above.
 
