@@ -16,13 +16,23 @@
             "command": "\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/design-to-build-gate.sh\"",
             "timeout": 10,
             "statusMessage": "Checking the Design gate"
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
           {
             "type": "command",
             "command": "\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/build-guard.sh\"",
             "timeout": 10,
             "statusMessage": "Checking protected paths and credentials"
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
           {
             "type": "command",
             "command": "\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/build-to-deploy-gate.sh\"",

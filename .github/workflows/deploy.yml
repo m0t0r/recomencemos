@@ -7,7 +7,7 @@
 # away from — see the spec's NFR25 and `docs/policy/build.md` -> `release-branch`.
 #
 # The checks are not restated here. `ci.yml` is called as a reusable workflow, so
-# the five jobs that gate a pull request are the same five, run on the commit
+# the jobs that gate a pull request are the same jobs, run on the commit
 # being deployed, and there is one definition of green in this repository.
 name: Deploy
 

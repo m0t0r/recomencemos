@@ -201,6 +201,15 @@ expect_decision "push HEAD:main"                                      deny  "$(b
 expect_decision "push a ticket branch"                                allow "$(bj 'git push -u origin ticket/12-add-widget')"
 expect_decision "bare push while on main"                             deny  "$(bj 'git push')"
 
+# The case #174 was: a worktree on a ticket branch while the launch checkout --
+# CLAUDE_PROJECT_DIR, still the fixture root here -- has the default branch out.
+# A gate reading the environment refused every bare push from every worktree.
+PUSHTREE="$ROOT.push"
+git -C "$ROOT" worktree add -q "$PUSHTREE" -b ticket/13-push
+expect_decision "bare push from a worktree, env on the default"       allow "$(wtj 'git push' "$PUSHTREE")"
+expect_decision "push origin main from that worktree"                 deny  "$(wtj 'git push origin main' "$PUSHTREE")"
+expect_decision "bare push from the main checkout, by its cwd"        deny  "$(wtj 'git push' "$ROOT")"
+
 git -C "$ROOT" checkout -q -b ticket/12-add-widget
 expect_decision "bare push while on a ticket branch"                  allow "$(bj 'git push')"
 expect_decision "push origin main from a ticket branch"               deny  "$(bj 'git push origin main')"
@@ -212,6 +221,15 @@ expect_decision "edit impeccable (vendored, never in the lock)"        deny  "$(
 expect_decision "edit a committed advisory"                            deny  "$(wj Write "$ROOT/docs/efforts/0001-good/advisories/security.md" 'x')"
 expect_decision "hand-edit pnpm-lock.yaml"                             deny  "$(wj Edit "$ROOT/pnpm-lock.yaml" 'x')"
 expect_decision "ordinary source file"                                 allow "$(wj Write "$ROOT/apps/web/app/thing.ts" 'export const a = 1;')"
+
+# The lock is read from the tree the write lands in. The worktree carries one;
+# the launch directory the environment names carries none, and the file being
+# written sits in a directory that does not exist yet.
+cp "$ROOT/skills-lock.json" "$PUSHTREE/skills-lock.json"
+saved="$CLAUDE_PROJECT_DIR"; export CLAUDE_PROJECT_DIR="$ROOT/wt-nolock"
+expect_decision "a vendored skill in a worktree, env with no lock"     deny  "$(wj Write "$PUSHTREE/.agents/skills/to-tickets/new/file.md" 'x')"
+expect_decision "a forked skill in that worktree"                      allow "$(wj Write "$PUSHTREE/.agents/skills/to-spec/new/file.md" 'x')"
+export CLAUDE_PROJECT_DIR="$saved"
 
 section "Rule I: credentials"
 expect_decision "an AWS access key id"                                 deny  "$(wj Write "$ROOT/apps/web/a.ts" "const k = \"AK""IAABCDEFGHIJKLMNOP\";")"

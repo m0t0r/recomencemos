@@ -1,11 +1,11 @@
 # The gate from `docs/policy/build.md` -> `required-checks`, run on the pull
 # request instead of on a developer's terminal.
 #
-# Six jobs rather than one job with six steps, because
+# One job per required check rather than one job with a step each, because
 # `docs/runbooks/recomencemos-go-live.md` §8 asks a human to set required status
 # checks named `lint`, `format`, `check-types`, `test`, `build` and the
 # dependency audit -- and a required status check is a job name. One job would
-# leave that step with one check to require and five names that do not exist.
+# leave that step with one check to require and names that do not exist.
 #
 # Each job runs the same root script a developer runs, so the two cannot drift;
 # `turbo run` lives in package.json, not here.
@@ -20,8 +20,8 @@ on:
   push:
     branches: [dev]
 
-  # Called by `deploy.yml` before it ships anything to Fly, so the five checks a
-  # pull request had to pass are the same five, run by the same jobs, on the
+  # Called by `deploy.yml` before it ships anything to Fly, so the checks a
+  # pull request had to pass are the same checks, run by the same jobs, on the
   # commit actually being deployed. Restating them in the deploy workflow would
   # give this repository two definitions of "green" that drift apart quietly.
   workflow_call:

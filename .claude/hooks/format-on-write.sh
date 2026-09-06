@@ -9,7 +9,9 @@
 # write, it just leaves the file for `pnpm format:fix`.
 set -uo pipefail
 
-root="${CLAUDE_PROJECT_DIR:-.}"
+# shellcheck source=./gate-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/gate-lib.sh"
+
 path=$(cat | jq -r '.tool_input.file_path // ""')
 [ -n "$path" ] && [ -f "$path" ] || exit 0
 
@@ -19,6 +21,10 @@ case "$path" in
 *) exit 0 ;;
 esac
 
+# The formatter runs from the tree the file is in, so it reads that tree's
+# config and binary rather than the launch checkout's -- tree_for() in
+# gate-lib.sh is why. A file outside any repository is left alone.
+root=$(tree_for "$path") || exit 0
 cd "$root" || exit 0
 pnpm exec oxfmt "$path" >/dev/null 2>&1 || true
 exit 0

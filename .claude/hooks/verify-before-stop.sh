@@ -84,12 +84,16 @@ out=$(pnpm format 2>&1) || block "\`pnpm format\` fails, so this change is not d
 
 $out"
 
-# The task list is restated here rather than run through `pnpm test`, and that is
-# a drift risk CLAUDE.md names for CI in the same words -- so anything added to
-# the root `test` script has to be added here too, or a session can report done
-# with the new gate red. `migrations:check` is the live half of NFR30.
-out=$(pnpm exec turbo run check-types test test:gates spec-identifiers migrations:check --output-logs=errors-only 2>&1) ||
-  block "\`check-types\`, \`test\`, \`test:gates\`, \`spec-identifiers\`, or \`migrations:check\` fails, so this change is not done.
+# The root scripts, and nothing restated. This used to spell out the task list
+# behind `pnpm test`, which meant anything added to that script had to be added
+# here too or a session could report done with the new gate red -- the drift
+# CLAUDE.md names for CI in the same words. Two turbo invocations instead of
+# one cost a fraction of a second; a list in two places cost a gate.
+out=$(pnpm check-types 2>&1) || block "\`pnpm check-types\` fails, so this change is not done.
+
+$out"
+
+out=$(pnpm test 2>&1) || block "\`pnpm test\` fails, so this change is not done. It runs the package suites, the gate suite, the spec-identifier reader and migration integrity; the output names which.
 
 $out"
 

@@ -354,7 +354,7 @@ registration does not apply** to a _persona natural_. International transmission
 - [ ] **Required status checks** on the default branch, by the job names
       `.github/workflows/ci.yml` publishes: **`lint`**, **`format`**, **`check-types`**, **`test`**
       (which is `turbo run test test:gates`, so `test:gates` is inside this one), **`build`**, and
-      **`audit`**. The workflow is six jobs rather than six steps precisely so each is requirable by
+      **`audit`**. The workflow is one job per check rather than one job of steps precisely so each is requirable by
       name. **No required reviews** — on a one-person repository they lock the operator out or
       normalize admin bypass
 - [ ] `format` is **`oxfmt --check`** — it reports and never rewrites, so requiring it cannot push to
