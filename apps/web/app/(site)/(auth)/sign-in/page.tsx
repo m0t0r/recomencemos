@@ -142,11 +142,13 @@ function PanelSkeleton() {
  * Both sit **above** the boundary rather than inside the panel: neither depends
  * on the query string or on the session, so the heading paints with the shell
  * instead of waiting behind a read it does not need. It is the shape `/publish`
- * already uses.
+ * already uses, down to its `px-4 py-10` — one spacing rhythm across the
+ * product's sheets, and a narrower measure here because this one holds a form
+ * and nothing else.
  */
 export default function SignInPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-10 sm:py-14">
+    <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-10">
       <h1 className="page-heading">{SIGN_IN_TITLE}</h1>
 
       <Suspense fallback={<PanelSkeleton />}>
