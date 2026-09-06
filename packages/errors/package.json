@@ -12,10 +12,12 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@vitest/coverage-v8": "^5.0.0",
     "typescript": "7.0.2",
     "vitest": "^5.0.0"
   }

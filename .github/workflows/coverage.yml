@@ -1,0 +1,80 @@
+# Coverage, measured on every pull request and reported on it. It blocks nothing.
+#
+# **This is deliberately not a seventh job in `ci.yml`**, for two reasons that are
+# both already written down. `ci.yml` is six jobs because `required-checks` in
+# `docs/policy/build.md` has six entries and a required status check is a job
+# name — a seventh job there would be a name a human is invited to require, and
+# `coverage-floor` is answered `none` precisely so that nobody does. And `ci.yml`
+# is `workflow_call`ed by `deploy.yml`, which grants `contents: read`; a job
+# inside it asking for `pull-requests: write` would exceed what the caller can
+# give and fail validation on every deploy.
+#
+# **`coverage-floor` is `none`, and the reason is in that policy file rather than
+# here.** The short version, because it is what stops someone reading a low
+# number as a defect: a route handler, a Server Action and an `async` Server
+# Component all verify at seam 3 against a running `next dev`, not in Vitest, so
+# a large part of `apps/web` is uncovered by design. This measures; it does not
+# judge.
+name: coverage
+
+# `pull_request` only. `ci.yml` also runs on `push` to `dev` because a Turborepo
+# cache is scoped to the branch that wrote it, so a pull request has nothing to
+# restore from without one — but this workflow's answer is a comment on a pull
+# request, and a run on `dev` would produce no comment for anyone. The
+# `restore-keys` prefix below still makes the second and later pushes to a branch
+# warm, which is the case that actually repeats.
+on:
+  pull_request:
+
+# `pull-requests: write` is what lets the report be posted, and it is the only
+# thing widened past `ci.yml`'s read-only default. Nothing here checks out or
+# executes anything with that token beyond the action named below.
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      # `pnpm test:coverage` is `turbo run test:coverage` followed by
+      # `scripts/coverage-merge.mjs`. The merge is what makes this one comment
+      # rather than six: the reporting action keys its sticky comment on the
+      # report name, so six workspaces reported separately would be six comments
+      # on every pull request. The script's own header carries the rest.
+      #
+      # No database and no Docker, the same constraint `pnpm test` already meets —
+      # `@repo/domain`'s seam 2 runs against PGlite in-process.
+      - run: pnpm test:coverage
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 7
+
+      # Reads the merged pair at `coverage/` and posts one comment, updated in
+      # place on each push rather than added again.
+      #
+      # It logs one warning here that is expected and correct: it looks for a
+      # Vitest config beside the report to read thresholds from, and this
+      # repository has none at the root because it has no root suite — six
+      # workspaces have their own. "Will not include thresholds in the final
+      # report" is the intended outcome, and a root config added to silence it
+      # would be a config claiming a suite that does not exist.
+      #
+      # `continue-on-error` because a pull request from a fork gets a read-only
+      # token whatever the block above asks for, and a missing coverage comment is
+      # not worth a red X on a pull request whose six real checks are green.
+      - name: Report coverage
+        continue-on-error: true
+        uses: davelosert/vitest-coverage-report-action@c4bbc33a89b7ace0e63d35f1f7d4bcee31155a73 # v2.13.0

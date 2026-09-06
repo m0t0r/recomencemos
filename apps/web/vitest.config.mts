@@ -54,5 +54,30 @@ export default defineConfig({
     include: ["**/*.test.{ts,tsx}"],
     exclude: ["node_modules/**", ".next/**"],
     setupFiles: ["./vitest.setup.ts"],
+    // Coverage is measured by v8 and reported, never enforced. The two
+    // machine-readable reporters are the point: the pull-request comment is
+    // built from `coverage-summary.json` and `coverage-final.json`, and
+    // `text` is what a person reading a local run sees.
+    //
+    // **There is no `thresholds` key here, and that is the policy rather than
+    // an omission.** A threshold fails the run, and `coverage-floor` in
+    // `docs/policy/build.md` is answered `none`.
+    //
+    // **The number this produces is low by construction, and reading it as a gap
+    // is the mistake.** The paragraph at the top of this file is the reason: a
+    // route handler, a Server Action and an `async` Server Component are all
+    // inside `app/` and none of them verifies here — they verify at seam 3
+    // against a running `next dev`. So most of `app/` is uncovered *by design*,
+    // which is exactly why `coverage-floor` is `none`: a floor would apply
+    // pressure to close a gap that is a deliberate architecture.
+    //
+    // `testing/` is the suite's own harness and the boundary tests at the app
+    // root are not source, so neither is measured.
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json", "json-summary"],
+      include: ["app/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "instrumentation*.ts"],
+      exclude: ["**/*.test.{ts,tsx}"],
+    },
   },
 });

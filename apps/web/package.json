@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "check-types": "next typegen && tsc --noEmit"
   },
@@ -42,6 +43,7 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "happy-dom": "^20.11.12",
     "portless": "0.15.6",
     "tailwindcss": "^4.2.6",

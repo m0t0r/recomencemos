@@ -33,6 +33,36 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    // Coverage is measured by v8 and reported, never enforced. The two
+    // machine-readable reporters are the point: the pull-request comment is
+    // built from `coverage-summary.json` and `coverage-final.json`, and
+    // `text` is what a person reading a local run sees.
+    //
+    // **There is no `thresholds` key here, and that is the policy rather than
+    // an omission.** A threshold fails the run, and `coverage-floor` in
+    // `docs/policy/build.md` is answered `none`.
+    //
+    // **It sits above `projects` rather than inside either one**, which is what
+    // makes seam 1 and seam 2 report one set of numbers instead of two that
+    // overwrite each other in the same directory. A pure resolver covered by
+    // seam 1 and a query module covered by seam 2 are the same package to a
+    // reader of the report.
+    //
+    // `src/testing/**` is the harness the fixtures and the snapshot builder live
+    // in, and the two CLI entry points are run as `node` by a Fly
+    // `release_command` and by `pnpm admin:enrol` — none of the three is
+    // product code a test is meant to reach.
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json", "json-summary"],
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/testing/**",
+        "src/migrate/cli.ts",
+        "src/admin/enrol-cli.ts",
+      ],
+    },
     projects: [
       {
         test: {

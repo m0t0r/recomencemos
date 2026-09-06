@@ -45,6 +45,7 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "generate": "drizzle-kit generate"
   },
@@ -63,6 +64,7 @@
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^24.13.3",
     "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "drizzle-kit": "^0.31.10",
     "typescript": "7.0.2",
     "vitest": "^5.0.0",
