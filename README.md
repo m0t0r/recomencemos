@@ -280,10 +280,11 @@ The hook watches `Write` and `Edit`, and pattern-matches `Bash` for shell redire
 
 **That heuristic used to fight the publish protocol.** `docs/agents/issue-tracker.md` puts a `Source of truth:` line naming the artifact inside an issue body, and the original pattern matched a `>` followed by the path _anywhere later on the line_ — so a markdown blockquote or an `intent -> spec.md` arrow in a `gh issue create` body read as a write, and the very protocol the gate exists to protect was refused. Two narrowings fixed it: heredoc bodies are stripped before matching, because a body is prose however often it says `intent.md`; and a redirect's target must be the token **immediately** after the operator, with a preceding `-` excluding the arrow. Nine protocol shapes are now regression cases in `gate-test.sh`. One ambiguity is left on purpose: a blockquote of the bare form `> docs/efforts/…/intent.md` is still refused, because that is also exactly what a shell redirect looks like. It also binds only agents on a machine that has this repo's settings loaded. Neither stops _you_: editing `intent.md` in your own editor is exactly how approval is meant to happen.
 
-Both gates share [`gate-lib.sh`](./.claude/hooks/gate-lib.sh) and are covered by [`gate-test.sh`](./.claude/hooks/gate-test.sh) — 58 cases across all nine rules, run by `pnpm test` as the `//#test:gates` task:
+Both gates share [`gate-lib.sh`](./.claude/hooks/gate-lib.sh) and are covered by [`gate-test.sh`](./.claude/hooks/gate-test.sh), the runner over one test file per gate under [`.claude/hooks/tests/`](./.claude/hooks/tests/), run by `pnpm test` as the `//#test:gates` task:
 
 ```sh
-pnpm test:gates            # the hooks alone — one line per rule
+pnpm test:gates            # every gate — one line per section
+pnpm test:gates hooks      # one file, by its name under tests/
 pnpm test:gates -- -v      # every case enumerated, for reading what is covered
 pnpm test                  # the hooks plus the design system's suite
 ```
