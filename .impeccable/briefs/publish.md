@@ -9,6 +9,51 @@ confirmation. The spec's own UX table, the voice guide and ADR-0009 answered mos
 interview would have asked; what they did not is listed under _Open decisions_ and is the human's
 to correct before the surface is locked.
 
+**Amended 2026-09-06 with [#181](https://github.com/m0t0r/recomencemos/issues/181): the visual
+world changed, the decisions above did not.** The structural thesis holds exactly — one page,
+three groups plus the optional rest, one submit, the _autorización_ first, capability before
+identity, the summary above the button. What changed is the page they are drawn on.
+
+**The form is a page of the same notebook the profile is written into.** `/my-profile` renders the
+three shapes of a CapabilityProfile as three sheets on a **ruled page** — a mark in the margin, the
+ruling between them, the heading in the display face (`DESIGN.md` → Layout, and `#180`). This form
+writes that same profile one step earlier, so it is drawn on that same page: the field groups become
+sheets, the ruling between sheets replaces the `<Separator />`s, the rose margin line runs down the
+left from `sm` up and is dropped on the phone, and the three marks that already mean something on
+`/my-profile` go on meaning it — the world at large, someone who opened her profile, someone she
+accepted. Group legends move into the **display face** at the 24 px step, the step those tier
+headings sit on. **Everything a person operates stays in Inter**: labels, help, controls, chips and
+the button. A form set in the display face is a form asking to be admired.
+
+**And her own words come back to her in the display face**, which the form did not do before. The
+page closes on `ProfileCard` — the component `/my-profile` and the Wall row already share a
+hierarchy with — fed from what she has typed, under the heading `PREVIEW_HEADING`, which has sat
+written and copy-tested in `_lib/profile-form/messages.ts` since #16 waiting for it. **This is not
+a reversal of variant A.** What A refused was the form drawn _beside_ a live preview, a two-column
+composition that costs the fields half a phone; a sheet at the close of the page costs them nothing
+and is the last thing she reads before she commits.
+
+**Composed at 390 px first.** The phone is the surface this Worker actually holds; desktop is the
+adaptation ([#178](https://github.com/m0t0r/recomencemos/issues/178), the owner's own correction).
+
+### The decisions taken visually, 2026-09-06 `[open]`
+
+Three things this amendment does **not** settle, because the owner decides composition from running
+variants rather than from a document — the same route `wall.md` records for `/`. They are
+`?variant=` on the real route, on `prototype/181-ui-variants`, and the winner is folded back here
+with its `Locked:` line:
+
+1. **How far the world goes** — rulings and the display face alone, or the full sheet treatment
+   with the margin line and the marks.
+2. **Where the preview sheet sits** — at the close of the page, or pinned in the thumb zone where a
+   phone can reach it without scrolling back.
+3. **Whether a chosen control is filled with ink** — _"a chosen item is a filled ink shape"_
+   (`DESIGN.md` → The world) applied to the Skill entries and the city, or left as the registry
+   draws them.
+
+Nothing in that list may change the field order, the group boundaries, the summary's position or
+any string; those are settled above and the variants inherit them.
+
 ## Job and audience
 
 A Worker in Pereira, Dosquebradas or Santa Rosa de Cabal, on her own or a borrowed Android, often

@@ -8,6 +8,30 @@
 the human's. The one decision the spec explicitly delegated to this ticket — one form or several —
 is answered below as an assumption and settled by `/prototype` UI, not by this document.
 
+**Amended 2026-09-06 with [#181](https://github.com/m0t0r/recomencemos/issues/181): the visual
+world changed, the decisions above did not.** This surface takes its treatment from
+[`publish.md`](publish.md)'s amendment of the same date and adds nothing of its own, which is the
+point rather than an omission: the two forms write the same nine fields through the same shared
+groups, so a Worker who publishes and later edits meets one page twice or she meets two products.
+The groups become sheets on a **ruled page**, the ruling replaces the `<Separator />`s, the margin
+line runs beside them from `sm` up, the legends move into the display face at the 24 px step, and
+everything she operates stays in Inter.
+
+**The preview sheet is more honest here than on `/publish`**, and it is the one thing this surface
+gets more of. On a first publish the card fills in as she types; here it opens holding **what she
+published**, which is exactly the question this page exists to answer — what are they seeing, and
+what will they see when I save. It is `ProfileCard`, the same component `/my-profile` renders one
+route away, so the sheet she edits and the sheet she then reads are the same object.
+
+**Open decision 3 above is in scope again because of it.** Whether the save control is sticky on a
+phone was left to the human; a preview pinned in the thumb zone would carry the action with it, and
+that pairing is one of the `?variant=` positions on `prototype/181-ui-variants`. The other two
+positions leave the save where it is, at the end of the form.
+
+**Open decisions 1 and 2 are untouched** — this is still one page with every group on it, and
+`/my-profile` still offers one _Editar_ control rather than per-section links. A visual amendment
+may not settle a routing question.
+
 ## Job and audience
 
 The same Worker, some days after publishing. Something on her profile is now wrong or has changed:
