@@ -127,8 +127,12 @@ request body and runs on `GITHUB_TOKEN` alone.
 
 ## 5. Prove it end to end
 
-The one thing `pnpm test` cannot cover: the suite drives `--dry-run`, which reaches no store by
-construction. This is where the remaining call is exercised.
+The one thing `pnpm test` cannot cover. The suite does drive the upload path — against a stub
+endpoint that records every request — so the naming, both prefixes, the body edit and the ordering
+that keeps a failed upload out of the pull request body are all covered before you get here. What a
+stub cannot judge is whether the **signature** it saw is valid, or whether a real bucket's lifecycle
+rules and public origin behave as §2 and §3 said they would. That is this section, and it is why it
+is a human's step rather than a case.
 
 ```sh
 mkdir -p "$(git rev-parse --show-toplevel)/.artifacts/ui-proof"

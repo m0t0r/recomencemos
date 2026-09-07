@@ -5,12 +5,16 @@
 # drives the audit and the migration gate -- it is repo logic living in
 # `scripts/`, and the alternative is a second test runner for one file.
 #
-# Every case runs `--dry-run`, which is offline by construction: it reaches no
-# pull request, no markdown renderer and no credential, so what is under test is
-# the part that decides *what would be published* -- the naming rule, the
-# grouping into comparisons, and the two prefixes that carry the two lifetimes.
-# The single call that writes to the object store lives in its own module and is
-# never imported on this path.
+# Most cases run `--dry-run`, which is offline by construction: it reaches no
+# pull request, no markdown renderer and no credential, so what is under test
+# there is the part that decides *what would be published* -- the naming rule,
+# the grouping into comparisons, and the two prefixes that carry the two
+# lifetimes. The call that writes to the object store lives in its own module and
+# is a dynamic import, so a dry run never loads it.
+#
+# The last two sections drive the real publish, still offline. They are the only
+# place the object-store call, the four `gh` subprocesses and the body edit are
+# exercised; what they need and what they cannot see is written above them.
 PROOF="$REPO/scripts/ui-proof.mjs"
 
 # The script derives its directory from `git rev-parse --show-toplevel`, so a
@@ -131,3 +135,256 @@ run_proof "a pull request that is not a number" 2 "--pr" "$D" publish --pr abc -
 run_proof "an unconfigured store refuses with 1" 1 "not configured" "$D" publish --pr 42
 run_proof "and it names every missing variable"  1 "UI_PROOF_PUBLIC_BASE" "$D" publish --pr 42
 
+# --- The upload path, offline ------------------------------------------------
+#
+# Everything above runs `--dry-run`, which reaches nothing by construction. What
+# it therefore never touches is the half that holds a credential and a network:
+# the object-store call, the four `gh` subprocesses, and the body edit that is
+# the only part of this a reviewer actually sees.
+#
+# These two sections drive that half with no network, no container and no new
+# dependency -- a fake `gh` earlier on PATH answering the four calls the
+# publisher makes, and a stub HTTP server as the endpoint, which records every
+# request and can be told to fail. They are worth their weight for a reason
+# already paid twice: each defect this path has shipped was invisible to every
+# dry-run case, because a dry run never constructs a client and never spawns a
+# child. A bucket asked for as a hostname was the first; a subprocess handed its
+# input through an option that does not exist was the second.
+#
+# **What no stub can check is that the signature is valid.** It sees a signed
+# request and says "signed"; only a real S3 implementation verifies one, and a
+# container in this suite is what CLAUDE.md refuses on the same grounds that keep
+# a database out of `pnpm test`. Signature validity and real bucket semantics are
+# section 5 of `docs/runbooks/ui-proof-artifacts.md`, checked once by a human,
+# because signing does not drift.
+
+# A subprocess that blocks is the failure mode this section is arranged against,
+# and it has arrived twice. `timeout(1)` is GNU coreutils and is not on a stock
+# macOS, so the deadline is here: the command runs in the background, is polled,
+# and is killed at the limit. 124 is the code `timeout(1)` reports, kept so the
+# number means the same thing to a reader who knows that tool.
+#
+# The point is that a wedged publisher costs this suite a bounded number of
+# seconds rather than a CI job's whole timeout -- a case that hangs is worse than
+# no case, because a red suite tells you something and a suite that never returns
+# tells you nothing.
+with_deadline() { # seconds cmd... -> echoes the exit code, or 124
+  local limit="$1"
+  shift
+  "$@" &
+  local pid=$! ticks=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$ticks" -ge "$((limit * 10))" ]; then
+      kill -9 "$pid" 2>/dev/null
+      wait "$pid" 2>/dev/null
+      echo 124
+      return 0
+    fi
+    sleep 0.1
+    ticks=$((ticks + 1))
+  done
+  wait "$pid"
+  echo $?
+}
+
+# Every stub this file starts, so the trap can end them all. A background server
+# outliving the suite is a held port and a leaked process on a developer's
+# machine, and on a failing run it is the run that failed that leaks it.
+STUBS=""
+trap 'for stub in $STUBS; do kill "$stub" 2>/dev/null; done' EXIT
+
+# **Not callable in a command substitution.** The stub's pid would be set in a
+# subshell the caller cannot reach, so nothing would ever kill it and the suite
+# would wait on a server nobody owns.
+proof_env() { # dir -> writes bin/gh, starts the stub, writes "$d/port"
+  local d="$1"
+  mkdir -p "$d/bin"
+
+  # The four calls the publisher makes, and no more. `api --method` and `pr edit`
+  # both read stdin, and both record what they were given: that a body actually
+  # crossed into the child is the regression guard for the defect named below,
+  # and it cannot be seen from outside the child any other way.
+  cat > "$d/bin/gh" <<'FAKEGH'
+#!/usr/bin/env bash
+{ printf 'gh'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$GH_LOG"
+case "$1 $2" in
+  "pr view")
+    node -e 'const fs=require("fs");const b=fs.readFileSync(process.env.GH_BODY,"utf8");process.stdout.write(JSON.stringify({title:"A title",body:b||"Original body.",url:"u"}))' ;;
+  "repo view")    printf '{"nameWithOwner":"owner/repo"}' ;;
+  "api --method") cat > "$GH_RENDERED"; printf '<p>Original body.</p>' ;;
+  "pr edit")      cat > "$GH_BODY" ;;
+esac
+FAKEGH
+  chmod +x "$d/bin/gh"
+
+  cat > "$d/stub.mjs" <<'STUB'
+import { createServer } from "node:http";
+import { appendFileSync, writeFileSync } from "node:fs";
+const status = Number(process.env.STUB_STATUS ?? 200);
+const server = createServer((req, res) => {
+  let n = 0;
+  req.on("data", (c) => (n += c.length));
+  req.on("end", () => {
+    const signed = /AWS4-HMAC-SHA256/.test(req.headers.authorization ?? "") ? "signed" : "unsigned";
+    appendFileSync(
+      process.env.PUT_LOG,
+      `${req.method} ${req.url.split("?")[0]} ${req.headers["content-type"]} ${n} ${signed}\n`,
+    );
+    res.writeHead(status).end();
+  });
+});
+server.listen(0, "127.0.0.1", () => writeFileSync(process.env.PORT_FILE, String(server.address().port)));
+STUB
+
+  : > "$d/put.log"
+  : > "$d/gh.log"
+  : > "$d/body.md"
+  : > "$d/rendered.md"
+  rm -f "$d/port"
+  # Its own output goes to a file. A background process sharing this file's pipe
+  # holds that pipe open and buffers the whole run's output until it dies, which
+  # is how the first two attempts at this looked like hangs when they were not.
+  PUT_LOG="$d/put.log" PORT_FILE="$d/port" STUB_STATUS="${STUB_STATUS:-200}" \
+    node "$d/stub.mjs" > "$d/stub.log" 2>&1 &
+  STUBS="$STUBS $!"
+  for _ in $(seq 1 100); do
+    [ -s "$d/port" ] && break
+    sleep 0.05
+  done
+  [ -s "$d/port" ]
+}
+
+# The publisher's own stdout goes to a file rather than up the caller's pipe, for
+# the reason above: this is called from a command substitution that reads the
+# exit code, and a child holding that pipe would keep the substitution open.
+#
+# **`exec`, so the pid the deadline holds is the publisher's own.** `env` execs
+# the shell and the shell execs `node`, which makes all three one process — and
+# without the last of those, the deadline killed a wrapper and orphaned the node
+# it had forked. Measured: two publishers survived the run that proved the
+# deadline works, which is the leak this section is supposed to be the answer to.
+proof_publish() { # dir port [arguments...] -> echoes the exit code
+  local d="$1" port="$2"
+  shift 2
+  with_deadline 60 \
+    env PATH="$d/bin:$PATH" \
+      GH_LOG="$d/gh.log" \
+      GH_BODY="$d/body.md" \
+      GH_RENDERED="$d/rendered.md" \
+      UI_PROOF_S3_ENDPOINT="http://127.0.0.1:$port" \
+      UI_PROOF_S3_BUCKET="stub-bucket" \
+      UI_PROOF_S3_ACCESS_KEY_ID="AKIAEXAMPLE" \
+      UI_PROOF_S3_SECRET_ACCESS_KEY="secretexample" \
+      UI_PROOF_PUBLIC_BASE="https://cdn.example.test" \
+      AWS_MAX_ATTEMPTS=1 \
+      bash -c 'cd "$1" && shift && exec node "$@" > out.log 2>&1' _ "$d" "$PROOF" "$@"
+}
+
+# One publish, many assertions: the run is the expensive part of this section and
+# repeating it per case would say nothing extra. Both of these are a line over
+# `ok`/`ko`, the way `lib.sh` asks -- the arguments they add are this gate's, the
+# bookkeeping is not.
+in_file() { # name file pattern
+  if grep -qE -- "$3" "$2" 2>/dev/null; then
+    ok "$1" "matched /$3/"
+  else
+    ko "$1" "no /$3/ in $(basename "$2")" "$(head -c 400 "$2" 2>/dev/null)"
+  fi
+}
+
+not_in_file() { # name file pattern
+  if grep -qE -- "$3" "$2" 2>/dev/null; then
+    ko "$1" "found /$3/ in $(basename "$2") and should not have"
+  else
+    ok "$1" "no /$3/"
+  fi
+}
+
+section "Artifact publisher: the upload path, offline"
+# The deadline itself, first and cheaply. Everything below trusts it to turn a
+# wedged subprocess into a failing case, so it is worth one second to know that
+# it does rather than to find out that it does not on the run that needs it.
+expect_run "a blocked subprocess is killed, not waited on" 0 "^124$" -- with_deadline 1 sleep 30
+D=$(proof_repo upload)
+proof_file "$D" before-publish-form.png
+proof_file "$D" after-publish-form.png
+proof_file "$D" demo-publish-a-profile.webm
+PORT=""
+proof_env "$D" && PORT=$(cat "$D/port")
+if [ -n "$PORT" ]; then
+  CODE=$(proof_publish "$D" "$PORT" publish --pr 42)
+  if [ "$CODE" = 0 ]; then
+    ok "a real publish against a stub store" "exit 0"
+  else
+    ko "a real publish against a stub store" "exit $CODE" "$(head -c 600 "$D/out.log")"
+  fi
+
+  # **The body has to reach the child, and only the child can say that it did.**
+  # The async form of `execFile` has no `input` option -- that belongs to the
+  # sync one -- and ignores the key in silence, so the markdown call sat on a
+  # stdin pipe nothing would ever write to or close. From outside, that read as a
+  # hang in the object-store client: three `gh` calls logged, the durable warning
+  # printed, an empty upload log, and nine minutes of nothing. This case is the
+  # only thing in the suite that would notice it come back.
+  in_file "the markdown call is given the body on stdin" "$D/rendered.md" "Original body\."
+
+  # Path-style: the bucket is the first path segment and never a subdomain. The
+  # SDK defaults the other way, and against an endpoint with no DNS that hangs.
+  in_file "the bucket is a path segment, not a hostname" "$D/put.log" '^PUT /stub-bucket/'
+  not_in_file "no request is unsigned" "$D/put.log" 'unsigned'
+  in_file "the review page lands under review/" "$D/put.log" \
+    '/stub-bucket/review/pr-42-[0-9a-f]{16}/index\.html text/html'
+  in_file "a comparison still lands beside it" "$D/put.log" \
+    '/review/pr-42-[0-9a-f]{16}/before-publish-form\.png image/png'
+  in_file "the demo lands under demos/" "$D/put.log" \
+    '/stub-bucket/demos/pr-42-[0-9a-f]{16}/demo-publish-a-profile\.webm video/webm'
+  in_file "the durable page lands beside the demo" "$D/put.log" \
+    '/stub-bucket/demos/pr-42-[0-9a-f]{16}/index\.html text/html'
+  not_in_file "no demo is written under review/" "$D/put.log" 'review/[^ ]*demo-'
+  in_file "every upload reports itself" "$D/out.log" 'uploaded demos/pr-42'
+
+  # The body edit is the last step, and it is what a reviewer actually sees.
+  in_file "the body gains the block" "$D/body.md" 'ui-proof:begin'
+  in_file "the review link is the published origin" "$D/body.md" \
+    'cdn\.example\.test/review/pr-42-[0-9a-f]{16}/index\.html'
+  in_file "the durable link is on its own line" "$D/body.md" 'The story, kept'
+  in_file "the prose it started with survives" "$D/body.md" '^Original body\.'
+
+  # Expiry: the same body, run again through the other subcommand.
+  CODE=$(proof_publish "$D" "$PORT" expire --pr 42)
+  if [ "$CODE" = 0 ]; then
+    ok "expiry runs against the body publish left" "exit 0"
+  else
+    ko "expiry runs against the body publish left" "exit $CODE" "$(head -c 600 "$D/out.log")"
+  fi
+  in_file "expiry rewrites the block in place" "$D/body.md" 'no longer linked'
+  in_file "and still names what it showed" "$D/body.md" 'It showed publish-a-profile, publish-form'
+  in_file "the durable link survives expiry" "$D/body.md" 'cdn\.example\.test/demos/pr-42'
+  not_in_file "the review link is gone" "$D/body.md" 'cdn\.example\.test/review/'
+  in_file "the prose still survives" "$D/body.md" '^Original body\.'
+else
+  ko "the upload path, offline" "the stub endpoint would not start"
+fi
+
+section "Artifact publisher: an object store that refuses"
+# A store that answers 500 must not leave the pull request body claiming an
+# artifact that is not there. The publisher edits the body only after every
+# upload has succeeded, and this is what holds that ordering.
+D=$(proof_repo uploadfail)
+proof_file "$D" after-publish-form.png
+PORT=""
+STUB_STATUS=500 proof_env "$D" && PORT=$(cat "$D/port")
+if [ -n "$PORT" ]; then
+  CODE=$(proof_publish "$D" "$PORT" publish --pr 42)
+  # 124 is the deadline, and it would be a hang rather than a refusal. A failing
+  # upload has to *fail*, promptly and by itself.
+  if [ "$CODE" != 0 ] && [ "$CODE" != 124 ]; then
+    ok "a failing upload is not a success" "exit $CODE"
+  else
+    ko "a failing upload is not a success" "exit $CODE" "$(head -c 600 "$D/out.log")"
+  fi
+  not_in_file "and the body is never edited" "$D/body.md" 'ui-proof:begin'
+  not_in_file "so no link is left pointing at nothing" "$D/body.md" 'cdn\.example\.test'
+else
+  ko "an object store that refuses" "the stub endpoint would not start"
+fi
