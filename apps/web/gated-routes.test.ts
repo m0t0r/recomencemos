@@ -12,7 +12,20 @@
  *
  * The `<meta>` half is a per-page `metadata.robots` export and is verified
  * running, against the one page that exists.
+ *
+ * **This one file runs in Node, against the suite's happy-dom default**, and the
+ * reason is the import on the first line. `next.config.ts` is Node-side
+ * configuration — it reads `import.meta.dirname` and is handed to a build tool,
+ * never to a browser — so it has nothing to say to a DOM. What a DOM says back
+ * is the problem: `withSentryConfig` reaches a bundler plugin that picks its
+ * path-resolution branch on `typeof document`, and under happy-dom `document`
+ * exists while `document.currentScript` is `null`, so it resolves its loader
+ * against `document.baseURI` and hands `fileURLToPath` an
+ * `http://localhost:3000/...` URL. The whole suite then fails to collect with
+ * _"The URL must be of scheme file"_. Observed on `@sentry/nextjs` 10.73.0.
  */
+
+// @vitest-environment node
 
 import nextConfig from "./next.config";
 import { GATED_ROUTE_PREFIXES, NOINDEX_HEADER, gatedRouteSources } from "./lib/gated-routes";
