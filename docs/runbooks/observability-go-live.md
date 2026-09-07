@@ -1,11 +1,10 @@
 # Runbook: taking observability live
 
 Everything Recomencemos has to do to turn error reporting and structured logging from "shipped" into
-"working" before it carries public traffic. It is the deliverable that stood in for the ten
+"working" before it carries public traffic. It is the deliverable that stands in for the ten
 [`docs/policy/`](../policy/) keys effort [`0001-observability`](../efforts/0001-observability/spec.md)
-deliberately left `UNSET` — effort 0002's design interview has since answered nearly all of them, so
-where a step ends in a decision this document now names the key **and the answer it carries**, rather
-than making one.
+deliberately left `UNSET`, so where a step ends in a decision this document names the key rather than
+making it.
 
 **Figures are pinned, and pinning is what makes them checkable.** Vendor caps and pricing change; this
 document states what was true on the date below, against the version below, so a reader can tell a
@@ -44,9 +43,8 @@ Two constraints on this table are load-bearing, not stylistic:
 
 **`SENTRY_AUTH_TOKEN` comes from the environment and never from a `.env` file.** `turbo.json` declares
 `.env*` a `build` input, so the file's _content_ is hashed into the cache key however the variable is
-declared — and under remote caching it would travel with the artifact. `secret-store` is **`fly
-secrets`**, mirrored in the operator's password manager; this constraint is why, and it would hold
-whatever the store were.
+declared — and under remote caching it would travel with the artifact. `secret-store` is `UNSET`; this
+constraint holds whatever you choose.
 
 **It is task-scoped, not global.** `passThroughEnv` on `web#build` alone, so a write-scoped token never
 reaches `dev`, `lint`, `test`, or `check-types`. Check what a task actually sees:
@@ -157,8 +155,8 @@ Both derive from the **5,000 errors/month** figure in §3. Re-derive them if you
 | **Spike**           | **> 333 errors in any rolling 24h window** | 5,000 ÷ 15 = 333.3. Even burn across a 30-day month is 5,000 ÷ 30 ≈ 167/day, so this is **2× even burn** | Same                                                  |
 
 Both are configured as Sentry alert rules on the org's error consumption. Both are written as a
-**next-business-day queue, not a page**, because `on-call-rotation` is **Nobody, best effort** — no
-band may assert that somebody is awake, because that key says nobody is.
+**next-business-day queue, not a page**, because `on-call-rotation` is `UNSET` — nothing here may
+assert that somebody is awake until that key says who.
 
 The spec carries three further bands that **cannot fire until a drain exists**, because they are
 measured on log lines rather than on events. They are listed here so they are switched on in the same
@@ -228,10 +226,11 @@ Spike — more than 333 errors in a rolling 24h window (5,000/mo ÷ 15).
 Label it `needs-triage` and nothing else. `/triage` assigns the rest; see
 [`docs/agents/triage-labels.md`](../agents/triage-labels.md).
 
-**`alert-destination` is set**, by effort 0002: human-queue bands go to a daily digest at 08:00
-America/Bogotá through the notification seam, and machine bands open a `needs-triage` issue from CI —
-the shape ADR-0001 fixes. What this section builds is the **webhook target** that carries a Sentry
-band into that second path; the key names where a breach lands, not the URL that delivers it.
+**`alert-destination` stays `UNSET`, deliberately.** The _shape_ of the destination is fixed by
+ADR-0001 — a `needs-triage` issue — but the webhook **target** is a concrete URL that does not exist
+until somebody stands the receiver up, and standing it up is what §6 is. Set it to the endpoint that
+opens issues in this repository. Setting the key means writing that URL (or the Action that receives
+it) into [`docs/policy/operability.md`](../policy/operability.md).
 
 ---
 
@@ -339,10 +338,8 @@ carries the rule: **log at the dynamic boundary, never inside a cached function.
 
 **No Content-Security-Policy ships yet, and that is deliberate.** A CSP is a real
 surface with real breakage risk; shipping a "reasonable default" nobody understands is how a policy
-silently blocks the browser SDK six months later, with no signal. `csp-policy` in
-[`docs/policy/security.md`](../policy/security.md) now **states the policy to ship** — and its
-`connect-src` carries a `<sentry-ingest>` placeholder, which is the one host this section exists to
-resolve. What follows is that input:
+silently blocks the browser SDK six months later, with no signal. `csp-policy` is `UNSET` and a CSP
+deserves its own effort. What ships is the input to that decision:
 
 **Read the host off your own DSN.** A DSN has the shape
 `https://<publicKey>@o<orgId>.ingest.<region>.sentry.io/<projectId>`, and the browser SDK POSTs
@@ -372,10 +369,8 @@ Nothing else is required: the SDK is bundled with the app rather than loaded fro
 ## 9. Start forwarding logs
 
 Logs currently go to **stdout and nowhere else**. That is the honest state:
-`observability-vendor` names Sentry for errors and traces, and names stdout for logs because no drain
-has been stood up yet — not because there is nowhere to put one. `hosting-target` is **Fly.io**, one
-machine, so route a) below is the concrete route and this section is work waiting to be done rather
-than a decision waiting to be made.
+`observability-vendor` names Sentry for errors and traces, and names stdout for logs precisely because
+`hosting-target` is `UNSET` and nothing can be routed until there is somewhere to route it.
 
 **Two routes, and they are not alternatives — most projects want the first.**
 
@@ -423,8 +418,7 @@ loggers you do not want forwarded.
 
 ### The three threats this effort creates
 
-Named because `threat-model-scope` is **anyone on the internet**, and an unnamed threat is not
-mitigated by being small.
+Named because `threat-model-scope` is `UNSET` and an unnamed threat is not mitigated by being small.
 
 1. **Public-DSN quota exhaustion.** Anyone reading the client bundle holds the DSN and can POST into
    the quota, blinding monitoring during an incident they caused. **Mitigated by §4**, vendor-side —
@@ -456,8 +450,7 @@ mitigated by being small.
 
    **Not mitigated, and deliberately so.** `rp_9f81c2d4e0a7` and `42` are the same thing to any
    mechanism that could be written here, and any bound would land equally on `/orders/42`, where the
-   concrete segment is the field's entire diagnostic value. So it is bounded deliberately, at one
-   named place, rather than guessed at everywhere. The reasoning, the rejected options, and
+   concrete segment is the field's entire diagnostic value. The reasoning, the rejected options, and
    the precedent are in
    [ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md).
 
@@ -468,11 +461,10 @@ mitigated by being small.
    classification of what it carries — so the shipped code deviates from a settled policy row. The row
    is **not** narrowed to accommodate it.
 
-   **`secrets-in-url-paths` in [`docs/policy/security.md`](../policy/security.md) is answered, and the
-   answer is `yes`.** It was `no` until #103 added `GET /admin/enrol/[token]`, which carries a live
-   credential in a path segment — so that key requires the path be **bounded before go-live**, and
-   the recipe below is not optional. The value records the routes that exist today rather than a
-   principle, so the audit is redone whenever a tokened route is added.
+   **The question is `secrets-in-url-paths` in [`docs/policy/security.md`](../policy/security.md), and
+   this runbook does not answer it.** It is a route-by-route audit — `/admin/enrol/[token]` is the
+   shape to look for — and it has to be redone whenever a tokened route is added. Answer the key
+   before go-live; where the answer is `yes`, bound the path using the recipe below.
 
 #### Bounding the path, for the `yes` branch
 
@@ -510,12 +502,11 @@ removes the flag.
 
 ### The four places a deletion request must reach
 
-`retention-personal` is set per aggregate in [`docs/policy/data.md`](../policy/data.md), and
-observability itself stores nothing — but it feeds four sinks, and a deletion request that reaches
-only the first is not honoured:
+`retention-personal` is `UNSET`, and observability itself stores nothing, but it feeds four sinks. A
+deletion request that reaches only the first is not honoured:
 
-1. **The drain** — log lines, wherever stdout is collected. Governed by `retention-logs`, which is
-   **30 days**; a log line inherits the classification of what it contains.
+1. **The drain** — log lines, wherever stdout is collected. Governed by `log-retention` /
+   `retention-logs`, both `UNSET`.
 2. **Sentry's retained events** — 30-day lookback on the Developer plan (§3). Deletion is per-issue or
    per-event through Sentry, and Sentry is a **data processor this product chose** —
    `observability-vendor` in [`docs/policy/operability.md`](../policy/operability.md) records the
@@ -537,10 +528,9 @@ deleting the release artifacts in Sentry and rotating `SENTRY_AUTH_TOKEN`.
 
 ### Rollback classes
 
-`rollback-mechanism` is **bluegreen and health-gated** — a failing `GET /api/health` aborts the
-deploy, and a completed deploy is undone in ≤ 5 minutes by one documented command. Anything that
-changes what is available as a mid-incident mitigation (feature flags being the obvious addition)
-changes the table below; these four classes hold as it stands:
+`rollback-mechanism` is `UNSET`; **`redeploy-previous-build` is the documented default** and a project
+may choose otherwise (feature flags being the obvious alternative, which changes what is available as a
+mid-incident mitigation). These four classes hold either way:
 
 | Change                                                                 | Class                                                                                                                                 | Time                      |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
