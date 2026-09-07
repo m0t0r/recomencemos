@@ -3,8 +3,8 @@
  *
  * **The scarcest resource in this design is one person's attention** (DD7), and
  * nothing bounded it before this module. What ships here is the mechanism plus
- * `requestMagicLink`; the other seven ceilings are rows in {@link CEILINGS}
- * added by the slices that need them.
+ * `requestMagicLink`; NFR26's other ceilings are rows in {@link CEILINGS} added
+ * by the slices that need them, and that registry is the count.
  *
  * **The counter lives in Postgres, not in process memory**, because deploys are
  * continuous and an in-memory limiter resets several times a day — which is the
@@ -50,9 +50,10 @@ export interface Ceiling {
  * address-only bound is defeated by rotating addresses, and an IP-only bound is
  * defeated by mobile data while tripping on a shared NAT.
  *
- * The seven remaining ceilings — `publishProfile`, `sendOffer`, `reportOffer`,
- * `requestSkill`, `createPhotoUpload`, `changeEmail`, and the gated read — are
- * NFR26's and arrive with the slices that can charge them. Adding one is a row
+ * The four remaining ceilings — `sendOffer`, `reportOffer`, `createPhotoUpload`
+ * and `changeEmail` — are NFR26's and arrive with the slices that can charge
+ * them. The gated read arrived with story 5 and is **two** rows for one
+ * requirement; its entry says why. Adding one is a row
  * here, a value in the `CHECK` on `rate_counter.action`, and a `rate limited`
  * row in the spec's UX state table. All three, or the ceiling is silent to the
  * person who hits it.
@@ -152,6 +153,45 @@ export const CEILINGS = {
   updateProfile: {
     account: { max: 10, windowSeconds: 24 * 60 * 60 },
     ip: { max: 10, windowSeconds: 24 * 60 * 60 },
+  },
+
+  /**
+   * **The harvesting ceiling, and the one entry in this registry that is two
+   * rows for one requirement.** NFR26 bounds a gated profile read at _"≤ 60 per
+   * Account per hour, ≤ 300 per day"_ — two windows against one principal, which
+   * nothing else here needs.
+   *
+   * **The window is in the action name because the table's key cannot hold it.**
+   * `rate_counter` is `UNIQUE (principal, action, window_start)`, and window
+   * starts are aligned to the epoch: at midnight the hour-aligned and the
+   * day-aligned start are the *same instant*, so two windows sharing one
+   * `action` would charge one row and the day's 300 would silently become the
+   * hour's 60 — once a day, at the hour a nightly job is most likely to run.
+   * Widening that constraint means a `DROP CONSTRAINT` on a `UNIQUE`, which
+   * NFR30's rule 3 counts destructive and requires to travel alone in a
+   * `contract` migration; two actions cost one migration and no such trip.
+   *
+   * **What this ceiling is actually for is DD7's arithmetic**: it turns
+   * enumerating the catalogue from a twenty-minute script into weeks, and into a
+   * signal. It is not there to stop a Hirer reading profiles — 60 an hour is
+   * more than anyone reads.
+   *
+   * **The per-IP numbers are 5× the Account bound and are this ticket's choice,
+   * not NFR26's.** The requirement says only _"a higher per-IP bound above it"_
+   * and never states one. 5× because the read needs a session and account
+   * rotation is already bounded by `requestMagicLink`'s two ceilings, while a
+   * shared NAT — a school, a café, an office in Pereira — may legitimately hold
+   * a dozen readers, and a per-IP bound that trips on them would lock out the
+   * exact population NFR26's own text warns about. Raising or lowering it is a
+   * one-line change here.
+   */
+  readProfileHourly: {
+    account: { max: 60, windowSeconds: 60 * 60 },
+    ip: { max: 300, windowSeconds: 60 * 60 },
+  },
+  readProfileDaily: {
+    account: { max: 300, windowSeconds: 24 * 60 * 60 },
+    ip: { max: 1500, windowSeconds: 24 * 60 * 60 },
   },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
@@ -412,6 +452,33 @@ export const CEILING_REFUSALS: Record<
     `Guardaste cambios ${ceiling.max} veces hoy, que es el máximo. ` +
     `Puedes guardar otra vez ${retryPhrase(retryAfter)}. ` +
     "Nada de lo que escribiste se perdió, y tu perfil sigue como lo guardaste la última vez.",
+
+  /**
+   * **The only two refusals here written for somebody who may be an attacker**,
+   * and they are the plainest in the table for exactly that reason. NFR26's own
+   * words are that the reply is _the honest one_ — reading paused, and when it
+   * resumes — _"since a harvester learns nothing he did not already know from
+   * being stopped"_. Vagueness would buy nothing against him and would cost the
+   * Hirer who was simply reading a real answer.
+   *
+   * **"Abriste", not "Leíste".** Every read charges, whether or not he read a
+   * word, and a sentence claiming to know he read them is a sentence he can
+   * catch being wrong. It also matches `publishProfile`'s "Intentaste", which is
+   * that entry's own reason.
+   *
+   * The third sentence names the door that is still open, as
+   * `requestMagicLink`'s does: the Wall and `/profiles` are public and carry no
+   * ceiling at all, so nobody who meets this is shut out of the product.
+   */
+  readProfileHourly: (ceiling, retryAfter) =>
+    `Abriste ${ceiling.max} perfiles en una hora, que es el máximo. ` +
+    `Puedes seguir abriendo perfiles ${retryPhrase(retryAfter)}. ` +
+    "Mientras tanto, las listas siguen abiertas.",
+
+  readProfileDaily: (ceiling, retryAfter) =>
+    `Abriste ${ceiling.max} perfiles hoy, que es el máximo. ` +
+    `Puedes seguir abriendo perfiles ${retryPhrase(retryAfter)}. ` +
+    "Mientras tanto, las listas siguen abiertas.",
 };
 
 /**

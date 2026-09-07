@@ -83,6 +83,60 @@ describe("CEILINGS", () => {
     expect(CEILINGS.publishProfile).not.toBe(CEILINGS.updateProfile);
     expect(CEILINGS.publishProfile.account?.max).not.toBe(CEILINGS.updateProfile.account.max);
   });
+
+  /**
+   * **NFR26's two numbers for the gated read, and the per-IP pair that is
+   * Build's choice rather than the requirement's.** The requirement states
+   * ≤ 60/hour and ≤ 300/day per Account and says only "a higher per-IP bound
+   * above it"; the whole object is asserted so that the invented half is a
+   * number somebody has to change on purpose.
+   */
+  it("bounds the gated read at sixty an hour per Account, five times that per IP", () => {
+    expect(CEILINGS.readProfileHourly).toEqual({
+      account: { max: 60, windowSeconds: 3600 },
+      ip: { max: 300, windowSeconds: 3600 },
+    });
+  });
+
+  it("bounds it at three hundred a day per Account, five times that per IP", () => {
+    expect(CEILINGS.readProfileDaily).toEqual({
+      account: { max: 300, windowSeconds: 86_400 },
+      ip: { max: 1500, windowSeconds: 86_400 },
+    });
+  });
+
+  /**
+   * **The reason the gated read is two actions rather than one.**
+   * `rate_counter` is `UNIQUE (principal, action, window_start)` and window
+   * starts are aligned to the epoch, so at midnight the hour-aligned and the
+   * day-aligned start are the *same instant*. Two windows under one action
+   * would charge one row there, and the day's 300 would silently become the
+   * hour's 60 — once a day, at the hour a nightly job is most likely to run.
+   *
+   * This is the arithmetic behind that sentence, asserted rather than recalled.
+   */
+  it("would have collided at midnight had the two windows shared an action", () => {
+    const midnight = new Date("2026-09-08T00:00:00.000Z");
+
+    expect(windowStartFor(midnight, CEILINGS.readProfileHourly.account.windowSeconds)).toEqual(
+      windowStartFor(midnight, CEILINGS.readProfileDaily.account.windowSeconds),
+    );
+    expect(Object.keys(CEILINGS)).toContain("readProfileHourly");
+    expect(Object.keys(CEILINGS)).toContain("readProfileDaily");
+  });
+
+  /**
+   * And the other half of that argument: away from midnight the two windows
+   * open at different instants, so nothing about the split is load-bearing at
+   * any other hour.
+   */
+  it("puts the two windows on different rows at every other hour", () => {
+    const midMorning = new Date("2026-09-08T09:17:04.000Z");
+
+    expect(
+      windowStartFor(midMorning, CEILINGS.readProfileHourly.account.windowSeconds),
+    ).not.toEqual(windowStartFor(midMorning, CEILINGS.readProfileDaily.account.windowSeconds));
+  });
 });
 
 describe("principalKey", () => {

@@ -182,6 +182,9 @@ const EXPORTED_BY_COLUMN: Record<string, string> = {
   "user.name": "name",
   "user.emailVerified": "emailVerified",
   "user.image": "imageUrl",
+  // A decision this platform took about the person reading the export, and one
+  // that suspends what she may do here — the opposite case from `isAdmin` below.
+  "user.offerSendingState": "offerSendingState",
   "user.createdAt": "registeredAt",
   "consent.side": "side",
   "consent.noticeVersion": "noticeVersion",

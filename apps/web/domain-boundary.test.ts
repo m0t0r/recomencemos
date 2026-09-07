@@ -123,6 +123,10 @@ const PUBLISHED = [
   "@repo/domain/policy",
   "@repo/domain/projections",
   "@repo/domain/profiles",
+  // #23's one: whether an Account may send an Offer, which is what decides
+  // whether it is served a gated profile. A different aggregate from the
+  // profile, and a Hirer may hold no profile at all.
+  "@repo/domain/accounts",
 ];
 
 describe("the domain package's export map", () => {

@@ -17,6 +17,10 @@
  * - {@link toGatedProfile} — what a signed-in Account reads at `/profile/[slug]`:
  *   the public shape plus `about` and the work history. **Not `fullName`**,
  *   which is collected at publish and crosses only at exchange (C1).
+ *   {@link toGatedIdentity} is its first half, and exists because that route
+ *   streams the work history inside its own Suspense boundary — see
+ *   {@link GatedIdentity} for why the split is a type rather than an optional
+ *   field.
  * - {@link toExchangedContact} — what crosses at Contact Exchange and nowhere
  *   else: full name, phone, email. {@link toExchangedProfile} is that beside the
  *   gated shape, which is what the other side holds after acceptance and what
@@ -69,8 +73,27 @@ export interface PublicProfile {
   readonly publishedAt: Date;
 }
 
-export interface GatedProfile extends PublicProfile {
+/**
+ * **The gated shape minus the work history**, because the route that renders it
+ * streams the two halves separately.
+ *
+ * `/profile/[slug]` renders identity first and the work history inside its own
+ * Suspense boundary (the spec's boundary table), so the page has to hold a
+ * complete, whitelisted value *before* the history resolves. Widening
+ * {@link GatedProfile} to make `workHistory` optional would have been the other
+ * way to do that, and it is the wrong one: `undefined` and "she listed nothing"
+ * are different facts, and a projection whose membership depends on when it is
+ * read is a projection NFR10 can no longer count.
+ *
+ * So the split is a type, and both halves are built from the same whitelist:
+ * `toGatedIdentity` is what streams first and `toGatedProfile` is that plus the
+ * history. Neither may ever carry `fullName`, `phone` or `email`.
+ */
+export interface GatedIdentity extends PublicProfile {
   readonly about: string;
+}
+
+export interface GatedProfile extends GatedIdentity {
   readonly workHistory: readonly string[];
 }
 
@@ -106,10 +129,16 @@ export function toPublicProfile(record: ProfileRecord): PublicProfile {
   };
 }
 
-export function toGatedProfile(record: ProfileRecord): GatedProfile {
+export function toGatedIdentity(record: ProfileRecord): GatedIdentity {
   return {
     ...toPublicProfile(record),
     about: record.about,
+  };
+}
+
+export function toGatedProfile(record: ProfileRecord): GatedProfile {
+  return {
+    ...toGatedIdentity(record),
     workHistory: [...record.workHistory],
   };
 }

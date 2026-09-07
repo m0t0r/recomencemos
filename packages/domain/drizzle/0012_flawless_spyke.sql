@@ -1,0 +1,4 @@
+ALTER TABLE "rate_counter" DROP CONSTRAINT "rate_counter_action_known";--> statement-breakpoint
+ALTER TABLE "user" ADD COLUMN "offer_sending_state" text DEFAULT 'active' NOT NULL;--> statement-breakpoint
+ALTER TABLE "rate_counter" ADD CONSTRAINT "rate_counter_action_known" CHECK ("rate_counter"."action" IN ('requestMagicLink', 'verifyAdminTotp', 'verifyAdminBackupCode', 'publishProfile', 'requestSkill', 'updateProfile', 'readProfileHourly', 'readProfileDaily'));--> statement-breakpoint
+ALTER TABLE "user" ADD CONSTRAINT "user_offer_sending_state_known" CHECK ("user"."offer_sending_state" IN ('active', 'frozen', 'banned'));

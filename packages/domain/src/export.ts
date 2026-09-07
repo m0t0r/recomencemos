@@ -35,6 +35,7 @@
 import { asc, eq } from "drizzle-orm";
 import type { ConsentSide } from "#consent/registry";
 import type { DomainDatabase } from "#database";
+import type { OfferSendingState } from "#policy/account-states";
 import * as schema from "#schema";
 
 /**
@@ -83,12 +84,27 @@ export interface ExportedConsent {
  * `isAdmin` is absent: the grant is `internal` rather than `personal`, and it is
  * a fact about the platform's staffing rather than about her. `image` is Google's
  * avatar URL, which is hers and is held here, so it crosses.
+ *
+ * **`offerSendingState` crosses, and the argument for it is the opposite of
+ * `isAdmin`'s** (story 5, which added the column). A grant says how the platform
+ * is staffed; a freeze is a decision this platform took *about the person
+ * reading the export*, and one that suspends what they may do here. Ley 1581
+ * gives the *titular* the right to know what is held about them, and a state
+ * that restricts them is the clearest case there is — an export that named her
+ * headline and not her suspension would be the "silently omitted `personal`
+ * column" NFR16's mechanism exists to make impossible.
+ *
+ * **It does not weaken C22.** The indistinguishable-404 at `/profile/[slug]` is
+ * about a page an unknown caller can sweep; this is a legal instrument served to
+ * one authenticated *titular* about herself, and `sendOffer` tells her the same
+ * thing the moment she tries to send.
  */
 export interface ExportedAccount {
   readonly email: string;
   readonly name: string;
   readonly emailVerified: boolean;
   readonly imageUrl: string | null;
+  readonly offerSendingState: OfferSendingState;
   readonly registeredAt: Date;
 }
 
@@ -121,6 +137,7 @@ export async function buildSubjectAccessExport(
       name: schema.user.name,
       emailVerified: schema.user.emailVerified,
       image: schema.user.image,
+      offerSendingState: schema.user.offerSendingState,
       createdAt: schema.user.createdAt,
     })
     .from(schema.user)
@@ -152,6 +169,10 @@ export async function buildSubjectAccessExport(
       name: row.name,
       emailVerified: row.emailVerified,
       imageUrl: row.image,
+      // The cast reads `user_offer_sending_state_known`, which refuses anything
+      // outside the registry at write time — the same argument the `side` cast
+      // below carries.
+      offerSendingState: row.offerSendingState as OfferSendingState,
       registeredAt: row.createdAt,
     },
     // Field by field, and the `side` cast is the one place the database's `TEXT`
