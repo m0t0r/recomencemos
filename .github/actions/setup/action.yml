@@ -15,11 +15,17 @@ runs:
   using: composite
   steps:
     # No `version:` on purpose. Given none, this action reads `packageManager`
-    # from package.json, which is where pnpm 11 is already pinned -- so the
+    # from package.json, which is where pnpm 12 is already pinned -- so the
     # version in CI cannot drift from the version a developer runs.
     # Third-party actions are pinned to a commit SHA; `actions/*` to a tag.
+    #
+    # **v6.1.0 is a floor, not a routine bump.** pnpm 12 ships as a Rust binary
+    # resolved through per-platform `@pnpm/exe.*` optional dependencies, and
+    # v6.1.0 is the release that learned to install it -- its only feature is
+    # "support pnpm v12". Any earlier pin installs nothing usable here, so this
+    # SHA may be moved forward but never back.
     - name: Install pnpm
-      uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
     # `.nvmrc` says `24`, so this resolves to the latest 24.x rather than
     # restating a patch version that would go stale. `engineStrict` in

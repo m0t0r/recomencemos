@@ -22,8 +22,18 @@
 FROM node:24-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-# Corepack reads `packageManager` from package.json, so the pinned pnpm 11 is
+# Corepack reads `packageManager` from package.json, so the pinned pnpm 12 is
 # the one that runs here too — the version is not restated in this file.
+#
+# **That puts a floor under Corepack, and therefore under the Node patch this
+# image ships.** pnpm 12 is a Rust binary resolved through per-platform
+# `@pnpm/exe.*` packages, not the `bin/pnpm.cjs` script pnpm 11 shipped, and a
+# Corepack that predates that indirection dies with `MODULE_NOT_FOUND` on a path
+# ending `bin/pnpm.cjs`. Measured on both sides: Corepack 0.34.0 (Node 24.11.0)
+# fails, 0.35.0 (Node 24.20.0) downloads the binary and runs. `node:24-slim`
+# resolved to 24.20.0 when this was written, so the build is above the floor —
+# but the tag moves and the floor does not, and if this image is ever pinned to
+# an exact 24.x, that is the number to check first.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
 WORKDIR /app

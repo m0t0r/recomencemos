@@ -57,7 +57,7 @@ The two candidates that were not chosen, and what each costs:
 | PGlite, file-backed    | Postgres 18.3             | yes                                    | **no** — single connection          |
 
 **What it costs, stated rather than waved through.** It adds Docker to a toolchain that was Node 24
-and pnpm 11 and nothing else. It stays a **`pnpm dev` requirement, not a repository one**: `pnpm test`
+and pnpm and nothing else. It stays a **`pnpm dev` requirement, not a repository one**: `pnpm test`
 runs against PGlite in-memory (spec 0002, Testing Decisions seam 2) and CI starts no database
 service, so a clone can install, type-check, test, build and pass the full gate with Docker never
 installed. `CLAUDE.md`'s Toolchain section carries the version floor.

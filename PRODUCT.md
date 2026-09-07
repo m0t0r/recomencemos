@@ -95,9 +95,9 @@ than that would be the kind of false a person relies on.
   ([ADR-0012](docs/adr/0012-spanish-is-the-interface-english-is-the-code.md)): route
   segments, file names, tables, columns, enum values, log `event` names, test names. The
   route is `/offers`, the table is `offer`, the page says _Propuesta_.
-- **Monorepo:** Turborepo on pnpm 11, TypeScript 7 throughout. `apps/web` is the only
+- **Monorepo:** Turborepo on pnpm 12, TypeScript 7 throughout. `apps/web` is the only
   app; the packages are `@repo/design-system`, `@repo/domain`, `@repo/errors`,
-  `@repo/observability` and `@repo/typescript-config`. Node 24.x and pnpm 11, both
+  `@repo/observability` and `@repo/typescript-config`. Node 24.x and pnpm 12, both
   enforced rather than suggested.
 - **Data:** PlanetScale Postgres through Drizzle, reached only through `@repo/domain`
   ([ADR-0010](docs/adr/0010-the-domain-package-is-the-only-door-to-the-database.md)). Two
