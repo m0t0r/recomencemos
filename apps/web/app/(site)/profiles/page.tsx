@@ -111,15 +111,18 @@ async function BrowseList({ searchParams }: { readonly searchParams: SearchParam
  * page held everything at `max-w-3xl`, so arriving from `/` moved the column
  * 128 px across the screen, and its one sentence over the list was a step
  * larger than the Wall's and half the distance below the heading. So the
- * measurements below are the Wall's `#profiles` section verbatim — the wide
- * column with the rows held at a reading measure inside it, `gap-6` under the
- * heading, `gap-8` over the rows — and the sentence is set exactly as the
- * Wall's seven-day count is.
+ * measurements below are the Wall's `#profiles` section — the wide column with
+ * the rows held at a reading measure inside it, `gap-6` under the heading,
+ * `gap-8` over the rows, and the sentence in the working face at the body step.
  *
- * `py-10` is the one thing not taken from it, and that is not an oversight:
- * the Wall's asymmetric `pt-12 pb-4 sm:pt-16` exists because the cover sits
- * immediately above it. This page opens on the shell, so it takes the sheet
- * rhythm `/sign-in` and `/publish` already use.
+ * **Three things are deliberately not copied, and each is named where it sits**
+ * rather than left for a reader to notice as a drift. `py-10`, because the
+ * Wall's asymmetric `pt-12 pb-4 sm:pt-16` exists to clear the cover above it
+ * and this page opens on the shell, so it takes the sheet rhythm `/sign-in` and
+ * `/publish` use. `min-h-6`, because the Wall's line holds its box against a
+ * count that can be absent and this sentence is never absent. And `max-w-prose`
+ * is *added*, because the ladder caps prose and this sentence is long enough to
+ * reach the cap where the Wall's is not.
  */
 export default function BrowsePage({ searchParams }: { readonly searchParams: SearchParams }) {
   return (
@@ -139,8 +142,14 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
           when the read fails, while this is a fact about how the list is built
           and is still true of the list a reader is being offered a second route
           to. It is the same reason the notice slot above is outside it.
+
+          `max-w-prose` is the one thing here the Wall's line does not carry,
+          and it is the ladder's rule rather than a departure from the Wall:
+          `DESIGN.md` → Typography holds prose at 65–75ch, and the Wall's line
+          is a short sentence that never reaches the cap while this one is 118
+          characters and would run to ~92ch in the column without it.
         */}
-        <p className="text-muted-foreground text-pretty">{BROWSE_LEAD}</p>
+        <p className="text-muted-foreground max-w-prose text-pretty">{BROWSE_LEAD}</p>
 
         {/*
           The escape the Wall does not need: a page of this list that failed still

@@ -33,9 +33,15 @@ it, so following _Ver todos los perfiles_ moved the whole ledger 128 px across a
 Its one sentence over the list was a step larger than the Wall's and sat half the distance below the
 heading, which on a phone is the difference between the first row being reachable and not.
 
-So the section's measurements are now the Wall's `#profiles` section verbatim — the wide column with
-the rows held at `max-w-3xl`, `gap-6` under the heading, `gap-8` over the rows, and the sentence set
-exactly as the Wall's seven-day count is. **The structural thesis is unchanged and this is what it
+So the section's measurements are now the Wall's `#profiles` section — the wide column with the rows
+held at `max-w-3xl`, `gap-6` under the heading, `gap-8` over the rows, and the sentence in the working
+face at the body step, where it was a step above it. **Three things are deliberately not copied**, and
+they are named in the code beside where each sits rather than left to read as drift: `py-10` (the Wall
+pads asymmetrically to clear the cover, and this page opens on the shell), `min-h-6` (the Wall's line
+holds its box against a count that can be absent, and this sentence is never absent), and
+`max-w-prose`, which is _added_ — `DESIGN.md` → Typography holds prose at 65–75ch, the Wall's line is
+short enough never to reach the cap, and this one is 118 characters and would run to ~92ch without it.
+**The structural thesis is unchanged and this is what it
 was always claiming**: one card component, two orderings, two framings — where "two framings" means
 two _sentences_, one for the newest and one for the whole ledger, and never two page shapes. A person's
 identity should not depend on which list she was reached through, and neither should a reader's sense
