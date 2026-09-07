@@ -20,10 +20,15 @@
  * a phone covers the list she just read, which is the one thing a confirmation
  * must not do when the list is why the action feels safe. The count in the
  * button label carries that weight instead.
+ *
+ * **Both halves are rows of the sheet the list is drawn on.** The note and the
+ * control each open on a ruling, so the page reads as one page rather than as a
+ * list with two things stacked under it.
  */
 
-import { Alert, AlertDescription } from "@repo/design-system/components/alert";
 import { Button } from "@repo/design-system/components/button";
+import { cn } from "@repo/design-system/lib/utils";
+import { InfoIcon, TriangleAlertIcon } from "lucide-react";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { signOutEverywhere } from "../actions";
@@ -61,55 +66,76 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
   /**
    * **Focus follows the outcome, not the control.** A list shrinking by two rows
    * announces nothing on its own, and a person using a screen reader would
-   * otherwise have to go looking for what happened. Moving focus to the alert
+   * otherwise have to go looking for what happened. Moving focus to the note
    * says what happened first and leaves the button one step away.
    */
   useEffect(() => {
     if (announcement) announcementRef.current?.focus();
   }, [announcement]);
 
+  /**
+   * **A limit of the platform, which is the only thing `destructive` may mark.**
+   * A returned `serverError` is the action refusing — the revocation did not
+   * happen and she is being asked to try again. Everything else that reaches
+   * this region is the outcome she asked for.
+   */
+  const Mark = failure ? TriangleAlertIcon : InfoIcon;
+
   return (
-    <div className="flex flex-col gap-4">
-      {announcement ? (
-        <Alert
-          ref={announcementRef}
-          variant={failure ? "destructive" : "default"}
+    <div className="flex flex-col">
+      {/*
+        **The region is permanent and its contents are not.** It used to be
+        mounted together with its own text, which is the announcement least
+        reliably read: a live region that arrives already holding its message is
+        one some screen readers never announce at all. It is here from the first
+        paint now, and the note is swapped into it — the shape `/sign-in` uses.
+
+        `role="status"` is polite rather than assertive, and the override is the
+        point: `alert` interrupts whatever a screen reader is saying, and this is
+        the result of something she just asked for.
+
+        `prefer-tag-over-role` asks for `<output>`, which is right in general and
+        wrong here: `<output>`'s content model is **phrasing content**, and this
+        region holds a `<div>` and a `<p>` — flow content. Taking the suggestion
+        would produce invalid HTML for a role the attribute already carries
+        correctly.
+      */}
+      <div
+        ref={announcementRef}
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- see above.
+        role="status"
+        aria-live="polite"
+        // Focusable programmatically but not in the tab order: a destination for
+        // focus after an outcome, never a stop on the way to the button.
+        tabIndex={-1}
+        className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
+      >
+        {announcement ? (
+          <div className="border-border grid grid-cols-[1.25rem_1fr] gap-x-3 border-t py-4">
+            <Mark
+              aria-hidden="true"
+              /* Centred on the first line: a 20 px mark against a 24 px line is 2 px down. */
+              className={cn("mt-0.5 size-5", failure ? "text-destructive" : "text-primary")}
+            />
+            <p className="text-foreground text-base leading-6 text-pretty">{announcement}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="border-border border-t pt-5">
+        {otherCount === 0 ? (
           /*
-            `role="status"` overrides the component's own `role="alert"`, and the
-            override is the point: `alert` is assertive and interrupts whatever a
-            screen reader is saying. This is the result of something she just
-            asked for, so it is announced politely — `alert` is for the
-            unexpected.
-
-            The lint rule below prefers the `<output>` element to this role, and
-            it is right in general — but the element here is `Alert`, which is
-            registry output rendering a `div`, and `DESIGN.md` forbids hand-editing
-            files under `src/components/`. Scoped to this line with the reason
-            rather than turned off anywhere wider.
+            **Absent, not disabled.** There is nothing wrong and nothing to
+            close, so a greyed-out button would invite her to work out why it
+            will not respond. The sentence says the true thing instead.
           */
-          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Alert is registry output and renders a div; see above.
-          role="status"
-          aria-live="polite"
-          // Focusable programmatically but not in the tab order: a destination
-          // for focus after an outcome, never a stop on the way to the button.
-          tabIndex={-1}
-        >
-          <AlertDescription>{announcement}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {otherCount === 0 ? (
-        /*
-          **Absent, not disabled.** There is nothing wrong and nothing to close,
-          so a greyed-out button would invite her to work out why it will not
-          respond. The sentence says the true thing instead.
-        */
-        <p className="text-muted-foreground text-sm">{ONLY_THIS_SESSION}</p>
-      ) : (
-        <form action={formAction}>
-          <CloseOthersButton count={otherCount} />
-        </form>
-      )}
+          <p className="text-muted-foreground text-sm text-pretty">{ONLY_THIS_SESSION}</p>
+        ) : (
+          <form action={formAction}>
+            <CloseOthersButton count={otherCount} />
+          </form>
+        )}
+      </div>
     </div>
   );
 }
@@ -122,7 +148,7 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
  * **Primary, not outline.** This is the only action on the surface and the whole
  * reason the page exists, and `DESIGN.md` gives `primary` to primary actions.
  * Nothing competes with it, so there is no hierarchy to solve by demoting it —
- * an `outline` button on a white card read as tertiary on a phone.
+ * an `outline` button read as tertiary on a phone.
  *
  * **Not `destructive`**, and that follows from the same argument that removed
  * the dialog: closing a session is disruptive, not destructive — nothing is lost

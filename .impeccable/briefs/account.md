@@ -1,7 +1,8 @@
 # Surface brief: `/account`
 
 **Target:** `apps/web/app/(site)/account/page.tsx` · **Mode:** Operate · **Ticket:**
-[#13](https://github.com/m0t0r/recomencemos/issues/13) · **Shaped:** 2026-08-28
+[#13](https://github.com/m0t0r/recomencemos/issues/13) · **Shaped:** 2026-08-28 ·
+**Amended:** 2026-09-07 for [#183](https://github.com/m0t0r/recomencemos/issues/183)
 
 ## Job and audience
 
@@ -31,6 +32,32 @@ a Worker gets to not wait those 8 hours.
 Visual authority is `DESIGN.md` and the existing token layer; nothing new is introduced. Structure
 is a **single column of stacked sections**, one per concern, because that is the shell later tickets
 extend (email change, deletion) and a phone reads one column.
+
+**Amended 2026-09-07 (#183): the column is a sheet on the ruled page, not a card on a grey field.**
+`DESIGN.md` → The world had not been written when this surface was first shaped, and the composition
+it describes is not open here — the ticket's own story states this family's answer, and `/my-profile`
+and `/sign-in` have both shipped it. Four consequences, and each replaces something above rather than
+sitting beside it:
+
+- **Paper, at `/my-profile`'s measure.** The page is `background` with no card and no second ground.
+  A card floating on `muted` is the idiom the world was chosen against, and it was the last one left
+  in the product. These are the two signed-in personal surfaces, so they share a measure and the same
+  `px-4 py-10` rhythm.
+- **The list _is_ the ruled page.** Rows separated by the ruling, the rose margin line down the left
+  from `sm` up and dropped on a phone — `DESIGN.md` → Layout, and the same `ruled-page` the Wall,
+  Browse and the three tiers are drawn on. It replaces the registry's `Item` group, which draws a
+  container this product's lists do not have.
+- **The marker is the word and nothing else.** Decision 3 below put _Estás aquí_ in a `Badge`; a
+  filled wash is a hue, and _state is a mark, never a hue_ names this surface directly — _a current
+  session is a word_. The string, its position beside the device name and its place in the row's
+  reading order are all unchanged; the chip around it is gone.
+- **The outcome is a ruled note, not a boxed alert.** A mark in the left column — ink for the
+  outcome, `destructive` for a limit of the platform — over a ruling, which is the shape `/sign-in`
+  took at [#182](https://github.com/m0t0r/recomencemos/issues/182). Its live region is now permanent
+  rather than mounted with its text, so what is announced exists before there is anything to announce.
+
+**Every string on the surface, the one action and the one form are unchanged by this amendment**,
+and so is everything decisions 1–5 below settle apart from the `Badge`.
 
 Three decisions, each with the alternative it beat:
 
@@ -64,9 +91,10 @@ Three decisions, each with the alternative it beat:
      phone, and a control out of sight is worse than an unlabelled value on a surface whose whole
      job is one action.
 
-   **A′** is A's density with the device name leading every row and _Este aparato_ as a `Badge`
-   beside it. C's real gain — a screen reader announcing the field names — is available here through
-   the description line at no vertical cost.
+   **A′** is A's density with the device name leading every row and the marker as a word beside it.
+   C's real gain — a screen reader announcing the field names — is available here through the
+   description line at no vertical cost. (The marker was a `Badge` until #183; the word stayed and
+   the chip went.)
 
 4. **The control is `primary`, not `outline`.** It is the only action on the surface and the whole
    reason the page exists, and `DESIGN.md` gives `primary` to primary actions; nothing competes with
@@ -132,9 +160,15 @@ generic label rather than an empty row.
 ## Constraints and open decisions
 
 **Binding.** `es-CO` only, `tú` throughout. WCAG 2.2 AA. Buttons ≤ 5 words, body sentences ≤ 20.
-`es-CO` date and time formats — _10 de agosto de 2026_, _3:40 p. m._ — never `08/10/2026`. Registry
-components only; `Card`, `Button`, `Skeleton` and `Separator` cover this surface and nothing needs
-adding. Light only.
+`es-CO` date and time formats — _10 de agosto de 2026_, _3:40 p. m._ — never `08/10/2026`. Light
+only.
+
+**Registry components where the registry has the thing, and the product's own list idiom where it
+does not** (amended #183). `Button`, `Skeleton` and `Separator` — the ruling — cover this surface and
+nothing needs adding. `Card`, `Item` and `Alert` are deliberately absent: the first two draw a
+container the ruled page replaces, and the third draws a box around a note that is now marked and
+ruled. `profile-row.tsx` is the prior art for all three, and `REVIEW.md`'s registry-equivalents pass
+is what this paragraph answers in advance.
 
 **Two findings from Better Auth 1.7.1, read out of `dist/api/routes/session.mjs` rather than
 recalled. Both change the implementation, and a builder must not rediscover them the hard way:**
