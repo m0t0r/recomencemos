@@ -34,10 +34,10 @@ type Gap = "reporting-inactive" | "release-unknown";
 /**
  * Prose per gap, naming the variable that closes it.
  *
- * The reader of the no-DSN line is someone who has just cloned this repo and run
- * it with no monitoring account, so the line has to say what to set rather than
- * only that something is unset — which is the difference between a notice and a
- * chore.
+ * The reader of the no-DSN line is whoever started the app without a monitoring
+ * account — a developer on their first `pnpm dev`, or an operator on a first
+ * deploy — so the line has to say what to set rather than only that something is
+ * unset, which is the difference between a notice and a chore.
  */
 const GAP_DETAIL: Record<Gap, string> = {
   "reporting-inactive":

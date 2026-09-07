@@ -264,7 +264,7 @@ describe("what @repo/observability derives from the list without receiving it", 
   // Stated rather than claimed away: a caller can recover the spellings from a
   // generated path by stripping the root, and the parity test above does exactly
   // that. What "not exported" buys is narrower than "unknowable" — it is that no
-  // *constant* is published, so there is nothing anywhere else can import, pin,
+  // *constant* is published, so there is nothing anyone else can import, pin,
   // filter, or spread, and adding a name to the list breaks nobody.
   it("publishes no constant to pin, and no derivation that works without a root", () => {
     for (const exported of Object.values(redactionModule)) {

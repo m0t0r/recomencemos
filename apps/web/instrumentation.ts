@@ -57,8 +57,8 @@ function isNodeRuntime(): boolean {
  * off-switch. `enabled: false` or an empty DSN is not equivalent: either still
  * installs the tracing provider, the propagator, the context manager and the
  * module-loader hooks on every boot. Not calling `init` is the only clean way to
- * be inactive, and every run of this app that has no DSN — development, CI, the
- * test suite — takes exactly that path.
+ * be inactive, and every run of this app that has no DSN takes exactly that
+ * path — which is every `pnpm dev` and every build that is not a deploy's.
  *
  * `sentry.server.config.ts` is dynamic for a second, independent reason: a
  * top-level import would run the module — and therefore `init` — regardless of
@@ -80,7 +80,7 @@ export async function register(): Promise<void> {
   // this one when a request *completes*. Together they are a rate (NFR17).
   //
   // It sits before the DSN branch because the traffic line is not conditional on
-  // reporting — a clone with no monitoring account still gets its denominator.
+  // reporting — a run with no monitoring account still gets its denominator.
   //
   // The subscription itself lives in the package for a reason beyond the dynamic
   // import rule above: a `node:diagnostics_channel` specifier written into *this*
