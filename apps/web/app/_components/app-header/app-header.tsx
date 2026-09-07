@@ -84,7 +84,14 @@ import type { ReactNode } from "react";
 import type { AuthSession } from "@repo/domain/auth-handler";
 import { auth } from "@/lib/auth";
 import { SessionMenuNoScript } from "@/app/_components/session-menu/no-script";
-import { SessionMenu, type SignOutAction } from "@/app/_components/session-menu/session-menu";
+import { DeferredSessionMenu } from "@/app/_components/session-menu/session-menu-deferred";
+/**
+ * `import type`, and it is load-bearing rather than tidy: a value import from
+ * `./session-menu` here would put the module back in this route's client-
+ * reference manifest and undo the split `session-menu-deferred.tsx` exists for.
+ * The type is erased; the menu arrives in its own chunk.
+ */
+import type { SignOutAction } from "@/app/_components/session-menu/session-menu";
 import { StickyHeader } from "@/app/_components/sticky-header";
 import { PRODUCT_NAME } from "./messages";
 
@@ -101,7 +108,7 @@ export interface AppHeaderProps {
   readonly homeLabel: string;
   /** The menu's sign-out action. The two shells land in different places. */
   readonly action: SignOutAction;
-  /** Passed straight to {@link SessionMenu}; absent omits the account row. */
+  /** Passed straight to {@link DeferredSessionMenu}; absent omits the account row. */
   readonly accountHref?: string;
   /**
    * The profile row for a signed-in session, resolved by the shell that has
@@ -173,7 +180,14 @@ export async function AppHeader({
         </Link>
 
         {session ? (
-          <SessionMenu
+          /*
+            The menu itself, reached through the client-side loader in
+            `session-menu-deferred.tsx` rather than imported here — which is what
+            keeps Base UI's popup stack out of every route's first load. Writing
+            `next/dynamic` in *this* file instead buys nothing; that module says
+            why.
+          */
+          <DeferredSessionMenu
             email={session.email}
             action={action}
             accountHref={accountHref}

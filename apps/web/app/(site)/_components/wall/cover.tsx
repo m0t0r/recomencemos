@@ -17,7 +17,7 @@
  * region to fill. `text-balance` keeps three lines from ending on a single word.
  */
 
-import { buttonVariants } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import { cn } from "@repo/design-system/lib/utils";
 import Link from "next/link";
 import type { ReactNode } from "react";

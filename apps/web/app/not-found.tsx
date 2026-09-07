@@ -37,7 +37,7 @@
  * cost this page the stylesheet and the fonts for nothing.
  */
 
-import { buttonVariants } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import { cn } from "@repo/design-system/lib/utils";
 import type { Metadata } from "next";
 import Link from "next/link";
