@@ -17,12 +17,27 @@ updates:
   # both redundant and rejected — overlapping directories for one ecosystem are
   # not allowed.
   #
-  # **pnpm 11 is beta here.** The published support matrix lists pnpm 7–10;
-  # dependabot-core added pnpm 11 in July 2026 and labels it beta. The lockfile
-  # is the reassuring part: pnpm 11 still writes `lockfileVersion: '9.0'`, the
-  # same format pnpm 10 writes, so the format is not the risk surface. If
-  # Dependabot ever fails to resolve this repo, that beta label is the first
-  # place to look.
+  # **pnpm 12 is unsupported here, and the lockfile format is the whole reason.**
+  # The published support matrix lists pnpm 7–10; pnpm 11 was added in July 2026
+  # and labelled beta; pnpm 12 is not supported at all — dependabot/dependabot-core
+  # #16095 is open and its two support pull requests, #16169 and #16170, are
+  # unmerged.
+  #
+  # This used to read that the format was "the reassuring part", because every
+  # version through 11 wrote one `lockfileVersion: '9.0'` document. Under pnpm 12
+  # the format is the risk surface. Left to its default, pnpm 12 writes a
+  # **two-document** YAML stream — an environment document naming its own binary
+  # first, the dependency graph second — and dependabot-core reads only the
+  # first: zero dependencies for every manifest, and existing alerts closed with
+  # no update performed (#15904). That failure is silent, which is what makes it
+  # worse than a hard error, and this file already records six advisories — four
+  # `high` — that sat on the default branch while every pull request went green.
+  #
+  # `pmOnFail: ignore` in `pnpm-workspace.yaml` is what holds the lockfile to a
+  # single document, so Dependabot reads this repo exactly as it did under pnpm
+  # 11. The reasoning, and what it gives up, is written beside that setting. If
+  # Dependabot ever reports this repository as having no dependencies, check that
+  # line before anything else: `grep -c '^---$' pnpm-lock.yaml` must be 0.
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -39,8 +54,9 @@ updates:
       prefix-development: chore
       include: scope
 
-    # `minimumReleaseAge` in `pnpm-workspace.yaml` is 1440 minutes — pnpm 11's
-    # default, which the repo takes rather than sets. A package published inside
+    # `minimumReleaseAge` in `pnpm-workspace.yaml` is 1440 minutes — pnpm's
+    # default since v11, unchanged in v12 and re-read rather than assumed at that
+    # bump, which the repo takes rather than sets. A package published inside
     # that window does not resolve locally at all, so a Dependabot PR raised
     # sooner would be one nobody could install.
     #

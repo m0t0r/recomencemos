@@ -53,7 +53,7 @@ the fix and the record; use it in any new hook that touches the repository.
 
 ## Commands
 
-Run from the repo root; `turbo` fans out to every workspace — the scripts are in `package.json`. pnpm 11 is pinned via `packageManager`; do not use npm/yarn.
+Run from the repo root; `turbo` fans out to every workspace — the scripts are in `package.json`. pnpm 12 is pinned via `packageManager`; do not use npm/yarn.
 
 **`pnpm dev` serves each worktree at its own HTTPS hostname, and there is no port to hold in your
 head** ([ADR-0018](docs/adr/0018-a-dev-server-is-reached-by-name-not-by-port.md)). `apps/web`'s `dev`
@@ -117,14 +117,20 @@ is written down.
 
 ## Toolchain
 
-The repo requires the **active Node LTS** (24.x) and **pnpm 11**, and it enforces both rather than suggesting them:
+The repo requires the **active Node LTS** (24.x) and **pnpm 12**, and it enforces both rather than suggesting them:
 
-- `engines.node` is `>=24` (major-version compatibility only — any 24.x satisfies it), and `engineStrict: true` in `pnpm-workspace.yaml` makes `pnpm install` **fail** on an older runtime instead of printing a warning. `.npmrc` sets the equivalent `engine-strict=true` so a stray `npm install` fails the same way — pnpm 11 reads its own settings from `pnpm-workspace.yaml`, not `.npmrc`, which is why both exist.
+- `engines.node` is `>=24` (major-version compatibility only — any 24.x satisfies it), and `engineStrict: true` in `pnpm-workspace.yaml` makes `pnpm install` **fail** on an older runtime instead of printing a warning. `.npmrc` sets the equivalent `engine-strict=true` so a stray `npm install` fails the same way — pnpm reads its own settings from `pnpm-workspace.yaml`, not `.npmrc`, which is why both exist. `engines.pnpm` is `>=12` and is enforced the same way: pnpm 11 against this repo exits `ERR_PNPM_UNSUPPORTED_ENGINE` rather than installing.
 - `.nvmrc` says `24`, so `fnm use` / `nvm use` picks the latest installed 24.x. If `pnpm install` refuses to run, the fix is `fnm use` / `nvm use`, not editing `engines`.
 - **TypeScript is 7.x** (pinned exactly, same version in the root and every workspace). TS 7 is the native compiler, and it ships **only a `tsc` binary** — there is no `tsserver`, and the JavaScript compiler API is gone (`node_modules/typescript` exports just the version string plus `./unstable/*` entry points). Two things follow:
   - `next build` type-checks by shelling out to the project-local `tsc` CLI, which is the Next 16 default. Do **not** set `experimental.useTypeScriptCli: false` — that switches Next back to the JS compiler API, which TS 7 does not provide, and the build exits. Diagnostics come out as plain `tsc` output without Next's code frames.
   - The `plugins: [{ "name": "next" }]` entry in the tsconfigs is a **tsserver** plugin, so it does nothing while an editor is pointed at the workspace TypeScript. It is kept because it costs nothing and is what Next's docs prescribe; "Use Workspace Version" in VS Code is not available under TS 7.
-- pnpm 11 applies a **supply-chain cooldown** (`minimumReleaseAge`) to new releases. Installing a package published inside that window appends pinned entries to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml` — that list is a record of deliberately-accepted fresh releases, not cruft. Prune entries when the versions they name are no longer the ones installed.
+- pnpm applies a **supply-chain cooldown** (`minimumReleaseAge`, 1440 minutes, its default since v11) to new releases. Installing a package published inside that window appends pinned entries to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml` — that list is a record of deliberately-accepted fresh releases, not cruft. Prune entries when the versions they name are no longer the ones installed; the list is **currently empty and the key absent**, which is its steady state rather than an omission.
+  **pnpm 12 is a Rust rewrite, and one line in `pnpm-workspace.yaml` is what keeps Dependabot able to read this repo.** Left to its default, pnpm 12 manages its own version and records that in a **second YAML document** at the head of `pnpm-lock.yaml`; dependabot-core reads only the first document, so it reports **zero dependencies and closes existing alerts without performing an update** (dependabot/dependabot-core#15904, open — pnpm 12 is unsupported there). `pmOnFail: ignore` suppresses that document, and `error` and `warn` do **not** — both still emit it. Three consequences worth holding:
+
+- **`grep -c '^---$' pnpm-lock.yaml` must be `0`.** That is the whole check, and it is the acceptance criterion the migration was held to. A non-zero answer means Dependabot has gone blind.
+- **What `ignore` gives up is pnpm's own enforcement of the `packageManager` pin, and `engines.pnpm` is what covers it** — `>=12` under `engineStrict`, so pnpm 11 exits `ERR_PNPM_UNSUPPORTED_ENGINE`. Corepack and `pnpm/action-setup` select the version; that engine field refuses the wrong one.
+- **Corepack has a floor of 0.35.0**, because pnpm 12 resolves through per-platform `@pnpm/exe.*` packages rather than the `bin/pnpm.cjs` pnpm 11 shipped. 0.34.0 (Node 24.11.0) dies with `MODULE_NOT_FOUND`; 0.35.0 (Node 24.20.0, what `node:24-slim` ships) works. This binds the `Dockerfile` and anyone driving pnpm through Corepack — a standalone pnpm install is unaffected.
+
 - `pnpm-workspace.yaml` is in oxfmt's `ignorePatterns` because pnpm writes those generated entries single-quoted and oxfmt rewrites them double-quoted, so the two tools would flip the file back and forth on every install. pnpm owns that file; do not remove the ignore.
 - `docs/efforts/*/advisories/` is ignored for the same shape of reason: a committed advisory is **verbatim** and `.claude/hooks/build-guard.sh` refuses to edit one, so a formatter rewriting it would make `pnpm format` and the Build gate contradict each other. `/spec-review` diffs the spec against those files; reformatting them is editing them.
 

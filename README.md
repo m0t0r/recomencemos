@@ -24,7 +24,7 @@ A [Turborepo](https://turborepo.dev) monorepo on pnpm, TypeScript throughout:
 | `packages/observability`     | `@repo/observability`     | The pino logger, the single report site, and the trace-context reader — **server-only**, the other half of the split                                                                           |
 | `packages/typescript-config` | `@repo/typescript-config` | Shared tsconfigs: `base`, `nextjs`, `react-library`                                                                                                                                            |
 
-Requires the **active Node LTS** (24.x — see `.nvmrc`) and **pnpm 11** (pinned via `packageManager`). The Node requirement is enforced, not suggested: `engineStrict` in `pnpm-workspace.yaml` makes `pnpm install` fail outright on an older runtime. Run `fnm use` or `nvm use` first.
+Requires the **active Node LTS** (24.x — see `.nvmrc`) and **pnpm 12** (pinned via `packageManager`). Neither is suggested: `engineStrict` in `pnpm-workspace.yaml` makes `pnpm install` fail outright on an older runtime, and `engines.pnpm` is `>=12`, so pnpm 11 exits `ERR_PNPM_UNSUPPORTED_ENGINE` rather than installing. Run `fnm use` or `nvm use` first. Driving pnpm through Corepack additionally needs Corepack 0.35.0 or newer — pnpm 12 is a native binary, and 0.34.0 cannot install it.
 
 **`pnpm dev` also needs Docker** (Engine 20.10+, Compose v2.20+) — `docker-compose.yaml` is the local development database, Postgres 18 behind PgBouncer in transaction-pooling mode. Nothing else needs it: `pnpm test` runs against PGlite in-memory and CI starts no database, so the whole gate is green on a machine without Docker. See `docs/policy/data.md` → `local-database`.
 

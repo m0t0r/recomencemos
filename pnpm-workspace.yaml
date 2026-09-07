@@ -6,9 +6,45 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# **`pnpm-lock.yaml` stays a single YAML document, and this is the line that
+# keeps it one.**
+#
+# pnpm 12 manages its own version: given a `packageManager` pin it downloads and
+# runs that version, and records having done so in a *second* YAML document at
+# the head of the lockfile — `packageManagerDependencies`, plus a `@pnpm/exe.*`
+# entry for each of the eight platforms. The dependency graph then sits in the
+# second document of the stream.
+#
+# dependabot-core reads only the first. It reports zero dependencies for every
+# manifest and closes existing alerts without performing an update
+# (dependabot/dependabot-core#15904, open; the two support pull requests are
+# unmerged). That is the one regression this repo cannot absorb quietly:
+# `.github/dependabot.yml` records six advisories, four of them `high`, that sat
+# on the default branch while every pull request went green.
+#
+# `ignore` is what suppresses the document, and `error` and `warn` are **not**
+# substitutes — measured, not assumed: both still emit it, because both still
+# manage the version. This is the "external tools manage versions" case pnpm's
+# own documentation names, and here there are three of them.
+#
+# Two *select* the version, both from `packageManager`: Corepack in the
+# `Dockerfile`, and `pnpm/action-setup` in `.github/actions/setup`. The third
+# *refuses the wrong one*, and it is the reason giving up pnpm's own check costs
+# so little: `engines.pnpm` is `>=12` and `engineStrict` above makes that fail
+# rather than warn, so pnpm 11 against this repo exits
+# `ERR_PNPM_UNSUPPORTED_ENGINE` naming the expected version. Checked by running
+# it. The residual gap is a *newer* pnpm than the pin, which satisfies `>=12`
+# and installs — the lockfile is the thing that would notice, and CI runs the
+# pinned version.
+#
+# Revisit when dependabot-core ships pnpm 12 support (#213): drop this line, run
+# `pnpm install`, and confirm Dependabot still resolves a graph from the
+# two-document lockfile before leaving it dropped.
+pmOnFail: ignore
+
 # `@sentry/nextjs` loads these two module-interception packages by bare specifier
 # from inside its own server instrumentation, so pnpm's isolated store has to put
-# them where a bare `require`/`import` from the app can see them. pnpm 11 reads
+# them where a bare `require`/`import` from the app can see them. pnpm reads
 # its settings from this file, not `.npmrc` (see CLAUDE.md), which is also why
 # the entry lands in a file pnpm owns and oxfmt ignores.
 #
@@ -17,24 +53,25 @@ packages:
 publicHoistPattern:
   - "import-in-the-middle"
   - "require-in-the-middle"
-# Releases accepted inside pnpm's supply-chain cooldown, pinned to the exact
-# version that was accepted. An entry is spent the moment the lock stops naming
-# that version, so this list is pruned rather than appended to forever: `grep
-# '<name>@<version>' pnpm-lock.yaml` is the whole test, and an entry with no hit
-# is a line to delete. The name belongs in the pattern — a bare version number
-# matches any unrelated package that happens to sit at it.
+# Releases accepted inside pnpm's supply-chain cooldown go in
+# `minimumReleaseAgeExclude`, pinned to the exact version accepted. **The list is
+# empty, so the key is absent** — that is the steady state, not an oversight. An
+# entry is spent the moment the lock stops naming its version, so the list is
+# pruned rather than appended to forever: `grep '<name>@<version>'
+# pnpm-lock.yaml` is the whole test, and an entry with no hit is a line to
+# delete. The name belongs in the pattern — a bare version number matches any
+# unrelated package that happens to sit at it.
 #
-# The ten `16.3.2` entries that used to sit here went that way: nine `@next/*`
-# and a bare `next`, all spent, because the lock resolves 16.3.0 and 16.3.3 and
-# names 16.3.2 in it zero times.
+# Everything that has ever sat here left that way. First the ten `16.3.2`
+# entries — nine `@next/*` and a bare `next` — because the lock resolves 16.3.0
+# and 16.3.3 and names 16.3.2 zero times. Then `shadcn@4.19.0` and
+# `resend@6.24.0`, because the lock resolves 4.21.0 and 6.26.0 (#212).
 #
-# Neither entry below needed a companion for the security patches in
-# `overrides`, but only one of them comfortably: `qs@6.16.0` was five days old
-# when it was taken and `fast-uri@3.1.7` was 33 hours, against a 24-hour window.
-# Nine hours earlier that second one would have needed a line here.
-minimumReleaseAgeExclude:
-  - shadcn@4.19.0
-  - resend@6.24.0
+# Worth knowing before the next one is added: neither of those two needed a
+# companion for the security patches in `overrides`, but only one of them
+# comfortably. `qs@6.16.0` was five days old when it was taken; `fast-uri@3.1.7`
+# was 33 hours, against a 24-hour window. Nine hours earlier it would have
+# needed a line here.
 
 # `@sentry/cli`'s postinstall is a *fallback* downloader, not the install step:
 # it resolves `@sentry/cli-<platform>` — an optional dependency pnpm has already
