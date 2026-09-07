@@ -13,8 +13,29 @@
  * and it is the only line on the page nobody else could have written. `h2`, so
  * the list is navigable heading to heading; the page's `h1` is its own title.
  *
- * The row carries no link: story 5 builds `/profile/[slug]`, and a row into a
- * 404 would be worse than a row that is complete on its own.
+ * **The heading is a link into `/profile/[slug]`**, which story 5 built. Three
+ * things about it were decided rather than defaulted:
+ *
+ * - **The link is the headline, not the row.** A row is an `<article>` holding a
+ *   heading, a name and a list of Skills; wrapping the whole of it would give a
+ *   screen reader one link whose accessible name is every Skill she listed, and
+ *   would make the chips unselectable text. The heading is the one line that
+ *   says what following it leads to.
+ * - **Its accessible name is the headline itself, and there is no `aria-label`.**
+ *   The obvious improvement — naming it "Ver el perfil de Ana María R." so a
+ *   list read link by link is a list of destinations — is a **WCAG 2.5.3
+ *   failure**: Label in Name asks that the accessible name contain the visible
+ *   text, and a speech-input user saying what he can see would then match
+ *   nothing. The headline is already unique per row and already says where the
+ *   link goes, so the accessible name it gives is the right one anyway.
+ * - **The row still says everything it said before.** The link is an addition to
+ *   the hierarchy and not a replacement for it: a reader who never follows it
+ *   has lost nothing, which is what kept these rows complete on their own while
+ *   `/profile/[slug]` did not exist.
+ *
+ * The destination is gated — an anonymous reader arrives at `/sign-in` with a
+ * way back — and the list itself is public and stays that way (NFR8 gates
+ * `/profile` and deliberately not `/profiles`).
  *
  * It lives in its own module because `/profiles` appends rows from the browser
  * as the reader scrolls, and a client component may not import the server list
@@ -25,6 +46,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@repo/design-system/compone
 import { Separator } from "@repo/design-system/components/separator";
 import { cityLabel } from "@repo/domain/policy";
 import type { PublicProfile } from "@repo/domain/profiles";
+import Link from "next/link";
 import { photoAlt } from "../../_lib/lists/messages";
 import { displayName, initialOf } from "../profile-card";
 import { SkillChips } from "./skill-chips";
@@ -66,7 +88,12 @@ export function ProfileRow({
               Alegreya (`DESIGN.md` → Typography). 24 px is the `h3` step.
             */}
             <h2 className="font-heading text-foreground text-2xl leading-7 font-medium text-pretty">
-              {profile.headline}
+              <Link
+                href={`/profile/${profile.slug}`}
+                className="hover:text-primary focus-visible:ring-ring/50 rounded-xs outline-none focus-visible:ring-[3px]"
+              >
+                {profile.headline}
+              </Link>
             </h2>
             <p className="text-muted-foreground text-sm">
               {name} · {cityLabel(profile.city)}
