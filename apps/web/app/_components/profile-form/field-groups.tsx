@@ -16,7 +16,7 @@
  * step, the button's verb, and where the form goes on success.
  *
  * **Since #181 a group's legend is set in the display face** — variant A
- * (_Renglones_), locked from `/prototype` UI on the two real routes; the four
+ * (_Renglones_), locked from `/prototype` UI on the two real routes; the three
  * richer treatments live on `prototype/181-ui-variants`. That is the whole of
  * what the notebook world asks of this form, and the restraint is the decision
  * rather than a shortfall: `DESIGN.md` says the contrast between the two faces
@@ -97,13 +97,29 @@ export const FIELD_GROUP_IDS = {
  * and the three sheets she then reads carry the same weight.
  *
  * **`text-2xl!`, and the `!` is load-bearing rather than lazy.** The registry
- * sizes a legend through `data-[variant=legend]:text-base`, which is an
- * attribute selector and therefore outranks a plain `text-2xl` however the two
- * are ordered — without it the face changed to Alegreya and the size silently
- * stayed at 16 px. Measured off the running page, not assumed. Restating the
- * same `data-` selector here would tie on specificity and leave the winner to
- * Tailwind's own sort order, which is not a thing to depend on; and editing
- * `field.tsx` is out, because `shadcn add --overwrite` replaces it wholesale.
+ * sizes a legend through `data-[variant=legend]:text-base`. Two things have to
+ * be true for that to beat a plain `text-2xl`, and both are: `cn` is
+ * `twMerge`, which does **not** treat a variant-prefixed `text-base` and a bare
+ * `text-2xl` as one conflict group, so both classes survive the merge rather
+ * than the later one replacing the earlier; and what is left is a
+ * `.class[attr]` selector against a `.class`, which wins on specificity
+ * whatever the order. Without the `!` the face changed to Alegreya and the size
+ * silently stayed at 16 px — measured off the running page, not assumed.
+ * Restating the same `data-` selector here would tie on specificity and leave
+ * the winner to Tailwind's own sort order, which is not a thing to depend on;
+ * and editing `field.tsx` is out, because `shadcn add --overwrite` replaces it
+ * wholesale. `FieldLegend` offers only `legend` and `label`, and neither is
+ * 24 px, so there is no variant to ask for instead.
+ *
+ * **Its twin is `own-profile-view.tsx`'s tier heading**, which carries this
+ * string minus the `mb-2` and the `!`. Two files holding one visual fact is
+ * what `globals.css`'s `@utility` block exists to prevent — *"named once so
+ * that three files cannot drift"* — and the reason it is not extracted here is
+ * that the two call sites need different things from it: this one has to win a
+ * specificity fight that the tier heading does not have, so a shared utility
+ * would either restate the size at this call site or push an `!important` onto
+ * a surface that has no use for one. A third consumer is where that trade
+ * flips, and it is a change to the design system rather than to this form.
  */
 const LEGEND_CLASS = "font-heading text-foreground mb-2 text-2xl! leading-8 font-medium";
 

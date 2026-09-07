@@ -25,11 +25,12 @@ about the page changes.
 what she wrote, and what the platform wrote — and a form set in the display face would be a form
 asking to be admired. So the restraint here is the decision rather than a shortfall.
 
-**Four richer treatments were built on this route and lost**, and they are on
+**Three richer treatments were built on this route and lost**, and they are on
 `prototype/181-ui-variants` with the screenshots on the ticket: the groups as sheets on a ruled page
 with the margin line and a mark per audience (_La página reglada_); that plus the card and the
-submit pinned in the thumb zone (_La ficha al pulgar_); that plus a chosen Skill and city filled
-with ink (_La libreta_); and the page as it stood before this ticket (_Actual_).
+submit pinned in the thumb zone (_La ficha al pulgar_); and that plus a chosen Skill and city filled
+with ink (_La libreta_). A fifth `?variant=` renders the page as it already stood (_Actual_), which
+is the control the other four were read against rather than a candidate.
 
 **So the form still shows her nothing back, and `PREVIEW_HEADING` is still unrendered.** Three of
 the losing treatments closed the page on `ProfileCard` fed from what she had typed — the component
