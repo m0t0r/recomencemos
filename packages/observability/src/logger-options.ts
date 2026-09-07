@@ -28,10 +28,12 @@ assertServerOnly("logger-options");
  * would mean a `turbo.json` change that belongs with the rest of the environment
  * plumbing.
  *
- * It still names the workspace rather than the service, which is a row on
- * `README.md`'s "Still to replace" list, owned by #9 — every log line carries it
- * and a drain filters on it, so changing it is a deploy-time decision taken
- * once, not a rename to slip into an unrelated pull request.
+ * It still names the workspace rather than the service, and that is tracked as a
+ * row on `README.md`'s "Still to replace" list rather than here — every log line
+ * carries it and a drain filters on it, so changing it is a deploy-time decision
+ * taken once, not a rename to slip into an unrelated pull request. (That row
+ * cites #9, which shipped the deploy and closed without taking the decision, so
+ * the row is the live record and the issue is not.)
  */
 const SERVICE_NAME = "web";
 

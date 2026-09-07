@@ -187,10 +187,13 @@ function matchedPattern(request: CompletedRequest): string | undefined {
  * oversight it looks like: this is the one place the path can be bounded, and
  * `docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md` is why
  * nothing ships that guesses at it — no mechanism can tell a reset token from an
- * order id, and every bound that catches one also lands on `/orders/42`. So the
- * bounding waits on an answer to `secrets-in-url-paths` in
- * `docs/policy/security.md`; the go-live runbook's §10 is the recipe for the
- * `yes` branch.
+ * order id, and every bound that catches one also lands on `/orders/42`.
+ *
+ * **`secrets-in-url-paths` in `docs/policy/security.md` is answered, and the
+ * answer is `yes`**: `GET /admin/enrol/[token]` carries a live credential in a
+ * segment, so that key requires the path be bounded before go-live. This
+ * function is what gets edited when it is; the go-live runbook's §10 is the
+ * recipe.
  */
 function pathnameOf(url: string | undefined): string {
   if (typeof url !== "string" || url.length === 0) return UNKNOWN_ROUTE;
