@@ -23,6 +23,34 @@ the product's one authored motion and stops under `prefers-reduced-motion`; `mot
 `UNSET`, so that is a habit rather than a requirement. Story 11's notices keep their slot above the
 list.
 
+**Amended 2026-09-07 with [#184](https://github.com/m0t0r/recomencemos/issues/184): `/profiles`
+takes the Wall's framing, and the framing is where the two were still saying different things.**
+The amendment above put both surfaces in the same world, and the shared parts carried it — the same
+row, the same ruling, the same margin line, the same one line of Alegreya. What did not travel was
+the geometry _around_ the list, and that is what a reader actually arrives into: `/profiles` held
+everything at `max-w-3xl` while `/` holds a wide column with the rows at a reading measure inside
+it, so following _Ver todos los perfiles_ moved the whole ledger 128 px across a desktop screen.
+Its one sentence over the list was a step larger than the Wall's and sat half the distance below the
+heading, which on a phone is the difference between the first row being reachable and not.
+
+So the section's measurements are now the Wall's `#profiles` section verbatim — the wide column with
+the rows held at `max-w-3xl`, `gap-6` under the heading, `gap-8` over the rows, and the sentence set
+exactly as the Wall's seven-day count is. **The structural thesis is unchanged and this is what it
+was always claiming**: one card component, two orderings, two framings — where "two framings" means
+two _sentences_, one for the newest and one for the whole ledger, and never two page shapes. A person's
+identity should not depend on which list she was reached through, and neither should a reader's sense
+of where he is standing.
+
+Two things this deliberately did **not** touch. The **ordering sentence is the same string**, still
+named once over the list and never on a card — changing it would be a copy decision this amendment
+was not given, and the table below settled it. And the **paging link, the scroll enhancement and the
+count announcement are untouched**: the accessibility tree is byte-identical before and after, which
+is the proof that a change of framing changed no one's reading of the list.
+
+One measurement the amendment does not take from the Wall: vertical rhythm. `/` opens on the cover
+and pads asymmetrically beneath it (`pt-12 pb-4 sm:pt-16`); `/profiles` opens on the shell, so it
+keeps `py-10`, the sheet rhythm `/sign-in` and `/publish` already use.
+
 ## Job and audience
 
 **A Hirer with no account**, arriving cold — from a link someone sent him, from the news, from a

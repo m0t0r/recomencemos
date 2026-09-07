@@ -102,26 +102,57 @@ async function BrowseList({ searchParams }: { readonly searchParams: SearchParam
   );
 }
 
+/**
+ * The framing is the Wall's own, and it is copied deliberately rather than
+ * merely resembling it.
+ *
+ * The two surfaces are one list seen twice — the teaser and the whole ledger —
+ * and until #184 they said so in the copy and denied it in the geometry: this
+ * page held everything at `max-w-3xl`, so arriving from `/` moved the column
+ * 128 px across the screen, and its one sentence over the list was a step
+ * larger than the Wall's and half the distance below the heading. So the
+ * measurements below are the Wall's `#profiles` section verbatim — the wide
+ * column with the rows held at a reading measure inside it, `gap-6` under the
+ * heading, `gap-8` over the rows — and the sentence is set exactly as the
+ * Wall's seven-day count is.
+ *
+ * `py-10` is the one thing not taken from it, and that is not an oversight:
+ * the Wall's asymmetric `pt-12 pb-4 sm:pt-16` exists because the cover sits
+ * immediately above it. This page opens on the shell, so it takes the sheet
+ * rhythm `/sign-in` and `/publish` already use.
+ */
 export default function BrowsePage({ searchParams }: { readonly searchParams: SearchParams }) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
-      <div className="flex flex-col gap-3">
-        <h1 className="page-heading">{BROWSE_TITLE}</h1>
-        <p className="text-muted-foreground max-w-prose text-lg text-pretty">{BROWSE_LEAD}</p>
-      </div>
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-10">
+      <h1 className="page-heading">{BROWSE_TITLE}</h1>
 
       {/* Story 11's two standing notices land here, above the list, as on the Wall. */}
 
-      {/*
-        The escape the Wall does not need: a page of this list that failed still
-        offers the whole list, which is the spec's `error` cell for Browse —
-        "the unfiltered list is still reachable".
-      */}
-      <ListBoundary escape={{ href: "/profiles", label: TO_BROWSE }}>
-        <Suspense fallback={<ProfileListSkeleton />}>
-          <BrowseList searchParams={searchParams} />
-        </Suspense>
-      </ListBoundary>
+      {/* Rows stay at a reading measure; the column is wide so the heading lands where the Wall's does. */}
+      <div className="flex max-w-3xl flex-col gap-8">
+        {/*
+          The ordering, named once, over the list — never on a card, which would
+          label a person by what has not happened to her.
+
+          It sits **above** the boundary rather than inside it, which is where
+          it differs from the Wall's count line: that one is a read and goes
+          when the read fails, while this is a fact about how the list is built
+          and is still true of the list a reader is being offered a second route
+          to. It is the same reason the notice slot above is outside it.
+        */}
+        <p className="text-muted-foreground text-pretty">{BROWSE_LEAD}</p>
+
+        {/*
+          The escape the Wall does not need: a page of this list that failed still
+          offers the whole list, which is the spec's `error` cell for Browse —
+          "the unfiltered list is still reachable".
+        */}
+        <ListBoundary escape={{ href: "/profiles", label: TO_BROWSE }}>
+          <Suspense fallback={<ProfileListSkeleton />}>
+            <BrowseList searchParams={searchParams} />
+          </Suspense>
+        </ListBoundary>
+      </div>
     </main>
   );
 }
