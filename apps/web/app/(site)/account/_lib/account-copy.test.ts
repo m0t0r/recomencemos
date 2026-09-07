@@ -1,45 +1,40 @@
 /**
- * The countable half of `docs/policy/voice.md`, over every string `/account`
- * renders.
+ * The countable half of `docs/policy/voice.md` over every string `/account`
+ * renders, plus the rules that are this surface's alone.
  *
- * The guide says it outright — _"Every rule below is testable against a single
- * sentence of copy. A rule you cannot fail is not a rule."_ — so the rules that
- * are genuinely mechanical are checked here rather than left to a reviewer's
- * eye. What is **not** here is the half no test can reach: whether the care is
- * aimed at the process rather than at the person. That is the boundary rule, it
- * is the load-bearing one, and it is a reading.
+ * The shared cases come from `@/testing/surface-copy`, which is where they live
+ * for every suite. What is added below is what only this surface can be asked:
+ * that the marker names no hardware, that the confirmation says this session
+ * survives, and that an unreadable `User-Agent` degrades to an honest absence.
  *
  * **It reads the module rather than an object inside it**, which is the one way
- * this file differs from its seven siblings. They each group their strings into
- * a `*_COPY` object and test that; this module was written as named exports
- * before the convention settled, and reflecting over the namespace covers a
- * string added tomorrow without anyone remembering to add it to a list. What it
- * costs is that a string's role — body or label — cannot be read off the shape,
- * so the two ceilings are applied from the names below.
+ * this file differs from its siblings. They each group their strings into a
+ * `*_COPY` object and pass that; this module was written as named exports before
+ * the convention settled, and reflecting over the namespace covers a string
+ * added tomorrow without anyone remembering to add it to a list. What it costs
+ * is that a string's role — body or label — cannot be read off the shape, so the
+ * label set is named below and asserted to be complete.
+ *
+ * Every string here is rendered by something. `FEEDBACK_REGION_LABEL` was the
+ * exception until it was wired to the live region it was written for, and a
+ * string put under the voice rules while nobody reads it is copy nobody could
+ * correct by looking at the product.
  */
 
-import {
-  EMPTY_LINK_TEXT,
-  LABEL_WORD_CEILING,
-  NEVER_SAY,
-  sentencesOf,
-  SENTENCE_WORD_CEILING,
-  shoutedWords,
-  wordCount,
-} from "@/testing/voice";
+import { describeSurfaceCopy } from "@/testing/surface-copy";
 import * as messages from "./messages";
 
 /**
- * The two strings a person reads that are built rather than declared. Both are
- * counted, and the count is the whole reason they take an argument, so each is
+ * The strings a person reads that are built rather than declared. Both take a
+ * count, and the count is the whole reason they are functions, so each is
  * exercised in both of its forms.
  */
-const BUILT_LABELS: readonly [string, string][] = [
+const BUILT_LABELS: readonly (readonly [string, string])[] = [
   ["closeOthersButton(1)", messages.closeOthersButton(1)],
   ["closeOthersButton(2)", messages.closeOthersButton(2)],
 ];
 
-const BUILT_COPY: readonly [string, string][] = [
+const BUILT_COPY: readonly (readonly [string, string])[] = [
   ["closedOthers(1)", messages.closedOthers(1)],
   ["closedOthers(2)", messages.closedOthers(2)],
 ];
@@ -65,52 +60,18 @@ const declared: readonly [string, string][] = Object.entries(messages).flatMap((
   typeof value === "string" ? [[name, value] as [string, string]] : [],
 );
 
-const copy = [...declared, ...BUILT_COPY, ...BUILT_LABELS];
+const labels = [...declared.filter(([name]) => LABEL_NAMES.has(name)), ...BUILT_LABELS];
 
-describe.each(copy)("%s", (_name, value) => {
-  it("is not empty", () => {
-    expect(value.trim().length).toBeGreaterThan(0);
-  });
+describeSurfaceCopy({ copy: [...declared, ...BUILT_COPY, ...BUILT_LABELS], labels });
 
-  it("has no ALL CAPS word", () => {
-    expect(shoutedWords(value)).toEqual([]);
-  });
-
-  it("carries no exclamation mark", () => {
-    expect(value).not.toContain("!");
-    expect(value).not.toContain("¡");
-  });
-
-  it.each(NEVER_SAY)("does not say %o", (banned) => {
-    expect(value.toLowerCase()).not.toContain(banned);
-  });
-
-  it.each(EMPTY_LINK_TEXT)("does not say %o", (phrase) => {
-    expect(value.toLowerCase()).not.toContain(phrase);
-  });
-
-  // A promise the platform cannot make, in either construction — and this is the
-  // surface most likely to reach for it, because she may be here worried.
-  it("does not say seguro", () => {
-    expect(value.toLowerCase()).not.toMatch(/\bsegur[oa]\b/);
-  });
-
-  it("keeps every sentence to twenty words", () => {
-    for (const sentence of sentencesOf(value)) {
-      expect(wordCount(sentence)).toBeLessThanOrEqual(SENTENCE_WORD_CEILING);
-    }
-  });
-});
-
-describe("labels", () => {
-  const labels = [...declared.filter(([name]) => LABEL_NAMES.has(name)), ...BUILT_LABELS];
-
-  it("covers every name the ceiling is meant for", () => {
+describe("the label set", () => {
+  /**
+   * The one thing namespace reflection cannot do for itself: a label renamed in
+   * `messages.ts` would silently drop out of the five-word ceiling and stay in
+   * the body cases, where twenty words are allowed.
+   */
+  it("names every label the module declares", () => {
     expect(labels.map(([name]) => name)).toHaveLength(LABEL_NAMES.size + BUILT_LABELS.length);
-  });
-
-  it.each(labels)("%s is five words or fewer", (_name, value) => {
-    expect(wordCount(value)).toBeLessThanOrEqual(LABEL_WORD_CEILING);
   });
 });
 
