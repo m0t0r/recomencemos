@@ -11,8 +11,9 @@ import { userEvent } from "@testing-library/user-event";
 // Like button.test.tsx this covers the seam rather than shadcn's code, and it is
 // the reason the environment is happy-dom rather than the jsdom Next's docs
 // prescribe: a portal plus a real user-event click is where a DOM environment
-// actually breaks, and downstream will test Dialog, Popover and Select long
-// before it tests Button. If happy-dom ever stops handling Base UI, this says so.
+// actually breaks, and this product's surfaces reach Dialog, Popover and Select
+// long before anything stresses Button. If happy-dom ever stops handling Base UI,
+// this says so.
 
 describe("Dialog", () => {
   it("opens into a portal", async () => {

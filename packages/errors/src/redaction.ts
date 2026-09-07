@@ -15,9 +15,9 @@ export const REDACTED = "[redacted]";
  * The shipped key names, **not** exported.
  *
  * Parity between the consumers is proved by running them over one input, never
- * by exporting a constant a downstream project would pin — an exported list is a
- * shape you can no longer change, and redaction lists only ever grow. What this
- * module publishes instead are two *derivations*: {@link isRedactedKey} and
+ * by exporting a constant something else could pin — an exported list is a shape
+ * you can no longer change, and redaction lists only ever grow. What this module
+ * publishes instead are two *derivations*: {@link isRedactedKey} and
  * {@link redactionPaths}. Both hand over the decision without handing over the
  * list.
  *
@@ -26,10 +26,10 @@ export const REDACTED = "[redacted]";
  * a generated path. The guarantee is that no *constant* is published — there is
  * nothing to import, pin, filter or spread, so adding a name breaks nobody.
  *
- * The list is **advisory**. It is a floor a project raises, and no test asserts
- * that these names are sufficient, because asserting that would encode a
- * guarantee nobody can make. What the tests assert is that the mechanism works
- * on the names that ship.
+ * The list is **advisory**. It is a floor, raised in place as this product
+ * learns of a field worth scrubbing, and no test asserts that these names are
+ * sufficient, because asserting that would encode a guarantee nobody can make.
+ * What the tests assert is that the mechanism works on the names that ship.
  *
  * Stored as **literal spellings**, not normalised, because the two derived
  * matchers need different things from them — see {@link redactionPaths}.

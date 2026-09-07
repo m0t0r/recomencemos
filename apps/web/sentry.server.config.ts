@@ -27,9 +27,9 @@ Sentry.init({
   // Explicit rather than inherited, on the server for the same reason as on the
   // browser: the wizard-generated config sets this `true`, which sends IP
   // address, cookies and headers — every one of them `personal` under
-  // `docs/policy/data.md` — to a processor no downstream project chose. It is
-  // already `false` by default in 10.70.0; pinning it is what stops a wizard
-  // re-run or an SDK default quietly flipping it.
+  // `docs/policy/data.md` — to a processor chosen to receive errors and nothing
+  // else. It is already `false` by default in 10.70.0; pinning it is what stops
+  // a wizard re-run or an SDK default quietly flipping it.
   //
   // Not migrated to `dataCollection` on purpose: supplying that object at all
   // switches the SDK's baseline from the privacy-preserving mapping this flag

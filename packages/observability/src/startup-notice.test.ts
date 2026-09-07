@@ -41,7 +41,7 @@ describe("logStartupNotice", () => {
     expect(lines()[0]?.level).toBe("warn");
   });
 
-  it("names the variable to set, because the reader is evaluating a template", () => {
+  it("names the variable to set, not only that something is unset", () => {
     const { logger, lines } = harness();
 
     logStartupNotice({ NODE_ENV: "development" }, logger);

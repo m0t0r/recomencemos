@@ -30,9 +30,9 @@ assertServerOnly("logger");
  * whichever request filled the entry; the prerender check is the same boundary
  * enforced by the framework rather than by convention. The log sites this effort
  * actually ships — `instrumentation.ts`, Route Handlers, Server Actions — are
- * all past that boundary, so none of them hit it. A downstream project adding a
- * log call to a prerendering component will, and the fix is `await connection()`
- * or `"use cache"`-free dynamic rendering, not a change here.
+ * all past that boundary, so none of them hit it. A log call added later to a
+ * component that prerenders will, and the fix is `await connection()` or
+ * `"use cache"`-free dynamic rendering, not a change here.
  *
  * The durable home for this rule is the root `CLAUDE.md`, under "Logging and
  * errors", where it sits beside DD1's other two. It is repeated here because
@@ -48,9 +48,9 @@ assertServerOnly("logger");
  * path. Constructing the printer as a stream removes the worker entirely, which
  * answers the question structurally rather than with a promise to be careful.
  *
- * `sync: true` is right at template scale. Revisit it above roughly 1000
- * lines/sec/instance, where a blocked event loop costs more than the last few
- * lines lost to a hard crash.
+ * `sync: true` is right at the volume this product writes. Revisit it above
+ * roughly 1000 lines/sec/instance, where a blocked event loop costs more than
+ * the last few lines lost to a hard crash.
  *
  * `pino-pretty` is imported statically even though production never takes this
  * branch, and that cost is accepted knowingly. A lazy `createRequire` would save

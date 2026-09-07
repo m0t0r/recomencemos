@@ -57,13 +57,14 @@ const READER = Symbol.for("repo.errors.ambientRequestIdReader");
  * that is itself compromised or merely wrong — and the value reaches the pretty
  * stdout stream an agent reads and acts on, where a newline or a quote is the
  * whole attack. A length bound alone admits both. So the charset is checked
- * rather than assumed: letters, digits, `-` and `_`, which is every id format a
- * downstream project is likely to mint (a UUID, a ULID, a nanoid, a request id
- * from a load balancer) and none of the characters that would let a value break
- * out of the line it is written on.
+ * rather than assumed: letters, digits, `-` and `_`, which covers every id
+ * format this product could plausibly adopt (a UUID, a ULID, a nanoid, a request
+ * id from a load balancer) and none of the characters that would let a value
+ * break out of the line it is written on.
  *
  * Deliberately not "must be a UUID": this bounds what a value may *contain*
- * without dictating what a downstream project's ids look like.
+ * without fixing the shape of the ids, which is a choice the request path makes
+ * and this module has no reason to constrain.
  */
 const SAFE_IDENTIFIER = /^[A-Za-z0-9_-]+$/;
 
