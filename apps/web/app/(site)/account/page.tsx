@@ -5,23 +5,22 @@
  * (`## UX design`, the Account row). Mode is **Operate**: nobody wants to spend
  * time here, so scanability and familiar affordances outrank expression.
  *
+ * **A sheet on the ruled page, not a card on a grey field.** The page is paper
+ * at `/my-profile`'s measure — the two signed-in personal surfaces share one —
+ * and the sessions are rows of one sheet, separated by the ruling with the rose
+ * margin line beside them from `sm` up. The `Card` on `bg-muted` this replaced
+ * was the last card-on-a-field left in the product, and it is the idiom the
+ * visual world was chosen against.
+ *
  * **This is the shell later tickets extend.** Email change and deletion (#29)
  * become further sections in this column; the section shape and the copy module
  * are what they inherit.
- *
- * **What is deliberately absent, because it belongs to #80:** every piece of
- * navigation, the signed-in identity chrome, and _salir_ — single-session
- * sign-out. Until that ticket lands this page is reachable only by typing its
- * URL, which is the gap #80 exists to close and is stated on this ticket's PR
- * rather than papered over with a second sign-out control here.
  *
  * **`noindex`.** `/account*` is on NFR8's list, so this carries both halves —
  * the `<meta>` below and the `X-Robots-Tag` header from `next.config.ts`, whose
  * route list `robots.test.ts` drives.
  */
 
-import { Card } from "@repo/design-system/components/card";
-import { Separator } from "@repo/design-system/components/separator";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
@@ -81,67 +80,97 @@ async function AccountPanel() {
   const otherCount = views.filter((view) => !view.current).length;
 
   return (
-    <Card className="flex w-full flex-col gap-6 p-6 sm:p-8">
+    <Section>
       {/*
-        **The heading and nothing under it.** The address used to sit here as a
-        subtitle, and the shell's session menu shows it too — so a signed-in
-        person met it twice on one screen, once as chrome and once as page copy.
-        The menu is the better of the two homes: it is on *every* page, it is
-        where a borrowed-phone check is already made (`SIGNED_IN_AS`), and it is
-        the thing the avatar in the corner is for. Repeating it here said nothing
-        the corner of the same screen was not already saying.
+        Evidence first, control after — never the other way round. Both are rows
+        of the same ruled page, so the note and the button continue the list's
+        rhythm rather than sitting under it as separate blocks.
       */}
-      <h1 className="page-heading">{ACCOUNT_TITLE}</h1>
-
-      <Separator />
-
-      <section className="flex flex-col gap-4" aria-labelledby="sessions-heading">
-        <div className="flex flex-col gap-1">
-          <h2 id="sessions-heading" className="text-foreground text-lg font-semibold">
-            {SESSIONS_HEADING}
-          </h2>
-          <p className="text-muted-foreground text-sm text-pretty">{SESSIONS_EXPLANATION}</p>
-        </div>
-
-        {/* Evidence first, control after — never the other way round. */}
+      <div className="ruled-page">
         <SessionList sessions={views} />
         <SessionsPanel otherCount={otherCount} />
-      </section>
-    </Card>
+      </div>
+    </Section>
   );
 }
 
 /**
- * The fallback holds the panel's shape rather than showing a spinner, so nothing
- * moves when the real thing resolves. Same wrappers and same `Card` as
- * `AccountPanel`, so the two cannot drift apart in outline.
+ * The heading and the sentence under it, which are the same in the fallback and
+ * in the resolved panel — so they are written once, here, rather than in two
+ * files kept in agreement by a comment saying they must be.
+ *
+ * The `<h2>` is in the display face at the 24 px step, which is the step
+ * `/my-profile`'s tier headings carry. Neither is the page's own heading, and
+ * both are the platform naming a region rather than her own words.
  */
-function PanelSkeleton() {
+function Section({ children }: { readonly children: React.ReactNode }) {
   return (
-    <Card className="flex w-full flex-col gap-6 p-6 sm:p-8" aria-hidden="true">
-      <Skeleton className="h-8 w-40" />
-      <Separator />
+    <section className="flex flex-col gap-6" aria-labelledby="sessions-heading">
       <div className="flex flex-col gap-2">
-        <Skeleton className="h-6 w-44" />
-        <Skeleton className="h-4 w-full" />
+        <h2
+          id="sessions-heading"
+          className="font-heading text-foreground text-2xl leading-8 font-medium"
+        >
+          {SESSIONS_HEADING}
+        </h2>
+        <p className="text-muted-foreground text-sm text-pretty">{SESSIONS_EXPLANATION}</p>
       </div>
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-      </div>
-      <Skeleton className="h-9 w-44" />
-    </Card>
+      {children}
+    </section>
   );
 }
 
+/**
+ * The fallback holds the list's shape rather than showing a spinner, so nothing
+ * moves when the real thing resolves — three rows and a control, on the same
+ * ruled page the resolved panel is drawn on.
+ */
+function PanelSkeleton() {
+  return (
+    <Section>
+      <div className="ruled-page" aria-hidden="true">
+        {[0, 1, 2].map((row) => (
+          <div
+            key={row}
+            className="border-border flex flex-col gap-2 border-t py-4 first:border-t-0"
+          >
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-4 w-40" />
+          </div>
+        ))}
+        <div className="border-border border-t pt-5">
+          <Skeleton className="h-9 w-44" />
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * The sheet, and the one line of display type on it.
+ *
+ * The `<h1>` sits **above** the boundary rather than inside the panel: it
+ * depends on neither the session nor the query string, so it paints with the
+ * shell instead of waiting behind a read it does not need. It is the shape
+ * `/sign-in` and `/publish` already use, down to the `px-4 py-10` — one spacing
+ * rhythm across the product's sheets.
+ */
 export default function AccountPage() {
   return (
-    <main className="bg-muted flex grow flex-col items-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <Suspense fallback={<PanelSkeleton />}>
-          <AccountPanel />
-        </Suspense>
-      </div>
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
+      {/*
+        **The heading and nothing under it.** Her address used to sit here as a
+        subtitle, and the shell's session menu shows it too — so a signed-in
+        person met it twice on one screen, once as chrome and once as page copy.
+        The menu is the better of the two homes: it is on *every* page, it is
+        where a borrowed-phone check is already made (`SIGNED_IN_AS`), and it is
+        the thing the avatar in the corner is for.
+      */}
+      <h1 className="page-heading">{ACCOUNT_TITLE}</h1>
+
+      <Suspense fallback={<PanelSkeleton />}>
+        <AccountPanel />
+      </Suspense>
     </main>
   );
 }
