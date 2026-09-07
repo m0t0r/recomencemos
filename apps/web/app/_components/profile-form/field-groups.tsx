@@ -15,6 +15,19 @@
  * What each surface keeps for itself is what is genuinely its own: the consent
  * step, the button's verb, and where the form goes on success.
  *
+ * **Since #181 a group's legend is set in the display face** — variant A
+ * (_Renglones_), locked from `/prototype` UI on the two real routes; the four
+ * richer treatments live on `prototype/181-ui-variants`. That is the whole of
+ * what the notebook world asks of this form, and the restraint is the decision
+ * rather than a shortfall: `DESIGN.md` says the contrast between the two faces
+ * *is* the hierarchy of the product — what she wrote, and what the platform
+ * wrote — and everything a person **operates** stays in Inter. A form set in
+ * the display face would be a form asking to be admired.
+ *
+ * The groups already sit on rulings: a `<Separator />` paints `bg-border`,
+ * which is the ruling token, so what divides two groups here is the same line
+ * that divides two rows on the Wall.
+ *
  * **Each `<FieldSet>` takes an `id`, and nothing links to one yet.** They are a
  * declared constant rather than strings written twice because the thing that
  * would use them is a `/prototype` UI variant on `prototype/142-ui-variants` —
@@ -78,6 +91,22 @@ export const FIELD_GROUP_IDS = {
   more: "more",
 } as const;
 
+/**
+ * A group legend, in the display face at the 24 px step — the step
+ * `/my-profile`'s tier headings already sit on, so the four groups she fills in
+ * and the three sheets she then reads carry the same weight.
+ *
+ * **`text-2xl!`, and the `!` is load-bearing rather than lazy.** The registry
+ * sizes a legend through `data-[variant=legend]:text-base`, which is an
+ * attribute selector and therefore outranks a plain `text-2xl` however the two
+ * are ordered — without it the face changed to Alegreya and the size silently
+ * stayed at 16 px. Measured off the running page, not assumed. Restating the
+ * same `data-` selector here would tie on specificity and leave the winner to
+ * Tailwind's own sort order, which is not a thing to depend on; and editing
+ * `field.tsx` is out, because `shadcn add --overwrite` replaces it wholesale.
+ */
+const LEGEND_CLASS = "font-heading text-foreground mb-2 text-2xl! leading-8 font-medium";
+
 export interface ProfileFieldGroupsProps {
   readonly form: ProfileFieldsForm;
   readonly machine: ProfileFormMachine;
@@ -102,7 +131,7 @@ export function ProfileFieldGroups({
   return (
     <FieldGroup>
       <FieldSet id={FIELD_GROUP_IDS.capability}>
-        <FieldLegend>{CAPABILITY_LEGEND}</FieldLegend>
+        <FieldLegend className={LEGEND_CLASS}>{CAPABILITY_LEGEND}</FieldLegend>
         <FieldDescription>{CAPABILITY_VISIBILITY}</FieldDescription>
         <form.Field name="skillSlugs" validators={{ onSubmit: skillSlugsField }}>
           {(field) => (
@@ -132,7 +161,7 @@ export function ProfileFieldGroups({
       <Separator />
 
       <FieldSet id={FIELD_GROUP_IDS.identity}>
-        <FieldLegend>{IDENTITY_LEGEND}</FieldLegend>
+        <FieldLegend className={LEGEND_CLASS}>{IDENTITY_LEGEND}</FieldLegend>
         <FieldDescription>{IDENTITY_VISIBILITY}</FieldDescription>
         <div className="grid gap-6 sm:grid-cols-[1fr_auto]">
           <TextField
@@ -175,7 +204,7 @@ export function ProfileFieldGroups({
       <Separator />
 
       <FieldSet id={FIELD_GROUP_IDS.contact}>
-        <FieldLegend>{CONTACT_LEGEND}</FieldLegend>
+        <FieldLegend className={LEGEND_CLASS}>{CONTACT_LEGEND}</FieldLegend>
         <FieldDescription>{CONTACT_VISIBILITY}</FieldDescription>
         <TextField
           form={form}
@@ -194,7 +223,7 @@ export function ProfileFieldGroups({
       <Separator />
 
       <FieldSet id={FIELD_GROUP_IDS.more}>
-        <FieldLegend>{MORE_LEGEND}</FieldLegend>
+        <FieldLegend className={LEGEND_CLASS}>{MORE_LEGEND}</FieldLegend>
         <FieldDescription>{MORE_VISIBILITY}</FieldDescription>
         <AboutField form={form} id={idFor("about")} serverError={serverErrorFor("about")} />
         <WorkHistoryFields

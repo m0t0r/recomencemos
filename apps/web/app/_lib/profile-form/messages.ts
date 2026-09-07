@@ -168,7 +168,17 @@ export const REMOVE_WORK_HISTORY_BUTTON = "Quitar";
 export const PHOTO_NOTE =
   "La foto la subes después de publicar. Tu perfil queda publicado sin ella.";
 
-/** Variant B's card heading: what a stranger sees, as she types it. */
+/**
+ * Variant B's card heading: what a stranger sees, as she types it.
+ *
+ * **Written for #16's variant B, and still unrendered after #181 reconsidered
+ * it.** Three of that ticket's five treatments closed the page on `ProfileCard`
+ * fed from the live form — the same component `/my-profile` renders, never a
+ * second card — and the owner picked the treatment without one. So this stays a
+ * string with no render site, deliberately: the work exists on
+ * `prototype/181-ui-variants` and is one decision away, and deleting the
+ * sentence would only mean writing it again.
+ */
 export const PREVIEW_HEADING = "Así te ve todo el mundo";
 
 /** The button says the verb of its action. Three words. */
