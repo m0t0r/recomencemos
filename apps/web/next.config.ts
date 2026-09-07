@@ -1,5 +1,8 @@
 import path from "node:path";
-import { withSentryConfig } from "@sentry/nextjs";
+// `@sentry/nextjs/config` and not `@sentry/nextjs`: the root entry still
+// re-exports this, but 10.73.0 deprecates that path and prints a warning on
+// every `next build` and `check-types`. It stops working in v11.
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 import { gatedRouteHeaders } from "./lib/gated-routes";
 

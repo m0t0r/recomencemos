@@ -33,7 +33,7 @@
     "@react-email/components": "^1.0.12",
     "@repo/errors": "workspace:*",
     "react": "^19.2.8",
-    "resend": "^6.24.0"
+    "resend": "^6.26.0"
   },
   "devDependencies": {
     "@react-email/ui": "6.9.3",
