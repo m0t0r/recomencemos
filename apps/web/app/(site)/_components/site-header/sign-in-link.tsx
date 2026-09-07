@@ -23,7 +23,7 @@
  * for hydration; nothing here is interactive and nothing is deferred.
  */
 
-import { buttonVariants } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SIGN_IN } from "./messages";

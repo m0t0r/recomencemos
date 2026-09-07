@@ -18,7 +18,7 @@
  * nothing about it looks different.
  */
 
-import { buttonVariants } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import {
   Empty,
   EmptyContent,

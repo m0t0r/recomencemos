@@ -21,7 +21,7 @@
  * there to press. Silence plus a spinner is what this must never become.
  */
 
-import { buttonVariants } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import type { PublicProfile } from "@repo/domain/profiles";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";

@@ -12,7 +12,7 @@
  */
 
 import { AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
-import { buttonVariants } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import { cityLabel, formatColombianPhone } from "@repo/domain/policy";
 import type { OwnProfile } from "@repo/domain/profiles";
 import { DoorOpenIcon, GlobeIcon, LockKeyholeIcon, type LucideIcon } from "lucide-react";

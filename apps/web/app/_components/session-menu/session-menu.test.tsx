@@ -228,3 +228,52 @@ describe("no auth client reaches the browser", () => {
     }
   });
 });
+
+/**
+ * **The popup stack stays off the first load, asserted over the source for the
+ * same reason the block above is.**
+ *
+ * `dropdown-menu` is Base UI's `Menu`, and `Menu` pulls floating-ui with the
+ * positioner, the focus guards and the scroll lock — 52.6 KB gzip, measured, on
+ * the first load of every route below a layout that renders this header. The
+ * deferral in `session-menu-deferred.tsx` is what takes it off, and a static
+ * import put back in `AppHeader` would put it straight back with every case
+ * above still green and the page still looking identical. Nothing a browser can
+ * be driven to do would show it either; the tell is an `import`.
+ *
+ * The cases below are one seam apart: the first is what the byte measurement
+ * depends on, the second is what the no-JavaScript story depends on.
+ */
+describe("the menu arrives in its own chunk", () => {
+  it("is reached from the header through the loader, never imported directly", () => {
+    // A specifier ending in `/session-menu` and nothing else: the sibling modules
+    // `/session-menu/no-script` and `/session-menu-deferred` are different files
+    // and are both fine to import.
+    const valueImport = /import\s+(?!type\b)[^;]*?from\s+["'][^"']*\/session-menu["']/;
+
+    const header = readFileSync(
+      join(import.meta.dirname, "..", "app-header", "app-header.tsx"),
+      "utf8",
+    );
+
+    expect(header).not.toMatch(valueImport);
+  });
+
+  it("still server-renders, which is what keeps the no-JavaScript way out reachable", () => {
+    // `ssr: false` measures identically and would leave the fallback submit
+    // button unrendered — so *Salir* would be unreachable with scripting
+    // disabled, which is the one state nobody looks at.
+    //
+    // **Read with the comments taken out**, because the paragraph in that file
+    // explaining why the option is not used says `ssr: false` in prose. The strip
+    // is naive — a `/*` inside a string literal would swallow the code after it —
+    // and it is safe here only because the file's two string literals are import
+    // specifiers. It is one file, not a tree, so that is checkable by looking.
+    const loader = readFileSync(join(import.meta.dirname, "session-menu-deferred.tsx"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+
+    expect(loader).toMatch(/dynamic\(/);
+    expect(loader).not.toMatch(/ssr:\s*false/);
+  });
+});

@@ -29,7 +29,7 @@
  * `gated-routes.test.ts` asserts that it stays off it.
  */
 
-import { buttonVariants } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import { profiles } from "@repo/domain/profiles";
 import Link from "next/link";
 import { connection } from "next/server";

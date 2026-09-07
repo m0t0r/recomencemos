@@ -25,7 +25,8 @@
  * module the two route-level boundaries use — one focus protocol, not three.
  */
 
-import { Button, buttonVariants } from "@repo/design-system/components/button";
+import { Button } from "@repo/design-system/components/button";
+import { buttonVariants } from "@repo/design-system/components/button-variants";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Component, type ReactNode } from "react";
