@@ -163,12 +163,18 @@ generic label rather than an empty row.
 `es-CO` date and time formats — _10 de agosto de 2026_, _3:40 p. m._ — never `08/10/2026`. Light
 only.
 
-**Registry components where the registry has the thing, and the product's own list idiom where it
-does not** (amended #183). `Button`, `Skeleton` and `Separator` — the ruling — cover this surface and
-nothing needs adding. `Card`, `Item` and `Alert` are deliberately absent: the first two draw a
-container the ruled page replaces, and the third draws a box around a note that is now marked and
-ruled. `profile-row.tsx` is the prior art for all three, and `REVIEW.md`'s registry-equivalents pass
-is what this paragraph answers in advance.
+**Registry components where the registry has the thing, and the product's own idiom where it does
+not** (amended #183). `Button`, `Skeleton` and `Separator` — the ruling — cover this surface and
+nothing needs adding. `Card`, `Item` and `Alert` are deliberately absent, each with prior art rather
+than an argument: `Card` and the `Item` group draw a container the ruled page replaces, and
+`profile-row.tsx` is how a row is drawn without one; `Alert` draws a box around a note that is now a
+mark over a ruling, and `sign-in-form.tsx`'s feedback region is how that is drawn. `REVIEW.md`'s
+registry-equivalents pass is what this paragraph answers in advance.
+
+**`Alert` is still the note on three other `(site)` surfaces**, so the product now carries two note
+shapes — the boxed one and the ruled one. That is a real inconsistency and it is recorded rather than
+resolved here: which shape wins is a decision for the surface that next touches one of the three, not
+something `/account` may settle on their behalf.
 
 **Two findings from Better Auth 1.7.1, read out of `dist/api/routes/session.mjs` rather than
 recalled. Both change the implementation, and a builder must not rediscover them the hard way:**

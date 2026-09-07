@@ -32,7 +32,7 @@ import { InfoIcon, TriangleAlertIcon } from "lucide-react";
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { signOutEverywhere } from "../actions";
-import { closeOthersButton, ONLY_THIS_SESSION } from "../_lib/messages";
+import { closeOthersButton, FEEDBACK_REGION_LABEL, ONLY_THIS_SESSION } from "../_lib/messages";
 
 type Result = Awaited<ReturnType<typeof signOutEverywhere>>;
 
@@ -90,6 +90,12 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
         one some screen readers never announce at all. It is here from the first
         paint now, and the note is swapped into it — the shape `/sign-in` uses.
 
+        **It is named, and `FEEDBACK_REGION_LABEL` is what names it.** That
+        string was written for this element — *"where the announcement lands,
+        named for a screen reader rather than for a sighted reader"* — and had
+        never been wired to anything, so the region a person landed in had no
+        name at all. It is not visible text: a sighted reader has the sentence.
+
         `role="status"` is polite rather than assertive, and the override is the
         point: `alert` interrupts whatever a screen reader is saying, and this is
         the result of something she just asked for.
@@ -105,6 +111,7 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- see above.
         role="status"
         aria-live="polite"
+        aria-label={FEEDBACK_REGION_LABEL}
         // Focusable programmatically but not in the tab order: a destination for
         // focus after an outcome, never a stop on the way to the button.
         tabIndex={-1}

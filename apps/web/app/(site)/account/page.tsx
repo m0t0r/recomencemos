@@ -21,6 +21,7 @@
  * route list `robots.test.ts` drives.
  */
 
+import { Separator } from "@repo/design-system/components/separator";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
@@ -80,7 +81,7 @@ async function AccountPanel() {
   const otherCount = views.filter((view) => !view.current).length;
 
   return (
-    <Section>
+    <SessionsSection>
       {/*
         Evidence first, control after — never the other way round. Both are rows
         of the same ruled page, so the note and the button continue the list's
@@ -90,7 +91,7 @@ async function AccountPanel() {
         <SessionList sessions={views} />
         <SessionsPanel otherCount={otherCount} />
       </div>
-    </Section>
+    </SessionsSection>
   );
 }
 
@@ -103,7 +104,7 @@ async function AccountPanel() {
  * `/my-profile`'s tier headings carry. Neither is the page's own heading, and
  * both are the platform naming a region rather than her own words.
  */
-function Section({ children }: { readonly children: React.ReactNode }) {
+function SessionsSection({ children }: { readonly children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-6" aria-labelledby="sessions-heading">
       <div className="flex flex-col gap-2">
@@ -124,25 +125,32 @@ function Section({ children }: { readonly children: React.ReactNode }) {
  * The fallback holds the list's shape rather than showing a spinner, so nothing
  * moves when the real thing resolves — three rows and a control, on the same
  * ruled page the resolved panel is drawn on.
+ *
+ * **It is drawn with the same parts as the thing it stands in for**, which is
+ * the only way a fallback stays in agreement with it: `Separator` for the rule
+ * the way `SessionList` and `profile-list/skeleton.tsx` both draw it, and bars
+ * on the two rows' own leadings — 24 px for the device name at the body step,
+ * 20 px for the meta line at the small one, separated by the row's own `gap-0.5`.
+ * A bar at some other height is a layout shift specified in advance.
  */
 function PanelSkeleton() {
   return (
-    <Section>
+    <SessionsSection>
       <div className="ruled-page" aria-hidden="true">
-        {[0, 1, 2].map((row) => (
-          <div
-            key={row}
-            className="border-border flex flex-col gap-2 border-t py-4 first:border-t-0"
-          >
-            <Skeleton className="h-5 w-48" />
-            <Skeleton className="h-4 w-40" />
+        {[0, 1, 2].map((row, index) => (
+          <div key={row}>
+            {index > 0 ? <Separator /> : null}
+            <div className="flex flex-col gap-0.5 py-4">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-5 w-40" />
+            </div>
           </div>
         ))}
         <div className="border-border border-t pt-5">
           <Skeleton className="h-9 w-44" />
         </div>
       </div>
-    </Section>
+    </SessionsSection>
   );
 }
 
