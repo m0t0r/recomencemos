@@ -158,16 +158,43 @@ run_proof "and it names every missing variable"  1 "UI_PROOF_PUBLIC_BASE" "$D" p
 # section 5 of `docs/runbooks/ui-proof-artifacts.md`, checked once by a human,
 # because signing does not drift.
 
+# A process and everything it forked, youngest first. `kill` reaches one process,
+# and the publisher's children are two levels down -- the fake `gh`, and the `cat`
+# inside it that this whole section exists because of. Killing the publisher alone
+# left both of those running, which review caught by looking for them rather than
+# by trusting the kill.
+kill_tree() { # pid
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
+  kill -9 "$pid" 2>/dev/null
+  return 0
+}
+
 # A subprocess that blocks is the failure mode this section is arranged against,
 # and it has arrived twice. `timeout(1)` is GNU coreutils and is not on a stock
 # macOS, so the deadline is here: the command runs in the background, is polled,
-# and is killed at the limit. 124 is the code `timeout(1)` reports, kept so the
-# number means the same thing to a reader who knows that tool.
+# and its whole tree is killed at the limit. 124 is the code `timeout(1)` reports,
+# kept so the number means the same thing to a reader who knows that tool.
 #
 # The point is that a wedged publisher costs this suite a bounded number of
 # seconds rather than a CI job's whole timeout -- a case that hangs is worse than
 # no case, because a red suite tells you something and a suite that never returns
 # tells you nothing.
+#
+# **The budget is deliberately far above the work, and both numbers are
+# measured.** This file takes 4-5 s on its own and the same beside every other
+# gate file -- the suite's 18 s wall clock is the slowest file, not this one --
+# so a publish is a couple of seconds and 120 is about sixty times it. That
+# absorbs a CI runner several times slower than the machine those figures came
+# from, and still caps a wedged run at minutes rather than at a job's timeout.
+#
+# A false red needed **four concurrent gate suites** to produce, which is several
+# times the load `pnpm test` actually applies. The other half of the answer is
+# that a 124 is reported as *the deadline*, not as an exit code: a hang and a
+# refusal are different findings, and a reader should not have to know which
+# number is which to tell them apart.
+DEADLINE=120
+
 with_deadline() { # seconds cmd... -> echoes the exit code, or 124
   local limit="$1"
   shift
@@ -175,7 +202,7 @@ with_deadline() { # seconds cmd... -> echoes the exit code, or 124
   local pid=$! ticks=0
   while kill -0 "$pid" 2>/dev/null; do
     if [ "$ticks" -ge "$((limit * 10))" ]; then
-      kill -9 "$pid" 2>/dev/null
+      kill_tree "$pid"
       wait "$pid" 2>/dev/null
       echo 124
       return 0
@@ -187,11 +214,37 @@ with_deadline() { # seconds cmd... -> echoes the exit code, or 124
   echo $?
 }
 
-# Every stub this file starts, so the trap can end them all. A background server
-# outliving the suite is a held port and a leaked process on a developer's
-# machine, and on a failing run it is the run that failed that leaks it.
+# Every stub this file starts. A background server outliving the suite is a held
+# port and a leaked process on a developer's machine, and on a failing run it is
+# the run that failed that leaks it.
+#
+# `proof_stop` at the end of a section is the mechanism and the trap is the
+# backstop, rather than the other way round: a trap only runs when the file ends,
+# so a stub started in the first section stayed up through the second, which is
+# what review saw when it went looking for one.
+#
+# **The trap is guarded on the shell that set it.** Bash runs an `EXIT` trap when
+# a subshell exits too, and this file reads exit codes out of command
+# substitutions -- so on a bash that does (4.0 and later; the macOS 3.2 this was
+# written on does not) an unguarded trap would kill the stub at the first
+# `PORT=$(cat …)`, before a single upload. `BASHPID` differs in a subshell and is
+# absent before 4.0, where `$$` is the right answer for both sides.
 STUBS=""
-trap 'for stub in $STUBS; do kill "$stub" 2>/dev/null; done' EXIT
+PROOF_SHELL=${BASHPID:-$$}
+
+proof_stop() { # -- ends every stub this file started
+  local stub
+  for stub in $STUBS; do
+    kill_tree "$stub"
+    wait "$stub" 2>/dev/null
+  done
+  STUBS=""
+  return 0
+}
+
+# `INT` and `TERM` as well as `EXIT`: a suite somebody interrupted is the run
+# most likely to leave a server behind, because it is the one nobody is watching.
+trap '[ "${BASHPID:-$$}" = "$PROOF_SHELL" ] && proof_stop' EXIT INT TERM
 
 # **Not callable in a command substitution.** The stub's pid would be set in a
 # subshell the caller cannot reach, so nothing would ever kill it and the suite
@@ -266,7 +319,7 @@ STUB
 proof_publish() { # dir port [arguments...] -> echoes the exit code
   local d="$1" port="$2"
   shift 2
-  with_deadline 60 \
+  with_deadline "$DEADLINE" \
     env PATH="$d/bin:$PATH" \
       GH_LOG="$d/gh.log" \
       GH_BODY="$d/body.md" \
@@ -300,6 +353,19 @@ not_in_file() { # name file pattern
   fi
 }
 
+# A publish's exit code, judged against the one it owes. `124` is named as the
+# deadline rather than reported as a code, because a hang and a refusal are
+# different findings and a reader should not have to know which number is which.
+proof_exit() { # name want-code got-code out-file
+  if [ "$3" = "$2" ]; then
+    ok "$1" "exit $3"
+  elif [ "$3" = 124 ]; then
+    ko "$1" "the deadline expired after ${DEADLINE}s (want exit $2)" "$(head -c 600 "$4" 2>/dev/null)"
+  else
+    ko "$1" "exit $3 (want $2)" "$(head -c 600 "$4" 2>/dev/null)"
+  fi
+}
+
 section "Artifact publisher: the upload path, offline"
 # The deadline itself, first and cheaply. Everything below trusts it to turn a
 # wedged subprocess into a failing case, so it is worth one second to know that
@@ -313,11 +379,7 @@ PORT=""
 proof_env "$D" && PORT=$(cat "$D/port")
 if [ -n "$PORT" ]; then
   CODE=$(proof_publish "$D" "$PORT" publish --pr 42)
-  if [ "$CODE" = 0 ]; then
-    ok "a real publish against a stub store" "exit 0"
-  else
-    ko "a real publish against a stub store" "exit $CODE" "$(head -c 600 "$D/out.log")"
-  fi
+  proof_exit "a real publish against a stub store" 0 "$CODE" "$D/out.log"
 
   # **The body has to reach the child, and only the child can say that it did.**
   # The async form of `execFile` has no `input` option -- that belongs to the
@@ -352,11 +414,7 @@ if [ -n "$PORT" ]; then
 
   # Expiry: the same body, run again through the other subcommand.
   CODE=$(proof_publish "$D" "$PORT" expire --pr 42)
-  if [ "$CODE" = 0 ]; then
-    ok "expiry runs against the body publish left" "exit 0"
-  else
-    ko "expiry runs against the body publish left" "exit $CODE" "$(head -c 600 "$D/out.log")"
-  fi
+  proof_exit "expiry runs against the body publish left" 0 "$CODE" "$D/out.log"
   in_file "expiry rewrites the block in place" "$D/body.md" 'no longer linked'
   in_file "and still names what it showed" "$D/body.md" 'It showed publish-a-profile, publish-form'
   in_file "the durable link survives expiry" "$D/body.md" 'cdn\.example\.test/demos/pr-42'
@@ -365,6 +423,7 @@ if [ -n "$PORT" ]; then
 else
   ko "the upload path, offline" "the stub endpoint would not start"
 fi
+proof_stop
 
 section "Artifact publisher: an object store that refuses"
 # A store that answers 500 must not leave the pull request body claiming an
@@ -376,15 +435,20 @@ PORT=""
 STUB_STATUS=500 proof_env "$D" && PORT=$(cat "$D/port")
 if [ -n "$PORT" ]; then
   CODE=$(proof_publish "$D" "$PORT" publish --pr 42)
-  # 124 is the deadline, and it would be a hang rather than a refusal. A failing
-  # upload has to *fail*, promptly and by itself.
-  if [ "$CODE" != 0 ] && [ "$CODE" != 124 ]; then
-    ok "a failing upload is not a success" "exit $CODE"
-  else
-    ko "a failing upload is not a success" "exit $CODE" "$(head -c 600 "$D/out.log")"
-  fi
+  # **The exact code, and evidence that an upload is what failed.** "not zero"
+  # would be satisfied by a publisher that refused for an unrelated reason -- an
+  # absent credential exits 1 and writes no body either -- so this case would pass
+  # while reaching no store at all. `lib.sh` states the rule it would be breaking:
+  # a script that crashed on every input exits non-zero and passes every refusing
+  # case on the code alone. An error escaping the publisher is exit 2.
+  proof_exit "a failing upload is not a success" 2 "$CODE" "$D/out.log"
+  in_file "and it was a real upload that failed" "$D/put.log" \
+    '^PUT /stub-bucket/review/pr-42-[0-9a-f]{16}/index\.html'
+  # The first refusal stops the loop: five objects were owed and one was tried.
+  expect_run "it stops at the first refusal" 0 "^1$" -- grep -c '^PUT ' "$D/put.log"
   not_in_file "and the body is never edited" "$D/body.md" 'ui-proof:begin'
   not_in_file "so no link is left pointing at nothing" "$D/body.md" 'cdn\.example\.test'
 else
   ko "an object store that refuses" "the stub endpoint would not start"
 fi
+proof_stop
