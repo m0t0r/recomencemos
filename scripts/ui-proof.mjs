@@ -35,12 +35,40 @@ import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 // Statically imported and cheap: the object-store client is a dynamic import
 // inside that module, so this costs nothing on the paths that never upload.
 import { missingConfig } from "./ui-proof-store.mjs";
 
-const run = promisify(execFile);
+/**
+ * `execFile`, and the child's stdin closed on every call.
+ *
+ * **`promisify(execFile)` has no `input` option, and passing one is silent.**
+ * `input` belongs to `execFileSync`/`spawnSync`; the async form ignores an
+ * option it does not know, and `execFile` opens stdin as a pipe whatever the
+ * caller passes — so a `gh` call that reads `-` sat on a pipe nothing would ever
+ * write to or close, and waited forever. Measured, not deduced: the publisher
+ * logged all three `gh` calls, printed the durable-clip warning and then stopped
+ * with an empty upload log, which read as a hang in the object-store client and
+ * was a `cat` blocked on stdin two processes away. `promisify(execFile)("cat",
+ * [], { input: "x" })` reproduces it on its own, with no repository involved.
+ *
+ * So the input is written to the handle rather than handed to the options bag,
+ * and a call with no input still gets its stdin ended — a child that inherits an
+ * open pipe it is waiting on is the same hang by another route.
+ */
+const run = (file, args, options = {}) =>
+  new Promise((resolve, reject) => {
+    const { input, ...rest } = options;
+    const child = execFile(file, args, rest, (error, stdout, stderr) => {
+      if (error) reject(error);
+      else resolve({ stdout, stderr });
+    });
+    // A child that exits without reading raises EPIPE here, and that is its
+    // business rather than ours: the callback above already carries the exit
+    // code, and an unhandled stream error would replace it with a crash.
+    child.stdin.on("error", () => {});
+    child.stdin.end(input ?? "");
+  });
 
 const out = (s) => process.stdout.write(s);
 const err = (s) => process.stderr.write(s);
