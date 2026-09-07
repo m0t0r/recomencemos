@@ -26,8 +26,12 @@ assertServerOnly("logger-options");
  * variable a correctness failure — Turborepo's strict environment mode filters
  * one out of the task environment entirely — so introducing `SERVICE_NAME` here
  * would mean a `turbo.json` change that belongs with the rest of the environment
- * plumbing. It is a placeholder: a downstream project renames it alongside
- * `apps/web`'s workspace name.
+ * plumbing.
+ *
+ * It still names the workspace rather than the service, which is a row on
+ * `README.md`'s "Still to replace" list, owned by #9 — every log line carries it
+ * and a drain filters on it, so changing it is a deploy-time decision taken
+ * once, not a rename to slip into an unrelated pull request.
  */
 const SERVICE_NAME = "web";
 
@@ -105,8 +109,8 @@ const STACK_ALLOWANCE_DIVISOR = 2;
 /**
  * The fields a truncated line keeps, **in priority order**.
  *
- * This is the stability contract from the spec's core entities — the names every
- * clone's saved searches bind to — then the correlation fields, then the ones a
+ * This is the stability contract from the spec's core entities — the names the
+ * drain's saved searches bind to — then the correlation fields, then the ones a
  * query filters on. Dropping the fields a query filters on would turn a
  * too-large line into an invisible one: `code` and `status` are here because a
  * 4xx never reaches the reporting platform, so an oversized line is the only
@@ -287,13 +291,13 @@ function collapsedFramesMarker(collapsed: number): string {
  * at the call site — the same treatment `route` gets. `node_modules` is the
  * obvious marker and covers pnpm's `.pnpm` store; Node's own `node:` frames are
  * the other frames a real request stack carries that name nothing anybody can
- * open. A monorepo has others and a downstream project will have more, so this
- * is the extension point — which, per ADR-0004, makes it also the natural thing
- * to break: a frame misclassified here is a frame silently folded. So it is one
- * named list to extend rather than a literal to hunt for, and it is covered at
- * the stdout seam like everything else in these options. Not exported: nothing
- * outside this module classifies a frame, and a template is extended by editing
- * the clone rather than by importing a list into it.
+ * open. This monorepo has others and will grow more, so this is the extension
+ * point — which, per ADR-0004, makes it also the natural thing to break: a frame
+ * misclassified here is a frame silently folded. So it is one named list to
+ * extend rather than a literal to hunt for, and it is covered at the stdout seam
+ * like everything else in these options. Not exported: nothing outside this
+ * module classifies a frame, so the list is extended here, in place, rather than
+ * by importing it somewhere that would then have an opinion about it.
  */
 const VENDOR_FRAME_PATTERNS: readonly RegExp[] = [/[\\/]node_modules[\\/]/, /(?:^|[\s(])node:/];
 
@@ -374,8 +378,9 @@ function collapseVendorRuns(frames: readonly string[]): StackEntry[] {
  * now buys application frames instead of more `.pnpm` paths.
  *
  * Then position, because the throw site is what an operator reads first. Bytes
- * rather than frames, because a frame count would mean a different thing in
- * every project built from this template.
+ * rather than frames, because a frame is not a fixed size — under pnpm's
+ * isolated store one costs more than twice what an application frame costs, so a
+ * frame count would buy a different amount of line in every workspace here.
  *
  * The `Name: message` header is not a frame: it is what the frames are about,
  * and it is never folded, counted, or cut. A stack that already fits comes back
@@ -1173,8 +1178,9 @@ export function createLoggerOptions(
     // so `pid` and `hostname` are never serialised. They are noise on serverless
     // — a pid nobody can attach to and a hostname that changes every invocation
     // — and they are not what anyone filters on. These three are: the guaranteed
-    // names are a stability contract, because every clone's saved searches bind
-    // to them and no clone can be migrated by us.
+    // names are a stability contract, because the drain's saved searches and
+    // every dashboard bind to them, and a rename breaks all of them at once
+    // without failing anything here.
     base: {
       service: SERVICE_NAME,
       env: env.NODE_ENV ?? "development",

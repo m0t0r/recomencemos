@@ -34,9 +34,10 @@ type Gap = "reporting-inactive" | "release-unknown";
 /**
  * Prose per gap, naming the variable that closes it.
  *
- * The reader of the no-DSN line is someone evaluating a template minutes after
- * cloning it, so the line has to say what to set rather than only that something
- * is unset — which is the difference between a notice and a chore.
+ * The reader of the no-DSN line is someone who has just cloned this repo and run
+ * it with no monitoring account, so the line has to say what to set rather than
+ * only that something is unset — which is the difference between a notice and a
+ * chore.
  */
 const GAP_DETAIL: Record<Gap, string> = {
   "reporting-inactive":
@@ -80,8 +81,8 @@ function findGaps(env: StartupEnvironment): Gap[] {
   if (!isReportingConfigured(env)) gaps.push("reporting-inactive");
 
   // Only in production. Nothing populates the release without CI, so warning
-  // about it in development would fire on every `pnpm dev` of every clone —
-  // which is how a startup notice becomes something people learn to skip past.
+  // about it in development would fire on every `pnpm dev` anybody runs — which
+  // is how a startup notice becomes something people learn to skip past.
   if (env.NODE_ENV === "production" && isBlank(env.NEXT_PUBLIC_RELEASE)) {
     gaps.push("release-unknown");
   }

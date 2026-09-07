@@ -13,7 +13,8 @@ const SECRET = "SENTINEL_SECRET_VALUE";
 // importing them. That is deliberate twice over: it is the assertion that the
 // list is unexported, and it keeps the test honest about what it proves — that
 // the *mechanism* works on the shipped names, never that the names are
-// sufficient. The list is advisory; a downstream project extends it.
+// sufficient. The list is advisory, and it is extended in place as this product
+// learns of a field worth scrubbing.
 //
 // The drift this cannot catch, stated plainly: a name added to `redaction.ts`
 // and not to this fixture goes untested and the suite stays green. Only the
@@ -263,8 +264,8 @@ describe("what @repo/observability derives from the list without receiving it", 
   // Stated rather than claimed away: a caller can recover the spellings from a
   // generated path by stripping the root, and the parity test above does exactly
   // that. What "not exported" buys is narrower than "unknowable" — it is that no
-  // *constant* is published, so there is nothing a downstream project can import,
-  // pin, filter, or spread, and adding a name to the list breaks nobody.
+  // *constant* is published, so there is nothing anywhere else can import, pin,
+  // filter, or spread, and adding a name to the list breaks nobody.
   it("publishes no constant to pin, and no derivation that works without a root", () => {
     for (const exported of Object.values(redactionModule)) {
       expect(Array.isArray(exported)).toBe(false);

@@ -115,9 +115,10 @@ async function loadSentry(): Promise<void> {
 
     // Explicit rather than inherited. The wizard-generated config sets this
     // `true`, which sends IP address, cookies and headers — every one of them
-    // `personal` under `docs/policy/data.md` — to a processor no downstream
-    // project chose. It is already `false` by default in 10.70.0; pinning it is
-    // what stops a wizard re-run or an SDK default quietly flipping it.
+    // `personal` under `docs/policy/data.md` — to a processor chosen to receive
+    // errors and nothing else. It is already `false` by default in 10.70.0;
+    // pinning it is what stops a wizard re-run or an SDK default quietly
+    // flipping it.
     //
     // Deprecated in favour of `dataCollection`, and **not** migrated on
     // purpose: supplying a `dataCollection` object at all switches the SDK's

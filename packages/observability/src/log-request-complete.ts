@@ -52,8 +52,9 @@ assertServerOnly("log-request-complete");
 /**
  * `snake_case`, like every field on the line: the line is its own namespace and
  * names what it carries for itself (ADR-0005). They are also the names the
- * logger ticket fixed as a stability contract — every clone's drain queries bind
- * to them and no clone can be migrated by us.
+ * logger ticket fixed as a stability contract — the drain's queries and every
+ * dashboard bind to them, and a rename breaks all of them at once without
+ * failing anything here.
  */
 export interface RequestCompletionFields {
   /** The HTTP method, so a per-route status distribution can separate a read from a write. */
@@ -183,11 +184,13 @@ function matchedPattern(request: CompletedRequest): string | undefined {
  * that is — an unrouted success now leaves no line at all — and narrows nothing
  * about the exposure: a tokened route is a routed request, which is the
  * population that always emits. That is deliberate and is the decision, not the
- * oversight it looks like: this is where
- * a project bounds the path, and
- * `docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md` is why the
- * template does not. Answer `secrets-in-url-paths` in `docs/policy/security.md`
- * first; the go-live runbook's §10 is the recipe.
+ * oversight it looks like: this is the one place the path can be bounded, and
+ * `docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md` is why
+ * nothing ships that guesses at it — no mechanism can tell a reset token from an
+ * order id, and every bound that catches one also lands on `/orders/42`. So the
+ * bounding waits on an answer to `secrets-in-url-paths` in
+ * `docs/policy/security.md`; the go-live runbook's §10 is the recipe for the
+ * `yes` branch.
  */
 function pathnameOf(url: string | undefined): string {
   if (typeof url !== "string" || url.length === 0) return UNKNOWN_ROUTE;
@@ -202,8 +205,8 @@ function pathnameOf(url: string | undefined): string {
  *
  * **Deliberately not the path when nothing matched.** The subscription hears
  * every HTTP server in the process, not only the app's router: build assets,
- * dev-only endpoints, and anything else a downstream project mounts all reach
- * it. Falling back to the raw pathname there would put
+ * dev-only endpoints, and anything else this app comes to mount all reach it.
+ * Falling back to the raw pathname there would put
  * `/_next/static/chunks/page-<hash>.js` — a value that changes every build — in
  * the one field a drain groups by, which is the cardinality explosion `route`'s
  * own contract exists to prevent. The concrete path is not lost; it travels
@@ -350,8 +353,8 @@ const SUBSCRIBED = Symbol.for("repo.observability.requestCompletionSubscribed");
  * "A Node.js module is loaded which is not supported in the Edge Runtime" on
  * every build. `@repo/observability` maps its `browser` export condition to
  * `browser-refusal.ts`, so importing this from there resolves the whole module
- * away in the edge bundle and the specifier is never seen. Keeping a clone's
- * build free of warnings is NFR1; this is the seam that does it.
+ * away in the edge bundle and the specifier is never seen. Keeping the build
+ * free of warnings is NFR1; this is the seam that does it.
  */
 export function subscribeRequestCompletion(logger: Logger = defaultLogger): void {
   const flags = globalThis as unknown as Record<symbol, boolean | undefined>;

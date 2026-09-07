@@ -100,9 +100,10 @@ const nextConfig: NextConfig = {
 /**
  * Source-map upload needs all three of `SENTRY_ORG`, `SENTRY_PROJECT` and
  * `SENTRY_AUTH_TOKEN`, and the build plugin logs at **error** level when it is
- * asked to upload without them. A fresh clone of this template sets none, so
- * gating on the full triple is what keeps `pnpm build` clean with no monitoring
- * account — the first thing a person evaluating a template checks.
+ * asked to upload without them. None of the three is set in development or in
+ * CI — they are credentials, and NFR24 keeps them out of the repo — so gating on
+ * the full triple is what keeps `pnpm build` clean and quiet everywhere the app
+ * is built without a monitoring account, which is everywhere except a deploy.
  *
  * **`SENTRY_AUTH_TOKEN` must come from the environment and never from a `.env`
  * file.** `turbo.json` declares `.env*` a `build` input, so the file's
@@ -130,11 +131,11 @@ const canUploadSourceMaps = Boolean(
 const release = process.env.NEXT_PUBLIC_RELEASE;
 
 export default withSentryConfig(nextConfig, {
-  // The build plugin reports on itself to Sentry by default, which for a
-  // template means every clone's build phones home to a processor the project
-  // never chose — the same objection that pins `sendDefaultPii: false` on the
-  // init. Off is the privacy-preserving default to ship; a project that wants
-  // to help Sentry can turn it back on knowingly.
+  // The build plugin reports on itself to Sentry by default, which means every
+  // build of this product — a developer's, CI's, a deploy's — phones home to a
+  // processor nobody here chose for that purpose. It is the same objection that
+  // pins `sendDefaultPii: false` on the init. Off is the privacy-preserving
+  // default; turning it back on is a decision to take knowingly.
   telemetry: false,
 
   // Quiet *only* on the path where the plugin has no credentials and therefore
@@ -169,8 +170,8 @@ export default withSentryConfig(nextConfig, {
     // are *not* covered by `sourcemaps.disable` — leaving them on is what makes
     // a credential-free build print "No auth token provided. Will not create
     // release" plus a Turborepo-specific hint about `passThroughEnv`. Both are
-    // noise on the one path a person evaluating this template walks first, so
-    // they are gated on the same triple the upload is.
+    // noise on every credential-free build, which is every build except a
+    // deploy's, so they are gated on the same triple the upload is.
     //
     // Release *injection* is deliberately left alone: it is a build-time
     // constant, needs no credentials, and is what lets a browser event carry a

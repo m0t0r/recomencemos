@@ -1,10 +1,10 @@
 # Runbook: taking observability live
 
-Everything a project built from this template has to do to turn error reporting and structured logging
-from "shipped" into "working". It is the deliverable that stands in for the ten
+Everything Recomencemos has to do to turn error reporting and structured logging from "shipped" into
+"working" before it carries public traffic. It is the deliverable that stands in for the ten
 [`docs/policy/`](../policy/) keys effort [`0001-observability`](../efforts/0001-observability/spec.md)
 deliberately left `UNSET`, so where a step ends in a decision this document names the key rather than
-making it for you.
+making it.
 
 **Figures are pinned, and pinning is what makes them checkable.** Vendor caps and pricing change; this
 document states what was true on the date below, against the version below, so a reader can tell a
@@ -155,8 +155,8 @@ Both derive from the **5,000 errors/month** figure in §3. Re-derive them if you
 | **Spike**           | **> 333 errors in any rolling 24h window** | 5,000 ÷ 15 = 333.3. Even burn across a 30-day month is 5,000 ÷ 30 ≈ 167/day, so this is **2× even burn** | Same                                                  |
 
 Both are configured as Sentry alert rules on the org's error consumption. Both are written as a
-**next-business-day queue, not a page**, because `on-call-rotation` is `UNSET` and a template may not
-assert that somebody is awake.
+**next-business-day queue, not a page**, because `on-call-rotation` is `UNSET` — nothing here may
+assert that somebody is awake until that key says who.
 
 The spec carries three further bands that **cannot fire until a drain exists**, because they are
 measured on log lines rather than on events. They are listed here so they are switched on in the same
@@ -227,10 +227,10 @@ Label it `needs-triage` and nothing else. `/triage` assigns the rest; see
 [`docs/agents/triage-labels.md`](../agents/triage-labels.md).
 
 **`alert-destination` stays `UNSET`, deliberately.** The _shape_ of the destination is fixed by
-ADR-0001 — a `needs-triage` issue — but the webhook **target** is a per-project URL, and no template
-can know it. Set it to the endpoint that opens issues in _your_ repository. Setting the key means
-writing that URL (or the Action that receives it) into
-[`docs/policy/operability.md`](../policy/operability.md).
+ADR-0001 — a `needs-triage` issue — but the webhook **target** is a concrete URL that does not exist
+until somebody stands the receiver up, and standing it up is what §6 is. Set it to the endpoint that
+opens issues in this repository. Setting the key means writing that URL (or the Action that receives
+it) into [`docs/policy/operability.md`](../policy/operability.md).
 
 ---
 
@@ -247,7 +247,7 @@ you have error reporting and you have log lines, and no way to get from one to t
 1. **Deploy** with `NEXT_PUBLIC_SENTRY_DSN` and `NEXT_PUBLIC_RELEASE` set, and with your log drain
    collecting the process's stdout.
 
-2. **Cause exactly one uncaught server error.** The template ships a handler for this:
+2. **Cause exactly one uncaught server error.** The app ships a handler for this:
 
    ```sh
    curl -i "https://<your-host>/api/example-error?mode=thrown"
@@ -336,7 +336,7 @@ carries the rule: **log at the dynamic boundary, never inside a cached function.
 
 ## 8. CSP hosts
 
-**No Content-Security-Policy ships with this template, and that is deliberate.** A CSP is a real
+**No Content-Security-Policy ships yet, and that is deliberate.** A CSP is a real
 surface with real breakage risk; shipping a "reasonable default" nobody understands is how a policy
 silently blocks the browser SDK six months later, with no signal. `csp-policy` is `UNSET` and a CSP
 deserves its own effort. What ships is the input to that decision:
@@ -349,10 +349,10 @@ envelopes to that origin. So:
 connect-src 'self' https://o<orgId>.ingest.<region>.sentry.io;
 ```
 
-Substitute your org id and region (`us`, `de`, …) — or, if you would rather not pin a region,
+Substitute the org id and region (`us`, `de`, …) — or, if you would rather not pin a region,
 `https://*.ingest.sentry.io` and `https://*.ingest.*.sentry.io`.
 
-Two additions that do **not** apply to what this template ships, listed so they are not discovered by
+Two additions that do **not** apply to what ships today, listed so they are not discovered by
 outage:
 
 - **Session Replay** needs `worker-src 'self' blob:` — it creates a web worker from a blob URL. Safari
@@ -449,7 +449,7 @@ Named because `threat-model-scope` is `UNSET` and an unnamed threat is not mitig
    ```
 
    **Not mitigated, and deliberately so.** `rp_9f81c2d4e0a7` and `42` are the same thing to any
-   mechanism this template could ship, and any bound would land equally on `/orders/42`, where the
+   mechanism that could be written here, and any bound would land equally on `/orders/42`, where the
    concrete segment is the field's entire diagnostic value. The reasoning, the rejected options, and
    the precedent are in
    [ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md).
@@ -457,18 +457,19 @@ Named because `threat-model-scope` is `UNSET` and an unnamed threat is not mitig
    **State it as what it is: a deviation.** [`docs/policy/data.md`](../policy/data.md) classifies
    `secret` — credentials, tokens, keys — as **never logged**, and marks that vocabulary **Fixed**;
    `retention-logs` adds that a log line inherits the classification of what it contains. This is the
-   one field the template writes without being able to know the classification of what it carries, so
-   the shipped code deviates from a settled policy row. The row is **not** narrowed to accommodate it.
+   one field written on the caller's behalf, by code no caller wrote, without being able to know the
+   classification of what it carries — so the shipped code deviates from a settled policy row. The row
+   is **not** narrowed to accommodate it.
 
    **The question is `secrets-in-url-paths` in [`docs/policy/security.md`](../policy/security.md), and
-   this runbook does not answer it.** Only the project knows whether any of its routes carries a
-   credential in a segment. Answer the key before go-live; where the answer is `yes`, bound the path
-   using the recipe below.
+   this runbook does not answer it.** It is a route-by-route audit — `/admin/enrol/[token]` is the
+   shape to look for — and it has to be redone whenever a tokened route is added. Answer the key
+   before go-live; where the answer is `yes`, bound the path using the recipe below.
 
 #### Bounding the path, for the `yes` branch
 
-Short because a downstream project owns `@repo/observability` outright — there is no knob to reach
-for, and none is coming (ADR-0006). You edit the function. Three points, all of which matter:
+Short because this repo owns `@repo/observability` outright — there is no knob to reach for, and
+none is coming (ADR-0006). You edit the function. Three points, all of which matter:
 
 - **Change `pathOf` in `packages/observability/src/log-request-complete.ts`; leave `routeOf` alone.**
   `pathOf` is the only producer of the value, so one edit covers every line the completion path emits — in
@@ -501,14 +502,16 @@ removes the flag.
 
 ### The four places a deletion request must reach
 
-`retention-personal` is `UNSET` and this template ships no store, but it ships four sinks. A deletion
-request that reaches only the first is not honoured:
+`retention-personal` is `UNSET`, and observability itself stores nothing, but it feeds four sinks. A
+deletion request that reaches only the first is not honoured:
 
 1. **The drain** — log lines, wherever stdout is collected. Governed by `log-retention` /
    `retention-logs`, both `UNSET`.
 2. **Sentry's retained events** — 30-day lookback on the Developer plan (§3). Deletion is per-issue or
-   per-event through Sentry, and Sentry is a **data processor you chose on the project's behalf** by
-   adopting this template. A regulated adopter needs to know that before an audit, not after.
+   per-event through Sentry, and Sentry is a **data processor this product chose** —
+   `observability-vendor` in [`docs/policy/operability.md`](../policy/operability.md) is where that
+   choice is recorded, and `/privacy` already names Sentry to the people it concerns
+   (`apps/web/app/_lib/consent/processors.ts`). Anything that changes the vendor changes both.
 3. **Uploaded source maps** — filed under a release, and they carry your source, not user data. Listed
    because a full purge of a release means deleting these too.
 4. **Any downstream cache** — anything that copied a log line or an event onward: a SIEM, a
@@ -528,12 +531,12 @@ deleting the release artifacts in Sentry and rotating `SENTRY_AUTH_TOKEN`.
 may choose otherwise (feature flags being the obvious alternative, which changes what is available as a
 mid-incident mitigation). These four classes hold either way:
 
-| Change                                                                 | Class                                                                                                   | Time                      |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `@repo/errors`, `@repo/observability`                                  | code-only                                                                                               | a redeploy                |
-| `LOG_LEVEL`, `LOG_FORMAT`, `LOG_MAX_LINE_BYTES`, the `no-console` rule | config                                                                                                  | seconds                   |
-| `withSentryConfig()` in `next.config.ts`                               | code-only, but it fails `pnpm build` for **every** downstream consumer — blast radius exceeds its class | a redeploy                |
-| Source-map upload                                                      | **one-way**                                                                                             | not reversible; see above |
+| Change                                                                 | Class                                                                                                       | Time                      |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `@repo/errors`, `@repo/observability`                                  | code-only                                                                                                   | a redeploy                |
+| `LOG_LEVEL`, `LOG_FORMAT`, `LOG_MAX_LINE_BYTES`, the `no-console` rule | config                                                                                                      | seconds                   |
+| `withSentryConfig()` in `next.config.ts`                               | code-only, but a mistake there fails `pnpm build` for **everyone at once** — blast radius exceeds its class | a redeploy                |
+| Source-map upload                                                      | **one-way**                                                                                                 | not reversible; see above |
 
 ---
 
@@ -573,8 +576,8 @@ _prepareEvent  →  processBeforeSend (beforeSend / beforeSendTransaction)
 
 - **The band measures the right quantity.** Every event that survives `beforeSend` is an event that
   counts against the quota, so "80% of the monthly allowance" is a threshold on the thing actually
-  being consumed. A `beforeSend` filter _would_ therefore be a real quota lever — the template ships
-  none by decision (NFR12, and §4), not because one would not work.
+  being consumed. A `beforeSend` filter _would_ therefore be a real quota lever — none ships, by
+  decision (NFR12, and §4), not because one would not work.
 - **The transport's backoff is not a control you own.** `rateLimits` is populated only from a server
   response (`updateRateLimits(rateLimits, response)`, i.e. a `429`), so the SDK begins dropping only
   _after_ the quota is already gone. It is a courtesy to Sentry's ingest, not a protection for your
@@ -582,7 +585,7 @@ _prepareEvent  →  processBeforeSend (beforeSend / beforeSendTransaction)
 
 Worth knowing alongside it: `beforeSend` also runs before the client-side `sampleRate` discard, so the
 scrubber runs on some events that are then dropped. Wasted work, not a correctness problem — and
-`sampleRate` is unset in this template, so no error is sampled away.
+`sampleRate` is unset here, so no error is sampled away.
 
 **4. The free-tier figures.** In §3, with their source and date.
 
@@ -626,7 +629,7 @@ are here to learn what a tokened 404 leaves in the drain, that is the answer, an
 implied:**
 
 > It holds only while a not-found is produced by calling the framework's `notFound()`. **It stops
-> holding the day a downstream handler throws its own not-found instead** — a `throw new AppError({
+> holding the day a handler throws its own not-found instead** — a `throw new AppError({
 status: 404, … })` that escapes a request is an error like any other, so it reaches
 > `onRequestError` and costs one event and one `error` line, per request — **on top of** the `info`
 > completion line above, which is emitted either way.
