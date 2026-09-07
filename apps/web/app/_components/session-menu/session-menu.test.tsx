@@ -234,46 +234,69 @@ describe("no auth client reaches the browser", () => {
  * same reason the block above is.**
  *
  * `dropdown-menu` is Base UI's `Menu`, and `Menu` pulls floating-ui with the
- * positioner, the focus guards and the scroll lock — 52.6 KB gzip, measured, on
- * the first load of every route below a layout that renders this header. The
- * deferral in `session-menu-deferred.tsx` is what takes it off, and a static
- * import put back in `AppHeader` would put it straight back with every case
- * above still green and the page still looking identical. Nothing a browser can
- * be driven to do would show it either; the tell is an `import`.
+ * positioner, the focus guards and the scroll lock. It is the largest thing on
+ * the first load of every route below a layout that renders this header, and
+ * `packages/design-system/CLAUDE.md` carries the figure and how it was taken —
+ * one home, so a number nobody can cheaply re-take cannot go wrong in three
+ * places at once.
  *
- * The cases below are one seam apart: the first is what the byte measurement
- * depends on, the second is what the no-JavaScript story depends on.
+ * The deferral in `session-menu-deferred.tsx` is what takes it off, and a static
+ * import put back anywhere in the app would put it straight back with every case
+ * above still green and the page still looking identical. Nothing a browser can
+ * be driven to do would show it; the tell is an `import`.
+ *
+ * **It walks all of `app/`, not the header alone.** The claim is not "AppHeader
+ * defers the menu" but "nothing in this app reaches the menu except the loader",
+ * and a check scoped to one file would go on passing the moment a second surface
+ * imported it. That is the design system's own rule read as a test — *which
+ * client components import which registry components, and it is one grep*.
+ *
+ * **Whether SSR stays on is not asserted here.** `ssr: false` would leave the
+ * `<noscript>` fallback unrendered and put *Salir* out of reach with scripting
+ * disabled, which is a running-browser question and is verified at seam 3 like
+ * every other one; a grep for the option over comment-stripped source pins the
+ * spelling of a config key rather than the behaviour, and the reason it is not
+ * used is in the loader beside the call.
  */
 describe("the menu arrives in its own chunk", () => {
-  it("is reached from the header through the loader, never imported directly", () => {
-    // A specifier ending in `/session-menu` and nothing else: the sibling modules
-    // `/session-menu/no-script` and `/session-menu-deferred` are different files
-    // and are both fine to import.
-    const valueImport = /import\s+(?!type\b)[^;]*?from\s+["'][^"']*\/session-menu["']/;
+  /**
+   * A specifier ending in `/session-menu` and nothing else — the siblings
+   * `./no-script` and `./session-menu-deferred` are different modules and are
+   * both fine to import. `export … from` is covered too: a re-export is a value
+   * edge like any other.
+   */
+  const valueEdge = /(?:import|export)\s+(?!type\b)[^;]*?from\s+["'][^"']*\/session-menu["']/;
 
-    const header = readFileSync(
-      join(import.meta.dirname, "..", "app-header", "app-header.tsx"),
-      "utf8",
-    );
+  /** The one module allowed to hold that edge. */
+  const LOADER = "session-menu-deferred.tsx";
 
-    expect(header).not.toMatch(valueImport);
+  it("is reached through the loader and from nowhere else in the app", () => {
+    const root = join(import.meta.dirname, "..", "..");
+
+    const sources = readdirSync(root, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+      .filter((entry) => !entry.name.includes(".test.") && entry.name !== LOADER)
+      .map((entry) => ({
+        name: entry.name,
+        text: readFileSync(join(entry.parentPath, entry.name), "utf8"),
+      }));
+
+    // A walk that read nothing would pass silently, which is the one way this
+    // case could be worse than not existing.
+    expect(sources.length).toBeGreaterThanOrEqual(50);
+
+    for (const { name, text } of sources) {
+      expect(
+        text,
+        `${name} imports the menu directly — render <DeferredSessionMenu /> instead, ` +
+          `and reach the module with \`import type\` if it is only a type you need`,
+      ).not.toMatch(valueEdge);
+    }
   });
 
-  it("still server-renders, which is what keeps the no-JavaScript way out reachable", () => {
-    // `ssr: false` measures identically and would leave the fallback submit
-    // button unrendered — so *Salir* would be unreachable with scripting
-    // disabled, which is the one state nobody looks at.
-    //
-    // **Read with the comments taken out**, because the paragraph in that file
-    // explaining why the option is not used says `ssr: false` in prose. The strip
-    // is naive — a `/*` inside a string literal would swallow the code after it —
-    // and it is safe here only because the file's two string literals are import
-    // specifiers. It is one file, not a tree, so that is checkable by looking.
-    const loader = readFileSync(join(import.meta.dirname, "session-menu-deferred.tsx"), "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/.*$/gm, "");
+  it("is reached by the loader, through a dynamic import", () => {
+    const loader = readFileSync(join(import.meta.dirname, LOADER), "utf8");
 
-    expect(loader).toMatch(/dynamic\(/);
-    expect(loader).not.toMatch(/ssr:\s*false/);
+    expect(loader).toMatch(/dynamic\(\s*\(\)\s*=>\s*import\(["']\.\/session-menu["']\)/);
   });
 });

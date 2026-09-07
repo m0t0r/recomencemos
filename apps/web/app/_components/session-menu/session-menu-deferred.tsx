@@ -5,22 +5,26 @@
  * stack off every route's first load.
  *
  * **What it was costing.** `dropdown-menu` is Base UI's `Menu`, and `Menu` pulls
- * floating-ui with the positioner, the focus guards and the scroll lock. Measured
- * from a production build: 52.6 KB gzip, on the first load of every page under
- * `(site)` and `(admin)` — because `AppHeader` is rendered by a layout, and a
- * layout's cost is paid by every route below it. A signed-out visitor downloaded
- * all of it for a menu behind an avatar she has no session to see.
+ * floating-ui with the positioner, the focus guards and the scroll lock — the
+ * largest single thing on the first load of every page under `(site)` and
+ * `(admin)`, because `AppHeader` is rendered by a layout and a layout's cost is
+ * paid by every route below it. A signed-out visitor downloaded all of it for a
+ * menu behind an avatar she has no session to see. **The figure lives in
+ * `packages/design-system/CLAUDE.md`, in one place rather than three**, with the
+ * command that re-takes it: a number copied into several documents is a number
+ * nobody re-takes, and this repo has already carried one 39 KB wrong across two
+ * efforts for exactly that reason.
  *
  * **Why the deferral has to happen here and not in `AppHeader`.** A route's
  * client-reference manifest carries every client module reachable from the server
- * graph, whether the import that reaches it is static or dynamic — so
- * `next/dynamic` written in the Server Component measures identically (65.6 →
- * 66.2 KB, which is noise). Next's own lazy-loading guide says it outright:
- * _"When a Server Component dynamically imports a Client Component, automatic
- * code splitting is currently not supported."_ The split needs a client module on
- * the far side of the boundary, which is what this file is. It is recorded here
- * because it is an afternoon's work to rediscover and nothing about it is visible
- * in a diff.
+ * graph, whether the import that reaches it is static or dynamic, so
+ * `next/dynamic` written in the Server Component measures identically — the rule
+ * beside the figure records that measurement too. Next's own lazy-loading guide
+ * says it outright: _"When a Server Component dynamically imports a Client
+ * Component, automatic code splitting is currently not supported."_ The split
+ * needs a client module on the far side of the boundary, which is what this file
+ * is. It is recorded because it is an afternoon's work to rediscover and nothing
+ * about it is visible in a diff.
  *
  * **SSR stays on, and that is not a default left unexamined.** `ssr: false` buys
  * exactly the same bytes and costs the no-JavaScript story: `session-menu.tsx`
