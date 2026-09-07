@@ -5,11 +5,17 @@
  * handle.
  *
  * The contact-detail rejector (DD3), the phone normalizer, the search normalizer
- * (DD4), the city registry (DD2) and the two list orderings — the Wall's, and
- * the attention spread the browsable list commits to. The Offer state machine
- * arrives here with the story that needs it.
+ * (DD4), the city and state registries (DD2) and the two list orderings — the
+ * Wall's, and the attention spread the browsable list commits to. The Offer
+ * state machine arrives here with the story that needs it.
  */
 
+export {
+  DEFAULT_OFFER_SENDING_STATE,
+  mayReadGatedProfile,
+  OFFER_SENDING_STATES,
+  type OfferSendingState,
+} from "#policy/account-states";
 export { CITIES, CITY_IDS, type CityId, cityLabel, isCityId } from "#policy/cities";
 export {
   type ContactDetailKind,

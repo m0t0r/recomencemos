@@ -76,6 +76,7 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import { citext, inList } from "#column-types";
+import { DEFAULT_OFFER_SENDING_STATE, OFFER_SENDING_STATES } from "#policy/account-states";
 
 /**
  * The sign-in methods a session can be established by, and the reason the column
@@ -137,55 +138,88 @@ export const ADMIN_SIGN_IN_METHOD = "link_totp" satisfies SignInMethod;
  * Not typed at sign-up: it becomes a Worker by holding a CapabilityProfile and a
  * Hirer by having sent an Offer. Nothing here says which, and nothing should.
  */
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
+export const user = pgTable(
+  "user",
+  {
+    id: text("id").primaryKey(),
 
-  /**
-   * Google returns a real name at sign-up and the magic link returns none, so
-   * this is `""` for half of the Accounts in this system. That asymmetry is
-   * spec concern C1 and is **not** resolved here: `CapabilityProfile.fullName`
-   * is what a Contact Exchange discloses, collected at publish (story 2), so
-   * both doors produce the same exchange whatever this column holds.
-   */
-  name: text("name").notNull(),
+    /**
+     * Google returns a real name at sign-up and the magic link returns none, so
+     * this is `""` for half of the Accounts in this system. That asymmetry is
+     * spec concern C1 and is **not** resolved here: `CapabilityProfile.fullName`
+     * is what a Contact Exchange discloses, collected at publish (story 2), so
+     * both doors produce the same exchange whatever this column holds.
+     */
+    name: text("name").notNull(),
 
-  /** `citext`, so one person cannot hold two Accounts by capitalising. `personal`. */
-  email: citext("email").notNull().unique(),
+    /** `citext`, so one person cannot hold two Accounts by capitalising. `personal`. */
+    email: citext("email").notNull().unique(),
 
-  /**
-   * Load-bearing for account linking, not decoration. A Google sign-in links to
-   * an existing Account only on a **verified** email match (DD5); linking on an
-   * unverified one is an account-takeover primitive. The magic-link door sets
-   * this `true` on creation, because opening a link sent to an address *is* the
-   * proof.
-   */
-  emailVerified: boolean("email_verified").notNull().default(false),
+    /**
+     * Load-bearing for account linking, not decoration. A Google sign-in links to
+     * an existing Account only on a **verified** email match (DD5); linking on an
+     * unverified one is an account-takeover primitive. The magic-link door sets
+     * this `true` on creation, because opening a link sent to an address *is* the
+     * proof.
+     */
+    emailVerified: boolean("email_verified").notNull().default(false),
 
-  /** Google's avatar URL. Nothing renders it yet; the profile photo is story 2's. */
-  image: text("image"),
+    /** Google's avatar URL. Nothing renders it yet; the profile photo is story 2's. */
+    image: text("image"),
 
-  /**
-   * **The Admin grant** (#17). `CONTEXT.md` calls Admin a staff Account and the
-   * Core entities section calls it _"the exception — a grant, because it is
-   * conferred rather than earned"_; this column is that grant.
-   *
-   * **`input: false` on the declaration is the load-bearing half.** It means no
-   * request body can set this field through any Better Auth endpoint, on sign-up
-   * or on update — so the grant has no API surface at all and DD7's rule holds
-   * by construction: _"the first Admin grant is a documented manual `UPDATE` —
-   * undocumented, it becomes a self-grant endpoint the first time someone needs
-   * it at 2 a.m."_ Runbook §6 is the documented path.
-   *
-   * Declared through `user.additionalFields` and **never** as a hand-added
-   * column, for the reason `verification.sharedDevice` carries: a hand-added
-   * column on a vendor table is invisible to the schema oracle, so
-   * `auth-schema.test.ts` could not pin it and a regeneration would drop it.
-   */
-  isAdmin: boolean("is_admin").notNull().default(false),
+    /**
+     * **The Admin grant** (#17). `CONTEXT.md` calls Admin a staff Account and the
+     * Core entities section calls it _"the exception — a grant, because it is
+     * conferred rather than earned"_; this column is that grant.
+     *
+     * **`input: false` on the declaration is the load-bearing half.** It means no
+     * request body can set this field through any Better Auth endpoint, on sign-up
+     * or on update — so the grant has no API surface at all and DD7's rule holds
+     * by construction: _"the first Admin grant is a documented manual `UPDATE` —
+     * undocumented, it becomes a self-grant endpoint the first time someone needs
+     * it at 2 a.m."_ Runbook §6 is the documented path.
+     *
+     * Declared through `user.additionalFields` and **never** as a hand-added
+     * column, for the reason `verification.sharedDevice` carries: a hand-added
+     * column on a vendor table is invisible to the schema oracle, so
+     * `auth-schema.test.ts` could not pin it and a regeneration would drop it.
+     */
+    isAdmin: boolean("is_admin").notNull().default(false),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+    /**
+     * **Whether this Account may send an Offer** — `active`, `frozen` or `banned`,
+     * the set `#policy/account-states` holds and the `CHECK` below is generated
+     * from.
+     *
+     * **Declared through `user.additionalFields` with `input: false`, for both of
+     * `isAdmin`'s reasons.** No request body can set it through any Better Auth
+     * endpoint, so a Hirer cannot unfreeze himself by any route the vendor
+     * exposes — the writers are `reportOffer` and `unfreezeHirer`, and they are
+     * story 10's. And a hand-added column on a vendor table is invisible to the
+     * schema oracle, so `auth-schema.test.ts` could not pin it and a regeneration
+     * would drop it.
+     *
+     * **It is on `user` rather than on a table of its own** because it is a
+     * property of the Account and not an event: the Report that caused the freeze
+     * is its own row with its own 24-month retention (NFR17), and this column is
+     * the state that Report puts the Account in. A join to the open Reports would
+     * make the value derived, and `sendOffer` has to read it **under a row lock**
+     * (NFR15/DD9) — which is a lock on this row.
+     */
+    offerSendingState: text("offer_sending_state").notNull().default(DEFAULT_OFFER_SENDING_STATE),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * DD2's rule for an enum-shaped column, through `inList` rather than a
+     * literal: `#policy/account-states` is the authority on the set, and a literal
+     * here would be a second spelling of it.
+     */
+    check("user_offer_sending_state_known", inList(table.offerSendingState, OFFER_SENDING_STATES)),
+  ],
+);
 
 /**
  * **Session**, classified `secret` (C28): `token` never reaches a log line, a

@@ -32,10 +32,16 @@ import { type CityId, isCityId } from "#policy/cities";
 import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-details";
 import { normalizeColombianPhone } from "#policy/phone";
 import { normalizeSearchText } from "#policy/search-text";
+import { findGatedIdentity, findGatedWorkHistory } from "#profiles/gated";
 import { type ListOptions, listBrowse, listWall, type ProfileListPage } from "#profiles/listing";
 import { mintSlug } from "#profiles/slug";
 import type { PhotoState } from "#policy/profile-states";
-import { type OwnProfile, type ProfileRecord, toOwnProfile } from "#projections";
+import {
+  type GatedIdentity,
+  type OwnProfile,
+  type ProfileRecord,
+  toOwnProfile,
+} from "#projections";
 import * as schema from "#schema";
 
 /**
@@ -610,6 +616,27 @@ export const profiles = {
   },
 
   /**
+   * The gated read, in the two halves `/profile/[slug]` streams.
+   *
+   * **Neither takes a principal, and unlike the two lists above that is not
+   * because the shape is public.** It is not: `about` and the work history are
+   * `personal` and gated. The authorization is a property of the *caller* — a
+   * live session, and an `offerSendingState` that is not `frozen` — rather than
+   * of the row, and neither is knowable from the slug, so passing one here
+   * would be a parameter this function could do nothing with. The route holds
+   * both checks, and `accounts.offerSendingState` is the second of them.
+   */
+  async findGated(slug: string): Promise<GatedIdentity | null> {
+    const { db } = await import("#connection");
+    return findGatedIdentity(db(), slug);
+  },
+
+  async gatedWorkHistory(slug: string): Promise<readonly string[]> {
+    const { db } = await import("#connection");
+    return findGatedWorkHistory(db(), slug);
+  },
+
+  /**
    * The Wall, newest first.
    *
    * **It takes no principal, and that is not an exception to the rule that every
@@ -654,4 +681,4 @@ export const profiles = {
  */
 export type { ListOptions, ProfileListPage } from "#profiles/listing";
 export { SLUG_PATTERN } from "#profiles/slug";
-export type { OwnProfile, PublicProfile } from "#projections";
+export type { GatedIdentity, GatedProfile, OwnProfile, PublicProfile } from "#projections";

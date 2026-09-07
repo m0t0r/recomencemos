@@ -93,12 +93,24 @@ const MODELS = Object.keys(TABLES) as Model[];
  *   reads it as `=== true` in any case, so the strictness is belt to the type's
  *   braces rather than the only thing holding.
  *
+ * - `user.offerSendingState` — whether this Account may send an Offer (story 5
+ *   reads it, story 10 writes it). The same shape and the same argument as
+ *   `isAdmin` one step over: `required: false` with a default is the only shape
+ *   `additionalFields` offers, and the column is `NOT NULL DEFAULT 'active'`
+ *   because a *null* sending state is not a fourth state this design has —
+ *   `mayReadGatedProfile` is a decision over three named members, and a null
+ *   would be a value it could not answer for.
+ *
  * There were three more entries, all belonging to the `twoFactor` plugin —
  * `user.twoFactorEnabled`, `twoFactor.verified` and
  * `twoFactor.failedVerificationCount`. They went with it. A deviation outliving
  * the column it describes is exactly what a set read by a check cannot have.
  */
-const STRICTER_NOT_NULL = new Set<string>(["verification.sharedDevice", "user.isAdmin"]);
+const STRICTER_NOT_NULL = new Set<string>([
+  "verification.sharedDevice",
+  "user.isAdmin",
+  "user.offerSendingState",
+]);
 
 /**
  * `getSchema` reports the fields Better Auth writes; `id` is implicit in its
@@ -499,6 +511,18 @@ describe("the Admin's door", () => {
     expect(betterAuthSchema.user?.fields.isAdmin).toMatchObject({ type: "boolean" });
     expect(options.user?.additionalFields?.isAdmin?.input).toBe(false);
     expect(getTableColumns(schema.user).isAdmin.name).toBe("is_admin");
+  });
+
+  /**
+   * The freeze read from the same end, and the half that matters is `input`:
+   * `reportOffer` and `unfreezeHirer` are the only writers, so a Hirer who could
+   * clear his own state through a vendor endpoint would defeat the one control
+   * that stops an Offer flood mid-incident (NFR15).
+   */
+  it("declares the sending state on the user model, closed to every request body", () => {
+    expect(betterAuthSchema.user?.fields.offerSendingState).toMatchObject({ type: "string" });
+    expect(options.user?.additionalFields?.offerSendingState?.input).toBe(false);
+    expect(getTableColumns(schema.user).offerSendingState.name).toBe("offer_sending_state");
   });
 
   /**

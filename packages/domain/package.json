@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#accounts": "./src/accounts/index.ts",
     "#admin/*": "./src/admin/*.ts",
     "#auth-schema": "./src/auth-schema.ts",
     "#auth/*": "./src/auth/*.ts",
@@ -29,6 +30,7 @@
     "#user-messages": "./src/user-messages.ts"
   },
   "exports": {
+    "./accounts": "./src/accounts/index.ts",
     "./admin": "./src/admin/index.ts",
     "./admin-enrolment": "./src/admin/enrolment-read.ts",
     "./auth-handler": "./src/auth/index.ts",

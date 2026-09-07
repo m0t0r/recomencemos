@@ -12,6 +12,7 @@ import {
   type ProfileRecord,
   toExchangedContact,
   toExchangedProfile,
+  toGatedIdentity,
   toGatedProfile,
   toOwnProfile,
   toPublicProfile,
@@ -108,6 +109,42 @@ describe("the gated projection", () => {
   it("still withholds an unapproved photo", () => {
     expect(toGatedProfile(record).photoUrl).toBeNull();
   });
+
+  /**
+   * **The half that streams is counted separately**, because it is the half a
+   * reader is most likely to widen: it is what `/profile/[slug]` renders before
+   * the work history resolves, so a field appended to it reaches the browser
+   * first and is the last thing anyone re-reads.
+   */
+  describe("its first half, which streams before the work history", () => {
+    it("carries the self-description and none of the other four", () => {
+      expect(counts(toGatedIdentity(record))).toEqual({
+        fullName: 0,
+        phone: 0,
+        email: 0,
+        about: 1,
+        workHistory: 0,
+      });
+    });
+
+    it("carries exactly the public keys plus the self-description", () => {
+      expect(Object.keys(toGatedIdentity(record)).toSorted()).toEqual(
+        [...Object.keys(toPublicProfile(record)), "about"].toSorted(),
+      );
+    });
+
+    /**
+     * The whole projection is its first half plus the history and nothing else.
+     * Asserted rather than assumed, so the two cannot drift into two whitelists
+     * that disagree about what "gated" means.
+     */
+    it("is the whole gated shape minus the work history", () => {
+      const { workHistory, ...rest } = toGatedProfile(record);
+
+      expect(rest).toEqual(toGatedIdentity(record));
+      expect(workHistory).toEqual(record.workHistory);
+    });
+  });
 });
 
 describe("the exchanged projection", () => {
@@ -143,6 +180,7 @@ describe("her own projection", () => {
 describe("every projection", () => {
   it.each([
     ["public", toPublicProfile],
+    ["gated identity", toGatedIdentity],
     ["gated", toGatedProfile],
     ["exchanged", toExchangedProfile],
     ["own", toOwnProfile],

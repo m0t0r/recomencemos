@@ -51,6 +51,7 @@ import {
   signInMethodForPath,
 } from "#auth/sign-in-attempt";
 import type { DomainDatabase } from "#database";
+import { DEFAULT_OFFER_SENDING_STATE } from "#policy/account-states";
 import { chargeCeiling } from "#rate-limit";
 import * as schema from "#schema";
 import { ADMIN_SIGN_IN_ONLY, SIGN_IN_FAILED } from "#user-messages";
@@ -408,6 +409,24 @@ export function authOptions({
     user: {
       additionalFields: {
         isAdmin: { type: "boolean", required: false, defaultValue: false, input: false },
+
+        /**
+         * **Whether this Account may send an Offer**, and the second field on
+         * this table declared rather than hand-added — for the reason above and
+         * for one of its own.
+         *
+         * `input: false` closes it to every request body Better Auth accepts.
+         * The writers are `reportOffer`, which sets `frozen` in one transaction
+         * with the Report (NFR15), and the Admin's `unfreezeHirer`; a Hirer who
+         * could clear his own freeze through a vendor endpoint would defeat the
+         * one control that stops an Offer flood mid-incident.
+         */
+        offerSendingState: {
+          type: "string",
+          required: false,
+          defaultValue: DEFAULT_OFFER_SENDING_STATE,
+          input: false,
+        },
       },
     },
 
