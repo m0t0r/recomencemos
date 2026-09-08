@@ -9,10 +9,34 @@
  *
  * **Her headline is the `<h1>`.** That is the same hierarchy the row on the Wall
  * argues for — she is described by what she can do — carried through to the page
- * the row leads to. Her name is under it, in the working face, beside her city.
- * A page whose heading was her name would be a page about a person rather than
- * about a capability, and the one thing this product will not do is describe
- * someone by what happened to her.
+ * the row leads to. A page whose heading was her name would be a page about a
+ * person rather than about a capability, and the one thing this product will not
+ * do is describe someone by what happened to her.
+ *
+ * **Her name is above it on screen, and that is not a contradiction** (#220).
+ * The `<h1>` is still her sentence and her name is still a paragraph; what
+ * changed is where the eye meets them. A portrait with a name beside it is one
+ * object, and a reader takes it in before reading what that person says — which
+ * is the order an introduction has. The hierarchy ADR-0009 fixes is about *what
+ * describes her*, not about which pixel comes first, and the test that guards it
+ * (`heads the page with her own words, not with her name`) is unchanged.
+ *
+ * **The composition is a page's, not a row's** (#220, brief at
+ * `.impeccable/briefs/gated-profile.md`). It used to be `flex gap-4` — a 40 px
+ * avatar in a left gutter, everything else in the column beside it — which is
+ * correct in a row, where the avatar is a scanning anchor across many people and
+ * the headline is a line or two. On a page about one person that gutter is 56 px
+ * wide and as tall as the whole block: measured at 390 px it held a 40 px circle
+ * over 418 px of nothing, squeezed a 103-character headline into **seven** lines
+ * and forced every Skill chip onto its own row, while her name landed 244 px
+ * below the words it belongs to. The portrait is `xl` and the measure is the
+ * page's, which is one fix for all three symptoms — four lines, two chips a row,
+ * and a name beside the face rather than a screen away.
+ *
+ * **The identity block is inside `ruled-page` with the sections**, so the page
+ * is one document rather than a header floating above a ruled one. Chosen from
+ * three candidates built and compared running at 390 px; the losing two are in
+ * the ticket.
  *
  * **The work history arrives as a promise**, not as an array. The page streams
  * it inside its own Suspense boundary, so this component takes what it can
@@ -54,7 +78,15 @@ function Section({
       aria-labelledby={id}
       className="border-border flex flex-col gap-3 border-t py-7 first:border-t-0 first:pt-0"
     >
-      <h2 id={id} className="font-heading text-foreground text-2xl leading-8 font-medium">
+      {/*
+        The 20 px step, and it is a step *down* from `own-profile-view.tsx`'s
+        otherwise identical section heading (#220). Her headline is this page's
+        `<h1>` at 24 px, and at 24 px these two `<h2>`s were the same face, size,
+        weight and colour as it — nothing in the type said which was the page and
+        which was a part of it. `/my-profile` keeps 24 px because its `<h1>` is a
+        32 px page title, so it has the step this page had to buy.
+      */}
+      <h2 id={id} className="font-heading text-foreground text-xl leading-7 font-medium">
         {heading}
       </h2>
       {children}
@@ -119,7 +151,8 @@ function WorkHistorySection({ lines }: { readonly lines: Promise<readonly string
 function WorkHistorySkeleton() {
   return (
     <div className="border-border flex flex-col gap-3 border-t py-7" aria-hidden="true">
-      <Skeleton className="h-8 w-56" />
+      {/* `h-7`, matching the 20 px section heading this stands in for (#220). */}
+      <Skeleton className="h-7 w-56" />
       <div className="flex flex-col gap-2 pl-5">
         <Skeleton className="h-5 w-full" />
         <Skeleton className="h-5 w-4/5" />
@@ -134,29 +167,6 @@ export function GatedProfileView({ profile, workHistory }: GatedProfileViewProps
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex gap-4">
-        {/*
-          The initial is the approved-photo-absent state and it is also the
-          pending state: one shape, two causes, never a badge. `aria-hidden`
-          while it holds an initial, because the name is announced anyway.
-        */}
-        <Avatar size="lg" className="shrink-0" aria-hidden={profile.photoUrl ? undefined : true}>
-          {profile.photoUrl ? <AvatarImage src={profile.photoUrl} alt={photoAlt(name)} /> : null}
-          <AvatarFallback>{initialOf(profile.firstName)}</AvatarFallback>
-        </Avatar>
-
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className="flex min-w-0 flex-col gap-1">
-            {/* Her own words, in the display face. The one line nobody else could have written. */}
-            <h1 className="page-heading">{profile.headline}</h1>
-            <p className="text-muted-foreground text-sm">
-              {name} · {cityLabel(profile.city)}
-            </p>
-          </div>
-          <SkillChips skills={profile.skills} />
-        </div>
-      </header>
-
       {/*
         Story 11's three statements are **not** here. This slot was reserved for
         them before they existed; they landed at the foot of `page.tsx` instead,
@@ -168,6 +178,70 @@ export function GatedProfileView({ profile, workHistory }: GatedProfileViewProps
       */}
 
       <div className="ruled-page">
+        <header className="border-border flex flex-col gap-4 border-t py-7 first:border-t-0 first:pt-0">
+          {/*
+            The nameplate: one object, so the face and the name cannot be read
+            apart. `items-center` rather than `items-start` because a two-line
+            name and a one-line name must both sit against the middle of the
+            circle — aligned to the top, a single line hangs off the crown of a
+            64 px portrait.
+          */}
+          <div className="flex items-center gap-4">
+            {/*
+              The initial is the approved-photo-absent state and it is also the
+              pending state: one shape, two causes, never a badge. `aria-hidden`
+              while it holds an initial, because the name is announced anyway.
+
+              **`xl` is the common case, not the flattering one.** Until a human
+              approves a photo this circle holds a letter, which is what most
+              profiles show — so 64 px had to be the size the composition is
+              drawn for with an initial in it, not the size that only works with
+              a face.
+            */}
+            <Avatar
+              size="xl"
+              className="shrink-0"
+              aria-hidden={profile.photoUrl ? undefined : true}
+            >
+              {profile.photoUrl ? (
+                <AvatarImage src={profile.photoUrl} alt={photoAlt(name)} />
+              ) : null}
+              <AvatarFallback>{initialOf(profile.firstName)}</AvatarFallback>
+            </Avatar>
+
+            {/*
+              Her name in the **working face**, not the display one. `DESIGN.md`
+              reserves Alegreya for headings and for what she wrote; her name is
+              neither, and setting it in the display face would put it in visual
+              competition with the sentence below that is actually hers.
+            */}
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <p className="text-foreground text-lg leading-6 font-medium">{name}</p>
+              <p className="text-muted-foreground text-sm">{cityLabel(profile.city)}</p>
+            </div>
+          </div>
+
+          {/*
+            Her own words, in the display face — the one line nobody else could
+            have written, and now on the page's full measure rather than in the
+            column a portrait left over.
+
+            **The 24 px step, and `page-heading` is deliberately not used here.**
+            That class is 32 px with `text-balance`, drawn for a page *title* of
+            two to four words; this `<h1>` is a sentence of up to 120 characters,
+            and a title's tooling set it in seven lines on a phone. 24 px is the
+            step her words already take in a row and on a card, so one rule now
+            holds everywhere: her sentence is 24 px Alegreya wherever it appears,
+            and only the composition around it changes. `DESIGN.md` → Typography
+            carries the clause this bought.
+          */}
+          <h1 className="font-heading text-foreground text-2xl leading-8 font-medium text-pretty">
+            {profile.headline}
+          </h1>
+
+          <SkillChips skills={profile.skills} />
+        </header>
+
         <Section id="about-heading" heading={ABOUT_HEADING}>
           {profile.about ? (
             /*

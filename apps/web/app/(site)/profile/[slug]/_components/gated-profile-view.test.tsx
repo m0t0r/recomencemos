@@ -108,10 +108,14 @@ describe("what crosses to the browser", () => {
 
 describe("the hierarchy", () => {
   /**
-   * Her headline is the `<h1>` and her name is under it. That is the same
-   * hierarchy the row on the Wall argues for, carried to the page the row leads
-   * to — she is described by what she can do, and a page headed by her name
-   * would be a page about a person rather than about a capability.
+   * Her headline is the `<h1>`. That is the same hierarchy the row on the Wall
+   * argues for, carried to the page the row leads to — she is described by what
+   * she can do, and a page headed by her name would be a page about a person
+   * rather than about a capability.
+   *
+   * **This is the assertion ADR-0009 rests on, and #220 left it alone.** That
+   * ticket moved her name *above* the heading on screen; what may never change
+   * is which of the two is the heading.
    */
   it("heads the page with her own words, not with her name", async () => {
     await renderView();
@@ -121,11 +125,25 @@ describe("the hierarchy", () => {
     expect(heading).not.toHaveTextContent("Ana R.");
   });
 
-  it("names her and her city under the heading", async () => {
+  /**
+   * Her name and her city both reach the reader, and neither is inside the
+   * heading.
+   *
+   * **It used to match `/Ana R\. · Pereira/`, one string in one node** — which
+   * pinned the row-shaped header's markup rather than anything a reader gets.
+   * #220 set the name and the city on two lines beside a portrait and the `·`
+   * went with the change, so the old assertion failed for a layout reason while
+   * every fact it cared about still held.
+   */
+  it("names her and her city outside the heading", async () => {
     await renderView();
     await screen.findByRole("heading", { name: WORK_HISTORY_HEADING });
 
-    expect(screen.getByText(/Ana R\. · Pereira/)).toBeInTheDocument();
+    expect(screen.getByText("Ana R.")).toBeInTheDocument();
+    expect(screen.getByText("Pereira")).toBeInTheDocument();
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).not.toHaveTextContent("Pereira");
   });
 
   it("heads her self-description and her work history separately", async () => {

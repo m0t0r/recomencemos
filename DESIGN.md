@@ -213,7 +213,16 @@ Alegreya, that is the signal that it is a heading or that she wrote it.
 28 · 32 · 36`, enumerated as `typography.scale` in the frontmatter so it is machine-readable.
   Tailwind's `text-3xl` is re-pointed at 32 px in `globals.css` so the utility a page heading
   reaches for lands on the ladder; `page-heading` is that step in the display face, and it is the
-  one class every `<h1>` in the product carries.
+  class a page **title** carries.
+
+  **It is the step for a title, not for every `<h1>`, and `/profile/[slug]` is the surface that
+  drew the line** ([#220](https://github.com/m0t0r/recomencemos/issues/220)). That page's `<h1>` is
+  not a title — it is a Worker's own sentence, up to 120 characters, and `page-heading` carries
+  `text-balance` because it was drawn for _Todos los perfiles_ and _Cómo funciona_. Set at 32 px on
+  a 390 px phone a 103-character sentence ran to **seven** lines. It sits at the 24 px step
+  instead, which is the step her words already take in a row and on a card — so the rule that holds
+  everywhere is **her sentence is 24 px Alegreya wherever it appears**, and only the composition
+  around it changes. A page whose `<h1>` names the page still carries `page-heading`.
 
 **Every step is a whole number in both rem and px, and that is a constraint rather than a tidy
 coincidence.** `@repo/notifications` renders the same visual system into email, where `rem` is
