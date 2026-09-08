@@ -38,6 +38,11 @@ const SENTINEL = {
   about: "SentinelDescripcion",
   phone: "+573009876543",
   workHistory: "SentinelHistorialDeTrabajo",
+  // The two self-asserted fields a Hirer gives on his first Offer (story 6).
+  // Distinct from `name` and `phone` above on purpose: those are the Worker
+  // half, and a shared sentinel would let the export carry one and pass for both.
+  hirerName: "SentinelNombreDeQuienEnvia",
+  hirerPhone: "+573001112233",
 } as const;
 
 async function anAccountWithEverything(database: TestDatabase): Promise<string> {
@@ -46,9 +51,19 @@ async function anAccountWithEverything(database: TestDatabase): Promise<string> 
   // Google's door fills both of these; the magic-link door fills neither, so they
   // are set here rather than left empty. An export tested only against a
   // magic-link Account would never see them.
+  // `hirerName` and `hirerPhone` are set here rather than through `sendOffer`
+  // for the reason `name` and `image` are: what is under test is whether the
+  // export's `select` list reaches every column, and driving another aggregate's
+  // whole transaction to fill two of them would make this fixture depend on
+  // story 6's refusals rather than on the schema.
   await database.db
     .update(schema.user)
-    .set({ name: SENTINEL.name, image: SENTINEL.image })
+    .set({
+      name: SENTINEL.name,
+      image: SENTINEL.image,
+      hirerName: SENTINEL.hirerName,
+      hirerPhone: SENTINEL.hirerPhone,
+    })
     .where(eq(schema.user.id, accountId));
 
   // The Worker consent arrives with the profile, through the module that owns
@@ -177,6 +192,11 @@ const EXPORTED_BY_COLUMN: Record<string, string> = {
   // A decision this platform took about the person reading the export, and one
   // that suspends what she may do here — the opposite case from `isAdmin` below.
   "user.offerSendingState": "offerSendingState",
+  // Held about him and disclosed to somebody else: a Worker reads both on every
+  // Offer he sends, so an export omitting them would omit the fields with the
+  // widest audience.
+  "user.hirerName": "hirerName",
+  "user.hirerPhone": "hirerPhone",
   "user.createdAt": "registeredAt",
   "consent.side": "side",
   "consent.noticeVersion": "noticeVersion",

@@ -427,6 +427,25 @@ export function authOptions({
           defaultValue: DEFAULT_OFFER_SENDING_STATE,
           input: false,
         },
+
+        /**
+         * **A Hirer's self-asserted name and phone**, collected once on his first
+         * Offer (C4) and declared here for the reason above it.
+         *
+         * `input: false` is again the security property rather than a tidiness
+         * one. These two strings are what a Worker reads when she decides whether
+         * to answer a stranger, and they are what she is handed at Contact
+         * Exchange; an endpoint that accepted them in a request body would let the
+         * identity she agreed to be rewritten after she agreed to it. The one
+         * writer is `sendOffer`, inside the transaction that writes his first
+         * Offer and his *autorización*.
+         *
+         * `required: false` and no `defaultValue`: the columns are `NULL` until
+         * that first Offer, which is what distinguishes an Account that has never
+         * sent one from a sender who left a field blank.
+         */
+        hirerName: { type: "string", required: false, input: false },
+        hirerPhone: { type: "string", required: false, input: false },
       },
     },
 

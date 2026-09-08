@@ -281,11 +281,17 @@ describe("what a refusal carries", () => {
 describe("the CHECK the first ceiling put on rate_counter.action", () => {
   // DD2's rule for an enum-shaped column, and the database refusing what
   // `CEILINGS` does not know.
+  //
+  // The value below is `acceptOffer`, which is story 9's and has no ceiling yet.
+  // It was `sendOffer` until story 6 gave that one a row — which is the shape of
+  // this case working: an action named here has to be one the registry genuinely
+  // does not hold, so the ticket that adds a ceiling is the ticket that finds
+  // this line and moves it forward.
   test("refuses an action the registry does not name", async ({ database }) => {
     await expect(
       database.db
         .insert(rateCounter)
-        .values({ principal: "address:x", action: "sendOffer", windowStart: noon, count: 1 }),
+        .values({ principal: "address:x", action: "acceptOffer", windowStart: noon, count: 1 }),
     ).rejects.toThrow();
   });
 });
