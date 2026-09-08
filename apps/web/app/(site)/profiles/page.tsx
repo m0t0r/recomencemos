@@ -26,6 +26,7 @@ import { cityLabel } from "@repo/domain/policy";
 import { profiles, SLUG_PATTERN } from "@repo/domain/profiles";
 import { skills } from "@repo/domain/skills";
 import type { Metadata } from "next";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Suspense } from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { CountAnnouncement } from "../_components/profile-list/count-announcement";
@@ -167,27 +168,37 @@ async function BrowseList({ searchParams }: { readonly searchParams: SearchParam
 }
 
 /**
- * The controls. `[stream]` from Cache Components' own menu, because reading
- * `searchParams` is dynamic — but this boundary waits on **nothing else**, which
- * is the point of it: the text box, the city and the submit are on screen and
- * usable while the list is still a skeleton below them.
+ * The controls.
+ *
+ * **They take no `filters` prop**: the panel reads the query string itself
+ * through `nuqs`, which is the same string this file reads for the list, so
+ * there is one reading and no second copy to keep in step. It is rendered on the
+ * server like any client component, so the controls arrive in the document
+ * already holding what the URL says.
  */
-async function BrowseFilters({ searchParams }: { readonly searchParams: SearchParams }) {
+function BrowseFiltersPanel() {
   return (
-    <BrowseFiltersForm
-      filters={browseFiltersFrom(await searchParams)}
-      skillOptions={
-        /*
-          The one database read on this half of the page, in a boundary of its
-          own **inside** the `<select>`. The control is complete without it —
-          `Cualquier capacidad` is what an unfiltered search sends — so holding
-          the whole form for it would trade three ready controls for one.
-        */
-        <Suspense fallback={<SkillOptionsFallback />}>
-          <SkillOptions />
-        </Suspense>
-      }
-    />
+    /*
+      `nuqs`' adapter is mounted **here**, on the one route that has query state,
+      rather than in the root layout — the reason #157 moved the toast region out
+      of it: a provider above every route is paid for by every route, and `/` and
+      `/privacy` have nothing to keep in the URL.
+    */
+    <NuqsAdapter>
+      <BrowseFiltersForm
+        skillOptions={
+          /*
+            The one database read on this half of the page, in a boundary of its
+            own **inside** the `<select>`. The control is complete without it —
+            `Cualquier capacidad` is what an unfiltered search sends — so holding
+            the whole panel for it would trade three ready controls for one.
+          */
+          <Suspense fallback={<SkillOptionsFallback />}>
+            <SkillOptions />
+          </Suspense>
+        }
+      />
+    </NuqsAdapter>
   );
 }
 
@@ -315,16 +326,19 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
         {/*
           The controls, in a boundary of their own and **outside** `ListBoundary`.
 
-          Two things follow from that placement, and both are criteria. They
-          resolve on the vocabulary read alone, which is one indexed statement
-          over ninety rows, so they paint and become usable while the list is
-          still streaming into the skeleton below them. And a list read that
-          fails leaves them standing — the search that failed is the one thing a
-          reader would want to change, so putting them inside the failing
-          boundary would take away the way out at the moment it is needed.
+          Three things follow from that placement. They wait on nothing but the
+          query string, so they paint and become usable while the list is still
+          streaming into the skeleton below them. A list read that fails leaves
+          them standing — the search that failed is the one thing a reader would
+          want to change, so putting them inside the failing boundary would take
+          away the way out at the moment it is needed. And the boundary is
+          **required** rather than chosen: the panel reads the query string
+          through `nuqs`, which is `useSearchParams` underneath, and a client
+          component reading that outside a boundary opts the whole route out of
+          the static shell.
         */}
         <Suspense fallback={<FiltersSkeleton />}>
-          <BrowseFilters searchParams={searchParams} />
+          <BrowseFiltersPanel />
         </Suspense>
 
         {/*

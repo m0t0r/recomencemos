@@ -87,8 +87,20 @@ export function toFilterParams(filters: BrowseFilters): Record<string, string> {
   };
 }
 
-/** Whether a person chose anything at all. */
-export function isNarrowed(filters: BrowseFilters): boolean {
+/**
+ * Whether a person chose anything at all.
+ *
+ * **It asks about presence, not about validity**, so it takes the terms
+ * structurally rather than as a {@link BrowseFilters}. The controls hold what
+ * the query string says before anything has narrowed a city id to one of the
+ * three; the page holds the validated triple. Both want the same answer, and
+ * requiring the narrow type here would have made the panel cast to get it.
+ */
+export function isNarrowed(filters: {
+  readonly query: string;
+  readonly skill: string | null;
+  readonly city: string | null;
+}): boolean {
   return filters.query.length > 0 || filters.skill !== null || filters.city !== null;
 }
 
