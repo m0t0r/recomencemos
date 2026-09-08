@@ -725,7 +725,7 @@ Repo-level surfaces that support it — create them as the work needs them, and 
 - `.claude/skills/<name>/SKILL.md` — **method**: how the work is done. Craft, not policy, and the same in any project.
 - `docs/policy/*.md` — **policy**: the answers only this organization can give. Every value is set or literally `UNSET`, and a skill needing an `UNSET` value raises a flagged concern naming the file and the key rather than guessing. Effort 0002's design interview set most of them; `grep -rn UNSET docs/policy/` is what is left.
 - `docs/runbooks/*.md` — **procedure**: what a human does to take something live or recover it, as numbers and commands rather than advice. A runbook step that ends in a decision names the `docs/policy/` key rather than making it. [`observability-go-live.md`](docs/runbooks/observability-go-live.md) is the one that ships: it carries the environment-variable phase split, the vendor's free-tier caps **pinned at a date**, the two control-band numbers and their arithmetic, the go-live check that proves `trace_id` correlation end to end, the breach path from webhook to `needs-triage` issue, and what was verified against the installed SDK rather than recalled.
-- `.claude/agents/<name>.md` — scoped subagents for recurring work such as verification, research, or simplification.
+- `.claude/agents/<name>.md` — scoped subagents for recurring work such as verification, research, or simplification. Five are the Design stage's advisors and fidelity checker; the sixth, `security-auditor`, is the in-house security expert — see **Security audit** under Agent skills below.
 - `.claude/settings.json` — hooks as deterministic gates (protected paths, formatters, credential scanning, deploy authorization).
 - `REVIEW.md` — the PR review passes beyond `code-review`'s two axes, and the severity threshold that blocks a merge. Under stacked PRs it also says what runs per-PR and what runs once at the top of the stack. Three passes now, and the third is the one that is deliberately **not** mechanised: recorded proof for a visible change is a reading rather than a run, because a machine can check a link is present and not that the artifact shows the criterion it is cited against.
 
@@ -820,6 +820,31 @@ The five canonical roles, used verbatim as label strings. See `docs/agents/triag
 ### Domain docs
 
 Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Security audit
+
+**The method is the vendored `security-audit` skill; the auditor is the `security-auditor` subagent;
+the coupling between them and this repository is `docs/agents/security-audit.md`.** Read that file
+before either a full `/security-audit` run or the `REVIEW.md` **Security review** pass, and do not
+fork the skill — the trust model, the list of designed behaviours that look like findings, the
+OWASP/ASVS/CWE tagging, the run directory and the filing rules all live in the coupling doc, which
+is what the agent reads first.
+
+Three things follow, and each closes a gap that was measured rather than guessed:
+
+- **The auditor is a subagent, so it cannot spawn agents and cannot write files.** The vendored skill
+  expects a hunter to delegate a rabbit hole and an orchestrator to write the run directory; here the
+  hunter returns the rabbit hole under **Handoffs** and the main session does every write. That is
+  the same split that keeps the four Design advisors read-only by contract.
+- **Prior runs are `security-finding` issues, not files under the home directory.** The skill
+  deduplicates against earlier `findings.json` files; here a finding's durable record is the tracker
+  (ADR-0001), a closed `wontfix` is an accepted risk that is never re-filed, and the fingerprint is
+  the sink file plus the CWE so two wordings of one bug meet. The run directory itself is
+  `.security-audit/runs/` and is gitignored.
+- **Dynamic confirmation runs against this tree's dev server and nothing else** — never the deployed
+  origin, never a live third-party endpoint, never a real person's data — and nothing the auditor
+  returns may hold a token, a secret or an enrolment URL, because an issue on this repository is
+  public. The list is the security policy's own "What a published artifact may never contain".
 
 ### SDLC artifacts
 

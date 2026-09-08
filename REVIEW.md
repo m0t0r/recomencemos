@@ -146,12 +146,46 @@ artifact published for a ticket with no spec parent is the one mistake here that
 waiting. `ui-evidence-retention` is the rule; the publisher warns but cannot see the ticket graph, so
 this is the place it is actually checked.
 
+### Security review — blocking, when the diff touches auth, the exchange path or an egress
+
+**A PR that changes how a caller proves who they are, what crosses to another person, or what leaves
+the system is read adversarially before it merges.** `pentest-cadence` in
+[`docs/policy/security.md`](docs/policy/security.md) is the rule — none external, two tiers of agent
+review in its place — and this pass is the per-PR tier. The full-platform tier is a `/security-audit`
+run, which is periodic rather than a merge gate.
+
+**The reader is the `security-auditor` subagent**, spawned with the PR number, and
+[`docs/agents/security-audit.md`](docs/agents/security-audit.md) → "Reviewing one pull request"
+carries the path list that decides whether this pass applies and the shape the result is posted in.
+The path condition is deliberate rather than lazy: a security review on the PR that changes a font
+size is how a reader learns to skim, and a pass that runs on every diff is bypassed the same week.
+
+Three things about the verdict:
+
+- **A `CONFIRMED` `CRITICAL` or `HIGH` blocks.** `MEDIUM` is advisory and the thread answers it.
+  `LOW` and below are named once and never block. The severity table is the vendored skill's, and
+  its rule that a defence-in-depth gap is a hardening note rather than a finding applies here too.
+- **A finding at `MEDIUM` or above is also an issue**, filed under `needs-triage` and
+  `security-finding` as the coupling doc says. A PR thread is not a place a finding survives a merge,
+  and [ADR-0001](docs/adr/0001-findings-enter-through-triage.md) is where findings enter.
+- **A finding that argues with a set policy value is not a finding.** The Wall is public, enrolment is
+  open and published as unverified, an Admin is fully trusted. The auditor's return names the row of
+  the coupling doc's designed-behaviour table it ruled out, and the reviewer checks that it did.
+
+**What this pass is not** is written down so nobody records it as one: an agent reading code another
+agent wrote shares its blind spots. What it buys is that every change to a boundary is read by a
+context that was told to break it, not by the one that was told to build it.
+
 ## Under stacked PRs
 
 `stacked-prs` is **yes** (`docs/policy/build.md`). Both `/code-review` axes run per PR, against each
 PR's own diff. The passes above run once, at the top of the stack, against the whole stack's diff —
 a registry equivalent introduced low in a stack and consumed above it is one finding, not one per
 PR.
+
+**Security review runs per PR too**, for the same reason recorded proof does: it asks whether _this
+diff_ opens a boundary, and a stack whose review sits only at the top has four merges of unread auth
+code below it. The path condition is evaluated against each PR's own diff.
 
 **Recorded proof is the exception, and it runs per PR.** The other passes ask a question about the
 stack's final state, so asking it five times wastes a reviewer. This one asks whether _this diff's_
