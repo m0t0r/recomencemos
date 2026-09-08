@@ -38,6 +38,7 @@
  * spelling by accident is the failure worth avoiding.
  */
 
+import type { ReactNode } from "react";
 import {
   FieldDescription,
   FieldGroup,
@@ -77,7 +78,7 @@ import {
 } from "@/app/_lib/profile-form/schema";
 import { messageOf, type ProfileFieldsForm } from "@/app/_lib/profile-form/use-profile-fields";
 import type { ProfileFormMachine } from "@/app/_lib/profile-form/use-profile-form";
-import { AboutField, CityField, PhotoNote, TextField, WorkHistoryFields } from "./fields";
+import { AboutField, CityField, TextField, WorkHistoryFields } from "./fields";
 import { SkillPicker, type VocabularyEntry } from "./skill-picker";
 
 /**
@@ -130,10 +131,22 @@ export interface ProfileFieldGroupsProps {
   readonly idFor: (field: PublishFieldName, index?: number) => string;
   readonly serverErrorFor: (field: PublishFieldName, index?: number) => string | undefined;
   /**
-   * The sentence about the photo. `/publish` says it is uploaded after
-   * publishing; an edit says where it is changed instead. Absent renders none.
+   * **The photo's place on this form**, filled differently by each surface.
+   *
+   * `/publish` puts the control here; `/my-profile/edit` puts a sentence saying
+   * where the photo is changed instead. It was `photoNote` and rendered a
+   * default sentence when absent — which stopped being right the moment one of
+   * the two surfaces had a real control to put here, since a default is exactly
+   * what a surface with its own answer has to work around.
+   *
+   * **It renders last inside the identity group**, and that placement is the
+   * brief's decision rather than a layout preference. It moved out of the
+   * optional-extras group with #18: a photo is an identity fact and belongs
+   * beside her name and her city, and a control that opens a camera roll is the
+   * most abandonable thing on the page — so it goes after everything that
+   * cannot be skipped, and never between her and the submit.
    */
-  readonly photoNote?: React.ReactNode;
+  readonly photoSlot?: ReactNode;
 }
 
 export function ProfileFieldGroups({
@@ -142,7 +155,7 @@ export function ProfileFieldGroups({
   vocabulary,
   idFor,
   serverErrorFor,
-  photoNote,
+  photoSlot,
 }: ProfileFieldGroupsProps) {
   return (
     <FieldGroup>
@@ -215,6 +228,7 @@ export function ProfileFieldGroups({
           autoComplete="name"
           maxLength={LIMITS.fullName}
         />
+        {photoSlot}
       </FieldSet>
 
       <Separator />
@@ -249,7 +263,6 @@ export function ProfileFieldGroups({
           serverErrorFor={(index) => serverErrorFor("workHistory", index)}
           hydrated={machine.hydrated}
         />
-        {photoNote ?? <PhotoNote />}
       </FieldSet>
     </FieldGroup>
   );
