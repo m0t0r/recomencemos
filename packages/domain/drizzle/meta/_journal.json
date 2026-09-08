@@ -99,6 +99,13 @@
       "when": 1788879352305,
       "tag": "0013_search_the_folded_column",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788897969099,
+      "tag": "0014_photo_review_gate",
+      "breakpoints": true
     }
   ]
 }
