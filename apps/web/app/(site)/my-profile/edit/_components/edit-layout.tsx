@@ -44,7 +44,7 @@ export function EditLayout({ form, machine, vocabulary, idFor, serverErrorFor }:
         vocabulary={vocabulary}
         idFor={idFor}
         serverErrorFor={serverErrorFor}
-        photoNote={
+        photoSlot={
           <p className="text-muted-foreground text-sm text-pretty">{PHOTO_CHANGED_ELSEWHERE}</p>
         }
       />

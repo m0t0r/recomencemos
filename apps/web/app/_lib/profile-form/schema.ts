@@ -289,3 +289,50 @@ export const consentVersionsArg = z.object({
   notice: z.string().min(1, PAGE_STALE),
   authorization: z.string().min(1, PAGE_STALE),
 });
+
+/**
+ * The quarantine key her browser was given, as a **bound argument** rather than
+ * a hidden input (ADR-0015).
+ *
+ * **It travels with the submit and nobody types it**, so React encodes it into
+ * the action reference, it survives without JavaScript (as `null` — see below),
+ * and the form's markup carries no mirror of it. A hidden `<input>` holding a
+ * key would be a piece of client state mirrored into the DOM, which is the exact
+ * shape ADR-0015 exists to replace.
+ *
+ * **`null` is the ordinary case, not an edge.** She picked no photo, or the
+ * upload lost the race with her submit, or JavaScript never ran — all three are
+ * a profile published without a photo, which is the design rather than a
+ * failure.
+ *
+ * **The shape is checked here and again in the domain**, and the second check is
+ * the one that matters: this value round-trips through the browser, so by the
+ * time it comes back it is caller-controlled. `attachPhoto` refuses anything
+ * that is not a key `@repo/storage` minted, which is what stops one profile's
+ * row being pointed at another profile's object.
+ */
+export const photoKeyArg = z
+  .string()
+  .regex(/^quarantine\/[A-Za-z0-9_-]{21}$/)
+  .nullable();
+
+/**
+ * What the browser tells `createPhotoUpload` about the bytes it is about to
+ * send.
+ *
+ * **Both values are signed into the presigned URL and neither is trusted.** The
+ * length becomes a `Content-Length` condition on the signature — which is what
+ * makes DD6's ceiling a property of the bucket rather than of our code — and the
+ * type bounds what may be PUT while deciding nothing: the server-side re-encode
+ * reads the format out of the bytes, because this string is a header the browser
+ * composed.
+ *
+ * No messages, because no sentence from here reaches a person: the browser is
+ * what fills this in, and a payload that fails it is not a form somebody typed.
+ */
+export const photoUploadSchema = z.object({
+  byteLength: z.number().int().positive(),
+  contentType: z.string().min(1).max(100),
+});
+
+export type PhotoUploadValues = z.output<typeof photoUploadSchema>;

@@ -33,7 +33,6 @@ import {
   ABOUT_LABEL,
   ADD_WORK_HISTORY_BUTTON,
   CITY_LEGEND,
-  PHOTO_NOTE,
   REMOVE_WORK_HISTORY_BUTTON,
   WORK_HISTORY_HELP,
   WORK_HISTORY_LABEL,
@@ -323,9 +322,4 @@ function WorkHistoryLine({
       }}
     </form.Field>
   );
-}
-
-/** The photo's place: a sentence, because the photo is another ticket's and NFR4's one exception. */
-export function PhotoNote() {
-  return <p className="text-muted-foreground text-sm">{PHOTO_NOTE}</p>;
 }

@@ -118,9 +118,20 @@ describe("the sentences the ticket names specifically", () => {
   });
 
   // NFR4: the photo is the one documented exception, and the form says so.
-  it("names the photo as what comes after publishing", () => {
+  /**
+   * **The note stopped being about *when* the photo happens and became about
+   * NFR4**, because the photo now has a control on this form. The requirement
+   * names it as the single documented exception and asks that the form say so
+   * **where the field appears** — so this is what stands in the control's place
+   * on the unhydrated path.
+   *
+   * What it must go on saying is that publishing is unaffected. That is the
+   * sentence this whole ticket is arranged around, and it is the half of it a
+   * test can hold.
+   */
+  it("names the photo as the exception, and says the profile publishes anyway", () => {
     expect(PUBLISH_COPY.PHOTO_NOTE.toLowerCase()).toContain("foto");
-    expect(PUBLISH_COPY.PHOTO_NOTE.toLowerCase()).toContain("después");
+    expect(PUBLISH_COPY.PHOTO_NOTE.toLowerCase()).toContain("perfil se publica");
   });
 
   /**

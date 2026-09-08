@@ -19,6 +19,7 @@
  * _autorización_ above the fields, and the verb on the button.
  */
 
+import type { ReactNode } from "react";
 import { Button } from "@repo/design-system/components/button";
 import { FieldGroup } from "@repo/design-system/components/field";
 import { AuthorizationConsent } from "@/app/_components/consent/authorization";
@@ -39,6 +40,15 @@ export interface PublishLayoutProps {
   readonly vocabulary: readonly VocabularyEntry[];
   readonly idFor: (field: PublishFieldName, index?: number) => string;
   readonly serverErrorFor: (field: PublishFieldName, index?: number) => string | undefined;
+  /**
+   * The photo step, rendered at the foot of the identity group.
+   *
+   * **A slot rather than a field this layout builds**, because
+   * `ProfileFieldGroups` is shared with `/my-profile/edit` and only one of the
+   * two surfaces carries a photo control today. Passing it in leaves the edit
+   * form's markup unchanged rather than making it opt out of something.
+   */
+  readonly photoSlot?: ReactNode;
 }
 
 export function PublishLayout({
@@ -47,6 +57,7 @@ export function PublishLayout({
   vocabulary,
   idFor,
   serverErrorFor,
+  photoSlot,
 }: PublishLayoutProps) {
   return (
     <FieldGroup>
@@ -58,6 +69,7 @@ export function PublishLayout({
         vocabulary={vocabulary}
         idFor={idFor}
         serverErrorFor={serverErrorFor}
+        photoSlot={photoSlot}
       />
 
       <FormSummary
