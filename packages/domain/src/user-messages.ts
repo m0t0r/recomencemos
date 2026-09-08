@@ -175,6 +175,24 @@ export const ADMIN_SKILL_SLUG_TAKEN =
   "Ya hay una capacidad con ese identificador. Escribe otro y vuelve a intentarlo.";
 
 /**
+ * The two refusals delivering an Offer can meet, and they are the Skill
+ * request's two one section over — for the same reason, which is that two people
+ * work one queue.
+ *
+ * Admin register (Warmth 5→2, Sophistication 2→4): one operator, mid-queue,
+ * who needs to know what changed under them and what to do next.
+ */
+export const ADMIN_OFFER_GONE = "Esa propuesta ya no está. Vuelve a cargar la página.";
+
+/**
+ * Somebody already handled it, or it moved on its own — an Offer whose sender
+ * was frozen is held, and one nobody answered expires. The sentence names the
+ * queue's state rather than an error, because that is what happened.
+ */
+export const ADMIN_OFFER_RESOLVED =
+  "Esa propuesta ya no está esperando revisión. Vuelve a cargar la página.";
+
+/**
  * An Admin action that broke on our side.
  *
  * **The second sentence is the one that matters**, and it is true by

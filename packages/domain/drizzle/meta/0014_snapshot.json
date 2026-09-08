@@ -1,5 +1,5 @@
 {
-  "id": "ee10ed3d-f9e5-45d5-8430-7f6dcc781d55",
+  "id": "4d7e2452-d069-4b76-9b78-91691f3df3a7",
   "prevId": "120295cc-2f7d-4f6f-915e-9dadd374a507",
   "version": "7",
   "dialect": "postgresql",
@@ -240,7 +240,7 @@
       "checkConstraints": {
         "admin_action_action_known": {
           "name": "admin_action_action_known",
-          "value": "\"admin_action\".\"action\" IN ('revokeSessions', 'promoteSkill')"
+          "value": "\"admin_action\".\"action\" IN ('revokeSessions', 'promoteSkill', 'deliverOffer')"
         }
       },
       "isRLSEnabled": false

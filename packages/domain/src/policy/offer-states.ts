@@ -64,8 +64,10 @@ export const INITIAL_OFFER_STATE = "pending_review" satisfies OfferState;
  * Hirer quietly shrink the number the operator is measured by, which is the
  * instrument lying about exactly the thing it exists to report.
  */
-export const PENDING_OFFER_STATES = ["pending_review", "on_hold"] as const satisfies readonly
-  OfferState[];
+export const PENDING_OFFER_STATES = [
+  "pending_review",
+  "on_hold",
+] as const satisfies readonly OfferState[];
 
 /**
  * NFR7's band, in hours: the age of the oldest undelivered Offer stays under it.

@@ -21,6 +21,7 @@ CREATE TABLE "offer" (
         AND char_length(btrim("offer"."when_text")) > 0)
 );
 --> statement-breakpoint
+ALTER TABLE "admin_action" DROP CONSTRAINT "admin_action_action_known";--> statement-breakpoint
 ALTER TABLE "rate_counter" DROP CONSTRAINT "rate_counter_action_known";--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "hirer_name" text;--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "hirer_phone" text;--> statement-breakpoint
@@ -32,4 +33,5 @@ CREATE INDEX "block_hirer_account_id_idx" ON "block" USING btree ("hirer_account
 CREATE INDEX "offer_capability_profile_id_created_at_idx" ON "offer" USING btree ("capability_profile_id","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "offer_hirer_account_id_created_at_idx" ON "offer" USING btree ("hirer_account_id","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "offer_pending_idx" ON "offer" USING btree ("created_at") WHERE "offer"."state" IN ('pending_review', 'on_hold');--> statement-breakpoint
+ALTER TABLE "admin_action" ADD CONSTRAINT "admin_action_action_known" CHECK ("admin_action"."action" IN ('revokeSessions', 'promoteSkill', 'deliverOffer'));--> statement-breakpoint
 ALTER TABLE "rate_counter" ADD CONSTRAINT "rate_counter_action_known" CHECK ("rate_counter"."action" IN ('requestMagicLink', 'verifyAdminTotp', 'verifyAdminBackupCode', 'publishProfile', 'requestSkill', 'updateProfile', 'sendOffer', 'readProfileHourly', 'readProfileDaily'));
