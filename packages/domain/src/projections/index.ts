@@ -29,11 +29,19 @@
  * And one more that is hers alone: {@link toOwnProfile}, the gated shape plus
  * the three held fields and her photo whatever its state, for `/my-profile`.
  *
+ * **Two more since story 6, and they are the same discipline over an Offer**:
+ * {@link toSentOffer} is what its sender reads and {@link toReceivedOffer} is
+ * what its addressee reads. The field that has to be counted here is the
+ * Hirer's phone — self-asserted, `personal`, and held on his Account — which
+ * reaches **neither**: it crosses at Contact Exchange and nowhere earlier,
+ * which is the same rule her number is held to, applied in the other direction.
+ *
  * Pure, and seam 1's: `projections.test.ts` puts five distinct sentinels into
  * one record and counts them in each output.
  */
 
 import type { CityId } from "#policy/cities";
+import { asOfferState, isOfferReviewDelayed, type OfferState } from "#policy/offer-states";
 import type { PhotoState } from "#policy/profile-states";
 import type { VocabularyEntry } from "#skills";
 
@@ -169,4 +177,138 @@ export function toOwnProfile(record: ProfileRecord): OwnProfile {
     // `photoUrl` crosses before approval.
     photoUrl: record.photoUrl,
   };
+}
+
+/**
+ * Everything an Offer projection may read — the row plus the two identities it
+ * sits between. Built by `#offers`; nothing outside this package sees it whole.
+ *
+ * **`hirerName` and `hirerPhone` are both on here and only one of them ever
+ * crosses.** They are `NULL` until his first Offer and the reader hands them
+ * through as they are; the *decision* about which reaches a browser is made
+ * below, once, where NFR11 can be counted — the same arrangement `photoUrl` has,
+ * where the reader resolves and the projection decides.
+ */
+export interface OfferRecord {
+  readonly id: string;
+  readonly state: string;
+  readonly workDescription: string;
+  readonly payTerms: string;
+  readonly whenText: string;
+  readonly sentAt: Date;
+  readonly deliveredAt: Date | null;
+  /** The Worker this Offer is for, as she appears to anyone. */
+  readonly worker: PublicProfile;
+  /** What he called himself on his first Offer. `null` before it. */
+  readonly hirerName: string | null;
+  /** What he gave as his number. **Never crosses on an Offer** — see below. */
+  readonly hirerPhone: string | null;
+}
+
+/**
+ * What one of these looks like on the wire, both ways round.
+ *
+ * The API contract fixes the shared half — _"`id`, `state`, `workDescription`,
+ * `payTerms`, `whenText`, `sentAt`, plus the counterpart's `PublicProfile`-shaped
+ * identity and nothing more until exchange"_ — and each side adds exactly one
+ * field of its own.
+ */
+interface OfferBase {
+  readonly id: string;
+  readonly state: OfferState;
+  readonly workDescription: string;
+  readonly payTerms: string;
+  readonly whenText: string;
+  readonly sentAt: Date;
+}
+
+/**
+ * What a Hirer sees at `/sent-offers`: **state only, and no contact details
+ * until an exchange**.
+ *
+ * `reviewDelayed` is the one field of its own (C41), and it is derived rather
+ * than stored — `deliveredAt IS NULL AND sentAt < now() - 24 hours`, computed by
+ * `isOfferReviewDelayed` and passed the clock so nothing under here reads it.
+ */
+export interface SentOffer extends OfferBase {
+  readonly worker: PublicProfile;
+  readonly reviewDelayed: boolean;
+}
+
+/**
+ * What a Worker sees at `/offers`: the same terms, plus **`hirerName` and
+ * nothing else about him** (C4).
+ *
+ * **His phone is deliberately not here, and this is the projection NFR11 is
+ * counted over.** His number crosses at Contact Exchange and nowhere earlier —
+ * the same rule her number is held to, in the same direction. `hirerName` is
+ * badged as declared rather than verified by every surface that renders it, so
+ * she judges knowing who *claims* to be asking.
+ *
+ * `null` is a real state and not a placeholder: it is an Offer written before
+ * this platform asked its senders to name themselves. The surface says so rather
+ * than rendering an empty string.
+ */
+export interface ReceivedOffer extends OfferBase {
+  readonly hirerName: string | null;
+}
+
+/**
+ * The sender's view, field by field from the whitelist.
+ *
+ * The clock is a parameter, so this stays pure and seam 1's, and so that a page
+ * rendering twenty rows reads the time once — every row on the screen then
+ * agrees about what "24 hours ago" means.
+ */
+export function toSentOffer(record: OfferRecord, now: Date): SentOffer {
+  return {
+    id: record.id,
+    state: offerStateOf(record),
+    workDescription: record.workDescription,
+    payTerms: record.payTerms,
+    whenText: record.whenText,
+    sentAt: record.sentAt,
+    worker: record.worker,
+    reviewDelayed: isOfferReviewDelayed(record.sentAt, record.deliveredAt, now),
+  };
+}
+
+/**
+ * The addressee's view. Note what is absent: `hirerPhone`, and her own
+ * `PublicProfile` — she knows who she is, and an Offer she received says nothing
+ * about her that she did not already write.
+ */
+export function toReceivedOffer(record: OfferRecord): ReceivedOffer {
+  return {
+    id: record.id,
+    state: offerStateOf(record),
+    workDescription: record.workDescription,
+    payTerms: record.payTerms,
+    whenText: record.whenText,
+    sentAt: record.sentAt,
+    hirerName: record.hirerName,
+  };
+}
+
+/**
+ * The row's `TEXT` state, narrowed.
+ *
+ * `offer_state_known` makes an unknown value unreachable through the schema, so
+ * this throws rather than falling back: unlike a sending state there is no
+ * "most restrictive" member to pick, and quietly showing an Offer as
+ * `pending_review` because its real state was unreadable would tell a person
+ * something false about a decision that is hers.
+ */
+function offerStateOf(record: OfferRecord): OfferState {
+  const state = asOfferState(record.state);
+
+  if (!state) {
+    throw new TypeError(
+      `An Offer row carries the state "${record.state}", which is not one this product has. ` +
+        "The offer_state_known constraint should make that unreachable, so something has " +
+        "written to this table from outside the domain package.",
+    );
+  }
+
+  return state;
 }

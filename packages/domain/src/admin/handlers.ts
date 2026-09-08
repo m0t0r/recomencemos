@@ -25,12 +25,15 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { AdminActionName } from "#admin/names";
 import type { DomainDatabase } from "#database";
+import { asOfferState, mayTransitionOffer } from "#policy/offer-states";
 import * as schema from "#schema";
 import {
   ADMIN_ACCOUNT_NOT_FOUND,
+  ADMIN_OFFER_GONE,
+  ADMIN_OFFER_RESOLVED,
   ADMIN_SKILL_REQUEST_GONE,
   ADMIN_SKILL_REQUEST_RESOLVED,
   ADMIN_SKILL_SLUG_TAKEN,
@@ -73,6 +76,36 @@ export interface AdminActionShapes {
    * has just typed two strings that are about to be read by everyone, and the
    * screen saying which pair landed is the only confirmation available.
    */
+  /**
+   * Lets one Offer through to the person it is addressed to.
+   *
+   * **The one act on this list with a deadline attached.** NFR7 bounds the age
+   * of the oldest undelivered Offer at 24 hours, which is why `/admin` leads with
+   * that section — and why the Offer aggregate ships this action with the story
+   * that writes the Offers rather than with the section that renders them. An
+   * Offer nobody can deliver is an Offer that only accumulates.
+   *
+   * **The result carries what the send needs and the browser never sees.** The
+   * notification is not sent from inside the handler: the transaction is
+   * rollback-able and a delivered email is not, so the send happens in the
+   * Server Action **after** this commits, and a transport that fails leaves the
+   * Offer delivered — DD9's rule for `acceptOffer`, which is the same trade in
+   * the same direction. That is why her address is on this result: it is the one
+   * value the caller cannot look up without a second door into the database, and
+   * `apps/web`'s action declares a return type that does not carry it.
+   */
+  deliverOffer: {
+    input: { readonly offerId: string };
+    result: {
+      /** What the queue tells the Admin: who it went to, in the terms NFR11 permits. */
+      readonly workerFirstName: string;
+      /** For the send, and for nothing that reaches a browser. */
+      readonly recipientEmail: string;
+      readonly recipientAccountId: string;
+      readonly offerId: string;
+    };
+  };
+
   promoteSkill: {
     input: {
       /** The `SkillRequest` row, as digits — see `#skills` for why it crosses as a string. */
@@ -250,6 +283,114 @@ export const ADMIN_ACTION_HANDLERS = {
     return {
       targetId: String(request.id),
       result: { slug: promoted.slug, labelEs: promoted.labelEs },
+    };
+  },
+
+  async deliverOffer(tx, { offerId }) {
+    /**
+     * **Locked, for `promoteSkill`'s reason and one of its own.** Two Admins
+     * working the same queue is ordinary rather than exotic, and here a second
+     * delivery would not merely write a second `AdminAction` — it would
+     * increment `delivered_offer_count` twice, and that column is NFR22's
+     * ordering input. A double delivery would push her *down* the browsable
+     * list for work she was contacted about once.
+     *
+     * `FOR UPDATE` rather than a conditional `UPDATE` returning a count, because
+     * the two refusals below are different sentences: an Offer that is not there
+     * and one somebody else has already handled are different facts about the
+     * queue in front of them.
+     */
+    const [offer] = await tx
+      .select({
+        id: schema.offer.id,
+        state: schema.offer.state,
+        capabilityProfileId: schema.offer.capabilityProfileId,
+      })
+      .from(schema.offer)
+      .where(eq(schema.offer.id, offerId))
+      .for("update")
+      .limit(1);
+
+    if (!offer) {
+      throw new AppError({
+        code: "admin_offer_not_found",
+        status: 404,
+        message:
+          "deliverOffer was given an Offer id no row carries. Nothing was delivered and no " +
+          "AdminAction was written, because nothing happened.",
+        // The id is an identifier and carries nothing either party wrote (NFR18).
+        userMessage: ADMIN_OFFER_GONE,
+        context: { offer_id: offerId },
+      });
+    }
+
+    const state = asOfferState(offer.state);
+
+    if (!state || !mayTransitionOffer(state, "delivered")) {
+      throw new AppError({
+        code: "admin_offer_not_deliverable",
+        status: 409,
+        message:
+          `deliverOffer was asked to deliver an Offer in state "${offer.state}", which is not a ` +
+          "state it can be delivered from. Nothing was delivered; the transaction rolls back " +
+          "with no AdminAction row and the counter untouched.",
+        userMessage: ADMIN_OFFER_RESOLVED,
+        context: { offer_id: offerId, state: offer.state },
+      });
+    }
+
+    await tx
+      .update(schema.offer)
+      .set({ state: "delivered", deliveredAt: new Date() })
+      .where(eq(schema.offer.id, offer.id));
+
+    /**
+     * **NFR22's ordering input, incremented here and nowhere else.** The
+     * browsable list orders by delivered-Offer count ascending, so this is the
+     * write that moves her down it — which is the fairness mechanism working,
+     * and the reason the read that feeds it is a stored column rather than a
+     * count over `state` (that count would fall back the moment she accepts).
+     *
+     * `+ 1` in SQL rather than read-then-write: the lock above is on the Offer
+     * row and not on her profile, and two Offers to one Worker delivered at once
+     * would otherwise lose an increment.
+     */
+    await tx
+      .update(schema.capabilityProfile)
+      .set({ deliveredOfferCount: sql`${schema.capabilityProfile.deliveredOfferCount} + 1` })
+      .where(eq(schema.capabilityProfile.id, offer.capabilityProfileId));
+
+    /**
+     * Who to write to. Read after the writes rather than before, so a refusal
+     * above never touches her address at all.
+     */
+    const [recipient] = await tx
+      .select({
+        accountId: schema.user.id,
+        email: schema.user.email,
+        firstName: schema.capabilityProfile.firstName,
+      })
+      .from(schema.capabilityProfile)
+      .innerJoin(schema.user, eq(schema.user.id, schema.capabilityProfile.accountId))
+      .where(eq(schema.capabilityProfile.id, offer.capabilityProfileId))
+      .limit(1);
+
+    // The Offer's foreign key guarantees the profile, and the profile's
+    // guarantees the Account; a missing row here means something this code does
+    // not model, and throwing rolls the delivery back rather than sending
+    // nothing and reporting success.
+    if (!recipient) {
+      throw new Error("The delivered Offer names a profile with no Account; nothing commits.");
+    }
+
+    return {
+      targetId: offer.id,
+      result: {
+        workerFirstName: recipient.firstName,
+        recipientEmail: recipient.email,
+        recipientAccountId: recipient.accountId,
+        offerId: offer.id,
+      },
     };
   },
 } as const satisfies { [K in AdminActionName]: AdminActionHandler<K> };

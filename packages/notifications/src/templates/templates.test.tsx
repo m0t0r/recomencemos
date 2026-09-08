@@ -16,6 +16,7 @@ import { AppError } from "@repo/errors/app-error";
 import type { ReactElement } from "react";
 import { BaseEmail } from "#templates/base";
 import { MAGIC_LINK_SUBJECT, MagicLinkEmail, safeUrl } from "#templates/magic-link";
+import { OFFER_DELIVERED_SUBJECT, OfferDeliveredEmail } from "#templates/offer-delivered";
 
 /**
  * The field a person other than the recipient controls, per template.
@@ -40,6 +41,16 @@ const templates: ReadonlyArray<{
   {
     name: "magic-link",
     render: ({ linked }) => <MagicLinkEmail url={linked} expiresInMinutes={15} />,
+  },
+  {
+    /**
+     * Her first name is the user-controlled field here — she typed it on her own
+     * profile, and it reaches this template unaltered. The Offer's terms are
+     * deliberately not in the mail at all, so the field with the widest exposure
+     * is the one this row puts the scripted payload in.
+     */
+    name: "offer-delivered",
+    render: ({ scripted, linked }) => <OfferDeliveredEmail firstName={scripted} url={linked} />,
   },
 ];
 
@@ -243,6 +254,91 @@ describe("the magic-link email", () => {
       "hoja de vida",
       "vacante",
       "donación",
+    ]) {
+      expect(text, `"${banned}" is on a CONTEXT.md Avoid list`).not.toContain(banned);
+    }
+  });
+});
+
+describe("the delivered-Offer email", () => {
+  const props = {
+    firstName: "Ana María",
+    url: "https://recomencemos.online/offers/0199a1f0-2b3c-7def-8000-0123456789ab",
+  };
+
+  it("has a subject that carries no exclamation mark and names nobody", () => {
+    expect(OFFER_DELIVERED_SUBJECT).toBe("Te llegó una propuesta de trabajo");
+    expect(OFFER_DELIVERED_SUBJECT).not.toContain("!");
+  });
+
+  /**
+   * **The whole reason this template is short.** The Offer's three fields are
+   * `personal` and the mail is not where they are read — a mailbox may be a
+   * shared phone, it sits in a provider's storage, and it reaches a vendor on the
+   * way. The site is the durable channel; this says something arrived.
+   */
+  it("carries none of the Offer's terms", async () => {
+    const terms = {
+      workDescription: "SENTINEL_WORK_DESCRIPTION",
+      payTerms: "SENTINEL_PAY_TERMS",
+      whenText: "SENTINEL_WHEN_TEXT",
+    };
+
+    // The props cannot carry them at all, which is the strongest form of this:
+    // the assertion below is over the rendered mail, and the type is what stops
+    // a caller passing them in the first place.
+    const html = await render(<OfferDeliveredEmail {...props} />);
+
+    for (const sentinel of Object.values(terms)) expect(html).not.toContain(sentinel);
+  });
+
+  /**
+   * His name is self-asserted and reaches her badged as declared rather than
+   * verified. A notification bar has no room for that badge, so it does not go
+   * there.
+   */
+  it("names nobody but her", async () => {
+    const html = await render(<OfferDeliveredEmail {...props} />);
+
+    expect(html).toContain("Ana María");
+    expect(OFFER_DELIVERED_SUBJECT).not.toContain("Ana");
+  });
+
+  /**
+   * The one sentence this email carries beyond the link, and the sentence the
+   * platform's actual work is in. Do 1: present tense, actor visible.
+   */
+  it("says a person read it first", async () => {
+    const text = await render(<OfferDeliveredEmail {...props} />, { plainText: true });
+
+    expect(text).toContain("Una persona la leyó antes de que te llegara");
+  });
+
+  /** Doing nothing is a complete answer, and the mail says so (Do 3). */
+  it("says she does not have to answer", async () => {
+    const text = await render(<OfferDeliveredEmail {...props} />, { plainText: true });
+
+    expect(text).toContain("no tienes que hacer nada");
+  });
+
+  it("uses no word from CONTEXT.md's Avoid lists", async () => {
+    const text = (
+      await render(<OfferDeliveredEmail {...props} />, { plainText: true })
+    ).toLowerCase();
+
+    for (const banned of [
+      "damnificad",
+      "víctima",
+      "afectad",
+      "beneficiari",
+      "necesitad",
+      "usuario",
+      "candidat",
+      "hoja de vida",
+      "vacante",
+      "donación",
+      "oferta",
+      "empleo",
     ]) {
       expect(text, `"${banned}" is on a CONTEXT.md Avoid list`).not.toContain(banned);
     }

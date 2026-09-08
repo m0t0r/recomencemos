@@ -39,6 +39,19 @@ const TARGET = "ana@recomencemos.test";
 const REQUEST_ID = "4242";
 
 /**
+ * The Offer `deliverOffer` acts on, pinned for the same reason.
+ *
+ * An Offer's key is a UUIDv7 minted in the application rather than a generated
+ * identity, so pinning it needs no `OVERRIDING SYSTEM VALUE` — the seed simply
+ * writes this value. It is a real v7 rather than an arbitrary UUID so that
+ * anything ordering by key sees what production would.
+ *
+ * The refusal case runs with nothing seeded, which is `deliverOffer`'s "act that
+ * did not happen": an Offer id no row carries.
+ */
+const OFFER_ID = "0199a1f0-2b3c-7def-8000-0123456789ab";
+
+/**
  * The actor, forged for the test.
  *
  * **The cast is the only one in this suite and it is deliberate**: `AdminActor`'s
@@ -66,6 +79,7 @@ const INPUTS = {
     slug: "sewing-machine-repair",
     labelEs: "Arreglo máquinas de coser",
   },
+  deliverOffer: { offerId: OFFER_ID },
 } satisfies { [K in AdminActionName]: AdminActionInput<K> };
 
 /** An Account with two live sessions, so `revokeSessions` has something to revoke. */
@@ -97,10 +111,50 @@ async function pendingRequest(database: TestDatabase): Promise<void> {
     .values({ id: BigInt(REQUEST_ID), accountId: "the-worker", text: "Arreglo máquinas de coser" });
 }
 
+/**
+ * An Offer waiting for a person to read it, under a key the table can name.
+ *
+ * Inserted directly rather than sent through `sendOffer`: what is under test
+ * here is the audit, and driving the whole send would make this fixture depend
+ * on that aggregate's own refusals. `offers.integration.test.ts` is where the
+ * send is exercised.
+ */
+async function pendingOffer(database: TestDatabase): Promise<void> {
+  await database.db.insert(schema.user).values([
+    { id: "the-worker", name: "Ana", email: "worker@recomencemos.test", emailVerified: true },
+    { id: "the-hirer", name: "", email: "hirer@recomencemos.test", emailVerified: true },
+  ]);
+
+  const [profile] = await database.db
+    .insert(schema.capabilityProfile)
+    .values({
+      accountId: "the-worker",
+      slug: "k7m2qx6vb4tn5rzc",
+      fullName: "Ana María Restrepo Gómez",
+      firstName: "Ana María",
+      lastInitial: "R",
+      city: "pereira",
+      headline: "Cocino almuerzos y comida casera",
+      phone: "+573001234567",
+      searchText: "ana maria pereira cocino",
+    })
+    .returning({ id: schema.capabilityProfile.id });
+
+  await database.db.insert(schema.offer).values({
+    id: OFFER_ID,
+    capabilityProfileId: (profile as { id: bigint }).id,
+    hirerAccountId: "the-hirer",
+    workDescription: "Cocinar almuerzos para ocho personas",
+    payTerms: "$120.000 por el día",
+    whenText: "Sábado desde las 7 de la mañana",
+  });
+}
+
 /** Everything each registered action needs to exist before it can run. */
 async function seedFor(database: TestDatabase, action: AdminActionName): Promise<void> {
   if (action === "revokeSessions") await targetWithSessions(database);
   if (action === "promoteSkill") await pendingRequest(database);
+  if (action === "deliverOffer") await pendingOffer(database);
 }
 
 const audit = (database: TestDatabase) =>
