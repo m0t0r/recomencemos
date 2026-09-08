@@ -131,22 +131,31 @@ The repo requires the **active Node LTS** (24.x) and **pnpm 12**, and it enforce
 - **What `ignore` gives up is pnpm's own enforcement of the `packageManager` pin, and `engines.pnpm` is what covers it** — `>=12` under `engineStrict`, so pnpm 11 exits `ERR_PNPM_UNSUPPORTED_ENGINE`. Corepack and `pnpm/action-setup` select the version; that engine field refuses the wrong one.
 - **Corepack has a floor of 0.35.0**, because pnpm 12 resolves through per-platform `@pnpm/exe.*` packages rather than the `bin/pnpm.cjs` pnpm 11 shipped. 0.34.0 (Node 24.11.0) dies with `MODULE_NOT_FOUND`; 0.35.0 (Node 24.20.0, what `node:24-slim` ships) works. This binds the `Dockerfile` and anyone driving pnpm through Corepack — a standalone pnpm install is unaffected.
 
+- `pnpm-workspace.yaml` is in oxfmt's `ignorePatterns` because pnpm writes those generated entries single-quoted and oxfmt rewrites them double-quoted, so the two tools would flip the file back and forth on every install. pnpm owns that file; do not remove the ignore.
+- `docs/efforts/*/advisories/` is ignored for the same shape of reason: a committed advisory is **verbatim** and `.claude/hooks/build-guard.sh` refuses to edit one, so a formatter rewriting it would make `pnpm format` and the Build gate contradict each other. `/spec-review` diffs the spec against those files; reformatting them is editing them.
+
 **What else pnpm 12 shipped, and what this repo took from it** (#213). Each candidate was measured
 against this repository rather than read off the changelog, and the refusals are written down so the
-next session does not re-propose one:
+next session does not re-propose one. **None of what was adopted is a decision a machine makes about
+this repository, so none of it has a script under `scripts/` or a file under `.claude/hooks/tests/`**
+— [ADR-0020](docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md)'s own
+words are that a root `package.json` script is wiring, and wiring holds no branching. A test would
+also have to reach the registry from inside `pnpm test`, which `gate-test.sh` is deliberately free of.
 
 - **`pnpm deps:outdated`** is `pnpm outdated --include-github-actions`. pnpm 12's `outdated` reads
   GitHub Actions as well as npm packages, which gives the SHA pin in `.github/actions/setup/action.yml`
   a **second reader** beside Dependabot's `directories:` glob — whose failure mode is silence.
   Measured: it reads `.github/workflows/*` and **follows** a `uses: ./.github/actions/<name>` into the
-  composite file; it resolves a SHA pin through the registry, so a drifted `# vX.Y.Z` comment does not
-  fool it; and it does **not** read an `action.yml` no workflow references, which is why that second
+  composite file; it resolves a SHA pin without reading the trailing `# vX.Y.Z` comment, so a comment
+  that has drifted does not fool it; and it does **not** read an `action.yml` no workflow references, which is why that second
   `directories:` entry is still not redundant. It exits `1` when anything is behind, and it is a
   command a person runs rather than a check: an upstream release makes it red the day it lands, which
-  is `docs/policy/security.md` C7's argument against a gate red on arrival.
-- **`pnpm peers`** replaces the removed `--resolution-only` and is how an unmet peer gets read. It is
-  red today — `better-auth@1.7.2` wants vitest `^2 || ^3 || ^4` against an installed 5.0.0 — which is
-  the same reason it is not a gate.
+  is `docs/policy/security.md` C7's argument against a gate red on arrival. `.github/dependabot.yml`
+  is where it is pointed at, because reviewing that SHA pin is the occasion to run it.
+- **`pnpm peers`** replaces the removed `--resolution-only` and is how an unmet peer gets read. An
+  unmet peer makes it red, and there is one in this tree, which is the same reason it is not a gate —
+  the pair is named in the pull request that adopted it rather than here, because which peer is unmet
+  changes and this sentence would not.
 - **`pnpm sbom` is a policy answer rather than a job.** `docs/policy/security.md` → `sbom`: generated
   on demand from the committed lockfile, never stored, and it covers the npm graph and not the base
   image under it.
@@ -160,9 +169,6 @@ next session does not re-propose one:
   serves binaries that are not installed locally — a fourth selector for a question `.nvmrc`,
   `engines.node` and `engineStrict` already answer once, and a shim for a `node_modules` every binary
   here already comes out of through `pnpm exec` or turbo.
-
-- `pnpm-workspace.yaml` is in oxfmt's `ignorePatterns` because pnpm writes those generated entries single-quoted and oxfmt rewrites them double-quoted, so the two tools would flip the file back and forth on every install. pnpm owns that file; do not remove the ignore.
-- `docs/efforts/*/advisories/` is ignored for the same shape of reason: a committed advisory is **verbatim** and `.claude/hooks/build-guard.sh` refuses to edit one, so a formatter rewriting it would make `pnpm format` and the Build gate contradict each other. `/spec-review` diffs the spec against those files; reformatting them is editing them.
 
 **Docker is required for `pnpm dev`, and for nothing else.** `docs/policy/data.md` → `local-database`
 puts the development database in `docker-compose.yaml` at the repo root: `postgres:18-alpine` on
