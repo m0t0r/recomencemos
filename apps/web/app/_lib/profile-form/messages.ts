@@ -160,13 +160,69 @@ export const ADD_WORK_HISTORY_BUTTON = "Agregar otro lugar";
 export const REMOVE_WORK_HISTORY_BUTTON = "Quitar";
 
 /**
- * The photo's place on this form, which is a sentence rather than a control:
- * the photo ships in its own ticket, and NFR4 names it as the one thing this
- * form may not do without JavaScript — so it is also the one thing this form
- * does not do at all.
+ * **NFR4's single documented exception, said where it appears.**
+ *
+ * Every other field on this form works with JavaScript unavailable. This one
+ * cannot: the downscale is a canvas and the upload is a `fetch` to a presigned
+ * URL. The requirement asks that the form *say so where the field is*, so this
+ * is what stands in the control's place on the unhydrated path — a sentence
+ * rather than a control that would do nothing.
+ *
+ * **It is not an apology.** Publishing does not wait for the photo either way,
+ * so what she loses without JavaScript is a picture and not a profile — and the
+ * sentence says which.
  */
 export const PHOTO_NOTE =
-  "La foto la subes después de publicar. Tu perfil queda publicado sin ella.";
+  "Para poner tu foto necesitas JavaScript. Tu perfil se publica igual, sin ella.";
+
+/**
+ * The photo field itself.
+ *
+ * **The label is the verb of the action** (voice guide), and the help line does
+ * the one job the whole ticket turns on: it says that a person looks at the
+ * photo and that the profile does not wait. Those are two facts about two
+ * different things, and a screen that lets her read them as one produces
+ * *"tu perfil está en revisión"* — a sentence the voice guide bans by name.
+ */
+export const PHOTO_LABEL = "Tu foto";
+export const PHOTO_CHOOSE = "Elegir una foto";
+export const PHOTO_REPLACE = "Elegir otra";
+export const PHOTO_HELP =
+  "Opcional. Una persona la mira antes de que se vea. Tu perfil se publica al instante.";
+
+/** The `alt` on her own preview: the role of the image, never a description of her. */
+export const PHOTO_PREVIEW_ALT = "La foto que elegiste";
+
+/**
+ * The two working states, which are real states rather than flashes: on a 5 MB
+ * phone photo the canvas work takes a moment, and the upload takes longer.
+ *
+ * Each says what is happening to the *picture*, not that something is loading.
+ */
+export const PHOTO_PREPARING = "Preparando tu foto…";
+export const PHOTO_UPLOADING = "Subiendo tu foto…";
+export const PHOTO_READY = "Tu foto está lista. Se guarda cuando publiques.";
+
+/**
+ * The refusals, all four in her terms.
+ *
+ * **No byte counts and no MIME types.** DD6's ceiling is 2 MB, and *"la foto
+ * pesa más de 2 MB"* is a sentence about a file rather than about a photo. What
+ * she can act on is choosing another one, and that is what each of these says.
+ */
+export const PHOTO_TOO_LARGE = "Esa foto es muy pesada y no pudimos reducirla. Elige otra.";
+export const PHOTO_UNREADABLE = "No pudimos leer esa foto. Elige otra desde tu teléfono.";
+export const PHOTO_UPLOAD_FAILED = "No pudimos subir tu foto. Vuelve a elegirla.";
+export const PHOTO_REMOVED = "Quitamos la foto. Puedes elegir otra o publicar sin ella.";
+export const PHOTO_REMOVE = "Quitar la foto";
+
+/**
+ * The store itself could not be asked. A fact about our deploy rather than
+ * about her, so the sentence says what is unaffected — which is everything that
+ * matters.
+ */
+export const PHOTO_UPLOAD_UNAVAILABLE =
+  "Ahora no podemos recibir fotos. Publica sin ella; tu perfil no depende de esto.";
 
 /**
  * Variant B's card heading: what a stranger sees, as she types it.
@@ -318,6 +374,20 @@ export const PUBLISH_COPY = {
   ADD_WORK_HISTORY_BUTTON,
   REMOVE_WORK_HISTORY_BUTTON,
   PHOTO_NOTE,
+  PHOTO_LABEL,
+  PHOTO_CHOOSE,
+  PHOTO_REPLACE,
+  PHOTO_HELP,
+  PHOTO_PREVIEW_ALT,
+  PHOTO_PREPARING,
+  PHOTO_UPLOADING,
+  PHOTO_READY,
+  PHOTO_TOO_LARGE,
+  PHOTO_UNREADABLE,
+  PHOTO_UPLOAD_FAILED,
+  PHOTO_REMOVED,
+  PHOTO_REMOVE,
+  PHOTO_UPLOAD_UNAVAILABLE,
   PREVIEW_HEADING,
   PUBLISH_BUTTON,
   FULL_NAME_REQUIRED,
@@ -345,6 +415,10 @@ export const PUBLISH_COPY = {
 
 /** The ones the voice guide holds to five words. */
 export const PUBLISH_LABELS = {
+  PHOTO_LABEL,
+  PHOTO_CHOOSE,
+  PHOTO_REPLACE,
+  PHOTO_REMOVE,
   CAPABILITY_LEGEND,
   IDENTITY_LEGEND,
   CONTACT_LEGEND,

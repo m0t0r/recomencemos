@@ -17,7 +17,7 @@
  */
 
 import type { ConsentVersions } from "@repo/domain/consent";
-import { useId } from "react";
+import { useId, useState } from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
 import { type PublishFieldName, PUBLISH_FAILED } from "@/app/_lib/profile-form/messages";
 import { publishProfileSchema } from "@/app/_lib/profile-form/schema";
@@ -25,6 +25,7 @@ import { serverFieldError } from "@/app/_lib/profile-form/summary";
 import { useProfileFields } from "@/app/_lib/profile-form/use-profile-fields";
 import { INITIAL_RESULT, useProfileForm } from "@/app/_lib/profile-form/use-profile-form";
 import { publishProfile } from "../actions";
+import { PhotoField } from "./photo-field";
 import { PublishLayout } from "./publish-layout";
 
 export interface PublishFormProps {
@@ -34,6 +35,19 @@ export interface PublishFormProps {
 }
 
 export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFormProps) {
+  /**
+   * **The quarantine key, held here and bound rather than mirrored into a hidden
+   * input** (ADR-0015). It arrives from {@link PhotoField} some time after the
+   * form first rendered — she picks a photo, it is downscaled, it is uploaded —
+   * so the binding below is re-made on the render that learns it, which is what
+   * `bind` already does on every render anyway.
+   *
+   * **`null` is the ordinary case and stays null in three of them**: she picked
+   * nothing, the upload has not finished when she submits, or JavaScript never
+   * ran. All three publish a profile without a photo, which is the design.
+   */
+  const [photoKey, setPhotoKey] = useState<string | null>(null);
+
   const machine = useProfileForm({
     /**
      * **Bound here, not hidden, and bound *here* rather than inside the
@@ -43,7 +57,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
      * form that has no consent at all, which is why the binding is the
      * surface's job.
      */
-    action: publishProfile.bind(null, consentVersions),
+    action: publishProfile.bind(null, consentVersions, photoKey),
     initial: INITIAL_RESULT,
     schema: publishProfileSchema,
     faultMessage: PUBLISH_FAILED,
@@ -67,6 +81,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
         vocabulary={vocabulary}
         idFor={idFor}
         serverErrorFor={(field, index) => serverFieldError(machine.serverErrors, field, index)}
+        photoSlot={<PhotoField onPhotoKeyChange={setPhotoKey} />}
       />
     </form>
   );

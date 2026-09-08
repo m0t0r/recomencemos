@@ -19,6 +19,7 @@
     "@repo/errors": "workspace:*",
     "@repo/notifications": "workspace:*",
     "@repo/observability": "workspace:*",
+    "@repo/storage": "workspace:*",
     "@sentry/nextjs": "^10.73.0",
     "@tanstack/react-form": "1.33.5",
     "lucide-react": "^1.41.0",
