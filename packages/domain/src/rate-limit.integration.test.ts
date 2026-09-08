@@ -23,6 +23,9 @@ import { rateCounter } from "#schema";
 import { test, type TestDatabase } from "#testing/fixtures";
 
 const ana = { scope: "address", id: "ana@example.co" } as const;
+
+/** The café in Pereira: one connection, and not one person. */
+const sharedConnection = { scope: "ip", id: "203.0.113.9" } as const;
 const noon = new Date("2026-08-27T12:00:00.000Z");
 
 /**
@@ -228,6 +231,37 @@ describe("what a refusal carries", () => {
     expect(refusal.error.userMessage).toContain("5 enlaces");
     expect(refusal.error.userMessage).toContain("en 12 minutos");
     expect(refusal.error.userMessage).toContain("Google");
+  });
+
+  /**
+   * **The scope has to reach the sentence, and only a real charge proves it.**
+   * Which of the two sentences a ceiling renders is a pure choice and is pinned
+   * at seam 1; that the *principal that actually tripped* is the one handed to
+   * the copy is a property of `chargeCeiling`, and a seam-1 test cannot see it.
+   * This is the case that would have gone red on the bug: before the fix, a
+   * connection was told "Pediste 20 enlaces en una hora".
+   */
+  test("tells a shared connection what happened without quoting it a count", async ({
+    database,
+  }) => {
+    const at = new Date("2026-08-27T12:48:00.000Z");
+    let outcome = await chargeCeiling(database.db, sharedConnection, "requestMagicLink", at);
+
+    for (let charge = 1; charge < 21; charge += 1) {
+      // oxlint-disable-next-line no-await-in-loop
+      outcome = await chargeCeiling(database.db, sharedConnection, "requestMagicLink", at);
+    }
+
+    expect(outcome.allowed).toBe(false);
+    if (outcome.allowed) return;
+
+    expect(outcome.error.userMessage).toContain("conexión a internet");
+    expect(outcome.error.userMessage).not.toContain("20");
+    expect(outcome.error.userMessage).not.toContain("Pediste");
+
+    // Still a real refusal with a real wait, and still the open door.
+    expect(outcome.error.userMessage).toContain("en 12 minutos");
+    expect(outcome.error.userMessage).toContain("Google");
   });
 
   // NFR18. `context` reaches the log line, and an address on a line is a leak
