@@ -6,8 +6,10 @@
  * of a guard clause rather than on behaviour.
  */
 
+import type { Ceiling, CeilingedAction, CeilingScope } from "#rate-limit";
 import {
   CEILING_REFUSALS,
+  ceilingFor,
   CEILINGS,
   principalKey,
   retryAfterFor,
@@ -224,7 +226,11 @@ describe("retryPhrase", () => {
 });
 
 describe("CEILING_REFUSALS", () => {
-  const message = CEILING_REFUSALS.requestMagicLink({ max: 5, windowSeconds: 3600 }, 720);
+  const message = CEILING_REFUSALS.requestMagicLink(
+    { max: 5, windowSeconds: 3600 },
+    720,
+    "address",
+  );
 
   // Do 4 — the product's own evidence, quoted back.
   it("quotes her count back", () => {
@@ -261,7 +267,11 @@ describe("CEILING_REFUSALS", () => {
    * way to take.
    */
   describe("the request a Worker meets mid-publish", () => {
-    const refused = CEILING_REFUSALS.requestSkill({ max: 5, windowSeconds: 86_400 }, 720);
+    const refused = CEILING_REFUSALS.requestSkill(
+      { max: 5, windowSeconds: 86_400 },
+      720,
+      "account",
+    );
 
     it("says the ones she already sent are still there", () => {
       expect(refused).toContain("quedaron en la fila");
@@ -294,8 +304,26 @@ describe("CEILING_REFUSALS", () => {
    * added without copy that survives these rules is a red test rather than a
    * sentence somebody meets on the worst day they have had.
    */
-  describe.each(Object.entries(CEILING_REFUSALS))("%s", (_action, refusal) => {
-    const refused = refusal({ max: 10, windowSeconds: 900 }, 720);
+  /**
+   * **Every declared scope, not one invented ceiling.** This used to build each
+   * refusal from `{ max: 10, windowSeconds: 900 }` and no scope at all, which
+   * made the copy rules run over a sentence the product never renders. Driving
+   * the cases off `CEILINGS` means each string is built from the ceiling that
+   * would actually refuse it, through the scope that would actually do the
+   * refusing.
+   */
+  const refusalCases = Object.entries(CEILINGS).flatMap(([action, scopes]) =>
+    Object.keys(scopes).map(
+      (scope) =>
+        [`${action} · ${scope}`, action as CeilingedAction, scope as CeilingScope] as const,
+    ),
+  );
+
+  describe.each(refusalCases)("%s", (_name, action, scope) => {
+    const ceiling = ceilingFor(action, scope);
+    if (!ceiling) throw new Error(`${action} declares no ceiling for ${scope}`);
+
+    const refused = CEILING_REFUSALS[action](ceiling, 720, scope);
 
     // Do 3 again, over the whole list: a refusal with no next step fails this
     // rule and NFR20 together.
@@ -323,6 +351,64 @@ describe("CEILING_REFUSALS", () => {
     // make it hers.
     it.each(["inválido", "error", "no puedes", "demasiado"])("does not say %o", (word) => {
       expect(refused.toLowerCase()).not.toContain(word);
+    });
+  });
+
+  /**
+   * **The regression these two exist for, and the reason the scope became a
+   * parameter.** Every ceiling written before the gated read bounded both
+   * principals at the same number, so one sentence was true whichever principal
+   * refused. The gated read is the first with two different numbers — 60 an hour
+   * against 300 — and the copy went on interpolating whichever `max` belonged to
+   * the principal that tripped. A reader behind a shared connection who had
+   * opened five profiles was told she had opened 300.
+   *
+   * Driven off the registry rather than named, so a *later* ceiling that splits
+   * its bounds inherits the check instead of quietly repeating the bug.
+   */
+  /**
+   * **An `ip` principal is a connection, not a person, and the copy has to know
+   * it.** Every other scope names one person — an Account, an email address —
+   * so quoting her own count back to her is Do 4 working as intended. A shared
+   * connection is the one principal where that sentence is about somebody else:
+   * a café in Pereira where three people published today tells the fourth
+   * *"Publicaste 3 veces hoy"*, which is false about her and is the sentence
+   * Don't 4 exists to refuse.
+   *
+   * Driven off the registry rather than named, so a later ceiling inherits the
+   * check instead of quietly repeating the bug.
+   */
+  const ipScoped = Object.entries(CEILINGS)
+    .filter(([, scopes]) => "ip" in scopes)
+    .map(([action]) => action as CeilingedAction);
+
+  it("has at least one ip-scoped ceiling, or this check is vacuous", () => {
+    expect(ipScoped.length).toBeGreaterThan(0);
+  });
+
+  describe.each(ipScoped)("%s, rendered to a shared connection", (action) => {
+    const scopes = CEILINGS[action] as Partial<Record<CeilingScope, { readonly max: number }>>;
+    const ipCeiling = ceilingFor(action, "ip");
+    if (!ipCeiling) throw new Error(`${action} lost its ip scope`);
+
+    const perIp = CEILING_REFUSALS[action](ipCeiling, 720, "ip");
+
+    // Not one of them — an IP's count is nobody's count, and the maxima of two
+    // scopes can coincide, so naming the ip max alone would pass by accident.
+    it("quotes no ceiling's count", () => {
+      for (const ceiling of Object.values(scopes)) {
+        expect(perIp).not.toContain(String(ceiling.max));
+      }
+    });
+
+    it("still quotes her own count to the principal that is one person", () => {
+      for (const [scope, ceiling] of Object.entries(scopes)) {
+        if (scope === "ip") continue;
+
+        const mine = CEILING_REFUSALS[action](ceiling as Ceiling, 720, scope as CeilingScope);
+        expect(mine).toContain(String(ceiling.max));
+        expect(mine).not.toEqual(perIp);
+      }
     });
   });
 });

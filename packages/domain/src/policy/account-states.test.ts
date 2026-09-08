@@ -9,8 +9,10 @@
  */
 
 import {
+  asOfferSendingState,
   DEFAULT_OFFER_SENDING_STATE,
   mayReadGatedProfile,
+  MOST_RESTRICTIVE_OFFER_SENDING_STATE,
   OFFER_SENDING_STATES,
   type OfferSendingState,
 } from "#policy/account-states";
@@ -26,6 +28,36 @@ describe("the sending states", () => {
   it("default to the one that restricts nothing", () => {
     expect(DEFAULT_OFFER_SENDING_STATE).toBe("active");
     expect(OFFER_SENDING_STATES).toContain(DEFAULT_OFFER_SENDING_STATE);
+  });
+});
+
+describe("reading a stored value back", () => {
+  it.each([...OFFER_SENDING_STATES])("recognises %o", (state) => {
+    expect(asOfferSendingState(state)).toBe(state);
+  });
+
+  /**
+   * Every way the column can hold something this code cannot name. The `CHECK`
+   * refuses all of them at write time; the narrower exists so that a reader
+   * still has to say what it does about one rather than casting it into the
+   * type and finding out later.
+   */
+  it.each(["", "ACTIVE", "Frozen", "suspended", "active ", undefined])(
+    "does not recognise %o",
+    (value) => {
+      expect(asOfferSendingState(value)).toBeUndefined();
+    },
+  );
+
+  /**
+   * **The direction is the point.** A fallback is only ever reached when the
+   * data has stopped making sense, and the member it lands on decides what
+   * happens then — so it must not be the one that admits.
+   */
+  it("falls back to a state that may not read a gated profile", () => {
+    expect(OFFER_SENDING_STATES).toContain(MOST_RESTRICTIVE_OFFER_SENDING_STATE);
+    expect(mayReadGatedProfile(MOST_RESTRICTIVE_OFFER_SENDING_STATE)).toBe(false);
+    expect(MOST_RESTRICTIVE_OFFER_SENDING_STATE).not.toBe(DEFAULT_OFFER_SENDING_STATE);
   });
 });
 

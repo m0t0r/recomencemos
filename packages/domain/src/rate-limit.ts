@@ -340,6 +340,17 @@ export function retryPhrase(retryAfter: number): string {
  * three sentences, each under twenty words: what our rule is with her count in
  * it, when it changes, and — where there is one — the door that is still open.
  *
+ * **The scope is a parameter because the count is only hers on one of them.**
+ * Every ceiling written before the gated read bounded both principals at the
+ * same number, so the sentence read the same either way and nothing needed to
+ * know which one refused. `readProfileHourly` is the first entry where the two
+ * differ, and quoting a per-IP maximum to the person who tripped it says
+ * _"Abriste 300 perfiles"_ to somebody who opened five behind a shared
+ * connection — a sentence she can catch being wrong, which is the failure Don't
+ * 4 names and the one thing this table's own copy rules say to avoid. An entry
+ * whose two bounds are equal may ignore the argument; `rate-limit.test.ts`
+ * refuses one where they are not.
+ *
  * **It is a `Record` over the action union rather than one sentence for every
  * ceiling**, and it stopped being one sentence the moment a second ceiling
  * existed. `requestMagicLink`'s copy names links and offers Google; rendering
@@ -349,17 +360,43 @@ export function retryPhrase(retryAfter: number): string {
  * sentence — the same mechanism `ADMIN_ACTION_HANDLERS` uses over its own
  * registry.
  */
+/**
+ * The two public surfaces, named as the product names them to a reader.
+ *
+ * `"las listas"` was what this said first, and it named nothing anybody had
+ * seen: the two surfaces are *el muro* — `CONTEXT.md` fixes the Wall's Spanish —
+ * and *Todos los perfiles*, whose own empty state already calls itself *la
+ * lista*. The voice guide's sentence rules refuse a sentence only somebody who
+ * already knows the product can parse, and a plural naming neither surface was
+ * one.
+ */
+/**
+ * **What a refusal says when the principal that tripped it is a connection.**
+ *
+ * `ip` is the only scope in {@link CEILINGS} that is not one person, so it is
+ * the only one where quoting a count back is a claim about somebody else. Every
+ * `ip`-scoped entry opens with its own verb and then this clause: what happened,
+ * and why it may not have been her. The alternative — one sentence shared by all
+ * six — would have had to drop the verb, and "Se hicieron muchas acciones" is
+ * the vagueness Don't 4 refuses.
+ */
+const SHARED_CONNECTION = "desde tu conexión a internet, que puede ser compartida";
+
+const OTHER_DOORS_OPEN = "el muro y la lista de perfiles siguen abiertos";
+
 export const CEILING_REFUSALS: Record<
   CeilingedAction,
-  (ceiling: Ceiling, retryAfter: number) => string
+  (ceiling: Ceiling, retryAfter: number, scope: CeilingScope) => string
 > = {
   /**
    * The last sentence is the spec's own requirement for this surface — _"the
    * Google door is still there"_ — and it is why a rate-limited sign-in is not a
    * dead end.
    */
-  requestMagicLink: (ceiling, retryAfter) =>
-    `Pediste ${ceiling.max} enlaces en una hora, que es el máximo. ` +
+  requestMagicLink: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se pidieron muchos enlaces ${SHARED_CONNECTION}. `
+      : `Pediste ${ceiling.max} enlaces en una hora, que es el máximo. `) +
     `Puedes pedir otro ${retryPhrase(retryAfter)}. ` +
     "Mientras tanto, puedes entrar con Google.",
 
@@ -400,8 +437,10 @@ export const CEILING_REFUSALS: Record<
    * the count includes the attempts the rejector refused, and a sentence that
    * told her she had published three times would be false.
    */
-  publishProfile: (ceiling, retryAfter) =>
-    `Intentaste publicar ${ceiling.max} veces hoy, que es el máximo. ` +
+  publishProfile: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se intentó publicar muchas veces hoy ${SHARED_CONNECTION}. `
+      : `Intentaste publicar ${ceiling.max} veces hoy, que es el máximo. `) +
     `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
     "Nada de lo que escribiste se perdió: sigue aquí.",
 
@@ -431,8 +470,10 @@ export const CEILING_REFUSALS: Record<
    * to take. Leaving her the form she is standing in, which is what that clause
    * was for, *escoge la más parecida* still does.
    */
-  requestSkill: (ceiling, retryAfter) =>
-    `Pediste ${ceiling.max} capacidades hoy, que es el máximo. ` +
+  requestSkill: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se pidieron muchas capacidades hoy ${SHARED_CONNECTION}. `
+      : `Pediste ${ceiling.max} capacidades hoy, que es el máximo. `) +
     "Las que enviaste quedaron en la fila: siguen ahí. " +
     `Puedes pedir otra ${retryPhrase(retryAfter)}; ahora escoge la más parecida.`,
 
@@ -448,8 +489,10 @@ export const CEILING_REFUSALS: Record<
    * pressed, and a refusal that names a different act than the one she took
    * reads as a refusal about something else.
    */
-  updateProfile: (ceiling, retryAfter) =>
-    `Guardaste cambios ${ceiling.max} veces hoy, que es el máximo. ` +
+  updateProfile: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se guardaron muchos cambios hoy ${SHARED_CONNECTION}. `
+      : `Guardaste cambios ${ceiling.max} veces hoy, que es el máximo. `) +
     `Puedes guardar otra vez ${retryPhrase(retryAfter)}. ` +
     "Nada de lo que escribiste se perdió, y tu perfil sigue como lo guardaste la última vez.",
 
@@ -466,19 +509,35 @@ export const CEILING_REFUSALS: Record<
    * catch being wrong. It also matches `publishProfile`'s "Intentaste", which is
    * that entry's own reason.
    *
+   * **The per-IP sentence drops the count, and that is the same rule applied
+   * once more rather than an exception to it.** These are the first two ceilings
+   * whose two bounds differ — 60 against 300 — so they are the first where
+   * `ceiling.max` is not necessarily hers. The per-IP bound exists for the
+   * shared connection this file argues for above, a school or a café or an
+   * office in Pereira; telling the twelfth reader on it that *she* opened 300
+   * profiles is exactly the sentence she can catch being wrong. So the per-IP
+   * half says what happened, names the shared connection as the likely cause,
+   * and quotes no number that is not hers. Do 4 asks for the product's evidence
+   * quoted back; a count belonging to somebody else is not evidence about her.
+   *
    * The third sentence names the door that is still open, as
-   * `requestMagicLink`'s does: the Wall and `/profiles` are public and carry no
-   * ceiling at all, so nobody who meets this is shut out of the product.
+   * `requestMagicLink`'s does: the Wall and the browsable list are public and
+   * carry no ceiling at all, so nobody who meets this is shut out of the
+   * product.
    */
-  readProfileHourly: (ceiling, retryAfter) =>
-    `Abriste ${ceiling.max} perfiles en una hora, que es el máximo. ` +
+  readProfileHourly: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se abrieron muchos perfiles ${SHARED_CONNECTION}. `
+      : `Abriste ${ceiling.max} perfiles en una hora, que es el máximo. `) +
     `Puedes seguir abriendo perfiles ${retryPhrase(retryAfter)}. ` +
-    "Mientras tanto, las listas siguen abiertas.",
+    `Mientras tanto, ${OTHER_DOORS_OPEN}.`,
 
-  readProfileDaily: (ceiling, retryAfter) =>
-    `Abriste ${ceiling.max} perfiles hoy, que es el máximo. ` +
+  readProfileDaily: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se abrieron muchos perfiles hoy ${SHARED_CONNECTION}. `
+      : `Abriste ${ceiling.max} perfiles hoy, que es el máximo. `) +
     `Puedes seguir abriendo perfiles ${retryPhrase(retryAfter)}. ` +
-    "Mientras tanto, las listas siguen abiertas.",
+    `Mientras tanto, ${OTHER_DOORS_OPEN}.`,
 };
 
 /**
@@ -554,7 +613,7 @@ export async function chargeCeiling(
       message:
         `The ${action} ceiling refused a request: ${count} charges against a ${principal.scope} ` +
         `principal in a ${ceiling.windowSeconds}s window, over the ceiling of ${ceiling.max}.`,
-      userMessage: CEILING_REFUSALS[action](ceiling, retryAfter),
+      userMessage: CEILING_REFUSALS[action](ceiling, retryAfter, principal.scope),
       /**
        * **Counts and enum values only — and deliberately no principal at all.**
        *

@@ -19,7 +19,7 @@ import { CURRENT_CONSENT_VERSIONS } from "#consent/registry";
 import { type PublishProfileInput, publishProfile } from "#profiles";
 import { findGatedIdentity, findGatedWorkHistory } from "#profiles/gated";
 import * as schema from "#schema";
-import { signIn, signInStack } from "#testing/auth-stack";
+import { signedInAccountId } from "#testing/auth-stack";
 import { test } from "#testing/fixtures";
 import type { TestDatabase } from "#testing/fixtures";
 
@@ -42,17 +42,8 @@ const INPUT = {
   consentVersions: CURRENT_CONSENT_VERSIONS,
 } as const;
 
-async function anAccount(database: TestDatabase, email = WORKER): Promise<string> {
-  const stack = signInStack(database);
-  await signIn(stack, email);
-
-  const [account] = await database.db
-    .select({ id: schema.user.id })
-    .from(schema.user)
-    .where(eq(schema.user.email, email));
-
-  return (account as { id: string }).id;
-}
+const anAccount = (database: TestDatabase, email = WORKER): Promise<string> =>
+  signedInAccountId(database, email);
 
 /** Publishes `INPUT` and returns the slug the minter gave it. */
 async function aPublishedProfile(

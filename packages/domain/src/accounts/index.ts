@@ -14,9 +14,10 @@
 import { eq } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import {
+  asOfferSendingState,
   DEFAULT_OFFER_SENDING_STATE,
+  MOST_RESTRICTIVE_OFFER_SENDING_STATE,
   type OfferSendingState,
-  OFFER_SENDING_STATES,
 } from "#policy/account-states";
 import * as schema from "#schema";
 
@@ -38,11 +39,18 @@ import * as schema from "#schema";
  * would turn a deleted Account into a silent 404 on a page it has nothing to do
  * with. The freeze is enforced at `sendOffer` under a lock regardless.
  *
- * **An unrecognised value reads as the default too, and that is the one to
- * argue with.** `user_offer_sending_state_known` refuses anything outside the
- * registry at write time, so this branch is unreachable through the schema —
- * it exists because `state as OfferSendingState` would be a cast that lies, and
- * a value this code cannot name is a value it cannot make a decision about.
+ * **An unrecognised value reads as the most restrictive state, and that is the
+ * opposite of the line above.** The two branches look alike and are not: a
+ * missing row means the caller's own Account went away, which is a fact about
+ * *this* request and says nothing about a freeze; an unrecognised value means
+ * the column has stopped holding what this code can reason about. The first is
+ * safe to read as `active` for the reasons above. The second is a value this
+ * code cannot name, so it cannot be the basis for admitting anybody — and
+ * `user_offer_sending_state_known` makes it unreachable through the schema, so
+ * failing closed here costs nothing at all.
+ *
+ * This read used to answer `active` to both, which put the one member that
+ * admits in the branch that fires when the data has stopped making sense.
  */
 export async function readOfferSendingState(
   db: DomainDatabase,
@@ -54,11 +62,15 @@ export async function readOfferSendingState(
     .where(eq(schema.user.id, accountId))
     .limit(1);
 
-  return asOfferSendingState(row?.offerSendingState);
+  return stateOfRow(row?.offerSendingState);
 }
 
-function asOfferSendingState(value: string | undefined): OfferSendingState {
-  return OFFER_SENDING_STATES.find((state) => state === value) ?? DEFAULT_OFFER_SENDING_STATE;
+function stateOfRow(stored: string | undefined): OfferSendingState {
+  // No row at all: the session outlived its Account. See above.
+  if (stored === undefined) return DEFAULT_OFFER_SENDING_STATE;
+
+  // A row holding something outside the registry. See above.
+  return asOfferSendingState(stored) ?? MOST_RESTRICTIVE_OFFER_SENDING_STATE;
 }
 
 /**
