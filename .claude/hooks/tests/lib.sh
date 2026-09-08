@@ -90,11 +90,22 @@ expect_decision() { # name allow|deny json [gate...]
 
 # A pattern is an ERE. EMPTY asserts nothing was written; `-` asserts nothing.
 # `--` before the pattern: a want like "--pr" is a flag to grep otherwise.
+#
+# The text is fed in on a herestring rather than through a pipe, and that is the
+# whole of a bug that made this suite report a random false failure per CI run.
+# The runner sets `pipefail`, `grep -q` exits the instant it matches, and a
+# writer still writing when the reader goes away dies of SIGPIPE -- so the
+# pipeline reported 141 while grep itself had reported a match. The window opens
+# once the text no longer fits one buffered write and the match sits near the
+# top, which is every long refusal this suite asserts on: the case passed or
+# failed on scheduling. It read as the assertion's own contradiction, an output
+# printed underneath the words saying it did not match. A herestring is a file,
+# not a pipe, so there is no reader to go away.
 matches() { # pattern text
   case "$1" in
     -) return 0 ;;
     EMPTY) [ -z "$2" ] ;;
-    *) printf '%s' "$2" | grep -qE -- "$1" ;;
+    *) grep -qE -- "$1" <<<"$2" ;;
   esac
 }
 
