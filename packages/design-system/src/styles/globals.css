@@ -245,6 +245,30 @@
   @apply font-heading text-foreground text-3xl font-medium tracking-[-0.01em] text-balance;
 }
 
+/* The chevron a native `<select>` stops drawing once `appearance: none` takes its chrome away.
+ *
+ * It is here rather than in a Tailwind arbitrary value for `background-image`, because a data URI
+ * is not a value Tailwind parses: it carries quotes, spaces and slashes, and what reached the
+ * stylesheet was a `background-image` whose whole value had been replaced by a literal ellipsis.
+ * That is a select which looks exactly like a text box and says nothing about opening a list —
+ * and, on the next rebuild, a `Module not found` that takes the whole page down. Grepping the
+ * compiled chunk for `svg+xml` is the check to repeat before trusting a value of that shape.
+ *
+ * **Do not write the failing class into a comment either**, here or anywhere the `@source` globs
+ * reach. Tailwind scans a file for candidate strings without caring whether they are code, so
+ * naming the class in the sentence that explains why it was removed is enough to generate it
+ * again — which is how this note came to be written twice.
+ *
+ * The path is `lucide-react`'s `chevron-down`, the same glyph the registry's `Select` trigger
+ * renders, and it is `currentColor` so it follows the control's own text rather than a hard-coded
+ * ink. Paired with `selectBox` in `components/input-variants.tsx`; neither is much use alone. */
+@utility select-chevron {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 0.625rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

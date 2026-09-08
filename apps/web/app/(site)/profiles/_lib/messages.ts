@@ -67,9 +67,18 @@ export const FILTER_TEXT_HINT = "Da lo mismo si escribes con tildes o sin ellas.
 export const FILTER_SKILL_LABEL = "Capacidad";
 export const FILTER_CITY_LABEL = "Ciudad";
 
-/** What each list reads before anything is chosen. Never "Todas" on its own. */
+/** What each control reads before anything is chosen. Never "Todas" on its own. */
 export const FILTER_ANY_SKILL = "Cualquier capacidad";
 export const FILTER_ANY_CITY = "Cualquier ciudad";
+
+/**
+ * The one option the Skill list holds while its own list is still arriving.
+ *
+ * The control is already on screen and already submittable — `Cualquier
+ * capacidad` is above this and is what an unfiltered search sends — so this says
+ * what is missing rather than that anything is unavailable.
+ */
+export const FILTER_SKILLS_LOADING = "Cargando las capacidades…";
 
 /** The verb, and what it acts on. */
 export const FILTER_SUBMIT = "Buscar";

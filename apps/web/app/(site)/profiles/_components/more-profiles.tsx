@@ -28,7 +28,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ProfileRow } from "../../_components/profile-list/profile-row";
 import { announcedMore } from "../../_lib/lists/messages";
 import { loadMoreProfiles } from "../actions";
-import { type BrowseFilters, browseHref } from "../_lib/filters";
+import { type BrowseFilters, browseHref, toFilterParams } from "../_lib/filters";
 import { BROWSE_MORE, BROWSE_MORE_FAILED, BROWSE_MORE_LOADING } from "../_lib/messages";
 
 /**
@@ -59,7 +59,9 @@ export function MoreProfiles({
     if (pending || cursor === null) return;
 
     setPending(true);
-    const result = await loadMoreProfiles({ after: cursor, ...filters });
+    // In their URL spelling, because the action reads them with the same
+    // function the page does — see `actions.ts`.
+    const result = await loadMoreProfiles({ after: cursor, ...toFilterParams(filters) });
     setPending(false);
 
     const page = result?.data;

@@ -7,7 +7,13 @@
  * search on the second page.
  */
 
-import { browseFiltersFrom, browseHref, isNarrowed, MAX_QUERY_LENGTH } from "./filters";
+import {
+  browseFiltersFrom,
+  browseHref,
+  isNarrowed,
+  MAX_QUERY_LENGTH,
+  toFilterParams,
+} from "./filters";
 
 describe("reading the filters off the URL", () => {
   it("takes the three terms a person can set", () => {
@@ -36,17 +42,19 @@ describe("reading the filters off the URL", () => {
   /**
    * A hand-edited URL shows the list rather than an error: nobody typed that
    * query string on purpose and there is nothing in it for a reader to correct.
+   *
+   * Each case asserts the field it is about. Asserting *both* fields on every
+   * case is how a table like this passes while checking nothing — three of four
+   * assertions were then true of a parameter the case never set.
    */
   it.each([
-    ["a city that is not one of the three", { city: "bogota" }],
-    ["a city in the wrong shape entirely", { city: "../etc" }],
-    ["a Skill slug with characters a slug never has", { skill: "Baking And Pastry" }],
-    ["an empty Skill", { skill: "" }],
-  ])("drops %s", (_case, params) => {
-    const filters = browseFiltersFrom(params);
-
-    expect(filters.skill).toBeNull();
-    expect(filters.city).toBeNull();
+    ["a city that is not one of the three", { city: "bogota" }, "city"],
+    ["a city in the wrong shape entirely", { city: "../etc" }, "city"],
+    ["a Skill slug with characters a slug never has", { skill: "Baking And Pastry" }, "skill"],
+    ["a Skill slug that is only punctuation", { skill: "--" }, "skill"],
+    ["an empty Skill", { skill: "" }, "skill"],
+  ] as const)("drops %s", (_case, params, field) => {
+    expect(browseFiltersFrom(params)[field]).toBeNull();
   });
 
   /**
@@ -104,5 +112,31 @@ describe("putting the filters back into a link", () => {
     const search = new URL(browseHref(filters), "https://example.test").searchParams;
 
     expect(browseFiltersFrom(Object.fromEntries(search))).toEqual(filters);
+  });
+});
+
+/**
+ * The **other** door: the paging Server Action takes the filters in these same
+ * names and reads them with the same function, so this is the round trip the
+ * infinite scroll depends on. The two used to be separate readings, and they
+ * disagreed about trimming.
+ */
+describe("putting the filters on the wire for the paging action", () => {
+  it("writes them in the names the reader expects", () => {
+    expect(toFilterParams({ query: "pan", skill: "home-cooking", city: "pereira" })).toEqual({
+      q: "pan",
+      skill: "home-cooking",
+      city: "pereira",
+    });
+  });
+
+  it("leaves out what nobody chose rather than sending it empty", () => {
+    expect(toFilterParams({ query: "", skill: null, city: null })).toEqual({});
+  });
+
+  it("round-trips through the reader", () => {
+    const filters = { query: "panadería", skill: "baking-and-pastry", city: "pereira" } as const;
+
+    expect(browseFiltersFrom(toFilterParams(filters))).toEqual(filters);
   });
 });

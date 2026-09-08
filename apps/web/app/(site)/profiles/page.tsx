@@ -28,6 +28,7 @@ import { skills } from "@repo/domain/skills";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
+import { CountAnnouncement } from "../_components/profile-list/count-announcement";
 import { ListEmptyState } from "../_components/profile-list/empty-state";
 import { ListBoundary } from "../_components/profile-list/list-boundary";
 import { ProfileList } from "../_components/profile-list/profile-list";
@@ -38,9 +39,9 @@ import {
   TO_BROWSE,
   TO_PUBLISH,
 } from "../_lib/lists/messages";
-import { BrowseFiltersForm } from "./_components/browse-filters";
+import { BrowseFiltersForm, SkillOptionsFallback } from "./_components/browse-filters";
 import { MoreProfiles } from "./_components/more-profiles";
-import { type BrowseFilters, browseFiltersFrom, isNarrowed } from "./_lib/filters";
+import { type BrowseFilters, browseFiltersFrom, browseHref, isNarrowed } from "./_lib/filters";
 import {
   BROWSE_LEAD,
   BROWSE_NARROWED_BODY,
@@ -72,27 +73,47 @@ function cursorFrom(value: string | string[] | undefined): string | null {
  * The list is empty for one of three reasons, and they are three different
  * states rather than one sentence with three causes.
  *
- * Nothing published at all is a fact about the **platform**. Nothing matching
- * what somebody chose is a fact about **the filters**, so it names them and
- * offers to clear them. Nothing on *this page* is a fact about **where the
- * reader is standing**, which a link they followed put them at.
+ * Nothing on *this page* is a fact about **where the reader is standing**, which
+ * a link they followed put them at. Nothing matching what somebody chose is a
+ * fact about **the filters**, so it names them and offers to clear them. Nothing
+ * published at all is a fact about the **platform**.
  *
- * The filtered branch has to come first: a filter set and no cursor would
- * otherwise fall through to "nobody has published", which is a claim about the
- * platform that a filter has no business making.
+ * **The cursor is read first, and the order is the finding rather than a
+ * preference.** Filters and a cursor can both be set at once — that is the end
+ * of a filtered list — and testing the filters first told a reader who had paged
+ * to the end that their filters matched nobody, when their filters had matched
+ * three pages of people. The cursor is the immediate cause whenever it is
+ * present, so it answers first, and its way out is the **first page of the list
+ * she is actually reading** rather than a route that also throws her filters
+ * away.
+ *
+ * **It announces the empty result**, and that is the one place this surface
+ * needs its own live region. `ProfileList` carries the count announcement and is
+ * rendered only when there are rows, so a filter that takes twenty-four profiles
+ * down to none used to swap the list for this panel in silence — and *Quitar los
+ * filtros* is a `<Link>`, so there is no document load to re-read the page.
  */
 function BrowseEmpty({
   filters,
   narrowing,
-  cursored,
+  cursor,
 }: {
   readonly filters: BrowseFilters;
   /** What is narrowing the list, in the words a person reads. */
   readonly narrowing: readonly string[];
-  readonly cursored: boolean;
+  /** The page cursor the reader arrived with, or nothing. */
+  readonly cursor: string | null;
 }) {
-  if (isNarrowed(filters)) {
-    return (
+  const empty =
+    cursor !== null ? (
+      <ListEmptyState
+        title={BROWSE_NARROWED_TITLE}
+        body={BROWSE_NARROWED_BODY}
+        actionHref={browseHref(filters)}
+        actionLabel={TO_BROWSE}
+        actionVariant="outline"
+      />
+    ) : isNarrowed(filters) ? (
       <ListEmptyState
         title={FILTER_EMPTY_TITLE}
         body={narrowedBy(narrowing)}
@@ -100,37 +121,32 @@ function BrowseEmpty({
         actionLabel={FILTER_CLEAR}
         actionVariant="outline"
       />
+    ) : (
+      <ListEmptyState
+        title={NOBODY_PUBLISHED_TITLE}
+        body={NOBODY_PUBLISHED_BODY}
+        actionHref="/publish"
+        actionLabel={TO_PUBLISH}
+      />
     );
-  }
 
-  return cursored ? (
-    <ListEmptyState
-      title={BROWSE_NARROWED_TITLE}
-      body={BROWSE_NARROWED_BODY}
-      actionHref="/profiles"
-      actionLabel={TO_BROWSE}
-      actionVariant="outline"
-    />
-  ) : (
-    <ListEmptyState
-      title={NOBODY_PUBLISHED_TITLE}
-      body={NOBODY_PUBLISHED_BODY}
-      actionHref="/publish"
-      actionLabel={TO_PUBLISH}
-    />
+  return (
+    <>
+      <CountAnnouncement count={0} />
+      {empty}
+    </>
   );
 }
 
 /**
  * The results.
  *
- * **The Skill's label is read here rather than passed down from the filter
- * panel**, and the two reads are deliberately not shared: the panel and the list
- * are separate Suspense boundaries precisely so the controls paint without
- * waiting on the list, and one awaited value shared between them would join them
- * back together. The vocabulary read is a single indexed statement against a
- * table of ninety rows, and it is only reached at all when the empty state has
- * something to name.
+ * **The Skill's label is read here rather than passed down from the controls**,
+ * and the two reads are deliberately not shared: the controls and the list are
+ * separate Suspense boundaries precisely so the controls paint without waiting
+ * on the list, and one awaited value shared between them would join them back
+ * together. The vocabulary read is a single indexed statement over ninety rows,
+ * and it is only reached at all when the empty state has something to name.
  */
 async function BrowseList({ searchParams }: { readonly searchParams: SearchParams }) {
   const params = await searchParams;
@@ -140,13 +156,7 @@ async function BrowseList({ searchParams }: { readonly searchParams: SearchParam
   const page = await profiles.browse({ ...filters, after });
 
   if (page.items.length === 0) {
-    return (
-      <BrowseEmpty
-        filters={filters}
-        narrowing={await narrowingOf(filters)}
-        cursored={after !== null}
-      />
-    );
+    return <BrowseEmpty filters={filters} narrowing={await narrowingOf(filters)} cursor={after} />;
   }
 
   return (
@@ -157,18 +167,42 @@ async function BrowseList({ searchParams }: { readonly searchParams: SearchParam
 }
 
 /**
- * The controls. Dynamic because the Skill list is a read, so `[stream]` from
- * Cache Components' own menu — the same choice the results make, in a boundary
- * that resolves sooner.
+ * The controls. `[stream]` from Cache Components' own menu, because reading
+ * `searchParams` is dynamic — but this boundary waits on **nothing else**, which
+ * is the point of it: the text box, the city and the submit are on screen and
+ * usable while the list is still a skeleton below them.
  */
 async function BrowseFilters({ searchParams }: { readonly searchParams: SearchParams }) {
-  const [vocabulary, params] = await Promise.all([skills.listActive(), searchParams]);
+  return (
+    <BrowseFiltersForm
+      filters={browseFiltersFrom(await searchParams)}
+      skillOptions={
+        /*
+          The one database read on this half of the page, in a boundary of its
+          own **inside** the `<select>`. The control is complete without it —
+          `Cualquier capacidad` is what an unfiltered search sends — so holding
+          the whole form for it would trade three ready controls for one.
+        */
+        <Suspense fallback={<SkillOptionsFallback />}>
+          <SkillOptions />
+        </Suspense>
+      }
+    />
+  );
+}
 
-  return <BrowseFiltersForm vocabulary={vocabulary} filters={browseFiltersFrom(params)} />;
+async function SkillOptions() {
+  const vocabulary = await skills.listActive();
+
+  return vocabulary.map((skill) => (
+    <option key={skill.slug} value={skill.slug}>
+      {skill.labelEs}
+    </option>
+  ));
 }
 
 /**
- * Holds the controls' box while the vocabulary arrives.
+ * Holds the controls' box for the tick `searchParams` takes to resolve.
  *
  * Mirrored piece for piece rather than measured to a number, for the reason
  * `ProfileListSkeleton` gives: a height written down goes stale the first time a
@@ -177,20 +211,23 @@ async function BrowseFilters({ searchParams }: { readonly searchParams: SearchPa
  */
 function FiltersSkeleton() {
   return (
-    <div className="flex flex-col gap-4" aria-hidden="true">
+    <div className="flex flex-col gap-5" aria-hidden="true">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-9 w-full" />
         <Skeleton className="h-4 w-64" />
       </div>
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <div className="flex flex-col gap-2 sm:flex-1">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-9 w-full" />
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-1">
-          <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-9 w-full" />
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-9 w-full" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-16" />
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-10 w-36" />
+          <Skeleton className="h-10 w-28" />
+          <Skeleton className="h-10 w-36" />
+          <Skeleton className="h-10 w-44" />
         </div>
       </div>
       <Skeleton className="h-9 w-24" />
