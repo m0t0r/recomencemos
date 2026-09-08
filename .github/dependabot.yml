@@ -121,7 +121,28 @@ updates:
   # The glob form is verified from `github_actions/file_fetcher.rb`, which
   # scans any non-root directory for `*.yml`, rather than from the documentation
   # — which describes only the root behaviour. If it stops working, the symptom
-  # is silence, so the SHA pin is worth an eye at review time regardless.
+  # is silence.
+  #
+  # **`pnpm deps:outdated` is the second reader that silence needs**, added by
+  # #213 once pnpm 12 taught `pnpm outdated` to read GitHub Actions. It answers
+  # the same question locally and from a different implementation, so the two
+  # going quiet together takes two bugs rather than one.
+  #
+  # It is a command a person runs and never a gate: an upstream release makes it
+  # red the day it lands, which is `docs/policy/security.md` C7's own argument
+  # for keeping the blocking audit narrow. What it reads was measured against
+  # fixtures rather than taken from the changelog, and the shape matters here:
+  #
+  #   - it reads `.github/workflows/*` and **follows** a `uses: ./.github/actions/<name>`
+  #     into the composite file, so `.github/actions/setup/action.yml` is covered
+  #     as long as a workflow references it — which `ci.yml` does
+  #   - it resolves a SHA pin to a version through the registry, so it is right
+  #     even when the trailing `# vX.Y.Z` comment has drifted
+  #   - it does **not** read an `action.yml` no workflow references
+  #
+  # That last line is why this entry's second directory is not redundant. The
+  # two readers overlap on today's one composite action and diverge the moment a
+  # second one arrives unreferenced; neither replaces the other.
   #
   # Dependabot rewrites the trailing `# v6.0.10` comment along with the SHA when
   # the comment sits on the same line, which is why it is written that way.

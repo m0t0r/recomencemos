@@ -18,6 +18,7 @@ An `UNSET` value is raised as a flagged concern naming this file and the key. It
 | `pentest-cadence`        | **None external.** Internally: `security-review` per PR touching auth, the exchange path or an egress; a full `/security-audit` run before the announcement and after major auth or exchange work                                                                 | How often an external party looks, if ever                                                                                                                                                                                                                                                                                                                                                                                       |
 | `secrets-in-url-paths`   | **yes** — one route, `GET /admin/enrol/[token]`. See below                                                                                                                                                                                                        | Whether any route carries a credential in a path segment — password reset, signed invite, unsubscribe. If yes, the completion line logs it verbatim ([ADR-0006](../adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)) and the path must be bounded before go-live                                                                                                                                                      |
 | `artifact-egress`        | **yes** — recordings and screenshots of the running app are published to an object store that serves **unauthenticated** reads, under an unguessable prefix. Review artifacts expire; story demos do not. See "What a published artifact may never contain" below | Whether anything leaves this system to a public origin that is not the app itself. Set by [ADR-0019](../adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md) and provisioned by [`../runbooks/ui-proof-artifacts.md`](../runbooks/ui-proof-artifacts.md). It is a key rather than a line in `build.md` because a future spec proposing a second kind of artifact needs `security-design` to hit this on the way past |
+| `sbom`                   | **Generated on demand, never stored** — `pnpm sbom --sbom-format cyclonedx --lockfile-only` at the commit in question. It covers the npm graph and not the image under it. See below                                                                              | Whether this system publishes a software bill of materials, in what format, and produced when. Set by #213, once pnpm 12 made one a single command                                                                                                                                                                                                                                                                               |
 
 ### Why `dependency-policy` and `audit-report-threshold` are two keys
 
@@ -31,6 +32,34 @@ branch while every pull request went green: each was transitive, so the blocking
 them past, and Dependabot could open no pull request for any of them because dependabot-core does not
 support updating transitive dependencies for the pnpm ecosystem. Nothing was broken. Nobody was
 told. `.github/workflows/security-audit.yml` is the actor this key exists to point at.
+
+### Why `sbom` is "on demand" rather than a build artifact
+
+`pnpm sbom` arrived with pnpm 12 and made a bill of materials one command, which is what put the
+question here at all. Two measurements decide where it runs, and both cut the same way.
+
+**`--lockfile-only` produces the document from the committed lockfile, with no install and no
+store.** So the SBOM for any commit this repository has ever had is reproducible from git by checking
+that commit out and running one command. An SBOM stored per build would therefore record nothing git
+does not already carry, while creating a second place "what shipped" is written down — and a second
+place is a place that can disagree with the first. The lockfile is the bill of materials; the SBOM is
+a serialization of it for a reader who cannot parse pnpm's format.
+
+**And it would be an incomplete document filed as though it were complete.** What deploys is a
+container built `FROM node:24-slim`, so what ships includes a Debian userland, its OpenSSL, and the
+Node build itself — none of which pnpm can see. A CycloneDX file attached to a release, named for the
+release, implies coverage it does not have. Producing it on request, from a lockfile, with the scope
+stated in the key, does not.
+
+So: no job in `.github/workflows/ci.yml`, no artifact retention window, and no row on the go-live
+checklist — a checklist row nobody ever ticks is worse than an absent one, and nothing in
+`compliance-regime` (Ley 1581 de 2012, which is about personal data rather than supply chain) obliges
+one. What the key buys is that the next person asked for an SBOM by a partner organization has the
+command, the format, and the sentence about what it does not cover.
+
+**What would change this answer**: a partner or a customer contract that requires an SBOM _archived_
+per release, or a move off a base image — at which point the honest artifact is a container SBOM from
+a scanner that reads image layers, and `pnpm sbom` is one input to it rather than the thing itself.
 
 ### The two `.env` files, and why the rule names only one of them
 
