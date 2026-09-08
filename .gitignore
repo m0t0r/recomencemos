@@ -62,6 +62,13 @@ yarn-error.log*
 .impeccable/review/
 .impeccable/mocks/
 
+# security-audit: the run directory a `/security-audit` run writes — REPORT.md,
+# FINDINGS-DETAIL.md, findings.json. A confirmed finding is filed as a
+# `security-finding` issue, which is its durable record (ADR-0001); the run
+# itself stays local because it can carry a proof of concept against a door
+# this repository has not yet closed, and the repository is public.
+.security-audit/
+
 # Vitest 5 centralises reports, attachments and blob output here. Nothing in
 # this repo configures a reporter that writes one today; the entry is a floor,
 # so a `vitest doctor` or `--reporter=json` run cannot leave artifacts staged.

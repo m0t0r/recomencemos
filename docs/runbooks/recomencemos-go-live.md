@@ -394,12 +394,13 @@ gh api repos/<owner>/<repo>/automated-security-fixes         # {"enabled":true,"
 `pentest-cadence` is **none external**, recorded as a decision rather than a silence. What runs in its
 place:
 
-- [ ] `/security-review` wired as a `REVIEW.md` pass on every PR touching **auth, the exchange path,
-      or an egress**. The path condition is deliberate — a security review on the PR that changes a
-      font size teaches the reader to skim
-- [ ] **One full `/security-audit` run** against the built system before the announcement, with
-      DD16's boundary table handed to it as input so its first phase does not have to infer an
-      architecture
+- [x] The **Security review** pass in `REVIEW.md`, run by the `security-auditor` subagent on every PR
+      touching **auth, the exchange path, or an egress**. The path condition is deliberate — a
+      security review on the PR that changes a font size teaches the reader to skim. The path list
+      is in `docs/agents/security-audit.md` → "Reviewing one pull request"
+- [ ] **One full `/security-audit` run** against the built system before the announcement, configured
+      as `docs/agents/security-audit.md` → "Running a full audit" says, with DD16's boundary table
+      handed to it as input so its first phase does not have to infer an architecture
 - [ ] Findings triaged; anything exploitable on the exchange path closed before the announcement
 
 > Neither is a pentest, and neither is recorded as one. An agent reading code another agent wrote
