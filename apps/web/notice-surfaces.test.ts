@@ -103,10 +103,11 @@ describe("the standing notices reach every surface that owes them", () => {
 
   const required = ALL_SURFACES.filter((surface) => noticesRequiredOn(surface.route));
 
-  it("finds at least the three surfaces that carry them today", () => {
+  it("finds at least the four surfaces that carry them today", () => {
     expect(required.map((surface) => surface.route).toSorted()).toEqual([
       "/",
       "/my-profile",
+      "/profile/[slug]",
       "/profiles",
     ]);
   });
