@@ -21,7 +21,10 @@
  * about a list that is rewritten daily.
  */
 
+import { Skeleton } from "@repo/design-system/components/skeleton";
+import { cityLabel } from "@repo/domain/policy";
 import { profiles, SLUG_PATTERN } from "@repo/domain/profiles";
+import { skills } from "@repo/domain/skills";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
@@ -35,12 +38,18 @@ import {
   TO_BROWSE,
   TO_PUBLISH,
 } from "../_lib/lists/messages";
+import { BrowseFiltersForm } from "./_components/browse-filters";
 import { MoreProfiles } from "./_components/more-profiles";
+import { type BrowseFilters, browseFiltersFrom, isNarrowed } from "./_lib/filters";
 import {
   BROWSE_LEAD,
   BROWSE_NARROWED_BODY,
   BROWSE_NARROWED_TITLE,
   BROWSE_TITLE,
+  FILTER_CLEAR,
+  FILTER_EMPTY_TITLE,
+  narrowedBy,
+  typedTerm,
 } from "./_lib/messages";
 
 export const metadata: Metadata = { title: BROWSE_TITLE };
@@ -60,19 +69,41 @@ function cursorFrom(value: string | string[] | undefined): string | null {
 }
 
 /**
- * The list is empty for one of two reasons, and they are different states.
+ * The list is empty for one of three reasons, and they are three different
+ * states rather than one sentence with three causes.
  *
- * Nothing published at all is a fact about the platform; nothing on *this* page
- * is a fact about where the reader is standing — so the second names what is
- * narrowing the list and offers to clear it.
+ * Nothing published at all is a fact about the **platform**. Nothing matching
+ * what somebody chose is a fact about **the filters**, so it names them and
+ * offers to clear them. Nothing on *this page* is a fact about **where the
+ * reader is standing**, which a link they followed put them at.
  *
- * **Today the narrowing it can name is the page cursor**, because that is the
- * only one that exists. Story 19's Skill and city filters add their own to this
- * same shape, and when they do this condition has to widen with them — a filter
- * set and no cursor would otherwise fall to the "nobody has published" branch.
+ * The filtered branch has to come first: a filter set and no cursor would
+ * otherwise fall through to "nobody has published", which is a claim about the
+ * platform that a filter has no business making.
  */
-function BrowseEmpty({ narrowed }: { readonly narrowed: boolean }) {
-  return narrowed ? (
+function BrowseEmpty({
+  filters,
+  narrowing,
+  cursored,
+}: {
+  readonly filters: BrowseFilters;
+  /** What is narrowing the list, in the words a person reads. */
+  readonly narrowing: readonly string[];
+  readonly cursored: boolean;
+}) {
+  if (isNarrowed(filters)) {
+    return (
+      <ListEmptyState
+        title={FILTER_EMPTY_TITLE}
+        body={narrowedBy(narrowing)}
+        actionHref="/profiles"
+        actionLabel={FILTER_CLEAR}
+        actionVariant="outline"
+      />
+    );
+  }
+
+  return cursored ? (
     <ListEmptyState
       title={BROWSE_NARROWED_TITLE}
       body={BROWSE_NARROWED_BODY}
@@ -90,17 +121,101 @@ function BrowseEmpty({ narrowed }: { readonly narrowed: boolean }) {
   );
 }
 
+/**
+ * The results.
+ *
+ * **The Skill's label is read here rather than passed down from the filter
+ * panel**, and the two reads are deliberately not shared: the panel and the list
+ * are separate Suspense boundaries precisely so the controls paint without
+ * waiting on the list, and one awaited value shared between them would join them
+ * back together. The vocabulary read is a single indexed statement against a
+ * table of ninety rows, and it is only reached at all when the empty state has
+ * something to name.
+ */
 async function BrowseList({ searchParams }: { readonly searchParams: SearchParams }) {
-  const after = cursorFrom((await searchParams).after);
-  const page = await profiles.browse({ after });
+  const params = await searchParams;
+  const after = cursorFrom(params.after);
+  const filters = browseFiltersFrom(params);
 
-  if (page.items.length === 0) return <BrowseEmpty narrowed={after !== null} />;
+  const page = await profiles.browse({ ...filters, after });
+
+  if (page.items.length === 0) {
+    return (
+      <BrowseEmpty
+        filters={filters}
+        narrowing={await narrowingOf(filters)}
+        cursored={after !== null}
+      />
+    );
+  }
 
   return (
     <ProfileList profiles={page.items}>
-      {page.nextCursor ? <MoreProfiles initialCursor={page.nextCursor} /> : null}
+      {page.nextCursor ? <MoreProfiles initialCursor={page.nextCursor} filters={filters} /> : null}
     </ProfileList>
   );
+}
+
+/**
+ * The controls. Dynamic because the Skill list is a read, so `[stream]` from
+ * Cache Components' own menu — the same choice the results make, in a boundary
+ * that resolves sooner.
+ */
+async function BrowseFilters({ searchParams }: { readonly searchParams: SearchParams }) {
+  const [vocabulary, params] = await Promise.all([skills.listActive(), searchParams]);
+
+  return <BrowseFiltersForm vocabulary={vocabulary} filters={browseFiltersFrom(params)} />;
+}
+
+/**
+ * Holds the controls' box while the vocabulary arrives.
+ *
+ * Mirrored piece for piece rather than measured to a number, for the reason
+ * `ProfileListSkeleton` gives: a height written down goes stale the first time a
+ * control gains a line, and nothing says so. `aria-hidden`, because the controls
+ * announce themselves when they arrive.
+ */
+function FiltersSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-hidden="true">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-1">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-1">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      </div>
+      <Skeleton className="h-9 w-24" />
+    </div>
+  );
+}
+
+/** What is narrowing the list, in the order the controls sit, and in her words. */
+async function narrowingOf(filters: BrowseFilters): Promise<string[]> {
+  if (!isNarrowed(filters)) return [];
+
+  const terms: string[] = [];
+  if (filters.query) terms.push(typedTerm(filters.query));
+
+  if (filters.skill) {
+    const label = (await skills.listActive()).find((skill) => skill.slug === filters.skill);
+    // A well-formed slug naming no Skill matched nothing, which is why this
+    // state is on screen at all. It is named by its slug rather than dropped:
+    // "you are filtering by something" is more use than a silent omission.
+    terms.push(label?.labelEs ?? filters.skill);
+  }
+
+  if (filters.city) terms.push(cityLabel(filters.city));
+
+  return terms;
 }
 
 /**
@@ -159,6 +274,21 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
           characters and would run to ~92ch in the column without it.
         */}
         <p className="text-muted-foreground max-w-prose text-pretty">{BROWSE_LEAD}</p>
+
+        {/*
+          The controls, in a boundary of their own and **outside** `ListBoundary`.
+
+          Two things follow from that placement, and both are criteria. They
+          resolve on the vocabulary read alone, which is one indexed statement
+          over ninety rows, so they paint and become usable while the list is
+          still streaming into the skeleton below them. And a list read that
+          fails leaves them standing — the search that failed is the one thing a
+          reader would want to change, so putting them inside the failing
+          boundary would take away the way out at the moment it is needed.
+        */}
+        <Suspense fallback={<FiltersSkeleton />}>
+          <BrowseFilters searchParams={searchParams} />
+        </Suspense>
 
         {/*
           The escape the Wall does not need: a page of this list that failed still

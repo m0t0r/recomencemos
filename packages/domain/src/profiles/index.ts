@@ -33,7 +33,13 @@ import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-de
 import { normalizeColombianPhone } from "#policy/phone";
 import { normalizeSearchText } from "#policy/search-text";
 import { findGatedIdentity, findGatedWorkHistory } from "#profiles/gated";
-import { type ListOptions, listBrowse, listWall, type ProfileListPage } from "#profiles/listing";
+import {
+  type BrowseOptions,
+  type ListOptions,
+  listBrowse,
+  listWall,
+  type ProfileListPage,
+} from "#profiles/listing";
 import { mintSlug } from "#profiles/slug";
 import type { PhotoState } from "#policy/profile-states";
 import {
@@ -650,8 +656,14 @@ export const profiles = {
     return listWall(db(), options);
   },
 
-  /** The browsable list, fewest delivered Offers first. Public for the same reason. */
-  async browse(options?: ListOptions): Promise<ProfileListPage> {
+  /**
+   * The browsable list, fewest delivered Offers first. Public for the same
+   * reason, and narrowed by whatever a Hirer put in the URL.
+   *
+   * The filters are the only thing this takes beyond the Wall's options, and
+   * they are all optional: a caller that sets none reads the whole list.
+   */
+  async browse(options?: BrowseOptions): Promise<ProfileListPage> {
     const { db } = await import("#connection");
     return listBrowse(db(), options);
   },
@@ -679,6 +691,6 @@ export const profiles = {
  * door; seam 2 reaches the functions through `#profiles/listing`, which is
  * private to this package.
  */
-export type { ListOptions, ProfileListPage } from "#profiles/listing";
+export type { BrowseFilters, BrowseOptions, ListOptions, ProfileListPage } from "#profiles/listing";
 export { SLUG_PATTERN } from "#profiles/slug";
 export type { GatedIdentity, GatedProfile, OwnProfile, PublicProfile } from "#projections";

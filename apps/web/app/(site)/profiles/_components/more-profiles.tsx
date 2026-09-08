@@ -28,9 +28,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ProfileRow } from "../../_components/profile-list/profile-row";
 import { announcedMore } from "../../_lib/lists/messages";
 import { loadMoreProfiles } from "../actions";
+import { type BrowseFilters, browseHref } from "../_lib/filters";
 import { BROWSE_MORE, BROWSE_MORE_FAILED, BROWSE_MORE_LOADING } from "../_lib/messages";
 
-export function MoreProfiles({ initialCursor }: { readonly initialCursor: string }) {
+/**
+ * @param filters what narrowed the page this continues. Both routes onward
+ * carry them — the action, because a cursor into a filtered ordering is
+ * meaningless against the unfiltered one, and the link, because it is the same
+ * page two by another door.
+ */
+export function MoreProfiles({
+  initialCursor,
+  filters,
+}: {
+  readonly initialCursor: string;
+  readonly filters: BrowseFilters;
+}) {
   const [rows, setRows] = useState<readonly PublicProfile[]>([]);
   /*
     How many arrived on the **last** page, which is not `rows.length`.
@@ -46,7 +59,7 @@ export function MoreProfiles({ initialCursor }: { readonly initialCursor: string
     if (pending || cursor === null) return;
 
     setPending(true);
-    const result = await loadMoreProfiles({ after: cursor });
+    const result = await loadMoreProfiles({ after: cursor, ...filters });
     setPending(false);
 
     const page = result?.data;
@@ -61,7 +74,7 @@ export function MoreProfiles({ initialCursor }: { readonly initialCursor: string
     setRows((current) => [...current, ...page.profiles]);
     setLastAppended(page.profiles.length);
     setCursor(page.nextCursor);
-  }, [cursor, pending]);
+  }, [cursor, pending, filters]);
 
   useEffect(() => {
     const node = sentinel.current;
@@ -105,7 +118,7 @@ export function MoreProfiles({ initialCursor }: { readonly initialCursor: string
           <div ref={sentinel} className="flex flex-col items-start gap-2 py-6">
             {failed ? <p className="text-muted-foreground text-sm">{BROWSE_MORE_FAILED}</p> : null}
             <Link
-              href={`/profiles?after=${cursor}`}
+              href={browseHref(filters, cursor)}
               className={buttonVariants({ variant: "outline" })}
               aria-busy={pending}
             >

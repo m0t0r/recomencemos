@@ -675,6 +675,35 @@ export const capabilityProfile = pgTable(
       .where(sql`${table.state} = 'published'`),
 
     /**
+     * Browse + typed words: a `pg_trgm` GIN index over the folded column (DD4).
+     *
+     * **This is the whole of why `searchText` is a plain column.** `unaccent()`
+     * is `STABLE` rather than `IMMUTABLE`, so Postgres refuses an index over it
+     * and refuses a generated column over it too; the folklore fix is to
+     * redeclare it `IMMUTABLE` by hand, which works and lies — change the
+     * dictionary and the index goes on answering from entries it no longer
+     * matches. Folding at write time instead leaves an ordinary text column
+     * that an ordinary index can serve, and the read compares two strings that
+     * were folded by the same function.
+     *
+     * **`gin_trgm_ops` is what makes `LIKE '%…%'` index-served at all.** A
+     * B-tree cannot answer a leading wildcard; the trigram index looks the
+     * pattern's three-character runs up directly, which is why the read spells
+     * the comparison as `LIKE` rather than as anything that would wrap the
+     * column in a function.
+     *
+     * Partial on the same predicate as the two browse indexes above it: every
+     * read that reaches this one is already reading published rows only.
+     *
+     * `pg_trgm` itself is enabled out of band on all three engines — never in a
+     * migration, because a managed provider gates extensions behind its own
+     * dashboard. See `#testing/global-setup`.
+     */
+    index("capability_profile_search_idx")
+      .using("gin", table.searchText.op("gin_trgm_ops"))
+      .where(sql`${table.state} = 'published'`),
+
+    /**
      * The duplicate-phone signal (C30): **non-unique**, because families and
      * shared households genuinely share one handset. A moderation signal, never
      * a constraint.

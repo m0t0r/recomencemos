@@ -29,11 +29,12 @@
  * Nothing here is cached, and there is no `use cache` anywhere near it.
  */
 
-import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, like, type SQL, sql } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import type { CityId } from "#policy/cities";
 import { type Page, PAGE_SIZE, pageOf } from "#policy/listing";
 import type { PhotoState } from "#policy/profile-states";
+import { toSearchPatterns } from "#policy/search-text";
 import { type PublicProfile, toPublicProfile } from "#projections";
 import * as schema from "#schema";
 import type { VocabularyEntry } from "#skills";
@@ -43,6 +44,30 @@ export interface ListOptions {
   readonly after?: string | null;
   readonly limit?: number;
 }
+
+/**
+ * What narrows the browsable list, on top of the published predicate every read
+ * of it already carries.
+ *
+ * **All three are optional and all three combine**, and each maps to one index
+ * the schema already declares rather than to a scan: the city to the leading
+ * column of `capability_profile_browse_city_idx`, the Skill to
+ * `profile_skill_skill_id_idx`, the typed words to
+ * `capability_profile_search_idx`.
+ *
+ * **Nothing here touches the ordering.** The attention spread is the same
+ * comparison over a smaller population, which is what makes the fairness
+ * property true of a filtered list without a second code path claiming it is.
+ */
+export interface BrowseFilters {
+  /** A `Skill`'s slug. A slug naming no Skill matches nothing, which is the honest answer. */
+  readonly skill?: string | null;
+  readonly city?: CityId | null;
+  /** What a Hirer typed, raw. Folded and split by `#policy/search-text`, never here. */
+  readonly query?: string | null;
+}
+
+export interface BrowseOptions extends ListOptions, BrowseFilters {}
 
 /** What a page of either list is. */
 export type ProfileListPage = Page<PublicProfile>;
@@ -178,11 +203,60 @@ const ATTENTION_SPREAD: Ordering = {
     )`,
 };
 
+/**
+ * The filters, as predicates against the same statement — one per term a caller
+ * actually set, and nothing at all when it set none.
+ *
+ * **Each one is written so an index can answer it**, which is the criterion this
+ * whole story turns on. Concretely: no function wraps a column, so nothing here
+ * forces the engine to compute a value per row before it can compare one.
+ *
+ * - **City** is plain equality on the column the browse-plus-city index leads
+ *   with.
+ * - **Skill** is an `EXISTS` over the join table keyed the reverse way from the
+ *   natural primary key — `profile_skill_skill_id_idx`, which DD2 declared for
+ *   exactly this read. The slug is resolved in an **uncorrelated** subquery, so
+ *   the engine looks the Skill up once against its unique index rather than once
+ *   per candidate profile. A join to `skill` instead would multiply the rows
+ *   before the page's `LIMIT` could cut them.
+ * - **The typed words** are `LIKE` against the folded column, one predicate per
+ *   word, answered by the trigram index — see `#policy/search-text` for why they
+ *   are separate and how they are escaped, and `#schema` for why the column is
+ *   plain text rather than an expression.
+ *
+ * The one shape worth knowing before reading an `EXPLAIN` here, because it looks
+ * like a regression and is not: **a GIN index supplies no ordering**, so a text
+ * query combined with the attention-spread sort is a bitmap scan plus a sort
+ * rather than an ordered walk. DD4 records that as the accepted cost of an
+ * honest accent fold, at a launch volume where the sort is measured in
+ * milliseconds.
+ */
+function filtersOf(filters: BrowseFilters): SQL[] {
+  const predicates: SQL[] = [];
+
+  if (filters.city) predicates.push(eq(schema.capabilityProfile.city, filters.city));
+
+  if (filters.skill) {
+    predicates.push(sql`exists (
+      select 1
+      from profile_skill
+      where profile_skill.capability_profile_id = ${schema.capabilityProfile.id}
+        and profile_skill.skill_id = (select skill.id from skill where skill.slug = ${filters.skill})
+    )`);
+  }
+
+  for (const pattern of filters.query ? toSearchPatterns(filters.query) : []) {
+    predicates.push(like(schema.capabilityProfile.searchText, pattern));
+  }
+
+  return predicates;
+}
+
 /** One page of published profiles in the given ordering. */
 async function readPage(
   db: DomainDatabase,
   ordering: Ordering,
-  options: ListOptions,
+  options: BrowseOptions,
 ): Promise<ProfileListPage> {
   const limit = options.limit ?? PAGE_SIZE;
   const after = options.after ? ordering.after(options.after) : undefined;
@@ -190,7 +264,7 @@ async function readPage(
   const rows = await db
     .select(PUBLIC_COLUMNS)
     .from(schema.capabilityProfile)
-    .where(after ? and(publishedOnly, after) : publishedOnly)
+    .where(and(publishedOnly, ...filtersOf(options), ...(after ? [after] : [])))
     .orderBy(...ordering.orderBy)
     // One more than the page shows, so "is there another page" is answered by a
     // row rather than guessed from a full one.
@@ -217,10 +291,17 @@ export function listWall(db: DomainDatabase, options: ListOptions = {}): Promise
  * Answered by `capability_profile_browse_idx`. The ordering is the attention
  * spread this product commits to, and the middle term is what keeps it a
  * rotation rather than a queue — see `#policy/listing`.
+ *
+ * **A filter narrows the population and changes nothing else** — not the
+ * ordering, not the keyset, not the projection. So the fairness property holds
+ * inside a filtered set for the same reason it holds outside one, and the cursor
+ * a filtered page hands back keeps working as long as the same filters travel
+ * with it. They have to: the cursor names a row's position in an ordering, and
+ * an ordering over a different population is a different ordering.
  */
 export function listBrowse(
   db: DomainDatabase,
-  options: ListOptions = {},
+  options: BrowseOptions = {},
 ): Promise<ProfileListPage> {
   return readPage(db, ATTENTION_SPREAD, options);
 }
