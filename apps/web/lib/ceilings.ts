@@ -28,12 +28,19 @@ import type { CeilingedAction, CeilingPrincipal } from "@repo/domain/rate-limit"
 import { ceilings } from "@repo/domain/rate-limit";
 import { logRequestError } from "@repo/observability/log-request-error";
 
-/** What a surface needs in order to say a ceiling refused (NFR26's third half). */
+/**
+ * What a surface needs in order to say a ceiling refused (NFR26's third half).
+ *
+ * **One field, because the wait is already inside the sentence.** This carried a
+ * `retryAfter` in seconds as well, and nothing read it: `retryPhrase` has
+ * already turned the same number into *"en 25 minutos"* by the time the message
+ * is built, and a surface rendering both would say the wait twice. It comes back
+ * the day something needs the number rather than the phrase — a `Retry-After`
+ * header, or a countdown that ticks.
+ */
 export interface CeilingRefusal {
   /** The ceiling's own sentence, in her terms. The only string that crosses. */
   readonly userMessage: string;
-  /** Seconds until the window resets. */
-  readonly retryAfter: number;
 }
 
 /**
@@ -58,7 +65,7 @@ export async function chargeCeilings(
       // Returned, not thrown: one `warn` line, no Sentry event.
       logRequestError(outcome.error, { level: "warn" });
 
-      return { userMessage: outcome.error.userMessage, retryAfter: outcome.retryAfter };
+      return { userMessage: outcome.error.userMessage };
     }
   }
 
