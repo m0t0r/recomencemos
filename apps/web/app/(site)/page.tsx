@@ -34,6 +34,7 @@ import { profiles } from "@repo/domain/profiles";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { ListEmptyState } from "./_components/profile-list/empty-state";
 import { ListBoundary } from "./_components/profile-list/list-boundary";
 import { ProfileList } from "./_components/profile-list/profile-list";
@@ -155,10 +156,23 @@ export default function WallPage() {
         </h2>
 
         {/*
-          Story 11's two standing notices land here, above the list and below the
-          heading: nobody is verified, and the platform holds no money. The
-          boundary below is scoped so a failed read leaves them on screen.
+          Story 11's three standing notices, in the slot this comment reserved:
+          above the list, below the heading, and **outside `ListBoundary`** — the
+          spec's Wall `error` cell asks for the notices to still render when the
+          read fails, and outside the boundary is the only place that is true.
+
+          It is also why story 11's fifth criterion needs nothing measured. The
+          notices sit above the grid and outside its boundary, so a skeleton that
+          failed to hold the row height would move the rows and could not move
+          them.
+
+          `h3`, not `h2`: this is inside the recent-profiles section, under that
+          section's own heading. `/profiles` renders the same component at `h2`
+          because there it sits directly under the page's `h1`.
         */}
+        <div className="max-w-3xl">
+          <StandingNotices treatment="disclosure" level={3} />
+        </div>
 
         {/* Rows stay at a reading measure; the section is wide so the heading lines up with the cover. */}
         <div className="max-w-3xl">

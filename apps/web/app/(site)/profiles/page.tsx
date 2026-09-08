@@ -24,6 +24,7 @@
 import { profiles, SLUG_PATTERN } from "@repo/domain/profiles";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { ListEmptyState } from "../_components/profile-list/empty-state";
 import { ListBoundary } from "../_components/profile-list/list-boundary";
 import { ProfileList } from "../_components/profile-list/profile-list";
@@ -129,7 +130,15 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-10">
       <h1 className="page-heading">{BROWSE_TITLE}</h1>
 
-      {/* Story 11's two standing notices land here, above the list, as on the Wall. */}
+      {/*
+        Story 11's three standing notices, in the slot this comment reserved —
+        above the list and outside `ListBoundary`, as on the Wall and for the
+        same reason. `h2` here, where the Wall renders `h3`: this sits directly
+        under the page's `h1` rather than inside a section of its own.
+      */}
+      <div className="max-w-3xl">
+        <StandingNotices treatment="disclosure" />
+      </div>
 
       {/* Rows stay at a reading measure; the column is wide so the heading lands where the Wall's does. */}
       <div className="flex max-w-3xl flex-col gap-8">

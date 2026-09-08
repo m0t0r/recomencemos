@@ -24,6 +24,7 @@ import { profiles } from "@repo/domain/profiles";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { OwnProfileView } from "./_components/own-profile-view";
 import { MY_PROFILE_PAGE_TITLE, MY_PROFILE_TITLE } from "./_lib/messages";
@@ -70,6 +71,21 @@ export default function MyProfilePage({ searchParams }: { searchParams: SearchPa
       <Suspense fallback={<PanelSkeleton />}>
         <ProfilePanel searchParams={searchParams} />
       </Suspense>
+      {/*
+        Story 11's three standing notices, at the foot rather than at the head,
+        which is the one placement decision this surface takes for itself.
+
+        The page above is already an honest account of who sees what — *lo que ve
+        todo el mundo*, *lo que ve quien abra tu perfil*, *lo que ve solo quien tú
+        aceptes* — and these three continue it: who checked (nobody), what we hold
+        (no money), and what refusing somebody actually reaches. Put at the head
+        they would push her own profile below the fold on a phone to tell her
+        something she is not, at that moment, deciding.
+
+        Outside the `<Suspense>` above, so a failed read of her profile still
+        leaves them on screen. Same rule as the two lists, different boundary.
+      */}
+      <StandingNotices treatment="expanded" />
     </main>
   );
 }

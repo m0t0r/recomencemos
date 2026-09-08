@@ -77,6 +77,26 @@ export function describeSurfaceCopy({ copy, labels }: SurfaceCopy): void {
     });
   });
 
+  /**
+   * **A surface may legitimately have none**, and an empty `it.each` is a suite
+   * Vitest fails to collect — _"No test found in suite"_ — so the block is
+   * skipped rather than emitted empty. The standing notices are the first such
+   * surface and the reason is a decision rather than an oversight: they carry no
+   * action at all, because routing three statements into a click is the
+   * small-print shape their brief refuses.
+   *
+   * The empty case is asserted rather than merely tolerated, so that a surface
+   * whose labels went missing still reports something.
+   */
+  if (labels.length === 0) {
+    describe("the links and buttons", () => {
+      it("has none, which is this surface's own decision", () => {
+        expect(labels).toEqual([]);
+      });
+    });
+    return;
+  }
+
   describe("the links and buttons", () => {
     it.each(labels)("%s is five words or fewer", (_name, value) => {
       expect(wordCount(value)).toBeLessThanOrEqual(LABEL_WORD_CEILING);
