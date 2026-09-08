@@ -123,3 +123,34 @@ function field(raw: FormData, name: string): string {
   const value = raw.get(name);
   return typeof value === "string" ? value : "";
 }
+
+/**
+ * The profile whose photo is being decided, as a **bound argument** rather than
+ * a hidden input (ADR-0015): it travels with a submit and nobody types it, so
+ * React encodes it into the action reference itself and this validates it on
+ * arrival.
+ *
+ * Digits rather than a number, for `promoteSkillRequestArg`'s reason: it is a
+ * `BIGINT` key, parsing it into a JavaScript `number` is lossy past 2^53, and
+ * nothing does arithmetic on it. No message, because no person can provoke this
+ * — the id comes from the row, and a forged one meets the refusals the action
+ * already answers.
+ */
+export const photoProfileArg = z.string().regex(/^\d+$/);
+
+/**
+ * **The payload of an action that has none.**
+ *
+ * Both photo decisions carry their target as a bound argument and their verb as
+ * which button was pressed, so there is nothing typed into either. `z.void()`
+ * was the first spelling and it is wrong: a `<form action={…}>` dispatch hands
+ * next-safe-action `{}` rather than `undefined`, so every submission failed the
+ * boundary parse — silently, because the row rendered `serverError` and a
+ * validation failure is not one. Driven against the running server, that was an
+ * approve button that did nothing at all and logged nothing.
+ *
+ * This accepts whatever arrives and yields `undefined`, which is what the action
+ * body then sees. It is not a hole: nothing reads the payload, and the value the
+ * action acts on is validated by `photoProfileArg` above.
+ */
+export const noPayloadSchema = z.preprocess(() => undefined, z.undefined());

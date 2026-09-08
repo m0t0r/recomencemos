@@ -8,6 +8,7 @@ import {
   SourceFailed,
   SourceSkeleton,
 } from "./queue";
+import { PhotoRow } from "./photo-row";
 import { SkillRequestRow } from "./skill-request-row";
 import { sectionWaiting } from "../_lib/messages";
 import { loadSection } from "../_lib/queue-data";
@@ -45,6 +46,7 @@ import {
  * shape a section ticket replaces with its own row.
  */
 const SECTION_ROWS: Record<string, ComponentType<{ readonly item: QueueItem }>> = {
+  photos: PhotoRow,
   skillRequests: SkillRequestRow,
 };
 

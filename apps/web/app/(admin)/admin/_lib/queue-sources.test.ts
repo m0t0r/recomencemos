@@ -167,10 +167,11 @@ describe("the source registry", () => {
    * lands.
    */
   it("has a resolver only where the data exists", () => {
-    expect(liveSources().map((source) => source.segment)).toEqual(["skills"]);
+    // Nav order, which is why `photos` comes first: the list is read in the
+    // order an Admin works it, not alphabetically.
+    expect(liveSources().map((source) => source.segment)).toEqual(["photos", "skills"]);
     expect(pendingSources().map((source) => source.segment)).toEqual([
       "offers",
-      "photos",
       "reports",
       "bounces",
     ]);

@@ -26,11 +26,18 @@
  */
 
 import { admin } from "@repo/domain/admin";
+import { photos } from "@repo/domain/photos";
 import { projectClientError } from "@repo/errors/app-error";
 import { logRequestError } from "@repo/observability/log-request-error";
 import { adminActionClient } from "@/lib/admin";
 import { returnActionError } from "@/lib/safe-action";
-import { promoteSkillRequestArg, promoteSkillSchema, revokeSessionsSchema } from "./_lib/schema";
+import {
+  noPayloadSchema,
+  photoProfileArg,
+  promoteSkillRequestArg,
+  promoteSkillSchema,
+  revokeSessionsSchema,
+} from "./_lib/schema";
 
 /** What the queue tells the Admin afterwards: a count, and no personal data. */
 export interface SessionsRevoked {
@@ -106,3 +113,71 @@ export const promoteSkill = adminActionClient
       return { labelEs: outcome.result.labelEs };
     },
   );
+
+/** What the queue tells the Admin afterwards about a photo: that it is decided. */
+export interface PhotoDecided {
+  readonly photoState: "approved" | "rejected";
+}
+
+/**
+ * Publish one photo.
+ *
+ * **The whole act is `@repo/domain/photos`'s**, and the interesting part of it is
+ * an ordering rather than a query: the object is re-encoded out of quarantine and
+ * into the public prefix *before* the transaction opens, because a network round
+ * trip plus an image decode inside an open Postgres transaction would hold one of
+ * ten pooled connections for the length of both. The row and its `AdminAction`
+ * then commit together, or neither does.
+ *
+ * **Nothing about the photo crosses back.** The Admin has the image on screen —
+ * it is what they were looking at — so the result is the new state and nothing
+ * else. A URL here would be an egress of an object that is public anyway, and a
+ * key would be an internal locator on the wire for no reason.
+ *
+ * **`noPayloadSchema` rather than `z.void()`**, because there is nothing typed
+ * into this — the profile is a bound argument and the decision is which button
+ * was pressed — and because `z.void()` refuses what a form dispatch actually
+ * sends. See the schema's own comment; the first version of this failed the
+ * boundary parse on every submission and said nothing.
+ */
+export const approvePhoto = adminActionClient
+  .bindArgsSchemas([photoProfileArg])
+  .inputSchema(noPayloadSchema)
+  .stateAction<PhotoDecided>(async ({ bindArgsParsedInputs: [profileId], ctx: { actor } }) => {
+    const outcome = await photos.approve(actor, profileId);
+
+    if (!outcome.ok) {
+      // Returned, not thrown. A photo somebody else already decided is an
+      // ordinary answer on a shared queue, and a caller that could raise an
+      // event from it would spend the month's allowance in a day.
+      logRequestError(outcome.error, { level: "warn" });
+      return returnActionError(projectClientError(outcome.error));
+    }
+
+    return { photoState: "approved" };
+  });
+
+/**
+ * Refuse one photo, **and delete it**.
+ *
+ * The ordering is the mirror of `approvePhoto`'s and is chosen on the same
+ * argument: the row and its audit commit first, then the object is deleted. A
+ * rollback after a delete would leave a `pending` row naming bytes that are gone,
+ * which is a review card no Admin can ever clear; a delete that fails after the
+ * commit leaves an unreachable orphan the bucket's own rule collects.
+ *
+ * It is irreversible, and the row says so before it is pressed.
+ */
+export const rejectPhoto = adminActionClient
+  .bindArgsSchemas([photoProfileArg])
+  .inputSchema(noPayloadSchema)
+  .stateAction<PhotoDecided>(async ({ bindArgsParsedInputs: [profileId], ctx: { actor } }) => {
+    const outcome = await photos.reject(actor, profileId);
+
+    if (!outcome.ok) {
+      logRequestError(outcome.error, { level: "warn" });
+      return returnActionError(projectClientError(outcome.error));
+    }
+
+    return { photoState: "rejected" };
+  });
