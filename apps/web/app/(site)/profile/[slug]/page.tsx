@@ -183,14 +183,26 @@ async function ProfilePanel({ params }: { readonly params: Params }) {
 function PanelSkeleton() {
   return (
     <div className="flex flex-col gap-8" aria-hidden="true">
-      <div className="flex gap-4">
-        <Skeleton className="size-12 shrink-0 rounded-full" />
-        <div className="flex w-full flex-col gap-2">
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-5 w-40" />
+      {/*
+        Re-cut to the nameplate composition (#220). It was a 48 px circle beside
+        a full-width bar — the row shape the header itself no longer has — so the
+        panel used to change layout, not just fill in, when it resolved. The
+        sizes here are the real ones: a 64 px portrait, the name and city beside
+        it, then four lines of a 24 px heading at `leading-8`.
+      */}
+      <div className="flex items-center gap-4">
+        <Skeleton className="size-16 shrink-0 rounded-full" />
+        <div className="flex flex-col gap-1.5">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-4 w-20" />
         </div>
       </div>
-      <Skeleton className="h-8 w-48" />
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-full" />
+        <Skeleton className="h-7 w-full" />
+        <Skeleton className="h-7 w-3/4" />
+      </div>
+      <Skeleton className="h-7 w-48" />
       <Skeleton className="h-28 w-full" />
     </div>
   );
@@ -210,17 +222,27 @@ export default function ProfilePage({ params }: { readonly params: Params }) {
         concrete Offer, which is the moment "we verify nobody" and "we never
         handle the money" have to be in front of her.
 
-        `expanded`, and at the foot, for `/my-profile`'s reason rather than the
-        two lists': the reader came for *this* profile and has already chosen it,
-        so the notices compete with nothing here — where above her identity they
-        would push the person she came to read below the fold on a phone.
+        At the foot rather than above her identity, which would push the person
+        the reader came for below the fold on a phone.
+
+        **`disclosure`, and the owner of `.impeccable/briefs/standing-notices.md`
+        took that call rather than this session (#220).** It was `expanded` by an
+        agent applying that brief's rule — `disclosure` above content the reader
+        came for, `expanded` where the notices compete with nothing — and the
+        foot of this page reads as the second case. What the rule does not see is
+        that this is the surface where the reader is deciding whether to write to
+        someone: three headings, three leads and three details put roughly 900 px
+        of platform prose between her work history and the one link out. Every
+        heading and every lead is still on screen and only the explanation is a
+        tap away, and `_lib/notices/messages.ts` splits `lead` from `detail`
+        precisely so this prop cannot decide what the product says.
 
         Outside the `<Suspense>`, so a refused read still leaves them on screen.
         That matters more here than anywhere: the ceiling refusal and the
         missing-profile response are both pages a reader can reach, and neither
         is a reason to stop saying what this platform does not do.
       */}
-      <StandingNotices treatment="expanded" />
+      <StandingNotices treatment="disclosure" />
     </main>
   );
 }
