@@ -61,6 +61,9 @@ describe.each(["disclosure", "expanded"] as const)("the %s treatment", (treatmen
   it("hides its marks from the accessibility tree", () => {
     const { container } = render(<StandingNotices treatment={treatment} />);
 
+    // Escape hatch, and it is the "the tree does not contain it" case: an `svg`
+    // that is correctly `aria-hidden` is by definition absent from the tree, so
+    // its absence is the thing being asserted and no role query can reach it.
     for (const svg of container.querySelectorAll("svg")) {
       expect(svg).toHaveAttribute("aria-hidden", "true");
     }
@@ -70,8 +73,61 @@ describe.each(["disclosure", "expanded"] as const)("the %s treatment", (treatmen
     render(<StandingNotices treatment={treatment} />);
 
     for (const notice of STANDING_NOTICES) {
-      for (const paragraph of notice.body) {
+      for (const paragraph of [notice.lead, ...notice.detail]) {
         expect(screen.getByText(paragraph)).toBeInTheDocument();
+      }
+    }
+  });
+});
+
+/**
+ * **The clauses the ticket names by hand are never behind a tap.**
+ *
+ * This is the regression test for what `/code-review`'s Spec axis found: the
+ * first cut put each statement's whole body inside `<details>`, so the sentence
+ * naming a Hirer's details as self-asserted and the sentence saying a Block does
+ * not remove her from the Wall were both collapsed by default — on the two
+ * surfaces where an anonymous reader meets them and nowhere else.
+ *
+ * A `lead` is visible in **both** treatments by construction, and that is what
+ * these assert. They are written against the accessibility tree's idea of
+ * visibility, which is what a reader who has not tapped anything actually has.
+ */
+describe("what a reader sees before touching anything", () => {
+  it.each(["disclosure", "expanded"] as const)(
+    "%s shows every lead without being opened",
+    (treatment) => {
+      render(<StandingNotices treatment={treatment} />);
+
+      for (const notice of STANDING_NOTICES) {
+        expect(screen.getByText(notice.lead)).toBeVisible();
+      }
+    },
+  );
+
+  it("shows a Hirer's details are self-asserted, on the collapsed lists", () => {
+    render(<StandingNotices treatment="disclosure" />);
+
+    expect(screen.getByText(/igual que los tuyos/)).toBeVisible();
+  });
+
+  it("shows that a Block leaves her card on the Wall, on the collapsed lists", () => {
+    render(<StandingNotices treatment="disclosure" />);
+
+    expect(screen.getByText(/Tu perfil sigue en el muro/)).toBeVisible();
+  });
+
+  /**
+   * The other half of the same rule: the disclosure genuinely hides something, or
+   * it is a control with nothing behind it. `toBeVisible` is what separates the
+   * two — the detail is in the document either way.
+   */
+  it("keeps the detail behind the disclosure, and only the detail", () => {
+    render(<StandingNotices treatment="disclosure" />);
+
+    for (const notice of STANDING_NOTICES) {
+      for (const paragraph of notice.detail) {
+        expect(screen.getByText(paragraph)).not.toBeVisible();
       }
     }
   });
@@ -112,11 +168,11 @@ describe("the disclosure treatment", () => {
    * with JavaScript unavailable — NFR4 is about the publishing flow, but a notice
    * a reader cannot open on a slow connection is a notice that is not there.
    *
-   * `container.querySelector` rather than a role query: `<details>` reaches the
-   * accessibility tree as a group with a disclosure triangle, and what is being
-   * asserted here is that the *element* is the native one rather than a
-   * reimplementation of it. That is a question about the markup, which is the
-   * narrow case the repo's escape hatch is for.
+   * **Escape hatch, and it is the "HTML that survives without JavaScript" case.**
+   * The accessibility tree reports a group with a disclosure triangle whether
+   * that group is a native `<details>` or a `div` with `aria-expanded` and a
+   * click handler — and the difference between those two is the whole of NFR4
+   * here. A role query cannot tell them apart, so this asks the markup.
    */
   it("uses native details, so it opens with no JavaScript", () => {
     const { container } = render(<StandingNotices treatment="disclosure" />);
@@ -125,20 +181,29 @@ describe("the disclosure treatment", () => {
     expect(container.querySelectorAll("summary")).toHaveLength(STANDING_NOTICES.length);
   });
 
-  /** Closed on arrival: the absences lead, and the elaboration is a choice. */
-  it("starts closed", () => {
-    const { container } = render(<StandingNotices treatment="disclosure" />);
+  /**
+   * **That it starts closed is asserted in user terms above**, by _"keeps the
+   * detail behind the disclosure"_ — which reads what a reader can actually read
+   * rather than which attribute is on the element, and would still fail if a
+   * disclosure were open and merely styled shut.
+   *
+   * A role query cannot say it directly. Testing Library refuses `expanded` on
+   * `role="group"` — _"aria-expanded is not supported on role group"_ — which is
+   * the role `<details>` maps to, so the choice was the attribute or the
+   * visibility. This one asserts only the count, which is a question about
+   * structure and which a role query answers cleanly.
+   */
+  it("groups each statement, one disclosure per statement", () => {
+    render(<StandingNotices treatment="disclosure" />);
 
-    for (const details of container.querySelectorAll("details")) {
-      expect(details).not.toHaveAttribute("open");
-    }
+    expect(screen.getAllByRole("group")).toHaveLength(STANDING_NOTICES.length);
   });
 });
 
 describe("the expanded treatment", () => {
   it("hides nothing behind a disclosure", () => {
-    const { container } = render(<StandingNotices treatment="expanded" />);
+    render(<StandingNotices treatment="expanded" />);
 
-    expect(container.querySelector("details")).toBeNull();
+    expect(screen.queryAllByRole("group")).toHaveLength(0);
   });
 });

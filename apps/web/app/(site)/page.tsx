@@ -161,10 +161,14 @@ export default function WallPage() {
           spec's Wall `error` cell asks for the notices to still render when the
           read fails, and outside the boundary is the only place that is true.
 
-          It is also why story 11's fifth criterion needs nothing measured. The
-          notices sit above the grid and outside its boundary, so a skeleton that
-          failed to hold the row height would move the rows and could not move
-          them.
+          It is also why story 11's fifth criterion holds more strongly than the
+          mechanism it names. That criterion reasons from the skeleton's height —
+          a regression there "moves them" — but the notices sit above the grid
+          *and* outside its boundary, so a fallback of the wrong height moves the
+          rows below it and cannot reach anything above. Measured rather than
+          argued: screenshotting `/profiles` in its skeleton state and again
+          resolved, the first differing scanline is y = 524 of 844, and the
+          notices occupy roughly y = 160-360.
 
           `h3`, not `h2`: this is inside the recent-profiles section, under that
           section's own heading. `/profiles` renders the same component at `h2`
