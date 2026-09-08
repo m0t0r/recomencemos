@@ -57,13 +57,38 @@ export const EMAIL_TERM = "Correo";
 export const NOTHING_MORE = "No escribiste nada más. Está bien así.";
 
 /**
- * The photo, described rather than badged (intent Q3). `absent` is the only
- * state reachable on this ticket; the other two are written now so the shape
- * is designed rather than invented at 5pm.
+ * The photo, **described rather than badged** (intent Q3), and this is the one
+ * surface where the description and the picture disagree with every other one.
+ *
+ * `absent` and `rejected` render her initial, because there is no object: the
+ * one was never attached and the other was deleted when it was refused. Both
+ * say so as a fact rather than as a to-do.
+ *
+ * **`pending` renders her own photo**, and the sentence had to change with it.
+ * It used to say _"mientras tanto se muestra tu inicial"_, which was true when
+ * no photo path existed and became false the moment one did — the spec's cell
+ * for this surface is her own photo shown, dignified, described as under review
+ * and not flagged. A sentence describing a screen the reader is not looking at
+ * is worse than no sentence.
+ *
+ * **What it must never say is that her *profile* is in review.**
+ * `docs/policy/voice.md` bans that construction by name — _"nothing about her
+ * profile is in review; her photo is"_ — and this ticket is the one where the
+ * two facts are most easily confused: publishing waited for nobody, and the
+ * photo is with a person.
  */
+/**
+ * The `alt` on her own photo.
+ *
+ * **What the image shows, and nothing about her.** The voice guide's rule for
+ * every meaningful image, applied to the one image in this product that is a
+ * person: it names the thing, never the circumstances of whoever is in it.
+ */
+export const OWN_PHOTO_ALT = "Tu foto de perfil";
+
 export const PHOTO_ABSENT = "Todavía no tienes foto. En su lugar se muestra tu inicial.";
 export const PHOTO_PENDING =
-  "Una persona está mirando tu foto. Mientras tanto se muestra tu inicial.";
+  "Una persona está mirando tu foto. Tu perfil ya está publicado; la foto aparece cuando la revisen.";
 /** The load failed: what failed, and that reloading helps. */
 export const LOAD_FAILED_TITLE = "No pudimos cargar tu perfil";
 export const LOAD_FAILED_EXPLANATION = "Tu perfil sigue publicado. Recarga la página para verlo.";
@@ -96,6 +121,7 @@ export const MY_PROFILE_COPY = {
   HELD_HEADING,
   HELD_EXPLANATION,
   NOTHING_MORE,
+  OWN_PHOTO_ALT,
   PHOTO_ABSENT,
   PHOTO_PENDING,
   PHOTO_REJECTED,

@@ -18,13 +18,12 @@
  * Node-environment Vitest run sets no `react-server` condition and `server-only`
  * throws there. `queue-data.ts` beside this file is where the gate goes.
  *
- * **Four of the five have no `load`, and they are absent rather than stubbed.**
- * Offers, photos, Reports and bounced addresses read tables that stories 6, 8, 10
- * and 15 create. A source with no resolver reports **no count and no age** —
- * never a zero. Zero is the good news an Admin scans for, and reporting it for a
- * branch nobody queried is the instrument that lies about exactly the thing this
- * surface exists to prevent. `coverageNotice` is the visible half of the same
- * fact.
+ * **Three of the five have no `load`, and they are absent rather than stubbed.**
+ * Offers, Reports and bounced addresses read tables that stories 6, 10 and 15
+ * create. A source with no resolver reports **no count and no age** — never a
+ * zero. Zero is the good news an Admin scans for, and reporting it for a branch
+ * nobody queried is the instrument that lies about exactly the thing this surface
+ * exists to prevent. `coverageNotice` is the visible half of the same fact.
  *
  * **Each branch is `LIMIT`-capped for display while its count and age-of-oldest
  * are computed over the whole branch** (C55). That is a property of a `load`
@@ -35,6 +34,7 @@
  */
 
 import { offers } from "@repo/domain/offers";
+import { photos } from "@repo/domain/photos";
 import { skills } from "@repo/domain/skills";
 import {
   BOUNCES_LABEL,
@@ -43,6 +43,7 @@ import {
   OFFER_WORK_FIELD,
   offerSummary,
   OFFERS_LABEL,
+  photoWaitingSince,
   PHOTOS_LABEL,
   REPORTS_LABEL,
   SKILL_REQUESTS_LABEL,
@@ -93,6 +94,22 @@ export interface QueueItem {
   readonly fields?: readonly QueueItemField[];
   /** When it arrived. The oldest across all sources is what renders first. */
   readonly arrivedAt: Date;
+  /**
+   * A short-lived signed URL for an item whose **content is an image** — today
+   * the photo branch and nothing else.
+   *
+   * **Optional on the shared type rather than a photo-shaped `QueueItem` of its
+   * own**, because every other part of the queue — the count, the age, the cap,
+   * the empty state, the failure card — is the same for a photo as for a Skill
+   * request, and a parallel type would fork all of that to carry one field. A
+   * source with no image simply does not set it.
+   *
+   * **It is signed and it expires in a minute**, which is what keeps NFR6's
+   * count at zero: the object is refused to anyone without a credential, and
+   * this URL is minted server-side inside a render that has already been through
+   * the Admin gate. Never logged, never persisted.
+   */
+  readonly imageUrl?: string;
 }
 
 export interface QueueBranch {
@@ -191,7 +208,41 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
     key: "photos",
     segment: "photos",
     label: PHOTOS_LABEL,
+    /**
+     * **No band, and inventing one would be a spec amendment.** NFR7 states one
+     * number and states it per Offer. A photo has no equivalent clock — and
+     * unlike a Report, a photo waiting costs the Worker something concrete (her
+     * face is not on her card yet), which is an argument for working the branch
+     * promptly rather than an argument for a number nobody agreed.
+     */
     bandHours: null,
+    async load(): Promise<QueueBranch> {
+      const branch = await photos.pending(PHOTO_DISPLAY_CAP);
+
+      /**
+       * **One signed URL per rendered row, and none for the rows past the cap.**
+       * Signing is a local HMAC rather than a network call, so twelve cost
+       * nothing measurable — but each is still a capability to read an
+       * unreviewed photo, so only the rows actually being rendered get one.
+       */
+      const items = await Promise.all(
+        branch.items.map(async (photo) => ({
+          id: photo.profileId,
+          /**
+           * **The summary names nobody.** Every other source has words to show;
+           * this one's item *is* the image, so the text beside it is the single
+           * fact the decision needs. Her name, her city and her headline are
+           * deliberately absent — an Admin is deciding whether an image may be
+           * public, and every extra field is a fact the decision does not need.
+           */
+          summary: photoWaitingSince(photo.attachedAt),
+          arrivedAt: photo.attachedAt,
+          imageUrl: await photos.reviewUrl(photo.photoKey),
+        })),
+      );
+
+      return { items, total: branch.total, oldestArrivedAt: branch.oldestAttachedAt };
+    },
   },
   {
     key: "reports",
@@ -261,6 +312,17 @@ export const SKILL_REQUEST_DISPLAY_CAP = 20;
  * more, and NFR7's band is what says whether that matters today.
  */
 export const OFFER_DISPLAY_CAP = 20;
+
+/**
+ * How many photos render at once (C55), and it is deliberately smaller than the
+ * Skill requests' twenty.
+ *
+ * Each row is an image rather than a sentence, so a screenful is fewer of them —
+ * and every rendered row costs a signed URL and an image request over whatever
+ * connection the Admin is on. The number beside the heading says whether there
+ * are more, and it is computed over the whole branch rather than over this cap.
+ */
+export const PHOTO_DISPLAY_CAP = 12;
 
 /**
  * The age of one instant, in whole hours.

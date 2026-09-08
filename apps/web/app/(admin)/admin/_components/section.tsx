@@ -9,6 +9,7 @@ import {
   SourceSkeleton,
 } from "./queue";
 import { OfferRow } from "./offer-row";
+import { PhotoRow } from "./photo-row";
 import { SkillRequestRow } from "./skill-request-row";
 import { sectionWaiting } from "../_lib/messages";
 import { loadSection } from "../_lib/queue-data";
@@ -47,6 +48,7 @@ import {
  */
 const SECTION_ROWS: Record<string, ComponentType<{ readonly item: QueueItem }>> = {
   offers: OfferRow,
+  photos: PhotoRow,
   skillRequests: SkillRequestRow,
 };
 

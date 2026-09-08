@@ -167,14 +167,12 @@ describe("the source registry", () => {
    * lands.
    */
   it("has a resolver only where the data exists", () => {
-    // Offers joined the live set with story 6, which is the story that writes
-    // them. The order is the nav's, so Offers lead.
-    expect(liveSources().map((source) => source.segment)).toEqual(["offers", "skills"]);
-    expect(pendingSources().map((source) => source.segment)).toEqual([
-      "photos",
-      "reports",
-      "bounces",
-    ]);
+    // Nav order, which is the order an Admin works the queue rather than an
+    // alphabetical one. Offers lead because NFR7 puts a 24-hour band on them and
+    // nothing else in the list carries a clock; photos follow, because a photo
+    // waiting costs a Worker her face on her own card.
+    expect(liveSources().map((source) => source.segment)).toEqual(["offers", "photos", "skills"]);
+    expect(pendingSources().map((source) => source.segment)).toEqual(["reports", "bounces"]);
   });
 
   it("finds a section by the segment its route carries", () => {

@@ -29,6 +29,7 @@ import {
   HELD_EXPLANATION,
   HELD_HEADING,
   NOTHING_MORE,
+  OWN_PHOTO_ALT,
   PHONE_TERM,
   PHOTO_ABSENT,
   PHOTO_PENDING,
@@ -42,6 +43,13 @@ import {
   WALL_LINK,
   WORK_HISTORY_TERM,
 } from "../_lib/messages";
+
+/**
+ * A literal rather than a `useId`, because there is exactly one card on this
+ * page and the id has to be identical in the server's HTML and the client's —
+ * which a literal is by construction.
+ */
+const PHOTO_SENTENCE_ID = "own-photo-state";
 
 function photoSentence(state: OwnProfile["photoState"]): string {
   switch (state) {
@@ -107,7 +115,22 @@ function Confirmation() {
   );
 }
 
-function Card({ profile }: { profile: OwnProfile }) {
+/**
+ * **Her own card, and the one place a photo here needs a name.**
+ *
+ * On a public list a photo sits beside the person's name and reads as
+ * decorative — an empty `alt` is right there, and `ProfileCard` defaults to one.
+ * On this page it is not: the photo is the *subject* of the sentence directly
+ * under it, and with `alt=""` it was removed from the accessibility tree
+ * altogether. Found by reading that tree against the running server — the image
+ * was on screen and simply not in it.
+ *
+ * The `alt` says what the image shows and nothing about her circumstances, and
+ * `photoDescribedBy` joins it to the sentence carrying the state, so "a person
+ * is looking at it" is announced **with** her photo rather than found
+ * separately.
+ */
+function Card({ profile, sentenceId }: { profile: OwnProfile; sentenceId: string }) {
   return (
     <ProfileCard
       firstName={profile.firstName}
@@ -116,6 +139,8 @@ function Card({ profile }: { profile: OwnProfile }) {
       headline={profile.headline}
       skills={profile.skills}
       photoUrl={profile.photoUrl}
+      photoAlt={OWN_PHOTO_ALT}
+      photoDescribedBy={sentenceId}
     />
   );
 }
@@ -202,8 +227,10 @@ function Tiers({ profile, justPublished, justSaved }: OwnProfileViewProps) {
       */}
       <div className="ruled-page">
         <Tier id="public-heading" heading={PUBLIC_HEADING} icon={GlobeIcon}>
-          <Card profile={profile} />
-          <p className="text-muted-foreground text-sm">{photoSentence(profile.photoState)}</p>
+          <Card profile={profile} sentenceId={PHOTO_SENTENCE_ID} />
+          <p id={PHOTO_SENTENCE_ID} className="text-muted-foreground text-sm">
+            {photoSentence(profile.photoState)}
+          </p>
           <p className="text-muted-foreground text-sm">{publishedOn(profile.publishedAt)}</p>
         </Tier>
 

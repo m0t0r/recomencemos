@@ -48,8 +48,26 @@ export interface ProfileCardProps {
    */
   readonly skills: readonly VocabularyEntry[];
   readonly photoUrl?: string | null;
-  /** The `alt` for a real photo. Never a description of her circumstances. */
+  /**
+   * The `alt` for a real photo. Never a description of her circumstances.
+   *
+   * **The default is `""`, which is right on a public list and wrong on her own
+   * page.** Beside a name, a photo is decorative and an empty `alt` keeps a
+   * screen reader from reading the same person twice. On `/my-profile` the photo
+   * is the subject of the sentence under it, so that surface passes a real one —
+   * and with the default it was absent from the accessibility tree entirely,
+   * which is how the omission was found.
+   */
   readonly photoAlt?: string;
+  /**
+   * An element whose text describes the photo's **state**, announced with the
+   * image rather than found separately.
+   *
+   * Only her own view has one. A public card must not say whether a photo is
+   * pending — that is the moderation state NFR6 keeps off every public surface,
+   * where `absent`, `pending` and `rejected` are one shape with three causes.
+   */
+  readonly photoDescribedBy?: string;
   readonly className?: string;
 }
 
@@ -72,6 +90,7 @@ export function ProfileCard({
   skills,
   photoUrl,
   photoAlt = "",
+  photoDescribedBy,
   className,
 }: ProfileCardProps) {
   return (
@@ -84,7 +103,9 @@ export function ProfileCard({
       */}
       <CardHeader className="flex flex-row items-start gap-4">
         <Avatar size="lg" aria-hidden={photoUrl ? undefined : true}>
-          {photoUrl ? <AvatarImage src={photoUrl} alt={photoAlt} /> : null}
+          {photoUrl ? (
+            <AvatarImage src={photoUrl} alt={photoAlt} aria-describedby={photoDescribedBy} />
+          ) : null}
           <AvatarFallback>{initialOf(firstName)}</AvatarFallback>
         </Avatar>
         <div className="flex min-w-0 flex-col gap-1">
