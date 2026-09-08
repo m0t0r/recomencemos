@@ -37,6 +37,15 @@ const TARGET = "ana@recomencemos.test";
  * a request that is not there is `promoteSkill`'s "act that did not happen".
  */
 const REQUEST_ID = "4242";
+const PROFILE_ID = "77";
+/**
+ * Keys shaped exactly as `@repo/storage` mints them — 21 characters of its
+ * alphabet under each prefix. Written out rather than minted so a fixture
+ * cannot drift into something the shape predicate would refuse without anyone
+ * noticing which half broke.
+ */
+const QUARANTINE_KEY = "quarantine/aaaaaaaaaaaaaaaaaaaaa";
+const PUBLIC_KEY = "photos/aaaaaaaaaaaaaaaaaaaaa.webp";
 
 /**
  * The Offer `deliverOffer` acts on, pinned for the same reason.
@@ -80,6 +89,8 @@ const INPUTS = {
     labelEs: "Arreglo máquinas de coser",
   },
   deliverOffer: { offerId: OFFER_ID },
+  approvePhoto: { profileId: PROFILE_ID, publicKey: PUBLIC_KEY },
+  rejectPhoto: { profileId: PROFILE_ID },
 } satisfies { [K in AdminActionName]: AdminActionInput<K> };
 
 /** An Account with two live sessions, so `revokeSessions` has something to revoke. */
@@ -150,11 +161,51 @@ async function pendingOffer(database: TestDatabase): Promise<void> {
   });
 }
 
+/**
+ * A published profile with a photo waiting, for the two photo actions.
+ *
+ * **No object is written anywhere, and neither handler needs one**: both are the
+ * *row* halves of DD6 steps 4 and 5, and the object work belongs to `#photos`,
+ * outside the transaction, for the reason `#admin/handlers` records at length.
+ * That split is what makes these two auditable at seam 2 with no bucket in
+ * sight — which is also the argument for the split.
+ */
+async function profileWithPendingPhoto(database: TestDatabase): Promise<void> {
+  await database.db.insert(schema.user).values({
+    id: "the-photo-worker",
+    name: "Luz",
+    email: "luz@recomencemos.test",
+    emailVerified: true,
+  });
+
+  await database.db
+    .insert(schema.capabilityProfile)
+    .overridingSystemValue()
+    .values({
+      id: BigInt(PROFILE_ID),
+      accountId: "the-photo-worker",
+      slug: "aaaaaaaaaaaaaaaa",
+      fullName: "Luz Mery Ramírez",
+      firstName: "Luz",
+      lastInitial: "R",
+      city: "pereira",
+      headline: "Arreglo máquinas de coser",
+      phone: "+573001112233",
+      searchText: "arreglo maquinas de coser",
+      photoState: "pending",
+      photoKey: QUARANTINE_KEY,
+      photoAttachedAt: new Date(),
+    });
+}
+
 /** Everything each registered action needs to exist before it can run. */
 async function seedFor(database: TestDatabase, action: AdminActionName): Promise<void> {
   if (action === "revokeSessions") await targetWithSessions(database);
   if (action === "promoteSkill") await pendingRequest(database);
   if (action === "deliverOffer") await pendingOffer(database);
+  if (action === "approvePhoto" || action === "rejectPhoto") {
+    await profileWithPendingPhoto(database);
+  }
 }
 
 const audit = (database: TestDatabase) =>

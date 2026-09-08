@@ -59,6 +59,16 @@ export interface ExportedProfile {
   readonly about: string;
   readonly phone: string;
   readonly photoState: string;
+  /**
+   * When the photo now waiting went in front of a person, or `null`.
+   *
+   * **Carried rather than excluded**, and the direction is habeas data's: it is
+   * a fact about her photo's life that she has no other way to learn, and "how
+   * long has this been waiting" is exactly the question the review gate makes
+   * it reasonable for her to ask. `photoKey` beside it stays excluded because a
+   * bucket locator answers no question she has.
+   */
+  readonly photoAttachedAt: Date | null;
   readonly state: string;
   readonly publishedAt: Date;
   readonly deliveredOfferCount: number;
@@ -318,6 +328,7 @@ async function exportedProfile(
       about: schema.capabilityProfile.about,
       phone: schema.capabilityProfile.phone,
       photoState: schema.capabilityProfile.photoState,
+      photoAttachedAt: schema.capabilityProfile.photoAttachedAt,
       state: schema.capabilityProfile.state,
       publishedAt: schema.capabilityProfile.publishedAt,
       deliveredOfferCount: schema.capabilityProfile.deliveredOfferCount,
@@ -353,6 +364,7 @@ async function exportedProfile(
     about: row.about,
     phone: row.phone,
     photoState: row.photoState,
+    photoAttachedAt: row.photoAttachedAt,
     state: row.state,
     publishedAt: row.publishedAt,
     deliveredOfferCount: row.deliveredOfferCount,

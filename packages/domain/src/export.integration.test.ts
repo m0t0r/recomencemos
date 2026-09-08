@@ -264,6 +264,7 @@ const EXPORTED_BY_COLUMN: Record<string, string> = {
   "capability_profile.about": "about",
   "capability_profile.phone": "phone",
   "capability_profile.photoState": "photoState",
+  "capability_profile.photoAttachedAt": "photoAttachedAt",
   "capability_profile.state": "state",
   "capability_profile.publishedAt": "publishedAt",
   "capability_profile.deliveredOfferCount": "deliveredOfferCount",

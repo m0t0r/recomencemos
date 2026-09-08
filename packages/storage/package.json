@@ -1,0 +1,47 @@
+{
+  "name": "@repo/storage",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#client": "./src/client.ts",
+    "#config": "./src/config.ts",
+    "#key-shapes": "./src/key-shapes.ts",
+    "#keys": "./src/keys.ts",
+    "#limits": "./src/limits.ts",
+    "#photo-url": "./src/photo-url.ts",
+    "#photos": "./src/photos.ts",
+    "#reencode": "./src/reencode.ts",
+    "#server-only": "./src/server-only.ts",
+    "#user-messages": "./src/user-messages.ts"
+  },
+  "exports": {
+    "./photos": {
+      "browser": "./src/browser-refusal.ts",
+      "default": "./src/photos.ts"
+    },
+    "./photo-url": "./src/photo-url.ts",
+    "./limits": "./src/limits.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:store": "vitest run --config vitest.store.config.mts",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1126.0",
+    "@aws-sdk/s3-request-presigner": "^3.1126.0",
+    "@repo/errors": "workspace:*",
+    "nanoid": "^6.0.1",
+    "sharp": "^0.35.2"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^5.0.0",
+    "typescript": "7.0.2",
+    "vitest": "^5.0.0"
+  }
+}
