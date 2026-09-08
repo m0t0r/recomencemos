@@ -22,6 +22,19 @@ import {
   BROWSE_NARROWED_BODY,
   BROWSE_NARROWED_TITLE,
   BROWSE_TITLE,
+  FILTER_ANY_CITY,
+  FILTER_ANY_SKILL,
+  FILTER_CITY_LABEL,
+  FILTER_CLEAR,
+  FILTER_EMPTY_TITLE,
+  FILTER_SKILL_LABEL,
+  FILTER_SUBMIT,
+  FILTER_TEXT_HINT,
+  FILTER_TEXT_LABEL,
+  FILTER_TEXT_PLACEHOLDER,
+  FILTERS_LEGEND,
+  narrowedBy,
+  typedTerm,
 } from "./messages";
 
 describeListCopy({
@@ -41,6 +54,18 @@ describeListCopy({
     ["LIST_ERROR_EXPLANATION", LIST_ERROR_EXPLANATION],
     ["LIST_ERROR_RETRY", LIST_ERROR_RETRY],
     ["LIST_ERROR_RETRYING", LIST_ERROR_RETRYING],
+    ["FILTERS_LEGEND", FILTERS_LEGEND],
+    ["FILTER_TEXT_LABEL", FILTER_TEXT_LABEL],
+    ["FILTER_TEXT_PLACEHOLDER", FILTER_TEXT_PLACEHOLDER],
+    ["FILTER_TEXT_HINT", FILTER_TEXT_HINT],
+    ["FILTER_SKILL_LABEL", FILTER_SKILL_LABEL],
+    ["FILTER_CITY_LABEL", FILTER_CITY_LABEL],
+    ["FILTER_ANY_SKILL", FILTER_ANY_SKILL],
+    ["FILTER_ANY_CITY", FILTER_ANY_CITY],
+    ["FILTER_SUBMIT", FILTER_SUBMIT],
+    ["FILTER_CLEAR", FILTER_CLEAR],
+    ["FILTER_EMPTY_TITLE", FILTER_EMPTY_TITLE],
+    ["narrowedBy", narrowedBy([typedTerm("panadería"), "Panadería y repostería", "Pereira"])],
     ["announcedCount", announcedCount(12)],
     ["photoAlt", photoAlt("Ana María R.")],
   ],
@@ -51,7 +76,41 @@ describeListCopy({
     ["TO_PUBLISH", TO_PUBLISH],
     ["LIST_ERROR_RETRY", LIST_ERROR_RETRY],
     ["LIST_ERROR_RETRYING", LIST_ERROR_RETRYING],
+    ["FILTER_SUBMIT", FILTER_SUBMIT],
+    ["FILTER_CLEAR", FILTER_CLEAR],
   ],
+});
+
+/**
+ * The empty state that names what is narrowing the list — the spec's `empty`
+ * cell for this surface, and the half of it a test can hold.
+ */
+describe("saying which filter is narrowing the list", () => {
+  const sentence = narrowedBy([typedTerm("panadería"), "Panadería y repostería", "Pereira"]);
+
+  it("quotes back every term that is set", () => {
+    expect(sentence).toContain("“panadería”");
+    expect(sentence).toContain("Panadería y repostería");
+    expect(sentence).toContain("Pereira");
+  });
+
+  it("says what to do next in the same breath", () => {
+    expect(sentence).toContain("Prueba");
+  });
+
+  /** One term is a sentence, not a list with a dangling separator. */
+  it("names one term without punctuation for the ones that are not set", () => {
+    expect(narrowedBy(["Pereira"])).toContain("filtrando por Pereira.");
+  });
+
+  /**
+   * It is a fact about the filters, never about the platform or about anybody.
+   * "Nobody has published" is a different state with its own sentence, and
+   * saying it here would make a claim a filter has no business making.
+   */
+  it("says nothing about the platform having no profiles", () => {
+    expect(`${FILTER_EMPTY_TITLE} ${sentence}`.toLowerCase()).not.toMatch(/todavía|nadie|aún/);
+  });
 });
 
 describe("naming the ordering", () => {
