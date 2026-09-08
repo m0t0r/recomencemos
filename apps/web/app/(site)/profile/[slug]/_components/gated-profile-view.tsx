@@ -157,7 +157,15 @@ export function GatedProfileView({ profile, workHistory }: GatedProfileViewProps
         </div>
       </header>
 
-      {/* Story 11's two standing notices land here, above her own words. */}
+      {/*
+        Story 11's three statements are **not** here. This slot was reserved for
+        them before they existed; they landed at the foot of `page.tsx` instead,
+        outside the Suspense boundary, so a ceiling refusal or a missing-profile
+        response still carries them. Left as a note rather than deleted, because
+        "above her own words" was a real proposal and the reason it was not taken
+        is that it puts three statements between a reader and the person she came
+        to read.
+      */}
 
       <div className="ruled-page">
         <Section id="about-heading" heading={ABOUT_HEADING}>
