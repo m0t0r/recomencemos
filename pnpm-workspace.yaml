@@ -152,12 +152,24 @@ overrides:
   #
   # Worth keeping from what those comments said, because it is the part that is
   # about this repository rather than about a version number: none of the six
-  # advisories was ever reachable here. `ajv` calls fast-uri to resolve
-  # `$id`/`$ref` in schemas it owns, and `qs` arrives under an `express` that
-  # only the MCP server `shadcn` can start, which neither `pnpm dev` nor the
-  # build ever does. The overrides existed to make the floor reproducible from
-  # config rather than from whatever the lock happened to hold; the registry now
-  # reproduces it, so the config is the thing to drop.
+  # advisories was ever reachable here. They are GHSA-f65p-4m7j-42xc,
+  # GHSA-jqff-g426-hqxp, GHSA-5jgf-p345-68v8 and GHSA-fph4-wmhf-6fwf against
+  # fast-uri, and GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx against qs — named
+  # here because `audit-report.mjs` reports a GHSA id, and a triager who meets
+  # one of these needs somewhere that maps it back to the reachability answer.
+  #
+  # `ajv` calls fast-uri to resolve `$id`/`$ref` in schemas it owns. `qs` is the
+  # one that needs its caveat stated rather than summarised: it **does** sit in
+  # the production graph, because `shadcn` is a runtime `dependencies` entry of
+  # `@repo/design-system` — it owns the `@import "shadcn/tailwind.css"` in
+  # `globals.css`. What it does not sit in is any code path: no workspace
+  # imports express, Next.js parses its own query strings, and the only surface
+  # is the MCP server `shadcn` can start, which neither `pnpm dev` nor the build
+  # ever does.
+  #
+  # The overrides existed to make the floor reproducible from config rather than
+  # from whatever the lock happened to hold; the registry now reproduces it, so
+  # the config is the thing to drop.
   #
   # If a future resolution ever falls back below either floor, the actor is
   # `.github/workflows/security-audit.yml` — `audit-report-threshold` is

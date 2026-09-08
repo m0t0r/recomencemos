@@ -121,7 +121,8 @@ updates:
   # The glob form is verified from `github_actions/file_fetcher.rb`, which
   # scans any non-root directory for `*.yml`, rather than from the documentation
   # — which describes only the root behaviour. If it stops working, the symptom
-  # is silence.
+  # is silence, so the SHA pin is worth an eye at review time regardless — and
+  # `pnpm deps:outdated` is what that eye should run.
   #
   # **`pnpm deps:outdated` is the second reader that silence needs**, added by
   # #213 once pnpm 12 taught `pnpm outdated` to read GitHub Actions. It answers
@@ -136,8 +137,9 @@ updates:
   #   - it reads `.github/workflows/*` and **follows** a `uses: ./.github/actions/<name>`
   #     into the composite file, so `.github/actions/setup/action.yml` is covered
   #     as long as a workflow references it — which `ci.yml` does
-  #   - it resolves a SHA pin to a version through the registry, so it is right
-  #     even when the trailing `# vX.Y.Z` comment has drifted
+  #   - it resolves a SHA pin to a version **without** reading the trailing
+  #     `# vX.Y.Z` comment — deleting the comment from a fixture returns the same
+  #     answer — so a comment that has drifted does not fool it
   #   - it does **not** read an `action.yml` no workflow references
   #
   # That last line is why this entry's second directory is not redundant. The
