@@ -343,3 +343,56 @@ export const DELIVER_OFFER_SUBMITTING = "Entregando…";
 
 /** What the Admin is told afterwards: which row moved, and where it went. */
 export const offerDelivered = (workerFirstName: string) => `Se la entregamos a ${workerFirstName}.`;
+/* --------------------------------------------------------------------------
+ * The photo section.
+ *
+ * **Nothing here names the person whose photo it is**, and that is the shape of
+ * the decision rather than a precaution: an Admin is deciding whether one image
+ * may be public, and her name, her city and her headline are facts the decision
+ * does not need. The brief at `.impeccable/briefs/photo.md` says so under
+ * _Interaction and layout_.
+ * ----------------------------------------------------------------------- */
+
+/** The heading over one waiting photo, and the group the two decisions sit in. */
+export const PHOTO_REVIEW_HEADING = "Decidir sobre esta foto";
+
+/**
+ * The `alt` for the photo under review.
+ *
+ * **It describes the role of the image rather than its contents**, because
+ * nobody here knows its contents — that is the whole reason a person is looking.
+ * Never a description of her or of her circumstances.
+ */
+export const PHOTO_REVIEW_ALT = "Foto que está esperando revisión";
+
+/** What the two decisions do, as the verb of the action. */
+export const PHOTO_APPROVE = "Publicar la foto";
+export const PHOTO_APPROVING = "Publicando…";
+export const PHOTO_REJECT = "No publicarla";
+export const PHOTO_REJECTING = "Quitando…";
+
+/**
+ * What rejecting costs, said before it is pressed.
+ *
+ * **It is irreversible and the copy says so plainly** — the voice guide's
+ * _"no se puede deshacer"_, which is on its Say list for exactly this kind of
+ * act. Rejecting deletes the object; there is no undo and no second look.
+ */
+export const PHOTO_REJECT_WARNING = "Al no publicarla, la foto se borra. No se puede deshacer.";
+
+/**
+ * The decision did not go through and it was not the Admin's doing.
+ *
+ * These actions take no typed payload, so a refused boundary parse is a defect
+ * on our side rather than a mistake on theirs — the sentence says the state of
+ * the queue and what to do, and blames nobody.
+ */
+export const PHOTO_DECISION_FAILED = "No pudimos guardar esa decisión. Vuelve a cargar la página.";
+
+/** Afterwards, in the row's own announced region. */
+export const PHOTO_APPROVED = "Publicamos la foto. Ya se ve en su perfil.";
+export const PHOTO_REJECTED = "Borramos la foto. Ella puede subir otra.";
+
+/** How long this one has been waiting, in the same words and format `requestedOn` uses. */
+export const photoWaitingSince = (at: Date) =>
+  `Esperando desde el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
