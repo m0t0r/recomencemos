@@ -31,6 +31,8 @@ import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
 import {
   ADMIN_ACCOUNT_NOT_FOUND,
+  ADMIN_PHOTO_ALREADY_REVIEWED,
+  ADMIN_PHOTO_GONE,
   ADMIN_SKILL_REQUEST_GONE,
   ADMIN_SKILL_REQUEST_RESOLVED,
   ADMIN_SKILL_SLUG_TAKEN,
@@ -82,6 +84,63 @@ export interface AdminActionShapes {
       readonly cuocCode?: string | undefined;
     };
     result: { readonly slug: string; readonly labelEs: string };
+  };
+
+  /**
+   * Publishes one photo — the row half of DD6 step 4.
+   *
+   * **The object was already re-encoded and written before this transaction
+   * opened**, and `#photos`'s `approvePhoto` is what did it. That ordering is
+   * deliberate and is the one place this registry's shape needed thinking
+   * about: a network round trip to object storage plus a libvips decode inside
+   * an open Postgres transaction holds one of ten pooled connections
+   * (`POOL_MAX`) for the length of both, and ten Admins would be the whole
+   * pool. So the handler receives a key naming an object that exists.
+   *
+   * **What that costs is an orphan rather than a dangling row, and that is the
+   * right way round.** If this transaction rolls back, a re-encoded object sits
+   * in the public prefix that nothing references — unreachable, since a URL is
+   * only ever derived from a row, and collected by the bucket's lifecycle rule.
+   * The other ordering would leave a row pointing at bytes that were never
+   * written, which is a broken image on somebody's profile.
+   *
+   * **It re-reads and locks the row rather than trusting the queue.** Two
+   * Admins working the same branch is the case this exists for, exactly as
+   * `promoteSkill` documents — and here the second one would otherwise publish
+   * a photo the first had already rejected and deleted.
+   */
+  approvePhoto: {
+    input: {
+      /** The CapabilityProfile whose photo this is. */
+      readonly profileId: string;
+      /** Where the re-encoded object was written. Server-derived, never from a form. */
+      readonly publicKey: string;
+    };
+    result: { readonly photoState: "approved" };
+  };
+
+  /**
+   * Refuses one photo — the row half of DD6 step 5.
+   *
+   * **The object is deleted by `#photos`'s `rejectPhoto` after this commits**,
+   * which is the mirror of the ordering above and chosen on the same argument:
+   * the irreversible act goes on the side where failing leaves the recoverable
+   * state. Rolling back after a delete would leave a `pending` row pointing at
+   * bytes that are gone, and an Admin would meet a broken review card forever;
+   * failing to delete after a commit leaves an orphan the lifecycle rule
+   * collects, and the row already says `rejected`.
+   *
+   * **`photoKey` is cleared to `NULL`**, so the row stops naming an object at
+   * all. That is what makes `rejected` and `absent` render identically on every
+   * public surface without either one being a special case at the reader.
+   */
+  rejectPhoto: {
+    input: { readonly profileId: string };
+    result: {
+      readonly photoState: "rejected";
+      /** The object the caller must now delete. Never rendered. */
+      readonly discardedKey: string;
+    };
   };
 }
 
@@ -159,6 +218,47 @@ export const ADMIN_ACTION_HANDLERS = {
       .returning({ id: schema.session.id });
 
     return { targetId: account.id, result: { revoked: revoked.length } };
+  },
+
+  async approvePhoto(tx, { profileId, publicKey }) {
+    const photo = await lockPendingPhoto(tx, profileId, "approvePhoto");
+
+    await tx
+      .update(schema.capabilityProfile)
+      .set({
+        photoState: "approved",
+        photoKey: publicKey,
+        // Cleared, because it answers "how long has this been waiting" and
+        // nothing is waiting any more. A stale value here would age a branch
+        // this row has left.
+        photoAttachedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.capabilityProfile.id, photo.id));
+
+    return { targetId: profileId, result: { photoState: "approved" } };
+  },
+
+  async rejectPhoto(tx, { profileId }) {
+    const photo = await lockPendingPhoto(tx, profileId, "rejectPhoto");
+
+    await tx
+      .update(schema.capabilityProfile)
+      .set({
+        photoState: "rejected",
+        // `NULL`, so the row stops naming an object. The caller deletes the
+        // bytes after this commits; the key travels back in the result for
+        // exactly that and is never rendered.
+        photoKey: null,
+        photoAttachedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.capabilityProfile.id, photo.id));
+
+    return {
+      targetId: profileId,
+      result: { photoState: "rejected", discardedKey: photo.photoKey },
+    };
   },
 
   async promoteSkill(tx, { requestId, slug, labelEs, cuocCode }) {
@@ -253,3 +353,64 @@ export const ADMIN_ACTION_HANDLERS = {
     };
   },
 } as const satisfies { [K in AdminActionName]: AdminActionHandler<K> };
+
+/**
+ * The row both photo handlers act on, locked, or a refusal that says which of
+ * the two things went wrong.
+ *
+ * **`FOR UPDATE` for `promoteSkill`'s reason, one entity over.** There is more
+ * than one Admin and they work the same branch, so the same photo open in two
+ * browsers is ordinary rather than exotic. Without the lock both reads see
+ * `pending`, both updates apply, and the second one writes an `AdminAction` for
+ * an act that had already happened — or worse, publishes a photo the first
+ * Admin had just rejected and deleted.
+ *
+ * **The two refusals are different sentences because they are different
+ * facts.** A profile with nothing waiting is a stale queue row an Admin should
+ * reload past; a photo already `approved` or `rejected` is somebody else's
+ * finished work. Neither is a fault, and both throw rather than return so the
+ * transaction — and its audit row — rolls back with them.
+ */
+async function lockPendingPhoto(
+  tx: DomainDatabase,
+  profileId: string,
+  action: "approvePhoto" | "rejectPhoto",
+): Promise<{ readonly id: bigint; readonly photoKey: string }> {
+  const [row] = await tx
+    .select({
+      id: schema.capabilityProfile.id,
+      photoState: schema.capabilityProfile.photoState,
+      photoKey: schema.capabilityProfile.photoKey,
+    })
+    .from(schema.capabilityProfile)
+    .where(eq(schema.capabilityProfile.id, BigInt(profileId)))
+    .for("update")
+    .limit(1);
+
+  if (!row) {
+    throw new AppError({
+      code: "admin_photo_profile_not_found",
+      status: 404,
+      message:
+        `${action} was given a profile id no row carries. Nothing changed and no AdminAction ` +
+        "was written, because nothing happened.",
+      userMessage: ADMIN_PHOTO_GONE,
+      // An id is an identifier and carries nothing of hers (NFR18).
+      context: { profile_id: profileId },
+    });
+  }
+
+  if (row.photoState !== "pending" || !row.photoKey) {
+    throw new AppError({
+      code: "admin_photo_already_reviewed",
+      status: 409,
+      message:
+        `${action} was asked to act on a photo in state "${row.photoState}". Only a pending ` +
+        "photo can be approved or rejected; the transaction rolls back with no AdminAction row.",
+      userMessage: ADMIN_PHOTO_ALREADY_REVIEWED,
+      context: { profile_id: profileId, photo_state: row.photoState },
+    });
+  }
+
+  return { id: row.id, photoKey: row.photoKey };
+}

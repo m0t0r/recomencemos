@@ -175,6 +175,32 @@ export const ADMIN_SKILL_SLUG_TAKEN =
   "Ya hay una capacidad con ese identificador. Escribe otro y vuelve a intentarlo.";
 
 /**
+ * She asked to attach a photo and there is nothing waiting to attach it to, or
+ * the key did not survive the round trip.
+ *
+ * **The profile is the subject and it is fine**, which is the whole register
+ * this ticket is arranged around: publishing never waited for the photo, so a
+ * failure here has cost her a picture and nothing else. The voice guide's
+ * banned sentence — _"tu perfil está en revisión"_ — is banned because it
+ * confuses exactly these two things.
+ */
+export const PHOTO_NOT_PENDING = "No pudimos guardar esa foto. Tu perfil sigue publicado.";
+
+/** She has no profile yet. Publishing is the step she is missing, and it is named. */
+export const PHOTO_NO_PROFILE = "Primero publica lo que sabes hacer. Después puedes poner tu foto.";
+
+/** No photo is waiting on this profile: reviewed and swept, or never that id. */
+export const ADMIN_PHOTO_GONE = "Esa foto ya no está en la fila. Vuelve a cargar la página.";
+
+/**
+ * Somebody already decided — the second Admin's case, and the reason the row is
+ * read under a lock. It names the other person's work rather than an error,
+ * because that is what happened.
+ */
+export const ADMIN_PHOTO_ALREADY_REVIEWED =
+  "Otra persona ya revisó esa foto. Vuelve a cargar la página.";
+
+/**
  * An Admin action that broke on our side.
  *
  * **The second sentence is the one that matters**, and it is true by

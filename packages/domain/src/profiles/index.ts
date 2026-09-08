@@ -538,6 +538,7 @@ export async function findOwnProfile(
       about: schema.capabilityProfile.about,
       phone: schema.capabilityProfile.phone,
       photoState: schema.capabilityProfile.photoState,
+      photoKey: schema.capabilityProfile.photoKey,
       publishedAt: schema.capabilityProfile.publishedAt,
       email: schema.user.email,
     })
@@ -575,15 +576,53 @@ export async function findOwnProfile(
     phone: row.phone,
     email: row.email,
     photoState: row.photoState as PhotoState,
-    // No photo path exists yet, so there is no URL to resolve. The photo ticket
-    // replaces this with the derivation DD6 describes.
-    photoUrl: null,
+    photoUrl: await ownPhotoUrl(row.photoState as PhotoState, row.photoKey),
     skills,
     workHistory: history.map((entry) => entry.text),
     publishedAt: row.publishedAt,
   };
 
   return toOwnProfile(record);
+}
+
+/**
+ * Where **she** sees her own photo — the one place a photo crosses before
+ * anybody has approved it.
+ *
+ * The spec's `/my-profile` cell is explicit: _"photo pending → **her own photo
+ * shown**, dignified, described as under review, not flagged"_. So the two
+ * states resolve to two different kinds of URL, and the difference is not
+ * cosmetic:
+ *
+ * - **`approved`** is the public object, read through the transformation origin
+ *   like everybody else's.
+ * - **`pending`** is a **signed, one-minute read of the quarantined object**,
+ *   because the quarantine prefix refuses anonymous reads by bucket policy —
+ *   which is the whole of NFR6. There is no other way to show it to her, and
+ *   showing it to her is the requirement.
+ *
+ * `absent` and `rejected` have no object at all: `rejectPhoto` sets `photoKey`
+ * to `NULL` and deletes the bytes, so both render her initial and the sentence
+ * beside it carries which of the two happened.
+ *
+ * **It never throws.** A store that is unconfigured or unreachable must not take
+ * `/my-profile` down — she has a profile, it is published, and the photo is the
+ * one part of that page that can be absent without the page being wrong. The
+ * fallback is `null`, which every surface already renders as her initial.
+ */
+async function ownPhotoUrl(state: PhotoState, key: string | null): Promise<string | null> {
+  if (!key) return null;
+
+  try {
+    const { presignReview, publicPhotoUrl } = await import("@repo/storage/photos");
+
+    if (state === "approved") return publicPhotoUrl(key);
+    if (state === "pending") return await presignReview(key);
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 /**

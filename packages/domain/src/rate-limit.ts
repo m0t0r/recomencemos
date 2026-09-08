@@ -193,6 +193,38 @@ export const CEILINGS = {
     account: { max: 300, windowSeconds: 24 * 60 * 60 },
     ip: { max: 1500, windowSeconds: 24 * 60 * 60 },
   },
+
+  /**
+   * **`createPhotoUpload`, per Account and per IP** — NFR26's own row, and the
+   * one ceiling here that bounds a resource outside this process.
+   *
+   * What it protects is the bucket and the moderation queue at once. Each
+   * charge mints a presigned PUT, and a presigned PUT is a write capability
+   * for a stranger's object store: unbounded, a script that signs and uploads
+   * in a loop fills 10 GB of R2's free tier and puts a `pending` row in front
+   * of an Admin for every one of them, which is DD7's scarcest resource spent
+   * by a crawler.
+   *
+   * **Ten a day is generous against the honest case and says so.** She picks a
+   * photo, dislikes it, picks another — three or four is a real afternoon.
+   * Ten is the shape `sendOffer` and `reportOffer` already use.
+   *
+   * **The refusal's copy is the one this ceiling is remembered for**, and the
+   * acceptance criterion fixes its second half: it says the profile **is
+   * already live without the photo**. Every other ceiling here refuses
+   * something she was trying to do; this one refuses an addition to something
+   * that already worked, and a sentence that left her thinking she had lost the
+   * profile would be worse than the refusal.
+   *
+   * **A signed URL that is never used still spends one.** The charge is for the
+   * capability rather than for the object, because the capability is what costs
+   * — there is no way to know whether a PUT happened, and a ceiling that only
+   * counted completed uploads would be defeated by not completing them.
+   */
+  createPhotoUpload: {
+    account: { max: 10, windowSeconds: 24 * 60 * 60 },
+    ip: { max: 10, windowSeconds: 24 * 60 * 60 },
+  },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
@@ -538,6 +570,25 @@ export const CEILING_REFUSALS: Record<
       : `Abriste ${ceiling.max} perfiles hoy, que es el máximo. `) +
     `Puedes seguir abriendo perfiles ${retryPhrase(retryAfter)}. ` +
     `Mientras tanto, ${OTHER_DOORS_OPEN}.`,
+
+  /**
+   * **The third sentence is fixed by #18's acceptance criterion**, which asks
+   * that the refusal say the profile _"is already live without the photo"_.
+   *
+   * It is the only ceiling here whose last sentence is about something that
+   * already worked. Every other one refuses a thing she was trying to do; this
+   * one refuses an addition to a profile that is published and findable right
+   * now, and a sentence that left her thinking she had lost it would be worse
+   * than the refusal itself. The voice guide's own example of a banned
+   * construction — _"tu perfil está en revisión"_ — is the same confusion said
+   * the other way round.
+   */
+  createPhotoUpload: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se intentaron muchas fotos hoy ${SHARED_CONNECTION}. `
+      : `Intentaste poner una foto ${ceiling.max} veces hoy, que es el máximo. `) +
+    `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
+    "Tu perfil ya está publicado y la gente puede verlo, con foto o sin ella.",
 };
 
 /**

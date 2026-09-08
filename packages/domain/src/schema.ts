@@ -623,11 +623,34 @@ export const capabilityProfile = pgTable(
     /** `personal`. E.164, normalised by `#policy/phone`. */
     phone: text("phone").notNull(),
 
-    /** Where the photo is in its life. `absent` until the photo ticket lands. */
+    /** Where the photo is in its life (DD6). `absent` until she attaches one. */
     photoState: text("photo_state").notNull().default("absent"),
 
-    /** `personal` always: the public URL is derived only at `approved` (DD6). */
+    /**
+     * `personal` always: the public URL is derived only at `approved` (DD6).
+     *
+     * **One column holding whichever key the current state names** — the
+     * quarantine key while `pending`, the public one once approved, and `NULL`
+     * at `absent` and `rejected`. A second column for the quarantine key was
+     * considered and is not needed: `promoteToPublic` deliberately leaves the
+     * quarantined object in place for recovery, and the bucket's own lifecycle
+     * rule (runbook §3) is what collects it. A column tracking an object nobody
+     * reads and nothing deletes would be a second source of truth about which
+     * bytes are current.
+     */
     photoKey: text("photo_key"),
+
+    /**
+     * When the photo now waiting became this Admin queue's problem — set by
+     * `attachPhoto`, cleared when the photo leaves `pending`.
+     *
+     * **Not `updatedAt`, and not `publishedAt`.** The queue's branch reports
+     * age-of-oldest over the whole branch (C55), and both of those move for
+     * reasons that have nothing to do with a photo — an edit to her headline
+     * would silently reset how long an Admin has been sitting on her picture.
+     * It is nullable because only a `pending` row has an answer.
+     */
+    photoAttachedAt: timestamp("photo_attached_at", { withTimezone: true }),
 
     state: text("state").notNull().default("published"),
 
@@ -709,6 +732,20 @@ export const capabilityProfile = pgTable(
      * a constraint.
      */
     index("capability_profile_phone_idx").on(table.phone),
+
+    /**
+     * The photo queue's branch: every profile waiting on a person, oldest
+     * first.
+     *
+     * **Partial, on `pending` alone**, which is the same shape
+     * `skill_request_pending_idx` already has and for the same reason — the
+     * branch an Admin works is a small fraction of the table, and both figures
+     * C55 asks for (the count and the age of the oldest) are computed over the
+     * whole branch rather than over a capped display.
+     */
+    index("capability_profile_photo_pending_idx")
+      .on(table.photoAttachedAt, table.id)
+      .where(sql`${table.photoState} = 'pending'`),
 
     check("capability_profile_city_known", inList(table.city, CITY_IDS)),
     check("capability_profile_photo_state_known", inList(table.photoState, PHOTO_STATES)),
@@ -853,3 +890,54 @@ export const skillRequest = pgTable(
     check("skill_request_state_known", inList(table.state, SKILL_REQUEST_STATES)),
   ],
 );
+
+/**
+ * **`PhotoUpload`** — which Account a quarantine key was minted for, and the
+ * only thing that makes attaching a photo an authorized act.
+ *
+ * **It exists because a shape check is not an authorization check.** The first
+ * version of the photo path validated that an attached key *looked like* one
+ * this repository mints and stopped there — so any account could attach any
+ * key, and `/security-review` traced a full exploit: read an approved photo's
+ * public URL off the Wall, derive the quarantine key it was named from, and
+ * publish a profile pointing at somebody else's face. The derivation is closed
+ * separately (`mintPublicKey`), but unguessability is not authorization, and a
+ * key that leaks any other way must not be attachable either. This table is the
+ * check that does not depend on a secret staying secret.
+ *
+ * **One row per Account, replaced on each mint.** She picks a photo, dislikes
+ * it, picks another; only the last one she uploaded may be attached. The
+ * primary key is the Account, so a second `createPhotoUpload` overwrites rather
+ * than accumulating, and `attachPhoto` deletes the row it consumes — a key is
+ * good for exactly one attach.
+ *
+ * **It is deliberately not an audit trail**, which is why the row is deleted
+ * rather than kept: the enduring record of which object a profile holds is
+ * `capability_profile.photo_key`, and NFR33's audit is `admin_action`. What
+ * this holds is a short-lived intent, and it holds nothing about the picture.
+ */
+export const photoUpload = pgTable("photo_upload", {
+  /**
+   * The Account, as the primary key. There is at most one photo in flight per
+   * person by construction rather than by a rule anybody has to enforce.
+   *
+   * `ON DELETE cascade`, so an erasure request takes these with it (NFR17) —
+   * and so the leaf-first purge has one fewer table to remember.
+   */
+  accountId: text("account_id")
+    .notNull()
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+
+  /** The key `presignUpload` minted. Opaque, server-generated, and about no one. */
+  photoKey: text("photo_key").notNull(),
+
+  /**
+   * When it was minted, so a row nobody attached can be swept.
+   *
+   * The presigned PUT it belongs to lives five minutes; the row is kept longer
+   * than that because she may fill in the rest of the form before submitting,
+   * and the attach happens at publish rather than at upload.
+   */
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

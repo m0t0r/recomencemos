@@ -35,6 +35,16 @@ import type { CityId } from "#policy/cities";
 import { type Page, PAGE_SIZE, pageOf } from "#policy/listing";
 import type { PhotoState } from "#policy/profile-states";
 import { toSearchPatterns } from "#policy/search-text";
+/**
+ * **`/photo-url` rather than `/photos`, and the difference is load-bearing.**
+ * That subpath is isomorphic — a URL builder and two environment readers, no
+ * credential and no SDK — while `/photos` constructs an S3 client at module
+ * load and carries `assertServerOnly`. This module is reached from
+ * `apps/web`'s client graph in a happy-dom test, and a static import of the
+ * server-only subpath made the backstop throw across a whole file. It was
+ * right to.
+ */
+import { photoUrl, publicBase, transformationsEnabled } from "@repo/storage/photo-url";
 import { type PublicProfile, toPublicProfile } from "#projections";
 import * as schema from "#schema";
 import type { VocabularyEntry } from "#skills";
@@ -111,6 +121,7 @@ const PUBLIC_COLUMNS = {
   city: schema.capabilityProfile.city,
   headline: schema.capabilityProfile.headline,
   photoState: schema.capabilityProfile.photoState,
+  photoKey: schema.capabilityProfile.photoKey,
   publishedAt: schema.capabilityProfile.publishedAt,
   skills: skillsOfProfile.as("skills"),
 };
@@ -122,6 +133,7 @@ interface PublicRow {
   readonly city: string;
   readonly headline: string;
   readonly photoState: string;
+  readonly photoKey: string | null;
   readonly publishedAt: Date;
   readonly skills: VocabularyEntry[];
 }
@@ -149,9 +161,30 @@ function toPublic(row: PublicRow): PublicProfile {
     phone: "",
     email: "",
     photoState: row.photoState as PhotoState,
-    // No photo path exists yet, so there is no URL to resolve; the projection
-    // withholds it at every state but `approved` regardless.
-    photoUrl: null,
+    /**
+     * **The URL is resolved here and gated twice, and both locks are load-bearing.**
+     *
+     * The first is this line: nothing is resolved unless the state is
+     * `approved`, so a `pending` or `rejected` row hands the projection `null`
+     * and every public surface renders her initial — _"one shape, two causes"_.
+     * The second is inside `photoUrl` itself, which refuses a key that is not a
+     * *public* key, so even a row whose two columns had somehow disagreed cannot
+     * produce a URL into quarantine. NFR6 counts objects, and this is the last
+     * place a public one could be named for an unreviewed photo.
+     *
+     * `null` also whenever the Cloudflare zone is not configured yet (runbook
+     * §3), which is DD6's _"photos serve at full size until it is done"_ read
+     * from the other end — an unconfigured deploy degrades into the initial,
+     * which is a state the design already has.
+     */
+    photoUrl:
+      row.photoState === "approved" && row.photoKey
+        ? photoUrl({
+            key: row.photoKey,
+            base: publicBase(),
+            transformations: transformationsEnabled(),
+          })
+        : null,
     skills: row.skills,
     workHistory: [],
     publishedAt: row.publishedAt,
