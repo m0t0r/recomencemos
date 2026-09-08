@@ -52,6 +52,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { type CeilingRefusal, chargeCeilings } from "@/lib/ceilings";
 import { clientIp } from "@/lib/client-ip";
@@ -201,6 +202,25 @@ export default function ProfilePage({ params }: { readonly params: Params }) {
       <Suspense fallback={<PanelSkeleton />}>
         <ProfilePanel params={params} />
       </Suspense>
+
+      {/*
+        Story 11's standing notices. `/profile` is a required prefix in
+        `lib/notice-surfaces.ts`, and this is the surface its rule is most
+        clearly about — the reader is deciding whether to write this person a
+        concrete Offer, which is the moment "we verify nobody" and "we never
+        handle the money" have to be in front of her.
+
+        `expanded`, and at the foot, for `/my-profile`'s reason rather than the
+        two lists': the reader came for *this* profile and has already chosen it,
+        so the notices compete with nothing here — where above her identity they
+        would push the person she came to read below the fold on a phone.
+
+        Outside the `<Suspense>`, so a refused read still leaves them on screen.
+        That matters more here than anywhere: the ceiling refusal and the
+        missing-profile response are both pages a reader can reach, and neither
+        is a reason to stop saying what this platform does not do.
+      */}
+      <StandingNotices treatment="expanded" />
     </main>
   );
 }
