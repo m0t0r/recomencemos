@@ -12,23 +12,14 @@
 import { eq } from "drizzle-orm";
 import { readOfferSendingState } from "#accounts";
 import * as schema from "#schema";
-import { signIn, signInStack } from "#testing/auth-stack";
+import { signedInAccountId } from "#testing/auth-stack";
 import { test } from "#testing/fixtures";
 import type { TestDatabase } from "#testing/fixtures";
 
 const HIRER = "carlos@recomencemos.test";
 
-async function anAccount(database: TestDatabase, email = HIRER): Promise<string> {
-  const stack = signInStack(database);
-  await signIn(stack, email);
-
-  const [account] = await database.db
-    .select({ id: schema.user.id })
-    .from(schema.user)
-    .where(eq(schema.user.email, email));
-
-  return (account as { id: string }).id;
-}
+const anAccount = (database: TestDatabase, email = HIRER): Promise<string> =>
+  signedInAccountId(database, email);
 
 describe("an Account's sending state", () => {
   test("is active for somebody who has just signed in for the first time", async ({ database }) => {

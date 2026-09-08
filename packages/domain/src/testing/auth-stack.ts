@@ -17,8 +17,10 @@
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { betterAuth } from "better-auth";
+import { eq } from "drizzle-orm";
 import { completeAdminEnrolment, mintAdminEnrolment, readAdminEnrolment } from "#admin/enrolment";
 import { type AuthLogger, authOptions } from "#auth/config";
+import * as schema from "#schema";
 import type { TestDatabase } from "#testing/database";
 
 export const BASE_URL = "https://recomencemos.test";
@@ -168,4 +170,32 @@ export async function enrolledAdmin(
   if (!outcome.ok) throw new Error("the enrolment refused the code it had just issued");
 
   return { accountId: outcome.accountId, secret, backupCodes: rendered.backupCodes };
+}
+
+/**
+ * Sign an email in through the real magic-link door and hand back the Account id
+ * the door created.
+ *
+ * **Three files had written this for themselves** — `export.integration.test.ts`
+ * as the opening of a larger fixture, and story 5's two — with the same select,
+ * the same `where`, and the same cast of the row Drizzle types as possibly
+ * absent. That cast is the reason it is one function now rather than three: it
+ * is the line that would have to be re-argued in every copy the day the sign-in
+ * stops creating a row, and the copies would not be re-argued together.
+ *
+ * `throw` rather than an assertion, for the reason {@link enrolledAdmin} gives
+ * above: a fixture narrows, and a fixture that asserts goes on to cast anyway.
+ */
+export async function signedInAccountId(database: TestDatabase, email: string): Promise<string> {
+  const stack = signInStack(database);
+  await signIn(stack, email);
+
+  const [account] = await database.db
+    .select({ id: schema.user.id })
+    .from(schema.user)
+    .where(eq(schema.user.email, email));
+
+  if (!account) throw new Error(`signing in ${email} created no Account row`);
+
+  return account.id;
 }

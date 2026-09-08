@@ -20,7 +20,7 @@ import { CURRENT_CONSENT_VERSIONS, recordConsent } from "#consent/index";
 import { buildSubjectAccessExport } from "#export";
 import { publishProfile } from "#profiles";
 import * as schema from "#schema";
-import { signIn, signInStack } from "#testing/auth-stack";
+import { signedInAccountId } from "#testing/auth-stack";
 import { test } from "#testing/fixtures";
 import type { TestDatabase } from "#testing/fixtures";
 
@@ -41,15 +41,7 @@ const SENTINEL = {
 } as const;
 
 async function anAccountWithEverything(database: TestDatabase): Promise<string> {
-  const stack = signInStack(database);
-  await signIn(stack, SENTINEL.email);
-
-  const [account] = await database.db
-    .select({ id: schema.user.id })
-    .from(schema.user)
-    .where(eq(schema.user.email, SENTINEL.email));
-
-  const accountId = (account as { id: string }).id;
+  const accountId = await signedInAccountId(database, SENTINEL.email);
 
   // Google's door fills both of these; the magic-link door fills neither, so they
   // are set here rather than left empty. An export tested only against a

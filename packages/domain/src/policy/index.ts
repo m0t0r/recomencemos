@@ -11,8 +11,10 @@
  */
 
 export {
+  asOfferSendingState,
   DEFAULT_OFFER_SENDING_STATE,
   mayReadGatedProfile,
+  MOST_RESTRICTIVE_OFFER_SENDING_STATE,
   OFFER_SENDING_STATES,
   type OfferSendingState,
 } from "#policy/account-states";

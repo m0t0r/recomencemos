@@ -189,7 +189,11 @@ export const user = pgTable(
     /**
      * **Whether this Account may send an Offer** — `active`, `frozen` or `banned`,
      * the set `#policy/account-states` holds and the `CHECK` below is generated
-     * from.
+     * from. Classified **`personal`**: it is a decision this platform took about
+     * a particular person and one that restricts what she may do here, so it is
+     * hers to see. `export.ts` is where that classification is acted on, and
+     * where the argument against reading it as `internal` — the class `isAdmin`
+     * holds — is written out.
      *
      * **Declared through `user.additionalFields` with `input: false`, for both of
      * `isAdmin`'s reasons.** No request body can set it through any Better Auth

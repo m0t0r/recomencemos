@@ -35,7 +35,11 @@
 import { asc, eq } from "drizzle-orm";
 import type { ConsentSide } from "#consent/registry";
 import type { DomainDatabase } from "#database";
-import type { OfferSendingState } from "#policy/account-states";
+import {
+  asOfferSendingState,
+  MOST_RESTRICTIVE_OFFER_SENDING_STATE,
+  type OfferSendingState,
+} from "#policy/account-states";
 import * as schema from "#schema";
 
 /**
@@ -169,10 +173,14 @@ export async function buildSubjectAccessExport(
       name: row.name,
       emailVerified: row.emailVerified,
       imageUrl: row.image,
-      // The cast reads `user_offer_sending_state_known`, which refuses anything
-      // outside the registry at write time — the same argument the `side` cast
-      // below carries.
-      offerSendingState: row.offerSendingState as OfferSendingState,
+      // Through the registry's own narrower rather than a cast, and to the same
+      // restrictive fallback `#accounts` uses. `user_offer_sending_state_known`
+      // makes the fallback unreachable; what it buys is that the two readers of
+      // this column cannot come to disagree about whether its values are
+      // trustworthy — which they briefly did, a cast here against a narrowing
+      // there.
+      offerSendingState:
+        asOfferSendingState(row.offerSendingState) ?? MOST_RESTRICTIVE_OFFER_SENDING_STATE,
       registeredAt: row.createdAt,
     },
     // Field by field, and the `side` cast is the one place the database's `TEXT`

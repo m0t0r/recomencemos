@@ -716,11 +716,11 @@ what it costs story 20's fairness measurement to get wrong, is in **Further Note
 
 ### Hirer — Account required, `noindex`
 
-| Surface               | Shape                                                                                                                                                                                                                   | Who may call                                                                                                                                                                                                                                               |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /profile/[slug]` | `GatedProfile`                                                                                                                                                                                                          | Any signed-in Account **whose `offerSendingState` is not `frozen`**. Charged against NFR26's read ceiling. A frozen caller gets the same response as a missing profile (C22). **A Blocked caller is served normally** — a Block reaches the send only (C3) |
-| action `sendOffer`    | `{ profileSlug, hirerName, hirerPhone, workDescription, payTerms, whenText, consentVersion }` → `{ ok } \| { fieldErrors }`. The two identity fields are collected once, on the first Offer, and stored on Account (C4) | Signed-in Account whose `offerSendingState` is read **from the row under a lock**, never from the session, and who is not Blocked                                                                                                                          |
-| `GET /sent-offers`    | `SentOffer[]` — state only; no contact details unless exchanged. Carries the derived `reviewDelayed` (C41)                                                                                                              | The sender                                                                                                                                                                                                                                                 |
+| Surface               | Shape                                                                                                                                                                                                                   | Who may call                                                                                                                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /profile/[slug]` | `GatedProfile`                                                                                                                                                                                                          | Any signed-in Account **whose `offerSendingState` is `active`**. Charged against NFR26's read ceiling. A frozen caller gets the same response as a missing profile (C22). **A Blocked caller is served normally** — a Block reaches the send only (C3) |
+| action `sendOffer`    | `{ profileSlug, hirerName, hirerPhone, workDescription, payTerms, whenText, consentVersion }` → `{ ok } \| { fieldErrors }`. The two identity fields are collected once, on the first Offer, and stored on Account (C4) | Signed-in Account whose `offerSendingState` is read **from the row under a lock**, never from the session, and who is not Blocked                                                                                                                      |
+| `GET /sent-offers`    | `SentOffer[]` — state only; no contact details unless exchanged. Carries the derived `reviewDelayed` (C41)                                                                                                              | The sender                                                                                                                                                                                                                                             |
 
 ### Admin — an emailed link **and** TOTP on the session itself
 
@@ -860,7 +860,7 @@ cannot exist here at all. Skills are aggregated in **one** query rather than per
 paginated list is what would actually miss NFR2. Both standing notices render on both.
 
 **Story 5 — read a full profile.** `/profile/[slug]` reads the session **[trust]**, redirects an
-anonymous caller to `/sign-in` with a validated return path, checks that the caller is not `frozen`,
+anonymous caller to `/sign-in` with a validated return path, checks that the caller is `active`,
 charges the read against NFR26's ceiling, and renders `GatedProfile` dynamically. A **frozen** caller —
 one with an open Report against him — gets exactly the missing-profile response (C22). A **Blocked**
 caller is served normally: C3 narrowed a Block to the send, so the Block edge is checked at `sendOffer`
@@ -3374,6 +3374,20 @@ deploy.
   turning them on would spend quota and collect exactly the personal data NFR18 forbids.
 
 ## Further Notes
+
+### Amendments made during Build
+
+**One, and it is a narrowing rather than a change of intent.**
+
+1. **The gated read admits `active`, not "anything but `frozen`."** Story 5 and the `GET
+/profile/[slug]` row both said _"whose `offerSendingState` is not `frozen`"_, which was written
+   before `banned` existed as a third member and reads, literally, as serving the whole gated
+   catalogue to the one principal an Admin removed on purpose. `banned` is the **stricter** state —
+   C22's own argument is that a freeze may be stronger precisely because it expires, so a ban cannot
+   be weaker than one. Both sentences now say `active`, and `mayReadGatedProfile` states the
+   predicate positively over the registry, so a fourth member added later is refused rather than
+   admitted by omission. Raised by `/code-review`'s Spec axis on #23, which is also where the
+   argument for amending rather than reverting is set out.
 
 ### Advisor recommendations overridden, and why
 
