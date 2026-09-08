@@ -5,9 +5,9 @@
  * handle.
  *
  * The contact-detail rejector (DD3), the phone normalizer, the search normalizer
- * (DD4), the city and state registries (DD2) and the two list orderings — the
- * Wall's, and the attention spread the browsable list commits to. The Offer
- * state machine arrives here with the story that needs it.
+ * (DD4), the city and state registries (DD2), the two list orderings — the
+ * Wall's, and the attention spread the browsable list commits to — and, since
+ * story 6, the Offer state machine.
  */
 
 export {
@@ -34,6 +34,17 @@ export {
   which is private to this package.
 */
 export type { AttentionSpreadOrder, NewestOrder } from "#policy/listing";
+export {
+  asOfferState,
+  INITIAL_OFFER_STATE,
+  isOfferReviewDelayed,
+  isTerminalOfferState,
+  mayTransitionOffer,
+  OFFER_REVIEW_WINDOW_HOURS,
+  OFFER_STATES,
+  type OfferState,
+  PENDING_OFFER_STATES,
+} from "#policy/offer-states";
 export { formatColombianPhone, normalizeColombianPhone, type PhoneVerdict } from "#policy/phone";
 export {
   PHOTO_STATES,

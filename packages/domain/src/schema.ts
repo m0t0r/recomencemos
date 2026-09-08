@@ -23,7 +23,9 @@ import {
   text,
   timestamp,
   unique,
+  uuid,
 } from "drizzle-orm/pg-core";
+import { v7 } from "uuid";
 import { ADMIN_ACTION_NAMES } from "#admin/names";
 // Imported as well as re-exported below: the two Admin tables at the foot of
 // this file reference `user.id`, and a re-export creates no local binding.
@@ -31,6 +33,7 @@ import { user } from "#auth-schema";
 import { inList } from "#column-types";
 import { CONSENT_SIDES } from "#consent/registry";
 import { CITY_IDS } from "#policy/cities";
+import { INITIAL_OFFER_STATE, OFFER_STATES } from "#policy/offer-states";
 import { PHOTO_STATES, PROFILE_STATES } from "#policy/profile-states";
 import { SKILL_REQUEST_STATES } from "#policy/skill-request-states";
 import { CEILINGED_ACTIONS } from "#rate-limit";
@@ -851,5 +854,210 @@ export const skillRequest = pgTable(
       .where(sql`${table.state} = 'pending'`),
 
     check("skill_request_state_known", inList(table.state, SKILL_REQUEST_STATES)),
+  ],
+);
+
+/**
+ * **`Offer`** — from one Account to one CapabilityProfile, and **immutable after
+ * send**. It is the row story 6 exists to write, and the row story 8, story 9
+ * and the Admin queue all read.
+ *
+ * **`id` is a UUIDv7, and it is the one exception DD2 makes.** Every other key in
+ * this schema is a `BIGINT IDENTITY` because a UUID is 16 bytes against 8 and
+ * widens every index that references it; this table earns the exception because
+ * `/offers/[id]` puts the value in a URL. A `BIGINT` there would publish the
+ * platform's total Offer count to every Hirer on his first send and hand an
+ * enumerator a clean `/offers/1..N` sweep — authorization stops the read, and it
+ * does not stop the existence oracle.
+ *
+ * **The value is minted in the application, never by the engine** (DD2). The id
+ * has to exist *before* the insert, because `sendOffer` writes the Offer and then
+ * references it in the same transaction; a column default would force a
+ * `RETURNING` round trip to learn it. It also removes a version dependency —
+ * `uuidv7()` is Postgres 18 only, and PGlite 18.3 and PlanetScale 18.4 agreeing
+ * today is an alignment being relied on rather than a guarantee.
+ *
+ * **Immutability is the product, and no constraint here can enforce it.** There
+ * is no `updated_at`, no revision column, and no function in `#offers` that
+ * writes a text field twice — but a `CHECK` cannot see a previous row, so the
+ * guarantee is that no such path exists, and `offers.integration.test.ts` is
+ * where that is asserted rather than implied.
+ *
+ * **One instant, not two.** DD2's index sketch names a `sent_at` column and this
+ * table carries `created_at` instead, because for a row nothing ever updates the
+ * two are the same moment — and two columns holding one instant can only diverge
+ * by a bug. The projection publishes it as `sentAt`, which is the vocabulary a
+ * person reads; `skill_request` already does exactly this with `requestedAt`.
+ * `delivered_at` is a second instant and a genuinely second fact: `NULL` until a
+ * human has read the Offer, which is NFR7's queue metric and NFR22's window, and
+ * a column rather than an inference because `state` moves past `delivered` the
+ * moment she answers.
+ *
+ * **The three free-text fields have passed the rejector** (NFR12, DD3) and the
+ * boundary parse's length bounds. They are `personal`: they are what one person
+ * wrote to another, and only she, he, and the Admin who reviews it read them.
+ *
+ * **His name and phone are not here.** They are collected once, on his first
+ * Offer, and stored on the Account (C4) — a copy per Offer would be a second
+ * place for a correction to fail to reach, and a self-asserted identity is a
+ * property of the sender rather than of the message.
+ */
+export const offer = pgTable(
+  "offer",
+  {
+    /** DD2's one UUIDv7, from `uuid`'s `v7()` in the application. See above. */
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => v7()),
+
+    /** Who it is for. Cascade: deleting her Account reaches everything about her. */
+    capabilityProfileId: bigint("capability_profile_id", { mode: "bigint" })
+      .notNull()
+      .references(() => capabilityProfile.id, { onDelete: "cascade" }),
+
+    /** Who sent it. Cascade, for the same reason from the other side. */
+    hirerAccountId: text("hirer_account_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    /** `personal`. What he is asking for. Passed the rejector (DD3, NFR12). */
+    workDescription: text("work_description").notNull(),
+
+    /** `personal`. What he is offering to pay. Passed the rejector. */
+    payTerms: text("pay_terms").notNull(),
+
+    /** `personal`. When he needs it. Passed the rejector. */
+    whenText: text("when_text").notNull(),
+
+    state: text("state").notNull().default(INITIAL_OFFER_STATE),
+
+    /**
+     * When a person read it and let it through. `NULL` for as long as it is
+     * waiting, which is what the queue's depth, its age-of-oldest and
+     * `SentOffer.reviewDelayed` are all computed over.
+     */
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /** The Offers she has received, newest first (DD2). Also the FK index on her side. */
+    index("offer_capability_profile_id_created_at_idx").on(
+      table.capabilityProfileId,
+      sql`${table.createdAt} DESC`,
+    ),
+
+    /** `/sent-offers`, newest first (DD2). Also the FK index on his side. */
+    index("offer_hirer_account_id_created_at_idx").on(
+      table.hirerAccountId,
+      sql`${table.createdAt} DESC`,
+    ),
+
+    /**
+     * **The first of DD2's five partial queue indexes**, and the one with a
+     * deadline attached: NFR7 bounds the age of the oldest undelivered Offer at
+     * 24 hours, and the queue asks three questions of this predicate on every
+     * Admin render — the oldest few rows, `COUNT(*)` over the branch, and
+     * `MIN(created_at)` over it.
+     *
+     * Partial rather than plain, so the index stays the size of the backlog
+     * instead of the size of the history. Without it, story 7's age-of-oldest is
+     * a sequential scan that grows with total Offers forever while the pending
+     * set stays near zero — the instrument getting slower exactly as the product
+     * succeeds.
+     *
+     * **The predicate is both undelivered states**, not `pending_review` alone.
+     * An Offer held because its sender is frozen (C22) is still work a human owes
+     * an answer on, and leaving it out would let a Report quietly shrink the
+     * number the operator is measured by.
+     */
+    index("offer_pending_idx")
+      .on(table.createdAt)
+      .where(sql`${table.state} IN ('pending_review', 'on_hold')`),
+
+    check("offer_state_known", inList(table.state, OFFER_STATES)),
+
+    /**
+     * A backstop that must never fire, in the shape DD2 fixes: the boundary parse
+     * is where an empty field becomes a `fieldError`, and a `CHECK` firing is a
+     * 500. It is here because these three fields are the whole of what she reads
+     * — an Offer naming no work, no pay and no when is not an Offer, and a row
+     * that reached this table without them would be one nobody could answer.
+     */
+    check(
+      "offer_terms_present",
+      sql`char_length(btrim(${table.workDescription})) > 0
+        AND char_length(btrim(${table.payTerms})) > 0
+        AND char_length(btrim(${table.whenText})) > 0`,
+    ),
+
+    /*
+      **A Worker may not be sent an Offer by her own Account** (DD9). Nothing in
+      the draft refused it, and it inflates `delivered_offer_count`, which is
+      NFR22's ordering input — so the fairness mechanism would be defeatable by
+      the person it protects, in one request.
+
+      There is no constraint here because a `CHECK` cannot reach the other table
+      to compare her Account id. It is enforced in `#offers`, where both rows are
+      in hand, and named here so the absence reads as a decision rather than as
+      an omission.
+    */
+  ],
+);
+
+/**
+ * **`Block`** — a Worker → Hirer edge. Permanent, no reason, and **keyed from the
+ * Offer** rather than from a Hirer account id a browser supplied.
+ *
+ * **What it reaches is bounded, stated, and narrower than the draft had it**
+ * (C3): *he cannot send her anything, and that is all*. It does not remove her
+ * from the public Wall — the Wall is public and cannot be selectively invisible —
+ * and it does not close his gated read of her profile. Her phone and email are
+ * untouched, because those cross only at Contact Exchange, which he can no longer
+ * reach. One rule, explainable to a Worker in one sentence.
+ *
+ * **The table arrives with the read rather than with the write.** `sendOffer` has
+ * to consult this edge under its row lock (NFR15, DD9), and story 10 is where
+ * `blockFromOffer` puts a row in it — the same expand shape
+ * `user.offer_sending_state` had, which existed for a slice before the actions
+ * that write it. A read against an empty table answers correctly.
+ *
+ * **A pure edge, so a composite natural primary key and no surrogate** — the
+ * shape `profile_skill` already takes, and DD2's `UNIQUE (worker_profile_id,
+ * hirer_account_id)` said by the engine rather than beside it. The uniqueness is
+ * not decoration: blocking twice is the same fact, and a second row would make
+ * "is he Blocked" a count rather than an existence check.
+ */
+export const block = pgTable(
+  "block",
+  {
+    /** Whose Block it is. Cascade: her deletion reaches everything she decided. */
+    workerProfileId: bigint("worker_profile_id", { mode: "bigint" })
+      .notNull()
+      .references(() => capabilityProfile.id, { onDelete: "cascade" }),
+
+    /** Who is Blocked. Cascade, so a deleted Account leaves no dangling edge. */
+    hirerAccountId: text("hirer_account_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * The natural key, and the index `sendOffer` reads on every send: both
+     * columns are equalities, so one lookup answers it.
+     */
+    primaryKey({
+      name: "block_worker_profile_id_hirer_account_id_pk",
+      columns: [table.workerProfileId, table.hirerAccountId],
+    }),
+
+    /**
+     * DD2's index on the *other* foreign key column. The primary key leads with
+     * her profile, so nothing serves a read keyed on his Account — which is what
+     * NFR17's leaf-first purge does when an Account is deleted.
+     */
+    index("block_hirer_account_id_idx").on(table.hirerAccountId),
   ],
 );

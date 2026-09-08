@@ -156,6 +156,27 @@ export const CEILINGS = {
   },
 
   /**
+   * **`sendOffer`, per Account and per IP** — NFR26's own row, and the bound on
+   * the one way a Hirer can put work in front of both a Worker and the person
+   * who reads every Offer before she does.
+   *
+   * It is the same ten `updateProfile` takes, and it protects two resources
+   * rather than one: the reviewer's attention, which DD7 names as the scarcest
+   * thing here, and a Worker's inbox. NFR7 bounds arrivals at 20 per rolling
+   * hour across the whole platform, so a single Account able to send more than
+   * ten in a day would be able to spend half of that band alone.
+   *
+   * **A refused send is charged**, as publishing's and editing's are: the action
+   * charges before its body runs, so a submission the contact-detail rejector
+   * refuses spends one of the ten. That is the case the seventh state exists
+   * for, and the refusal says when he may send again.
+   */
+  sendOffer: {
+    account: { max: 10, windowSeconds: 24 * 60 * 60 },
+    ip: { max: 10, windowSeconds: 24 * 60 * 60 },
+  },
+
+  /**
    * **The harvesting ceiling, and the one entry in this registry that is two
    * rows for one requirement.** NFR26 bounds a gated profile read at _"≤ 60 per
    * Account per hour, ≤ 300 per day"_ — two windows against one principal, which
@@ -495,6 +516,27 @@ export const CEILING_REFUSALS: Record<
       : `Guardaste cambios ${ceiling.max} veces hoy, que es el máximo. `) +
     `Puedes guardar otra vez ${retryPhrase(retryAfter)}. ` +
     "Nada de lo que escribiste se perdió, y tu perfil sigue como lo guardaste la última vez.",
+
+  /**
+   * **The Hirer's ceiling, and the one refusal in this table addressed to him.**
+   *
+   * The voice guide's tone matrix drops Warmth to 3 for a Hirer writing an Offer
+   * and holds Directness at 5, so this is the plainest entry here: his count, the
+   * wait, and the one thing he actually wants to know — that the Offers already
+   * sent are on their way to a person who will read them, and that nothing he
+   * typed was thrown away.
+   *
+   * **It says what happened to the Offers he already sent, because that is the
+   * question a ceiling raises.** A Hirer who meets this after nine sends has nine
+   * Offers in a queue and no way to see them from here; a refusal that named only
+   * the wait would leave him to guess whether the tenth attempt undid any of it.
+   */
+  sendOffer: (ceiling, retryAfter, scope) =>
+    (scope === "ip"
+      ? `Se enviaron muchas propuestas hoy ${SHARED_CONNECTION}. `
+      : `Enviaste ${ceiling.max} propuestas hoy, que es el máximo. `) +
+    `Puedes enviar otra ${retryPhrase(retryAfter)}. ` +
+    "Las que ya enviaste siguen su curso y nada de lo que escribiste se perdió.",
 
   /**
    * **The only two refusals here written for somebody who may be an attacker**,

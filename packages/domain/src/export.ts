@@ -109,6 +109,20 @@ export interface ExportedAccount {
   readonly emailVerified: boolean;
   readonly imageUrl: string | null;
   readonly offerSendingState: OfferSendingState;
+  /**
+   * **What he told this platform to call him, and the number he said to reach
+   * him on** (story 6, C4). `null` until his first Offer, which is the whole of
+   * what that `null` means.
+   *
+   * They are `personal` and self-asserted, and both facts matter here: Ley 1581
+   * gives the *titular* the right to know what is held about him, and this is
+   * held about him *and disclosed to somebody else* — a Worker reads them on
+   * every Offer he sends and keeps them after a Contact Exchange. An export that
+   * carried his email and not the name under which strangers have been reading
+   * his Offers would omit the more consequential of the two.
+   */
+  readonly hirerName: string | null;
+  readonly hirerPhone: string | null;
   readonly registeredAt: Date;
 }
 
@@ -142,6 +156,8 @@ export async function buildSubjectAccessExport(
       emailVerified: schema.user.emailVerified,
       image: schema.user.image,
       offerSendingState: schema.user.offerSendingState,
+      hirerName: schema.user.hirerName,
+      hirerPhone: schema.user.hirerPhone,
       createdAt: schema.user.createdAt,
     })
     .from(schema.user)
@@ -181,6 +197,8 @@ export async function buildSubjectAccessExport(
       // there.
       offerSendingState:
         asOfferSendingState(row.offerSendingState) ?? MOST_RESTRICTIVE_OFFER_SENDING_STATE,
+      hirerName: row.hirerName,
+      hirerPhone: row.hirerPhone,
       registeredAt: row.createdAt,
     },
     // Field by field, and the `side` cast is the one place the database's `TEXT`

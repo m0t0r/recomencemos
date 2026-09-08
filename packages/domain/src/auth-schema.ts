@@ -212,6 +212,36 @@ export const user = pgTable(
      */
     offerSendingState: text("offer_sending_state").notNull().default(DEFAULT_OFFER_SENDING_STATE),
 
+    /**
+     * **How a Hirer names himself, and the number he says to reach him on** —
+     * both `personal`, both **self-asserted**, and both collected exactly once,
+     * on his first Offer (C4).
+     *
+     * **They are `NULL` until then, and that is the fact `sendOffer` reads.**
+     * "Has he sent an Offer before" is answered from his Consent row rather than
+     * from these columns, but a `NOT NULL DEFAULT ''` here would make an Account
+     * that has never sent anything indistinguishable from one whose sender left
+     * the field blank — and the difference is whether the form asks him.
+     *
+     * **Nothing verifies either.** ADR-0008 declined verification deliberately,
+     * and every surface that renders them says so in as many words: story 11's
+     * standing notice already reads *"el nombre y el teléfono de quien te escribe
+     * los escribió esa misma persona"*. They reach a Worker only on an Offer she
+     * has received and in the `ExchangedContact` she accepted, badged as declared
+     * rather than checked.
+     *
+     * **Declared through `user.additionalFields` with `input: false`**, for the
+     * two reasons `isAdmin` and `offerSendingState` carry. No request body can set
+     * them through any Better Auth endpoint, so the only writer is `sendOffer`
+     * inside its own transaction — which matters because a Worker deciding
+     * whether to answer is reading these, and an endpoint that let them be
+     * rewritten afterwards would let the name she agreed to change under her. And
+     * a hand-added column on a vendor table is invisible to the schema oracle, so
+     * `auth-schema.test.ts` could not pin it and a regeneration would drop it.
+     */
+    hirerName: text("hirer_name"),
+    hirerPhone: text("hirer_phone"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

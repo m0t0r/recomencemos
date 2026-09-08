@@ -99,6 +99,13 @@
       "when": 1788879352305,
       "tag": "0013_search_the_folded_column",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788910802389,
+      "tag": "0014_good_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

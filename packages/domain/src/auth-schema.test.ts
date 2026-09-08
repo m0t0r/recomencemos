@@ -526,6 +526,30 @@ describe("the Admin's door", () => {
   });
 
   /**
+   * The Hirer's two self-asserted fields (story 6, C4), read the same way and for
+   * the same reason as the two above.
+   *
+   * **`input: false` is what a Worker's decision rests on.** These are the name
+   * and the number she reads when she decides whether to answer a stranger, and
+   * they are two of the three things she is handed at Contact Exchange. A vendor
+   * endpoint that accepted either in a request body would let the identity she
+   * agreed to be rewritten after she agreed to it — so the only writer is
+   * `sendOffer`, inside the transaction that also writes his *autorización*.
+   *
+   * They are absent from `STRICTER_NOT_NULL` because they are genuinely nullable
+   * in both places: `NULL` here means he has never sent an Offer, which is the
+   * fact that decides whether the form asks him for them.
+   */
+  it("declares the Hirer's name and phone, closed to every request body", () => {
+    expect(betterAuthSchema.user?.fields.hirerName).toMatchObject({ type: "string" });
+    expect(betterAuthSchema.user?.fields.hirerPhone).toMatchObject({ type: "string" });
+    expect(options.user?.additionalFields?.hirerName?.input).toBe(false);
+    expect(options.user?.additionalFields?.hirerPhone?.input).toBe(false);
+    expect(getTableColumns(schema.user).hirerName.name).toBe("hirer_name");
+    expect(getTableColumns(schema.user).hirerPhone.name).toBe("hirer_phone");
+  });
+
+  /**
    * C44, and it is now true by construction rather than by mechanism.
    * `trustDevice` was a body field on the plugin's two verify endpoints — passing
    * `true` wrote a signed cookie plus a verification row that skipped the second
