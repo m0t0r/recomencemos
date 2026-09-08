@@ -139,7 +139,13 @@ async function ProfilePanel({ params }: { readonly params: Params }) {
    * came back **42 bytes apart** — the shorter path emitted one fewer streaming
    * chunk — so a frozen caller could tell "I am frozen" from "she is not here"
    * by reading `Content-Length`. Doing the same work on both paths closes the
-   * length signal and the timing one with it.
+   * length signal.
+   *
+   * **It does not close the timing one, and this comment used to say it did.**
+   * Both reads run, but an index hit and a miss are not equal-time, and nothing
+   * here measured them. What the equal work buys is that the *difference* is a
+   * property of the data rather than of the branch — which is a smaller claim
+   * than the one that was written, and the only one that was checked.
    *
    * The cost is one query a frozen caller's answer does not use, bounded by the
    * ceiling above. Nothing read here reaches him: the refusal is taken before

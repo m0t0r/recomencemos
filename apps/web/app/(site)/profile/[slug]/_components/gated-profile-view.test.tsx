@@ -151,8 +151,13 @@ describe("the work history", () => {
     // The whole list, in order — `arrayContaining` plus three `indexOf`
     // comparisons said the same thing while admitting a fourth item nobody
     // wrote.
-    const history = screen.getByRole("heading", { name: WORK_HISTORY_HEADING }).closest("section");
-    const items = within(history as HTMLElement)
+    //
+    // By role rather than `.closest("section")`, which asserted a markup shape
+    // and cast the result. `Section` renders `aria-labelledby`, so the section
+    // *is* a named region and the accessibility tree can answer this — which
+    // means the query now pins that wiring too, and fails if the heading ever
+    // stops naming the region.
+    const items = within(screen.getByRole("region", { name: WORK_HISTORY_HEADING }))
       .getAllByRole("listitem")
       .map((item) => item.textContent);
 

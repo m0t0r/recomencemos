@@ -19,8 +19,30 @@ import {
   WORK_HISTORY_HEADING,
 } from "./messages";
 
-const HOURLY = CEILING_REFUSALS.readProfileHourly({ max: 60, windowSeconds: 3600 }, 720);
-const DAILY = CEILING_REFUSALS.readProfileDaily({ max: 300, windowSeconds: 86_400 }, 7200);
+/**
+ * **Both scopes, because this surface renders whichever one refused.**
+ * `chargeCeilings` charges the Account and the address, and hands the page the
+ * first refusal's sentence whichever principal it belonged to — so the per-IP
+ * half is copy a person reads here just as much as the per-Account half, and the
+ * voice rules have to run over it. It is the half that used to quote her a count
+ * that was not hers.
+ */
+const HOURLY = CEILING_REFUSALS.readProfileHourly({ max: 60, windowSeconds: 3600 }, 720, "account");
+const HOURLY_SHARED = CEILING_REFUSALS.readProfileHourly(
+  { max: 300, windowSeconds: 3600 },
+  720,
+  "ip",
+);
+const DAILY = CEILING_REFUSALS.readProfileDaily(
+  { max: 300, windowSeconds: 86_400 },
+  7200,
+  "account",
+);
+const DAILY_SHARED = CEILING_REFUSALS.readProfileDaily(
+  { max: 1500, windowSeconds: 86_400 },
+  7200,
+  "ip",
+);
 
 describeSurfaceCopy({
   copy: [
@@ -31,7 +53,9 @@ describeSurfaceCopy({
     ["TO_BROWSE", TO_BROWSE],
     ["RATE_LIMITED_HEADING", RATE_LIMITED_HEADING],
     ["readProfileHourly", HOURLY],
+    ["readProfileHourly · shared connection", HOURLY_SHARED],
     ["readProfileDaily", DAILY],
+    ["readProfileDaily · shared connection", DAILY_SHARED],
   ],
   labels: [["TO_BROWSE", TO_BROWSE]],
 });
@@ -114,10 +138,40 @@ describe("the refusal a reader meets at the ceiling", () => {
     expect(DAILY).toContain("2 horas");
   });
 
-  it("names the lists, which carry no ceiling and are still open", () => {
-    for (const refusal of [HOURLY, DAILY]) {
-      expect(refusal).toContain("listas");
+  /**
+   * It said `"las listas"` and named nothing anybody had seen. The two surfaces
+   * that carry no ceiling are *el muro* — the Wall's Spanish, fixed in
+   * `CONTEXT.md` — and the browsable list, which its own empty state already
+   * calls *la lista*.
+   */
+  it("names the two surfaces that carry no ceiling, as the product names them", () => {
+    for (const refusal of [HOURLY, HOURLY_SHARED, DAILY, DAILY_SHARED]) {
+      expect(refusal).toContain("el muro");
+      expect(refusal).toContain("la lista de perfiles");
     }
+  });
+
+  /**
+   * **The count belongs to one principal and the sentence has to know which.**
+   * A shared connection is not a person, so quoting it a maximum says "you did
+   * this" about somebody else — a reader on a café's wifi who opened five
+   * profiles was told she had opened 300.
+   */
+  it("quotes no ceiling's count to a shared connection", () => {
+    for (const refusal of [HOURLY_SHARED, DAILY_SHARED]) {
+      // Every maximum in play on this route, per-Account and per-IP, hourly and
+      // daily. The wait is still a number and is still hers to read.
+      for (const max of ["60", "300", "1500"]) {
+        expect(refusal).not.toContain(max);
+      }
+
+      expect(refusal).toContain("conexión a internet");
+    }
+  });
+
+  it("still says when reading resumes, whichever principal refused", () => {
+    expect(HOURLY_SHARED).toContain("12 minutos");
+    expect(DAILY_SHARED).toContain("2 horas");
   });
 
   /**
@@ -125,7 +179,7 @@ describe("the refusal a reader meets at the ceiling", () => {
    * describe a person by a rule that is about how fast he read.
    */
   it("never calls him blocked", () => {
-    for (const refusal of [HOURLY, DAILY, RATE_LIMITED_HEADING]) {
+    for (const refusal of [HOURLY, HOURLY_SHARED, DAILY, DAILY_SHARED, RATE_LIMITED_HEADING]) {
       expect(refusal.toLowerCase()).not.toMatch(/bloque|suspend|sanci/);
     }
   });
