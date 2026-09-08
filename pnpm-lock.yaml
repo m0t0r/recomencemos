@@ -6,9 +6,6 @@ settings:
 
 overrides:
   '@esbuild-kit/core-utils>esbuild': ^0.25.0
-  ajv>fast-uri: ^3.1.6
-  body-parser>qs: ^6.16.0
-  express>qs: ^6.16.0
 
 importers:
 

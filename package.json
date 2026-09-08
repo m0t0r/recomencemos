@@ -13,6 +13,7 @@
     "lint": "oxlint . --max-warnings 0",
     "audit:direct": "node scripts/audit-direct.mjs",
     "audit:report": "node scripts/audit-report.mjs",
+    "deps:outdated": "pnpm outdated --include-github-actions",
     "db:up": "docker compose up --detach --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down --volumes && pnpm db:up",

@@ -37,7 +37,8 @@ packages:
 # and installs — the lockfile is the thing that would notice, and CI runs the
 # pinned version.
 #
-# Revisit when dependabot-core ships pnpm 12 support (#213): drop this line, run
+# Revisit when dependabot-core ships pnpm 12 support
+# (dependabot/dependabot-core#16095, open): drop this line, run
 # `pnpm install`, and confirm Dependabot still resolves a graph from the
 # two-document lockfile before leaving it dropped.
 pmOnFail: ignore
@@ -133,57 +134,33 @@ allowBuilds:
 overrides:
   "@esbuild-kit/core-utils>esbuild": "^0.25.0"
 
-  # GHSA-f65p-4m7j-42xc, GHSA-jqff-g426-hqxp, GHSA-5jgf-p345-68v8 and
-  # GHSA-fph4-wmhf-6fwf (fast-uri < 3.1.6, four `high`): host confusion and
-  # server-side request forgery through URI normalisation — a percent-encoded
-  # scheme, a repeatedly percent-decoded hostname, a malformed IPv6 literal, and
-  # IDN canonicalisation skipped on a scheme-relative reference.
+  # **Three entries left this map on 2026-09-08, and the test that took them out
+  # is written here so the next reader runs it rather than re-deriving it.**
+  # `ajv>fast-uri` (`^3.1.6`), `body-parser>qs` and `express>qs` (both
+  # `^6.16.0`) were floors under four `high` and two `medium` advisories, and
+  # each carried the same removal condition: "resolves X or later unaided".
   #
-  # `ajv` is the only package here that depends on it, and it calls it to
-  # resolve `$id`/`$ref` in a JSON Schema. Four chains reach it and none is a
-  # request path: `shadcn -> @modelcontextprotocol/sdk`, `shadcn ->
-  # @dotenvx/dotenvx -> conf -> ajv-formats`, `@sentry/nextjs ->
-  # @sentry/webpack-plugin -> webpack -> schema-utils -> ajv-formats`, and
-  # `react-email -> conf -> ajv-formats`. Each validates its own schemas, so no
-  # attacker-supplied URI reaches the parser — the advisories were already
-  # unreachable, and the override is taken for the reason the esbuild one above
-  # is: it costs a line and leaves nothing for a later reader to re-derive.
+  # Reading the lock proves nothing while the override is applied — it reports
+  # the floor being enforced, not the floor being unnecessary. So the test was a
+  # **cold** resolution: all three lines dropped, `pnpm-lock.yaml` moved aside
+  # entirely, `pnpm install --lockfile-only`. Unaided, pnpm picks
+  # `fast-uri@3.1.7` and `qs@6.16.0` — one version of each, both above their
+  # floors. With the lock restored and only the three lines dropped, the lock
+  # diff is exactly those three lines, and `pnpm audit:direct` and
+  # `pnpm audit:report` are both clean. The three are independent — different
+  # packages, different parents — which is why one cold run answers all three.
   #
-  # What was checked rather than assumed: `ajv@8.20.0` asks for `^3.0.1`, so the
-  # fix was always in range and only the lock was holding 3.1.5 — but
-  # `pnpm update -r fast-uri` does not move it (the same command reaches `qs`
-  # below and stops short of this), while resolving `ajv@8.20.0` alone in an
-  # empty project picks 3.1.7. The override is therefore what makes the floor
-  # reproducible from config instead of from whatever the lock happens to hold.
+  # Worth keeping from what those comments said, because it is the part that is
+  # about this repository rather than about a version number: none of the six
+  # advisories was ever reachable here. `ajv` calls fast-uri to resolve
+  # `$id`/`$ref` in schemas it owns, and `qs` arrives under an `express` that
+  # only the MCP server `shadcn` can start, which neither `pnpm dev` nor the
+  # build ever does. The overrides existed to make the floor reproducible from
+  # config rather than from whatever the lock happened to hold; the registry now
+  # reproduces it, so the config is the thing to drop.
   #
-  # Scoped rather than bare, for the reason the esbuild entry gives: fast-uri's
-  # own latest is 4.x, and a bare `^3.1.6` would hold a future direct consumer
-  # to a major it never asked for.
-  #
-  # Review and remove once `ajv` resolves 3.1.6 or later unaided: drop the line,
-  # run `pnpm install --lockfile-only`, and read `pnpm why fast-uri`.
-  "ajv>fast-uri": "^3.1.6"
-
-  # GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx (qs < 6.16.0, two `medium`):
-  # denial of service through an attacker-controlled `isBuffer`, and an
-  # array-limit bypass through comma parsing inside a bracket key.
-  #
-  # One chain, and it belongs to a CLI: `shadcn -> @modelcontextprotocol/sdk ->
-  # express`, with `body-parser` underneath that same express. `shadcn` is a
-  # runtime `dependencies` entry of `@repo/design-system` — it owns the
-  # `@import "shadcn/tailwind.css"` in `globals.css` — so qs does sit in the
-  # production graph rather than a dev-only one. What it does not sit in is any
-  # code path: no workspace imports express, Next.js parses its own query
-  # strings, and the only surface is the MCP server `shadcn` can start, which
-  # neither `pnpm dev` nor the build ever does.
-  #
-  # Both parents already ask for a range admitting the fix (`express@5.2.1`
-  # wants `^6.14.0`, `body-parser@2.3.0` wants `^6.15.2`), so this is a floor
-  # and not a forced upgrade. Two scoped entries rather than one bare `qs`,
-  # because express and body-parser resolve it separately and a bare override
-  # would silently also catch a consumer nobody has looked at.
-  #
-  # Review and remove once both parents resolve 6.16.0 or later unaided, by the
-  # same three steps as the entry above.
-  "body-parser>qs": "^6.16.0"
-  "express>qs": "^6.16.0"
+  # If a future resolution ever falls back below either floor, the actor is
+  # `.github/workflows/security-audit.yml` — `audit-report-threshold` is
+  # `moderate` and above, transitive included, which is wide enough to catch
+  # both. Re-adding a line here is that finding's fix, not a precaution to take
+  # in advance.
