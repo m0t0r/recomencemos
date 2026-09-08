@@ -13,14 +13,23 @@
  */
 
 /**
- * What the live region says when the grid resolves — a count, once, rather than
+ * What the live region says when the list resolves — a count, once, rather than
  * one announcement per card.
  *
- * Singular and plural rather than "1 perfiles". `es-CO` has no other special
- * case here, and zero is never announced: an empty list renders its own state
- * with its own heading, which a screen reader reaches as content.
+ * Singular and plural rather than "1 perfiles"; `es-CO` has no other special
+ * case here.
+ *
+ * **Zero is a sentence rather than "0 perfiles", and it is announced.** The
+ * comment here used to say zero was never announced, on the grounds that an
+ * empty list renders its own heading which a screen reader reaches as content —
+ * which is true of arriving at an empty page and false of *becoming* one. A
+ * filter that takes twenty-four profiles down to none changes the list without
+ * a document load, and the empty panel that replaces it is a heading nobody is
+ * sent to. So the empty result says so, in words, in the region that was already
+ * carrying the count.
  */
 export function announcedCount(count: number): string {
+  if (count === 0) return "Ningún perfil";
   return count === 1 ? "1 perfil" : `${count} perfiles`;
 }
 

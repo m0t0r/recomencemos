@@ -1,0 +1,1 @@
+CREATE INDEX "capability_profile_search_idx" ON "capability_profile" USING gin ("search_text" gin_trgm_ops) WHERE "capability_profile"."state" = 'published';

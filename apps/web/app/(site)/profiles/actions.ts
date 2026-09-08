@@ -24,11 +24,10 @@
  * without an account. The boundary parse is still the boundary parse.
  */
 
-import { type CityId, isCityId } from "@repo/domain/policy";
 import { profiles, SLUG_PATTERN } from "@repo/domain/profiles";
 import { z } from "zod";
 import { actionClient } from "@/lib/safe-action";
-import { MAX_QUERY_LENGTH, SKILL_SLUG } from "./_lib/filters";
+import { browseFiltersFrom, FILTER_KEYS } from "./_lib/filters";
 
 /**
  * **The filters travel with the cursor, and they have to.** A cursor names a
@@ -36,30 +35,30 @@ import { MAX_QUERY_LENGTH, SKILL_SLUG } from "./_lib/filters";
  * a different ordering — so a page two that dropped its filters would not merely
  * show the wrong rows, it would skip and repeat rows within the set it did show.
  *
- * They are parsed here rather than trusted: this is a directly reachable POST
- * endpoint and the boundary parse is the boundary parse, whatever the component
- * that calls it happens to send. The shapes are the ones `_lib/filters` accepts
- * from the URL, which is what keeps the two doors into this read agreeing about
- * what a filter is.
+ * **The three filter terms arrive in their URL spelling and are read by
+ * `browseFiltersFrom`, the same function the page reads them with.** This
+ * schema deliberately says almost nothing about them: it is a directly reachable
+ * POST endpoint, so what arrives is a string or it is not, and every decision
+ * about what a *filter* is — the trim, the length bound, which city ids exist,
+ * what a Skill slug looks like — belongs to the one function that already makes
+ * it. Restating those rules here is what produced a first draft where the action
+ * did not trim and the page did.
+ *
+ * The cursor is this schema's own, because it is not a filter: it is checked
+ * against the slug minter's pattern, which `@repo/domain/profiles` owns.
  */
 const nextPageSchema = z.object({
   /** The opaque public handle of the last row on the page already shown. */
   after: z.string().regex(SLUG_PATTERN),
-  query: z.string().max(MAX_QUERY_LENGTH).default(""),
-  skill: z.string().regex(SKILL_SLUG).nullable().default(null),
-  // The registry's own guard rather than a second list of three municipalities:
-  // `CITIES` is what the `CHECK` constraint is generated from, and a copy here
-  // would be the thing that goes stale when a fourth one is added.
-  city: z
-    .custom<CityId>((value) => typeof value === "string" && isCityId(value))
-    .nullable()
-    .default(null),
+  [FILTER_KEYS.query]: z.string().optional(),
+  [FILTER_KEYS.skill]: z.string().optional(),
+  [FILTER_KEYS.city]: z.string().optional(),
 });
 
 export const loadMoreProfiles = actionClient
   .inputSchema(nextPageSchema)
-  .action(async ({ parsedInput }) => {
-    const page = await profiles.browse(parsedInput);
+  .action(async ({ parsedInput: { after, ...params } }) => {
+    const page = await profiles.browse({ ...browseFiltersFrom(params), after });
 
     return { profiles: page.items, nextCursor: page.nextCursor };
   });

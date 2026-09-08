@@ -41,16 +41,14 @@ export interface BrowseFilters {
  */
 export const MAX_QUERY_LENGTH = 80;
 
-/**
- * A `Skill` slug as the vocabulary spells one: lowercase words joined by
- * hyphens. Exported because the paging action parses the same term off a POST
- * body, and two spellings of "what a Skill slug is" would be two doors into one
- * read that disagreed about it.
- */
-export const SKILL_SLUG = /^[a-z]+(?:-[a-z]+)*$/;
+/** A `Skill` slug as the vocabulary spells one: lowercase words joined by hyphens. */
+const SKILL_SLUG = /^[a-z]+(?:-[a-z]+)*$/;
 
 /** The query-string names, in one place, because the form and the links must agree. */
 export const FILTER_KEYS = { query: "q", skill: "skill", city: "city", after: "after" } as const;
+
+/** What a filter looks like on the wire, whichever door it came through. */
+export type FilterParams = Partial<Record<string, string | string[] | undefined>>;
 
 function oneOf(value: string | string[] | undefined): string {
   // A repeated parameter arrives as an array. The first is what the form would
@@ -58,9 +56,14 @@ function oneOf(value: string | string[] | undefined): string {
   return (typeof value === "string" ? value : (value?.[0] ?? "")).trim();
 }
 
-export function browseFiltersFrom(
-  params: Record<string, string | string[] | undefined>,
-): BrowseFilters {
+/**
+ * **The one definition of what a filter is**, and both doors into the browsable
+ * list go through it — the page, from `searchParams`, and the paging action,
+ * from its own request body. There were two readings for a while, and they
+ * disagreed about trimming, which is the shape of bug where a search works on
+ * page one and returns nothing on page two.
+ */
+export function browseFiltersFrom(params: FilterParams): BrowseFilters {
   const skill = oneOf(params[FILTER_KEYS.skill]);
   const city = oneOf(params[FILTER_KEYS.city]);
 
@@ -68,6 +71,19 @@ export function browseFiltersFrom(
     query: oneOf(params[FILTER_KEYS.query]).slice(0, MAX_QUERY_LENGTH),
     skill: SKILL_SLUG.test(skill) ? skill : null,
     city: isCityId(city) ? city : null,
+  };
+}
+
+/**
+ * The filters back on the wire, in the same names {@link browseFiltersFrom}
+ * reads. A term that is not set is absent rather than empty, so what crosses
+ * says only what somebody chose.
+ */
+export function toFilterParams(filters: BrowseFilters): Record<string, string> {
+  return {
+    ...(filters.query ? { [FILTER_KEYS.query]: filters.query } : {}),
+    ...(filters.skill ? { [FILTER_KEYS.skill]: filters.skill } : {}),
+    ...(filters.city ? { [FILTER_KEYS.city]: filters.city } : {}),
   };
 }
 
@@ -85,12 +101,10 @@ export function isNarrowed(filters: BrowseFilters): boolean {
  * only what somebody actually chose.
  */
 export function browseHref(filters: BrowseFilters, after?: string | null): string {
-  const params = new URLSearchParams();
-
-  if (filters.query) params.set(FILTER_KEYS.query, filters.query);
-  if (filters.skill) params.set(FILTER_KEYS.skill, filters.skill);
-  if (filters.city) params.set(FILTER_KEYS.city, filters.city);
-  if (after) params.set(FILTER_KEYS.after, after);
+  const params = new URLSearchParams({
+    ...toFilterParams(filters),
+    ...(after ? { [FILTER_KEYS.after]: after } : {}),
+  });
 
   const search = params.toString();
   return search ? `/profiles?${search}` : "/profiles";
