@@ -169,6 +169,28 @@ a density decision and not a content one.
 rather than inheriting it. The rule for taking it is in the type's own doc comment: disclosure where
 the notices sit above content the reader came for, expanded where they do not.
 
+### What `/code-review` then changed, and it is the important part
+
+The split above was locked, built, and reviewed — and the Spec axis found that it had quietly moved
+two acceptance criteria behind a tap. In the first cut a statement was a heading plus a body, and the
+**whole** body went inside the `<details>`. So on `/` and `/profiles` — the only surfaces an
+anonymous Hirer meets — the clause naming his own name and phone as self-asserted (criterion 3) and
+the clause saying a Block does **not** remove her from the Wall (criterion 2's third statement, the
+one the ticket calls _"the one most easily lost"_) were both collapsed by default.
+
+The prominence decision was not the thing that was wrong; the copy model was. Each statement now
+carries three parts rather than two:
+
+- **`heading`** — the absence, stated whole.
+- **`lead`** — one sentence, **always on screen in both treatments**: what this absence costs the
+  reader. Every clause an acceptance criterion names by hand lives here.
+- **`detail`** — what we do instead, and how the thing works. The only part a tap reveals.
+
+**The rule that falls out of it is the one to keep:** a treatment decides how much _explanation_ is
+in front of a reader before they ask for it, and it may never decide what the product says. A
+criterion is never the thing a disclosure hides. `standing-notices.test.tsx` asserts each lead is
+visible in both treatments, and that the detail — and only the detail — is not.
+
 ### What building the variants found
 
 Two things that were read out of a running browser rather than predicted, and both changed the

@@ -20,8 +20,8 @@
  * **A Server Component that ships no client JavaScript**, which is how NFR4 and
  * NFR3 are met structurally rather than by measurement: there is no bundle to add
  * to the first load, and nothing has to hydrate before the text is readable. The
- * `open` treatment's disclosure is `<details>`, which is native HTML and opens
- * with the script tag removed.
+ * disclosure is `<details>`, which is native HTML and opens with the script tag
+ * removed.
  *
  * **Nothing here is `destructive`.** `DESIGN.md` reserves that triad for a limit
  * of the platform — which these are — but painting three of them on the first
@@ -31,6 +31,8 @@
  * rather than argued.
  */
 
+import { Separator } from "@repo/design-system/components/separator";
+import { cn } from "@repo/design-system/lib/utils";
 import { BanknoteIcon, ChevronDownIcon, MessageSquareOffIcon, ShieldOffIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import {
@@ -47,13 +49,17 @@ import {
  * them** — it is `disclosure` where the notices sit above content the reader came
  * for, and `expanded` where they do not:
  *
- * - `disclosure` — the three absence sentences are always on screen and tappable;
- *   what follows from each is one tap away. Used on `/` and `/profiles`, where the
- *   fully expanded form pushed the first profile row entirely below the fold, and
- *   the Wall's whole job is that a reader meets three or four people and forms a
- *   view.
- * - `expanded` — all three read in full, separated by the ruling. Used on
+ * - `disclosure` — every heading and every lead is on screen; only the detail is
+ *   a tap away. Used on `/` and `/profiles`, where showing the detail too pushed
+ *   the first profile row entirely below the fold, and the Wall's whole job is
+ *   that a reader meets three or four people and forms a view.
+ * - `expanded` — heading, lead and detail all read in full. Used on
  *   `/my-profile`, where the notices sit at the foot and compete with nothing.
+ *
+ * **What a tap hides is never a criterion.** `messages.ts` splits each statement
+ * into a `lead` that is always on screen and a `detail` that is not, precisely so
+ * this prop cannot decide what the product does or does not say — only how much
+ * of the explanation is in front of the reader before they ask for it.
  *
  * **The prop is required rather than defaulted, deliberately.** A default would
  * let the next surface take a prominence decision by omission, which is exactly
@@ -84,14 +90,26 @@ const HEADING_ID = "standing-notices-heading";
  *
  * On `/profiles` and `/my-profile` the region sits directly under the page's
  * `<h1>`, so it is an `h2`. On the Wall it sits **inside** the recent-profiles
- * section, under that section's own `<h2>`, so it is an `h3`. The statements take
- * the next level down either way.
+ * section, under that section's own `<h2>`, so it is an `h3`.
  */
 export type NoticesHeadingLevel = 2 | 3;
 
 /**
- * One statement's heading and one statement's mark — the part both treatments
- * render identically, so the two cannot drift.
+ * The two tags a level implies, resolved in one place.
+ *
+ * They were two ternaries in two components, which is one switch on one primitive
+ * written twice — so admitting a level 4 meant editing both and agreeing with
+ * yourself. Here the statement's level is the region's plus one by construction.
+ */
+function headingTags(level: NoticesHeadingLevel) {
+  return level === 2
+    ? ({ region: "h2", statement: "h3" } as const)
+    : ({ region: "h3", statement: "h4" } as const);
+}
+
+/**
+ * One statement's heading and mark — the part both treatments render identically,
+ * so the two cannot drift.
  */
 function StatementHeading({
   notice,
@@ -102,12 +120,15 @@ function StatementHeading({
   readonly level: NoticesHeadingLevel;
   readonly className?: string;
 }) {
-  const Heading = level === 2 ? "h3" : "h4";
+  const Heading = headingTags(level).statement;
   const Mark = MARKS[notice.key];
 
   return (
     <Heading
-      className={`font-heading text-foreground flex flex-row items-start gap-3 text-lg leading-6 font-medium text-pretty${className ? ` ${className}` : ""}`}
+      className={cn(
+        "font-heading text-foreground flex flex-row items-start gap-3 text-lg leading-6 font-medium text-pretty",
+        className,
+      )}
     >
       <Mark aria-hidden="true" className="text-primary mt-1 size-4 shrink-0" />
       <span className="min-w-0 grow">{notice.heading}</span>
@@ -115,38 +136,66 @@ function StatementHeading({
   );
 }
 
-/** One statement's body: what is absent, then what follows from it. */
-function StatementBody({ notice }: { readonly notice: StandingNotice }) {
-  return notice.body.map((paragraph) => (
-    <p key={paragraph} className="text-muted-foreground text-sm leading-5 text-pretty">
-      {paragraph}
-    </p>
-  ));
+/**
+ * Everything below a statement's heading in the expanded treatment, indented past
+ * the mark so the text hangs off the heading rather than off the edge of the
+ * column.
+ *
+ * The lead comes first and the detail follows it. The split itself lives in
+ * `messages.ts` and the reason is there — a criterion may never be the thing a
+ * tap hides — and this treatment hides nothing, so it simply reads them in order.
+ */
+function StatementText({ notice }: { readonly notice: StandingNotice }) {
+  return (
+    <div className="flex flex-col gap-2 pl-7">
+      {[notice.lead, ...notice.detail].map((paragraph) => (
+        <p key={paragraph} className="text-muted-foreground text-sm leading-5 text-pretty">
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Both treatments are a ruled list, which is `DESIGN.md` → Layout: _"Every list
+ * is a ruled page. Rows are separated by the ruling."_
+ *
+ * `Separator` from the registry rather than a `border-t`, and it sits **inside**
+ * the `<li>` rather than between two of them — the shape
+ * `profile-list/profile-row.tsx` already uses, because a `<ul>` may not hold a
+ * `<div>` as a direct child. The `ruled-page` utility is deliberately not used:
+ * it carries the rose margin line, and on the Wall this list sits directly above
+ * the profile list that owns one, so a second would read as two margins rather
+ * than as one page.
+ */
+function StatementList({ children }: { readonly children: React.ReactNode }) {
+  return <ul className="flex flex-col">{children}</ul>;
 }
 
 function ExpandedStatements({ level }: { readonly level: NoticesHeadingLevel }) {
   return (
-    <ul className="flex flex-col gap-5">
-      {STANDING_NOTICES.map((notice) => (
+    <StatementList>
+      {STANDING_NOTICES.map((notice, index) => (
         <li key={notice.key} className="flex flex-col gap-2">
+          {index > 0 ? <Separator className="my-5" /> : null}
           <StatementHeading notice={notice} level={level} />
-          <div className="flex flex-col gap-2 pl-7">
-            <StatementBody notice={notice} />
-          </div>
+          <StatementText notice={notice} />
         </li>
       ))}
-    </ul>
+    </StatementList>
   );
 }
 
 /**
  * The disclosure treatment.
  *
- * **What sits behind the summary is the elaboration and never the absence.** The
- * heading — which is the absence, stated whole — is the `<summary>` and is always
- * on screen; only the two paragraphs that follow from it are one tap away. A
- * treatment that hid a heading would be answering a different question than the
- * one the brief asked.
+ * **What sits behind the summary is the detail and never a criterion.** Each
+ * statement's heading and its lead are always on screen; only the elaboration is
+ * a tap away. The first cut of this component put the whole body behind the
+ * summary, and `/code-review` found that two clauses the ticket names by hand —
+ * a Hirer's details being self-asserted, and a Block not removing her from the
+ * Wall — were then hidden by default on the two surfaces where they matter most.
  *
  * **The heading element goes *inside* `<summary>`**, which is valid — `summary`'s
  * content model admits one heading — and it is what keeps this treatment's
@@ -157,9 +206,10 @@ function ExpandedStatements({ level }: { readonly level: NoticesHeadingLevel }) 
  */
 function DisclosedStatements({ level }: { readonly level: NoticesHeadingLevel }) {
   return (
-    <ul className="flex flex-col">
-      {STANDING_NOTICES.map((notice) => (
-        <li key={notice.key} className="border-border border-t">
+    <StatementList>
+      {STANDING_NOTICES.map((notice, index) => (
+        <li key={notice.key}>
+          {index > 0 ? <Separator className="my-4" /> : null}
           <details className="group">
             {/*
               `list-none` plus an explicit chevron, because `display: flex` on the
@@ -169,20 +219,40 @@ function DisclosedStatements({ level }: { readonly level: NoticesHeadingLevel })
               tapped. The chevron is `aria-hidden`; `<summary>` already reports its
               expanded state to the accessibility tree.
             */}
-            <summary className="focus-visible:ring-ring flex cursor-pointer list-none flex-row items-start gap-3 rounded-sm py-3 focus-visible:ring-2 focus-visible:outline-none">
-              <StatementHeading notice={notice} level={level} className="grow" />
+            {/*
+              **The lead is in the `<summary>`, and it has to be.** Everything
+              after the summary inside a `<details>` is what the disclosure hides,
+              so a lead placed there would be exactly the bug this split was
+              introduced to fix — which is what happened on the first attempt.
+
+              A grid rather than a flex row because the summary now carries two
+              rows, and because its children have to stay valid: `summary` admits
+              phrasing content intermixed with **one heading**, so the heading
+              element, the chevron and a `<span>` are all allowed where a wrapping
+              `<div>` would not be. The lead is therefore a `span` here and a `p`
+              in the expanded treatment — same sentence, same source.
+            */}
+            <summary className="focus-visible:ring-ring grid cursor-pointer list-none grid-cols-[1fr_auto] items-start gap-x-3 gap-y-2 rounded-sm py-3 focus-visible:ring-2 focus-visible:outline-none">
+              <StatementHeading notice={notice} level={level} />
               <ChevronDownIcon
                 aria-hidden="true"
                 className="text-muted-foreground mt-1 size-4 shrink-0 transition-transform group-open:rotate-180"
               />
+              <span className="text-muted-foreground col-span-2 pl-7 text-sm leading-5 text-pretty">
+                {notice.lead}
+              </span>
             </summary>
             <div className="flex flex-col gap-2 pb-4 pl-7">
-              <StatementBody notice={notice} />
+              {notice.detail.map((paragraph) => (
+                <p key={paragraph} className="text-muted-foreground text-sm leading-5 text-pretty">
+                  {paragraph}
+                </p>
+              ))}
             </div>
           </details>
         </li>
       ))}
-    </ul>
+    </StatementList>
   );
 }
 
@@ -194,7 +264,7 @@ export function StandingNotices({
   readonly treatment: NoticesTreatment;
   readonly level?: NoticesHeadingLevel;
 }) {
-  const RegionHeading = level === 2 ? "h2" : "h3";
+  const RegionHeading = headingTags(level).region;
 
   return (
     <section aria-labelledby={HEADING_ID}>

@@ -19,6 +19,7 @@
  */
 
 import { describeSurfaceCopy } from "@/testing/surface-copy";
+import { sentencesOf } from "@/testing/voice";
 import { NOTICES_HEADING, STANDING_NOTICES } from "./messages";
 
 describeSurfaceCopy({
@@ -28,8 +29,10 @@ describeSurfaceCopy({
       (notice) =>
         [
           [`${notice.key}.heading`, notice.heading],
-          [`${notice.key}.body[0]`, notice.body[0]],
-          [`${notice.key}.body[1]`, notice.body[1]],
+          [`${notice.key}.lead`, notice.lead],
+          ...notice.detail.map(
+            (paragraph, index) => [`${notice.key}.detail[${index}]`, paragraph] as const,
+          ),
         ] as const,
     ),
   ],
@@ -59,12 +62,17 @@ describe("the three statements", () => {
   });
 
   /**
-   * Two paragraphs each: what is absent, then what follows from it. The second
-   * may never replace the first, and a statement that grew a third paragraph is
-   * one where that has started to happen.
+   * **One sentence, because the lead is what survives a disclosure.** It is on
+   * screen in both treatments and it carries the clause the ticket names by hand;
+   * a lead that grew a second sentence is a lead drifting back into being the
+   * body, and the collapsed state getting taller is how nobody would notice.
    */
-  it.each(STANDING_NOTICES)("$key says what is absent and then what follows", ({ body }) => {
-    expect(body).toHaveLength(2);
+  it.each(STANDING_NOTICES)("$key leads with one sentence and no more", ({ lead }) => {
+    expect(sentencesOf(lead)).toHaveLength(1);
+  });
+
+  it.each(STANDING_NOTICES)("$key says what follows, after the lead", ({ detail }) => {
+    expect(detail.length).toBeGreaterThan(0);
   });
 });
 
@@ -78,7 +86,9 @@ describe("the non-verification notice", () => {
    * says which sentence rather than which list.
    */
   it("never uses the word that implies we verify", () => {
-    const everything = [notice?.heading, ...(notice?.body ?? [])].join(" ").toLowerCase();
+    const everything = [notice?.heading, notice?.lead, ...(notice?.detail ?? [])]
+      .join(" ")
+      .toLowerCase();
     expect(everything).not.toContain("verificad");
   });
 
@@ -89,16 +99,16 @@ describe("the non-verification notice", () => {
    * sentence is a fact about him; with it, it is the symmetry she needs.
    */
   it("names a Hirer's own name and phone as self-asserted, like everyone else's", () => {
-    const body = notice?.body.join(" ") ?? "";
+    const lead = notice?.lead ?? "";
 
-    expect(body).toContain("El nombre y el teléfono de quien envía una propuesta");
-    expect(body).toContain("igual que los tuyos");
+    expect(lead).toContain("El nombre y el teléfono de quien te escribe");
+    expect(lead).toContain("igual que los tuyos");
   });
 
   /** What we do instead follows the absence and never replaces it. */
   it("says what we do instead, after saying what we do not", () => {
-    expect(notice?.body[1]).toContain("una persona lee cada propuesta");
-    expect(notice?.body[1]).toContain("tu teléfono no sale de aquí");
+    expect(notice?.detail[1]).toContain("una persona lee cada propuesta");
+    expect(notice?.detail[1]).toContain("tu teléfono no sale de aquí");
   });
 });
 
@@ -112,12 +122,12 @@ describe("the no-money notice", () => {
    * upon.
    */
   it("says plainly that we can recover nothing", () => {
-    expect(notice?.body[1]).toContain("no podemos devolverte nada");
+    expect(notice?.lead).toContain("no podemos devolverte nada");
   });
 
   it("says we take no commission and hold nothing", () => {
-    expect(notice?.body[0]).toContain("No cobramos comisión");
-    expect(notice?.body[0]).toContain("no guardamos ni un peso");
+    expect(notice?.detail[0]).toContain("No cobramos comisión");
+    expect(notice?.detail[0]).toContain("no guardamos ni un peso");
   });
 });
 
@@ -131,13 +141,13 @@ describe("the Block notice", () => {
    * the sentence after it.
    */
   it("says her card stays public and his reading stays open", () => {
-    expect(notice?.body[1]).toContain("Tu perfil sigue en el muro");
-    expect(notice?.body[1]).toContain("puede seguir leyéndolo");
+    expect(notice?.lead).toContain("Tu perfil sigue en el muro");
+    expect(notice?.lead).toContain("puede seguir leyéndolo");
   });
 
   it("bounds what a Block reaches, in the same breath as offering it", () => {
-    expect(notice?.body[0]).toContain("deja de poder enviarte propuestas");
-    expect(notice?.body[0]).toContain("eso es todo lo que alcanza");
+    expect(notice?.detail[0]).toContain("deja de poder enviarte propuestas");
+    expect(notice?.detail[0]).toContain("eso es todo lo que alcanza");
   });
 
   /**
@@ -147,7 +157,9 @@ describe("the Block notice", () => {
    * person relies on.
    */
   it("never implies she becomes invisible", () => {
-    const everything = [notice?.heading, ...(notice?.body ?? [])].join(" ").toLowerCase();
+    const everything = [notice?.heading, notice?.lead, ...(notice?.detail ?? [])]
+      .join(" ")
+      .toLowerCase();
 
     expect(everything).not.toMatch(/invisible/);
     expect(everything).not.toMatch(/ya no te ver/);
@@ -159,7 +171,7 @@ describe("the Block notice", () => {
    * `-e` form — and `bloquearlo` would assume every Hirer is a man.
    */
   it("names the person rather than gendering the pronoun", () => {
-    const everything = [notice?.heading, ...(notice?.body ?? [])].join(" ");
+    const everything = [notice?.heading, notice?.lead, ...(notice?.detail ?? [])].join(" ");
 
     expect(everything).toContain("bloquear a esa persona");
     expect(everything).not.toMatch(/bloquear[lL][oa]/);

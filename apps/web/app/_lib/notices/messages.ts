@@ -40,35 +40,56 @@
 export const NOTICES_HEADING = "Tres cosas claras sobre Recomencemos";
 
 /**
- * One statement: a heading that carries the absence on its own, and a body that
- * says what we do instead without ever replacing it.
+ * One statement, in three parts, and the split is a **requirement rather than a
+ * layout convenience**.
  *
- * **The heading is not a label and not a summary — it is the sentence that has
- * to survive being skimmed.** `voice.md`'s Do 2 is *"put the absence first when
- * there is one"*, and a reader who reads only the three headings has been told
- * the three things this component exists to tell them.
+ * The disclosure treatment puts `detail` behind a tap. That is only honest if
+ * what stays on screen is complete enough to satisfy the ticket on its own — and
+ * the first cut of this file failed exactly there: `/code-review`'s Spec axis
+ * found that the clause naming a Hirer's details as self-asserted, and the clause
+ * saying a Block does **not** remove her from the Wall, were both collapsed by
+ * default on the two surfaces where they matter most. The ticket singles the
+ * second one out as _"the one most easily lost"_, and hiding it by default is one
+ * way of losing it.
+ *
+ * So each statement now carries:
+ *
+ * - `heading` — the absence, stated whole. `voice.md`'s Do 2, *"put the absence
+ *   first when there is one"*.
+ * - `lead` — **one sentence, always on screen in both treatments**: what this
+ *   absence costs the reader. Never behind a disclosure, and every clause an
+ *   acceptance criterion names by hand lives here.
+ * - `detail` — what we do instead, and how the thing works. The elaboration, and
+ *   the only part a tap reveals.
+ *
+ * A reader who reads only the headings and the leads has been told the three
+ * things this component exists to tell them, including the parts that cost
+ * something to learn.
  */
 export interface StandingNotice {
   /** Stable, English, and the `id` a heading is addressed by. ADR-0012: identifiers are English. */
   readonly key: "verification" | "money" | "block";
   readonly heading: string;
-  /**
-   * Two paragraphs, in this order on all three: **what is absent**, then **what
-   * follows from it**. The symmetry is deliberate — it is `voice.md`'s Do 2 and
-   * Do 3 as a shape rather than as a habit, so the second paragraph can never
-   * grow into a replacement for the first.
-   */
-  readonly body: readonly [string, string];
+  /** Always visible. What the absence in the heading costs the reader. */
+  readonly lead: string;
+  /** Behind the disclosure where there is one. What we do instead, and how it works. */
+  readonly detail: readonly string[];
 }
 
 /**
  * **Nobody is verified**, and a Hirer's own details are self-asserted too.
  *
- * The first five sentences are `voice.md`'s approved rendering, in its order.
- * The sixth is C4's clause and is this ticket's third acceptance criterion: he
+ * The heading and the `detail` are `voice.md`'s approved rendering, in its order.
+ * The `lead` is C4's clause and is this ticket's third acceptance criterion: he
  * types his name and phone at first send, and nothing checks either — so hers
  * are no more and no less trustworthy than his, and the copy says so rather than
  * leaving her to assume the asymmetry runs the other way.
+ *
+ * **It is the lead rather than the third sentence of the detail, and that is the
+ * review's finding.** The criterion asks that his details be *named* as
+ * self-asserted; collapsed inside a disclosure on the two surfaces an anonymous
+ * Hirer actually meets, they were named to nobody who did not tap. Promoting it
+ * reorders `voice.md`'s sequence by one clause and keeps every sentence of it.
  *
  * **The heading says *no verificamos* and never *no verificado*.** The past
  * participle is on `voice.md`'s Never-say list in any construction implying that
@@ -78,22 +99,24 @@ export interface StandingNotice {
 const VERIFICATION: StandingNotice = {
   key: "verification",
   heading: "Aquí no verificamos a nadie",
-  body: [
-    "No comprobamos que quien publica haya perdido su trabajo. Tampoco que quien envía una propuesta sea quien dice ser. El nombre y el teléfono de quien envía una propuesta los escribió esa misma persona, igual que los tuyos.",
+  lead: "El nombre y el teléfono de quien te escribe los escribió esa misma persona, igual que los tuyos.",
+  detail: [
+    "No comprobamos que quien publica haya perdido su trabajo. Tampoco que quien envía una propuesta sea quien dice ser.",
     "Lo que sí hacemos: una persona lee cada propuesta antes de que te llegue. Y tu teléfono no sale de aquí hasta que tú aceptes.",
   ],
 };
 
 /**
- * **The platform holds no money**, and the third sentence is the one that costs
+ * **The platform holds no money**, and the lead is the sentence that costs
  * something to write down.
  *
  * ADR-0007: *"We hold nothing, so we can refund nothing and withhold nothing.
  * The site says so plainly rather than implying a protection that does not
  * exist — an implied guarantee is worse than none, because it is relied upon."*
- * That last clause is why the sentence is here and not softened into *el pago es
- * entre ustedes*, which is true and says nothing about what happens when it goes
- * wrong.
+ * That last clause is why the sentence is the **lead** and not the detail: an
+ * implied guarantee that is relied upon is not corrected by a paragraph nobody
+ * opened, and *el pago es entre ustedes* is true while saying nothing at all
+ * about what happens when it goes wrong.
  *
  * *Comisión* rather than *tarifa* and *pago* rather than *transacción*: the
  * `Say` list's words, in the register a person uses about being paid.
@@ -101,9 +124,9 @@ const VERIFICATION: StandingNotice = {
 const MONEY: StandingNotice = {
   key: "money",
   heading: "Por aquí no pasa el dinero",
-  body: [
+  lead: "Si no te pagan, no podemos devolverte nada ni retenerle nada a nadie.",
+  detail: [
     "No cobramos comisión y no guardamos ni un peso. El pago lo arreglan ustedes dos, por fuera de esta página.",
-    "Si no te pagan, no podemos devolverte nada ni retenerle nada a nadie.",
   ],
 };
 
@@ -111,19 +134,26 @@ const MONEY: StandingNotice = {
  * **What a Block reaches, and what it does not** — the statement the ticket calls
  * the one most easily lost.
  *
- * Three things about its shape are deliberate.
+ * Four things about its shape are deliberate.
  *
- * **It defines a Block before it bounds one.** No Offer surface exists yet, so a
- * reader meeting this on the Wall has never seen the thing being described, and
- * `voice.md` refuses a sentence only somebody who already knows the product can
- * parse. That is why it opens on *si alguien te incomoda* rather than on
- * *bloquear*.
+ * **The cost is the lead, and this is the statement that most needed it.** The
+ * ticket calls this one _"the one most easily lost"_ and says what losing it
+ * looks like — *a Block does not remove her from the public Wall*. In the first
+ * cut that sentence sat in the second paragraph, behind a tap, on both public
+ * surfaces. A protection somebody relies on because they did not open a
+ * disclosure is the failure this whole component exists to prevent.
+ *
+ * **The heading defines a Block before the lead bounds one.** No Offer surface
+ * exists yet, so a reader meeting this on the Wall has never seen the thing being
+ * described, and `voice.md` refuses a sentence only somebody who already knows
+ * the product can parse. *Bloquear detiene las propuestas* is the definition, and
+ * *y nada más* is what the lead then makes concrete.
  *
  * **It never says she becomes invisible**, because she does not.
  * `CONTEXT.md`'s Block entry bans that description by name, and C3 accepted the
  * cost out loud: the person she refused keeps reading her `about` and her work
- * history for as long as the profile is up. The third sentence is that cost,
- * stated rather than implied.
+ * history for as long as the profile is up. The lead is that cost, stated rather
+ * than implied.
  *
  * **The verb is rephrased around gender, not slashed.** *Bloquear a esa persona*
  * rather than *bloquearlo*, which is `voice.md`'s own worked example of this rule
@@ -132,9 +162,9 @@ const MONEY: StandingNotice = {
 const BLOCK: StandingNotice = {
   key: "block",
   heading: "Bloquear detiene las propuestas y nada más",
-  body: [
+  lead: "Tu perfil sigue en el muro y esa persona puede seguir leyéndolo.",
+  detail: [
     "Si alguien te incomoda, puedes bloquear a esa persona sin dar razones. Entonces deja de poder enviarte propuestas, y eso es todo lo que alcanza.",
-    "Tu perfil sigue en el muro y esa persona puede seguir leyéndolo.",
   ],
 };
 
