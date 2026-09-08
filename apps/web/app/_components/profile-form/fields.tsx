@@ -25,8 +25,8 @@ import {
 } from "@repo/design-system/components/field";
 import { Button } from "@repo/design-system/components/button";
 import { Input } from "@repo/design-system/components/input";
-import { RadioGroup, RadioGroupItem } from "@repo/design-system/components/radio-group";
 import { Textarea } from "@repo/design-system/components/textarea";
+import { RadioChips } from "@/app/_components/radio-chips";
 import { useId } from "react";
 import {
   ABOUT_HELP,
@@ -164,21 +164,21 @@ export function AboutField({ form, id, serverError }: FieldProps) {
   );
 }
 
+/** The three cities as chips, built once so the order and the labels have one source. */
+const CITY_CHIPS = CITY_IDS.map((city) => ({ value: city, label: CITY_LABELS[city] }));
+
 /**
- * The registry's `RadioGroup`, three items, in a fieldset whose legend is the
- * question. Base UI renders a hidden native radio beside each item carrying
- * `name`, `value`, `required` and the `id` the label pairs with, so a tap on
- * the label picks the city with no JavaScript and the form posts it (NFR4).
- * Not a `Select`: three options do not want a dropdown on a phone.
+ * Three items in a fieldset whose legend is the question.
+ *
+ * **The chips themselves are `RadioChips`**, shared with the browsable list's
+ * city filter — Base UI renders a hidden native radio beside each item carrying
+ * `name`, `value` and `required`, so a tap on the label picks the city with no
+ * JavaScript and the form posts it (NFR4). What stays here is what only this
+ * form has: the validator, the server's verdict, and the error the two produce
+ * between them. Not a `Select`: three options do not want a dropdown on a phone.
  */
-export function CityField({
-  form,
-  id,
-  serverError,
-  layout = "column",
-}: FieldProps & { layout?: "column" | "row" }) {
+export function CityField({ form, id, serverError }: FieldProps) {
   const errorId = useId();
-  const baseId = useId();
 
   return (
     <form.Field name="city" validators={{ onSubmit: cityField }}>
@@ -189,29 +189,16 @@ export function CityField({
         return (
           <FieldSet id={id} aria-describedby={invalid ? errorId : undefined} aria-invalid={invalid}>
             <FieldLegend variant="label">{CITY_LEGEND}</FieldLegend>
-            <RadioGroup
+            <RadioChips
               name="city"
               required
+              chips={CITY_CHIPS}
               value={field.state.value}
-              onValueChange={(value) => field.handleChange(String(value))}
+              onValueChange={field.handleChange}
               onBlur={field.handleBlur}
-              aria-invalid={invalid}
-              className={layout === "row" ? "flex flex-wrap gap-2" : "gap-2"}
-            >
-              {CITY_IDS.map((city) => {
-                const radioId = `${baseId}-${city}`;
-                return (
-                  <FieldLabel
-                    key={city}
-                    htmlFor={radioId}
-                    className="border-border w-full rounded-md border px-3 py-2 font-normal"
-                  >
-                    <RadioGroupItem id={radioId} value={city} />
-                    {CITY_LABELS[city]}
-                  </FieldLabel>
-                );
-              })}
-            </RadioGroup>
+              invalid={invalid}
+              layout="stack"
+            />
             {message === undefined ? null : <FieldError id={errorId}>{message}</FieldError>}
           </FieldSet>
         );

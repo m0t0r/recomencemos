@@ -83,6 +83,15 @@ export const FILTER_SKILLS_LOADING = "Cargando las capacidades…";
 /** The verb, and what it acts on. */
 export const FILTER_SUBMIT = "Buscar";
 
+/**
+ * While the narrowed list is on its way.
+ *
+ * The previous results stay on screen through the transition, so this is the
+ * only thing that says a new list is coming — the same reason the search region
+ * carries `aria-busy`.
+ */
+export const FILTER_SEARCHING = "Buscando…";
+
 /** Shown only when something is narrowing the list. Says what it undoes. */
 export const FILTER_CLEAR = "Quitar los filtros";
 
