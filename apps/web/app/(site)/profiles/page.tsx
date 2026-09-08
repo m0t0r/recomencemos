@@ -26,6 +26,7 @@ import { cityLabel } from "@repo/domain/policy";
 import { profiles, SLUG_PATTERN } from "@repo/domain/profiles";
 import { skills } from "@repo/domain/skills";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Suspense } from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
@@ -202,7 +203,23 @@ function BrowseFiltersPanel() {
   );
 }
 
+/**
+ * **`await connection()` first**, which is `[dynamic]` from Cache Components'
+ * own menu and the same boundary `VocabularyStrip` puts in front of this exact
+ * read on the Wall.
+ *
+ * Without it the list is resolved while the shell is prerendered and baked into
+ * it, so a Skill promoted through the Admin queue would not appear in this
+ * control until the next deploy. It is also the one thing standing between a
+ * build and a database: the read reaches `#connection`, which wants
+ * `DATABASE_URL`, and a build machine has none — that failure surfaces as a
+ * complaint about `crypto.randomUUID()`, because the missing variable becomes an
+ * `AppError` and an `AppError` mints a reference number. A build with a local
+ * `.env.local` beside it hides both halves.
+ */
 async function SkillOptions() {
+  await connection();
+
   const vocabulary = await skills.listActive();
 
   return vocabulary.map((skill) => (
