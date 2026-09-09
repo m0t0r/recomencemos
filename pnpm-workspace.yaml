@@ -134,6 +134,50 @@ allowBuilds:
 overrides:
   "@esbuild-kit/core-utils>esbuild": "^0.25.0"
 
+  # GHSA-p293-qw3h-jr36 and GHSA-2xp9-vwfh-vxw4 (next >=16.0.0 <16.3.3), both
+  # `critical`, both unauthenticated remote code execution — one on
+  # Windows-hosted servers, one in the Image Optimization API when AVIF files
+  # are used. They reach this repo through exactly one chain:
+  #
+  #   @react-email/ui -> next@16.3.0 -> sharp@0.35.3
+  #
+  # `@react-email/ui@6.9.3` pins `next` to the **exact** version `16.3.0`, so no
+  # dedupe and no version bump of anything already in the lock can move it —
+  # which is the case `overrides` exists for.
+  #
+  # Worth stating plainly, because the gate's wording invites the wrong
+  # conclusion: `pnpm audit:direct` reports these as a **direct** dependency and
+  # blocks on them, but the vulnerable *instance* is transitive and dev-only.
+  # `next` is a direct dependency of `web` at 16.3.4 — already patched — and the
+  # audit matches an advisory to a workspace manifest by package name rather
+  # than by the path that is actually vulnerable. The block is still correct to
+  # act on; the reachability answer is that `@react-email/ui` is a
+  # `devDependencies` entry of `@repo/notifications` serving the `email dev`
+  # preview, so neither advisory is in any deployed path. Neither is reachable
+  # here on its own terms either: nothing hosts on Windows, and the Image
+  # Optimization API is not reached — `apps/web/next.config.ts` carries no
+  # `images` key at all.
+  #
+  # `sharp` comes along for free and is the entry's second reason.
+  # GHSA-rgj7-g3m4-5g8c (`high`, libheif) is against `sharp@<0.35.4`, which is
+  # what `next@16.3.0` resolves; `next@16.3.4` declares `^0.35.4`. That matters
+  # more than a transitive `high` usually would, because `@repo/storage` decodes
+  # attacker-supplied bytes through sharp on the photo path, and its
+  # `DECODABLE_FORMATS` currently admits `avif` and `heif` — the two decoders
+  # this advisory is about.
+  #
+  # Pinned to the version already in the lock rather than a range, so this line
+  # dedupes the tree to one `next` and one `sharp` instead of adding a third.
+  #
+  # **Drop it when `@react-email/ui` is next taken.** 6.9.5 pins `next@16.3.3`
+  # and is unaffected, but it was six hours old when this was written — inside
+  # pnpm's 1440-minute cooldown — so taking it would have needed a
+  # `minimumReleaseAgeExclude` entry to buy a worse tree (two `next` copies
+  # rather than one). The removal test is this file's own: drop the line, move
+  # `pnpm-lock.yaml` aside, `pnpm install --lockfile-only`, and check that
+  # nothing below 16.3.3 comes back.
+  "@react-email/ui>next": "16.3.4"
+
   # **Three entries left this map on 2026-09-08, and the test that took them out
   # is written here so the next reader runs it rather than re-deriving it.**
   # `ajv>fast-uri` (`^3.1.6`), `body-parser>qs` and `express>qs` (both
