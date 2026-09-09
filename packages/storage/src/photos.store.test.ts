@@ -54,7 +54,13 @@ async function uploadToQuarantine(bytes: Buffer): Promise<string> {
   const response = await fetch(uploadUrl, {
     method: "PUT",
     body: new Uint8Array(bytes),
-    headers: { "Content-Type": "image/jpeg", "Content-Length": String(bytes.byteLength) },
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Content-Length": String(bytes.byteLength),
+      // A signed header, so this is not optional politeness — dropping it
+      // invalidates the signature. See `presignUpload`.
+      "If-None-Match": "*",
+    },
   });
 
   expect(response.status).toBe(200);
@@ -118,6 +124,95 @@ describe("the presigned PUT", () => {
     });
 
     expect(response.ok).toBe(false);
+  });
+
+  /**
+   * The one that closes the time-of-check/time-of-use hole: an Admin decides on
+   * bytes, and the bytes have to still be the ones decided on.
+   *
+   * The queue renders the object once and the approval reads it *again*, so a
+   * write capability that outlives its first use lets a holder swap the object
+   * in between — publishing to the anonymously-readable prefix something no
+   * person ever looked at, which is the whole of what the review gate is for.
+   * Length and content type are pinned by the signature but are the holder's own
+   * declared values, so neither bounds the swap.
+   *
+   * The control below is half the case: without the condition the replay is
+   * accepted, so a green first half alone would prove only that the store was
+   * asleep.
+   */
+  it("refuses a second write to a key its URL has already written", async () => {
+    const bytes = await photoBytes();
+    const { uploadUrl } = await presignUpload(
+      { byteLength: bytes.byteLength, contentType: "image/jpeg" },
+      ENV,
+    );
+
+    const put = (body: Buffer) =>
+      fetch(uploadUrl, {
+        method: "PUT",
+        body: new Uint8Array(body),
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Content-Length": String(body.byteLength),
+          "If-None-Match": "*",
+        },
+      });
+
+    expect((await put(bytes)).status).toBe(200);
+
+    // A different picture, padded to the length the signature covers — which is
+    // exactly the move the condition exists to refuse.
+    const swapped = await photoBytes(900, 700);
+    const padded = Buffer.concat([swapped, Buffer.alloc(bytes.byteLength - swapped.byteLength)]);
+
+    expect((await put(padded)).status).toBe(412);
+  });
+
+  /**
+   * The control for the case above, and the reason it is worth its lines: it
+   * signs the same PUT *without* the condition and shows the replay accepted.
+   *
+   * It reaches for the SDK directly rather than adding a switch to
+   * `presignUpload`, because a production flag that turns the condition off
+   * would be a way to reintroduce the defect in the field — a worse thing to own
+   * than a few lines of setup in a test.
+   */
+  it("would accept that replay if the write were not conditional", async () => {
+    const [{ PutObjectCommand, S3Client }, { getSignedUrl }] = await Promise.all([
+      import("@aws-sdk/client-s3"),
+      import("@aws-sdk/s3-request-presigner"),
+    ]);
+
+    const bytes = await photoBytes();
+    const unconditional = await getSignedUrl(
+      new S3Client({
+        region: "auto",
+        endpoint: ENV.PHOTO_S3_ENDPOINT,
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: ENV.PHOTO_S3_ACCESS_KEY_ID,
+          secretAccessKey: ENV.PHOTO_S3_SECRET_ACCESS_KEY,
+        },
+      }),
+      new PutObjectCommand({
+        Bucket: ENV.PHOTO_S3_BUCKET,
+        Key: `quarantine/${"control".padEnd(21, "0")}`,
+        ContentLength: bytes.byteLength,
+        ContentType: "image/jpeg",
+      }),
+      { expiresIn: 300 },
+    );
+
+    const put = () =>
+      fetch(unconditional, {
+        method: "PUT",
+        body: new Uint8Array(bytes),
+        headers: { "Content-Type": "image/jpeg", "Content-Length": String(bytes.byteLength) },
+      });
+
+    expect((await put()).status).toBe(200);
+    expect((await put()).status).toBe(200);
   });
 
   it("refuses to sign anything above the ceiling in the first place", async () => {

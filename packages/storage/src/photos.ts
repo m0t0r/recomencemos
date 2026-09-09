@@ -129,6 +129,28 @@ export async function presignUpload(
       Key: photoKey,
       ContentLength: byteLength,
       ContentType: contentType,
+      // **`If-None-Match: *` is what makes this URL a single write rather than a
+      // window, and it is load-bearing rather than defensive.**
+      //
+      // A SigV4 presigned URL is a bearer capability with no replay protection
+      // of its own, and `PutObject` overwrites — so without the condition this
+      // authorises *N* writes to one key for as long as it lives. That defeats
+      // the review gate rather than merely widening it: the Admin's queue reads
+      // the object once to render it and `promoteToPublic` reads it *again* on
+      // approval, so a holder who overwrites between the two gets bytes no
+      // human ever saw published to the anonymously-readable prefix. Same
+      // length and same content type, both of which the signature pins, are the
+      // holder's own declared values and are trivially matched.
+      //
+      // The condition is a *signed* header, so it lands in
+      // `X-Amz-SignedHeaders` and a client cannot drop it: omitting it
+      // invalidates the signature. The browser therefore has to send it, which
+      // is why the `fetch` on the publish surface does.
+      //
+      // Measured against the MinIO in `docker-compose.yaml` rather than read
+      // off a changelog: with the condition, the first PUT answers 200 and a
+      // replay answers 412; without it, the replay answers 200.
+      IfNoneMatch: "*",
     }),
     { expiresIn: UPLOAD_URL_TTL_SECONDS },
   );
@@ -261,9 +283,12 @@ export async function promoteToPublic(
       Key: publicKey,
       Body: bytes,
       ContentType: `image/${PUBLIC_FORMAT}`,
-      // Immutable because the key is derived from content that can never change:
-      // one quarantine key promotes to one public key, and a re-review writes a
-      // different one. Cloudflare caches the transformation on top of this.
+      // Immutable because nothing ever writes this key twice: it was minted
+      // fresh a few lines above and is written once, and a re-review mints
+      // another. (It is *not* derived from the content — deriving it was the
+      // defect `mintPublicKey` exists to have removed, so the old wording here
+      // named a property this code deliberately no longer has.) Cloudflare
+      // caches the transformation on top of this.
       CacheControl: "public, max-age=31536000, immutable",
     }),
   );
