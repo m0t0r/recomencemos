@@ -167,9 +167,10 @@ describe("the source registry", () => {
    * lands.
    */
   it("has a resolver only where the data exists", () => {
-    expect(liveSources().map((source) => source.segment)).toEqual(["skills"]);
+    // Offers joined the live set with story 6, which is the story that writes
+    // them. The order is the nav's, so Offers lead.
+    expect(liveSources().map((source) => source.segment)).toEqual(["offers", "skills"]);
     expect(pendingSources().map((source) => source.segment)).toEqual([
-      "offers",
       "photos",
       "reports",
       "bounces",

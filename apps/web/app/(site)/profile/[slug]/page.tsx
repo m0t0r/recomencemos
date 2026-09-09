@@ -46,6 +46,7 @@
 
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import { accounts } from "@repo/domain/accounts";
+import { consent, CURRENT_CONSENT_VERSIONS } from "@repo/domain/consent";
 import { mayReadGatedProfile } from "@repo/domain/policy";
 import { profiles, SLUG_PATTERN } from "@repo/domain/profiles";
 import type { Metadata } from "next";
@@ -57,6 +58,7 @@ import { requireAccountPage } from "@/lib/account";
 import { type CeilingRefusal, chargeCeilings } from "@/lib/ceilings";
 import { clientIp } from "@/lib/client-ip";
 import { GatedProfileView } from "./_components/gated-profile-view";
+import { OfferForm } from "./_components/offer-form";
 import { ReadPaused } from "./_components/read-paused";
 import { PROFILE_PAGE_TITLE } from "./_lib/messages";
 
@@ -171,7 +173,37 @@ async function ProfilePanel({ params }: { readonly params: Params }) {
    */
   const workHistory = profiles.gatedWorkHistory(slug);
 
-  return <GatedProfileView profile={profile} workHistory={workHistory} />;
+  /**
+   * **Whether he has ever sent an Offer, from his Consent row.** It decides
+   * whether the form asks him to name himself and whether it shows the
+   * *autorización* — a rendering decision, and only that. The action reads the
+   * same fact again and `sendOffer` reads it a third time inside its own
+   * transaction, where it is the one that counts.
+   *
+   * Awaited rather than streamed: it is one indexed read, and the form's shape
+   * depends on it, so a boundary around it would paint a form with two fewer
+   * fields and then grow them.
+   */
+  const alreadyIdentified = await consent.hasConsented(session.accountId, "hirer");
+
+  return (
+    <>
+      <GatedProfileView profile={profile} workHistory={workHistory} />
+
+      {/*
+        **Bound here, and nowhere else** (ADR-0015). The slug and the two consent
+        versions this page displayed travel with the submit and nobody types
+        them, so React encodes them into the action reference — which is what
+        keeps the form's own JSX free of any mirror of them, and what makes the
+        slug something an attacker cannot edit to address the Offer elsewhere.
+      */}
+      <OfferForm
+        profileSlug={slug}
+        consentVersions={CURRENT_CONSENT_VERSIONS}
+        alreadyIdentified={alreadyIdentified}
+      />
+    </>
+  );
 }
 
 /**

@@ -295,3 +295,51 @@ export const skillPromoted = (labelEs: string) => `Agregamos «${labelEs}» al l
  */
 export const requestedOn = (at: Date) =>
   `Pedida el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
+
+/**
+ * The Offers section — the one branch with a deadline on it, which is why
+ * `/admin` redirects here and why it leads the nav.
+ *
+ * Admin register throughout (Warmth 5→2, Sophistication 2→4): one operator
+ * working a queue, density over warmth, and the age of the oldest item is a
+ * number rather than a sentence.
+ */
+
+/**
+ * The line above the terms: who wrote it, and who it is for.
+ *
+ * **His name is badged as declared rather than verified**, here as everywhere
+ * else it appears — nobody checked it, and the queue is the surface where that
+ * matters most, because this is where a person decides whether it reaches her.
+ * An Account that has never named itself carries no name at all, and the
+ * sentence says so rather than rendering an empty space.
+ */
+export const offerSummary = (
+  workerFirstName: string,
+  workerLastInitial: string,
+  hirerName: string | null,
+) =>
+  `${hirerName ? `De ${hirerName} (nombre sin comprobar)` : "De alguien que no puso nombre"} ` +
+  `para ${workerFirstName} ${workerLastInitial}.`;
+
+/** The three things an Offer names, as the queue labels them. */
+export const OFFER_WORK_FIELD = "El trabajo";
+export const OFFER_PAY_FIELD = "El pago";
+export const OFFER_WHEN_FIELD = "Cuándo";
+
+/** When it was sent — the same long-form date `requestedOn` uses, for its reason. */
+export const offerSentOn = (at: Date) =>
+  `Enviada el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
+
+/**
+ * The one action this section ships, and what it does said in the verb.
+ *
+ * *Entregar* rather than *Aprobar*: an Admin is not approving a person or her
+ * work, they are letting a message through to somebody. `rejectOffer` is the
+ * other half and belongs to the Admin section's own ticket.
+ */
+export const DELIVER_OFFER_SUBMIT = "Entregar";
+export const DELIVER_OFFER_SUBMITTING = "Entregando…";
+
+/** What the Admin is told afterwards: which row moved, and where it went. */
+export const offerDelivered = (workerFirstName: string) => `Se la entregamos a ${workerFirstName}.`;

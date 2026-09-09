@@ -807,6 +807,25 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 }
 
 export { googleSignInAvailable, MAGIC_LINK_TTL_MINUTES };
+
+/**
+ * **Where this app is reached, as one answer rather than two.**
+ *
+ * Published since story 6, which gave it a second reader: the delivered-Offer
+ * email needs an absolute URL, and every URL in every template is built from
+ * server-owned values. Re-deriving the origin in `apps/web` would have meant a
+ * second spelling of a rule that is genuinely subtle — `PORTLESS_URL` wins
+ * outside production because a worktree's hostname carries its branch and no
+ * static `.env.local` value can be right for every tree at once, and it is
+ * refused in production for the same reason.
+ *
+ * It reads two environment variables and nothing else: no connection, no
+ * session, no row. Widening this subpath by one pure function is not the
+ * widening ADR-0010 refuses — what that ADR withholds is the schema, the
+ * connections and the Better Auth instance, and none of them is reachable from
+ * here.
+ */
+export { authBaseUrl } from "#auth/config";
 /**
  * **Where a granted Account is sent once its link is spent, published so that
  * the route directory and the redirect cannot drift apart.**
