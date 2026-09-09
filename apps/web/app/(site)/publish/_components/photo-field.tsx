@@ -29,9 +29,16 @@
  * accepts.
  */
 
+import { Avatar, AvatarFallback, AvatarImage } from "@repo/design-system/components/avatar";
 import { Button } from "@repo/design-system/components/button";
 import { buttonVariants } from "@repo/design-system/components/button-variants";
-import { Field, FieldDescription, FieldError } from "@repo/design-system/components/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldTitle,
+} from "@repo/design-system/components/field";
+import { cn } from "@repo/design-system/lib/utils";
 import { PHOTO_INPUT_ACCEPT } from "@repo/storage/limits";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPhotoUpload } from "../actions";
@@ -81,6 +88,13 @@ export interface PhotoFieldProps {
    * photo to attach, which includes every state but `ready`.
    */
   readonly onPhotoKeyChange: (photoKey: string | null) => void;
+
+  /**
+   * Whether the page has hydrated, from the same machine the rest of the form
+   * reads. Until it has, the control is inert — a camera roll that opens and
+   * then loses the picture — so the sentence stands in its place instead.
+   */
+  readonly hydrated: boolean;
 }
 
 const REFUSALS: Record<DownscaleRefusal, string> = {
@@ -88,12 +102,28 @@ const REFUSALS: Record<DownscaleRefusal, string> = {
   "too-large": PHOTO_TOO_LARGE,
 };
 
-export function PhotoField({ onPhotoKeyChange }: PhotoFieldProps) {
+export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
   const [state, setState] = useState<PhotoStep>({ step: "idle" });
   const inputId = useId();
   const helpId = useId();
   const statusId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * **Which pick is still the one that counts.**
+   *
+   * The comment above `previewUrl` already says she may pick five photos before
+   * she likes one, and each pick is two awaits deep — a downscale and a signed
+   * upload. Nothing made them exclusive, so two overlapping picks raced and the
+   * *slower* one won: it resolved last, so its `onPhotoKeyChange` was the value
+   * the form carried into `publishProfile`, and the picture on screen was the
+   * other one. She would have published a photo she had replaced.
+   *
+   * A monotonic token is enough because the loser has nothing to undo — the
+   * object it uploaded is an unattached quarantine key, which is the state an
+   * abandoned upload already leaves.
+   */
+  const pickToken = useRef(0);
 
   /**
    * **An object URL is a document-lifetime allocation, not a value.** Each
@@ -110,10 +140,15 @@ export function PhotoField({ onPhotoKeyChange }: PhotoFieldProps) {
   async function pick(file: File | undefined) {
     if (!file) return;
 
+    const token = ++pickToken.current;
+    const current = () => token === pickToken.current;
+
     onPhotoKeyChange(null);
     setState({ step: "preparing" });
 
     const prepared = await downscale(file);
+
+    if (!current()) return;
 
     if (!prepared.ok) {
       setState({ step: "said", message: REFUSALS[prepared.reason], tone: "error" });
@@ -132,6 +167,11 @@ export function PhotoField({ onPhotoKeyChange }: PhotoFieldProps) {
      */
     const signed = await createPhotoUpload({ byteLength, contentType });
 
+    if (!current()) {
+      URL.revokeObjectURL(preview);
+      return;
+    }
+
     if (!signed?.data) {
       // The ceiling's own sentence, or a store that is not configured. Both come
       // back as a returned refusal with copy already written for her.
@@ -148,22 +188,39 @@ export function PhotoField({ onPhotoKeyChange }: PhotoFieldProps) {
       const response = await fetch(signed.data.uploadUrl, {
         method: "PUT",
         body: blob,
-        // Both are covered by the signature, so a mismatch is a refusal from the
-        // store rather than something this code has to check.
-        headers: { "Content-Type": contentType },
+        // All three are covered by the signature, so a mismatch is a refusal
+        // from the store rather than something this code has to check — and
+        // `If-None-Match` is not optional politeness: it is a *signed* header,
+        // so dropping it invalidates the signature. It is what makes the URL a
+        // single write rather than a five-minute window in which the object an
+        // Admin reviewed can be swapped for another. See `presignUpload`.
+        headers: { "Content-Type": contentType, "If-None-Match": "*" },
       });
 
       if (!response.ok) throw new Error(String(response.status));
 
+      if (!current()) {
+        URL.revokeObjectURL(preview);
+        return;
+      }
+
       setState({ step: "ready", previewUrl: preview, photoKey: signed.data.photoKey });
       onPhotoKeyChange(signed.data.photoKey);
     } catch {
+      if (!current()) {
+        URL.revokeObjectURL(preview);
+        return;
+      }
+
       setState({ step: "said", message: PHOTO_UPLOAD_FAILED, tone: "error" });
       URL.revokeObjectURL(preview);
     }
   }
 
   function remove() {
+    // Invalidates any pick still in flight: without this, an upload she started
+    // and then removed still resolves and re-attaches itself.
+    pickToken.current += 1;
     onPhotoKeyChange(null);
     setState({ step: "said", message: PHOTO_REMOVED, tone: "note" });
     if (inputRef.current) inputRef.current.value = "";
@@ -190,80 +247,103 @@ export function PhotoField({ onPhotoKeyChange }: PhotoFieldProps) {
         input came out named "Tu foto Elegir una foto", two labels concatenated
         into one name. A control has one name, and the useful one is the verb.
       */}
-      <p className="text-foreground text-sm font-medium">{PHOTO_LABEL}</p>
+      <FieldTitle>{PHOTO_LABEL}</FieldTitle>
       <FieldDescription id={helpId}>{PHOTO_HELP}</FieldDescription>
 
       {/*
-        **The whole control lives inside `<noscript>`'s complement.** Without
-        JavaScript the browser renders the `<noscript>` sentence and never the
-        input, which is NFR4's exception honoured rather than apologised for —
-        an input that opened a camera roll and then did nothing would be worse
-        than none.
+        **The sentence stands *in place of* the control, rather than beside it.**
+
+        This was a `<noscript>` wrapping the sentence while the input stayed a
+        sibling — and `<noscript>` gates only its own children, never its
+        siblings, so the served document carried the explanation *and* a working
+        camera-roll button that then did nothing. Exactly the outcome
+        `.impeccable/briefs/photo.md` refuses: "the no-JS branch renders the
+        sentence in place of the control rather than rendering a control that
+        does nothing."
+
+        `hydrated` is the right condition and `<noscript>` is not, because it
+        covers both ways the control can be inert — JavaScript disabled, and
+        JavaScript enabled but not yet hydrated. `SkillPicker` is the prior art
+        (`field-groups.tsx`), and the flag comes from the same machine.
       */}
-      <noscript>
-        <p className="text-muted-foreground text-sm leading-5">{PHOTO_NOTE}</p>
-      </noscript>
+      {hydrated ? (
+        <>
+          {previewUrl ? (
+            // Her own picture, at the size the card will show it. `AvatarImage`
+            // is Base UI rather than `next/image`, so a `blob:` URL for bytes
+            // that exist only in this tab is fine — and it brings the ring and
+            // the fallback the hand-rolled `<img>` had to go without.
+            <Avatar className="size-32" aria-describedby={statusId}>
+              <AvatarImage src={previewUrl} alt={PHOTO_PREVIEW_ALT} />
+              <AvatarFallback>{PHOTO_PREVIEW_ALT.slice(0, 1)}</AvatarFallback>
+            </Avatar>
+          ) : null}
 
-      {previewUrl ? (
-        // Her own picture, at the size the card will show it. Not `next/image`:
-        // this is a `blob:` URL for bytes that exist only in this tab.
-        // oxlint-disable-next-line next/no-img-element
-        <img
-          src={previewUrl}
-          alt={PHOTO_PREVIEW_ALT}
-          aria-describedby={statusId}
-          className="bg-muted size-32 rounded-full object-cover"
-        />
-      ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              **The input precedes the label, and that ordering is the focus
+              ring.** The focusable element is the `sr-only` input; the visible
+              affordance is the `<label>`, which never receives focus — so
+              `buttonVariants`' own `:focus-visible` styles an element the
+              keyboard never reaches, and the control had *no* visible focus
+              state at all (WCAG 2.2 AA, 2.4.7). Every other `buttonVariants`
+              use in this app sits on a natively-focusable `<Link>`, which is
+              why the gap was new here. `peer` + `peer-focus-visible:` is the
+              fix, and Tailwind's sibling selector only looks *forward*, so the
+              input has to come first in the DOM.
+            */}
+            <input
+              ref={inputRef}
+              id={inputId}
+              type="file"
+              accept={PHOTO_INPUT_ACCEPT}
+              aria-describedby={`${helpId} ${statusId}`}
+              disabled={busy}
+              // `sr-only` rather than `hidden`: the input has to stay in the
+              // accessibility tree for the label to name anything.
+              className="peer sr-only"
+              onChange={(event) => {
+                void pick(event.target.files?.[0]);
+              }}
+            />
 
-      <div className="flex flex-wrap items-center gap-2">
-        {/*
-          A `<label>` styled as a button and pointing at a real input, rather
-          than a button that clicks a hidden input for you: the label *is* the
-          accessible name of the control, so a screen reader announces one thing
-          instead of two, and the keyboard path is the browser's own.
-        */}
-        {/*
-          **`buttonVariants` on a plain `<label>`, never `<Button render={<label/>}>`.**
-          This is `own-profile-view.tsx`'s rule applied to the other native
-          element, and for the same reason: Base UI's `render` puts button
-          semantics onto whatever it is handed. Driven against the running
-          server, that produced a `<label>` carrying its own `tabindex` and
-          `onclick` — so one control had two tab stops and the input announced
-          as a button rather than as a file input. A label needs neither; the
-          browser's own `htmlFor` behaviour is the whole interaction.
-        */}
-        <label
-          htmlFor={inputId}
-          className={buttonVariants({
-            variant: "outline",
-            className: busy ? "pointer-events-none opacity-50" : undefined,
-          })}
-        >
-          {previewUrl ? PHOTO_REPLACE : PHOTO_CHOOSE}
-        </label>
+            {/*
+              A `<label>` styled as a button and pointing at a real input, rather
+              than a button that clicks a hidden input for you: the label *is* the
+              accessible name of the control, so a screen reader announces one thing
+              instead of two, and the keyboard path is the browser's own.
+            */}
+            {/*
+              **`buttonVariants` on a plain `<label>`, never `<Button render={<label/>}>`.**
+              This is `own-profile-view.tsx`'s rule applied to the other native
+              element, and for the same reason: Base UI's `render` puts button
+              semantics onto whatever it is handed. Driven against the running
+              server, that produced a `<label>` carrying its own `tabindex` and
+              `onclick` — so one control had two tab stops and the input announced
+              as a button rather than as a file input. A label needs neither; the
+              browser's own `htmlFor` behaviour is the whole interaction.
+            */}
+            <label
+              htmlFor={inputId}
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "peer-focus-visible:border-ring peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50",
+                busy && "pointer-events-none opacity-50",
+              )}
+            >
+              {previewUrl ? PHOTO_REPLACE : PHOTO_CHOOSE}
+            </label>
 
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="file"
-          accept={PHOTO_INPUT_ACCEPT}
-          aria-describedby={`${helpId} ${statusId}`}
-          disabled={busy}
-          // `sr-only` rather than `hidden`: the input has to stay in the
-          // accessibility tree for the label above to name anything.
-          className="sr-only"
-          onChange={(event) => {
-            void pick(event.target.files?.[0]);
-          }}
-        />
-
-        {state.step === "ready" ? (
-          <Button type="button" variant="ghost" onClick={remove}>
-            {PHOTO_REMOVE}
-          </Button>
-        ) : null}
-      </div>
+            {state.step === "ready" ? (
+              <Button type="button" variant="ghost" onClick={remove}>
+                {PHOTO_REMOVE}
+              </Button>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <FieldDescription>{PHOTO_NOTE}</FieldDescription>
+      )}
 
       {/*
         One region for every step, announced politely. A picture appearing is not
