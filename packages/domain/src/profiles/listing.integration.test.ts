@@ -33,6 +33,13 @@ interface Seed {
   readonly state?: "published" | "taken_down";
   readonly skills?: readonly string[];
   readonly photoState?: "absent" | "pending" | "approved" | "rejected";
+  /**
+   * Left out of every case that is not about the photo. `listing.ts` requires
+   * *both* the state and the key before it resolves a URL, so a seed that sets
+   * only `photoState: "approved"` cannot reach the approved leg at all — which
+   * is why the approved leg had no test until one was written.
+   */
+  readonly photoKey?: string;
   readonly firstName?: string;
   readonly city?: "pereira" | "dosquebradas" | "santa_rosa_de_cabal";
   readonly headline?: string;
@@ -92,6 +99,7 @@ async function seed(database: TestDatabase, entry: Seed): Promise<bigint> {
       about: "Diez años cocinando para familias y para fiestas de barrio.",
       phone: "+573001234567",
       photoState: entry.photoState ?? "absent",
+      photoKey: entry.photoKey,
       state: entry.state ?? "published",
       publishedAt: entry.publishedAt,
       deliveredOfferCount: entry.deliveredOfferCount ?? 0,
@@ -270,6 +278,64 @@ describe("the Wall", () => {
       slug: "pendingaaaaaaaaa",
       publishedAt: new Date(Date.UTC(2026, 8, 1)),
       photoState: "pending",
+    });
+
+    expect((await listWall(database.db, { limit: 10 })).items[0]?.photoUrl).toBeNull();
+  });
+
+  /**
+   * **The leg the ticket's own first comment warned about, and the one that had
+   * no test.**
+   *
+   * _"When the photo path lands, the Wall and `/profiles` will keep rendering
+   * initials only, and **nothing will fail** — no compile error, no red test."_
+   * That was true right up to this case: the withholding leg above passes
+   * whether or not the URL is ever resolved, and `projections.test.ts` covers
+   * `toPublicProfile`, which is the *pure* projection — hand it a `null` and it
+   * faithfully carries one. Hardcoding `photoUrl: null` back into `listing.ts`
+   * left the whole suite green.
+   *
+   * `PHOTO_PUBLIC_BASE` has to be stubbed or this asserts nothing: with no base
+   * configured `photoUrl` returns `null` by design (DD6's "photos serve at full
+   * size until the zone is done"), which is the same answer the regression
+   * gives. That is the shape of a case that models only the helpful state.
+   */
+  test("resolves an approved photo's URL, on both public lists", async ({ database }) => {
+    vi.stubEnv("PHOTO_PUBLIC_BASE", "https://photos.recomencemos.test");
+    vi.stubEnv("PHOTO_TRANSFORMATIONS", "off");
+
+    await seed(database, {
+      slug: "approvedaaaaaaaa",
+      publishedAt: new Date(Date.UTC(2026, 8, 1)),
+      photoState: "approved",
+      photoKey: `photos/${"a".repeat(21)}.webp`,
+    });
+
+    const wall = (await listWall(database.db, { limit: 10 })).items[0]?.photoUrl;
+    const browse = (await listBrowse(database.db, {})).items[0]?.photoUrl;
+
+    expect(wall).toContain("https://photos.recomencemos.test");
+    expect(wall).toContain("a".repeat(21));
+    // Both lists go through `toPublic`, and a regression in either is a
+    // different surface losing her face.
+    expect(browse).toBe(wall);
+  });
+
+  /**
+   * The third state, which had no case either. `rejected` is not `pending`, and
+   * a predicate written as `!== "pending"` would pass the case above and publish
+   * a photo a person refused.
+   */
+  test("withholds a photo that was rejected, even with a key still on the row", async ({
+    database,
+  }) => {
+    vi.stubEnv("PHOTO_PUBLIC_BASE", "https://photos.recomencemos.test");
+
+    await seed(database, {
+      slug: "rejectedaaaaaaaa",
+      publishedAt: new Date(Date.UTC(2026, 8, 1)),
+      photoState: "rejected",
+      photoKey: `photos/${"b".repeat(21)}.webp`,
     });
 
     expect((await listWall(database.db, { limit: 10 })).items[0]?.photoUrl).toBeNull();

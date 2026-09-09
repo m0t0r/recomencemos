@@ -26,7 +26,7 @@
  */
 
 import { Button } from "@repo/design-system/components/button";
-import { FieldLegend, FieldSet } from "@repo/design-system/components/field";
+import { FieldDescription, FieldLegend, FieldSet } from "@repo/design-system/components/field";
 import { useActionState, useEffect, useRef } from "react";
 import { approvePhoto, rejectPhoto } from "../actions";
 import {
@@ -128,7 +128,7 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
         />
       ) : null}
 
-      <p className="text-muted-foreground text-sm leading-5">{item.summary}</p>
+      <FieldDescription>{item.summary}</FieldDescription>
 
       {/*
         **Said before it is pressed, not after.** Rejecting deletes the object
@@ -136,7 +136,7 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
         Say list for exactly this, and a confirmation dialog would be a second
         thing to click several hundred times a day rather than a second thought.
       */}
-      <p className="text-muted-foreground text-sm leading-5">{PHOTO_REJECT_WARNING}</p>
+      <FieldDescription>{PHOTO_REJECT_WARNING}</FieldDescription>
 
       <div className="flex flex-wrap gap-2">
         <form action={approveAction}>

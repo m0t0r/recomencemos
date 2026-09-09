@@ -98,6 +98,47 @@ describe("reading a published profile by its slug", () => {
     expect(serialised).not.toContain("+573001234567");
   });
 
+  /**
+   * **The gated page dropped approved photos, and nothing was red.**
+   *
+   * `findGatedIdentity` did not select `photoKey` at all and hardcoded
+   * `photoUrl: null` behind a comment reading "no photo path exists yet" — true
+   * when written, false once the photo path landed. The symptom was the wrong
+   * way round: a **signed-in** reader saw the initial where an **anonymous**
+   * Wall visitor saw the approved face, and `gated-profile-view.tsx`'s image
+   * branch was simply dead code.
+   *
+   * It survived because this file had **zero** photo assertions, and because
+   * `projections.test.ts` covers gated only through `toGatedIdentity` — the pure
+   * projection, which faithfully carries whatever `null` it is handed. The
+   * spec's per-surface state table has no photo cell for the Full profile row,
+   * which is the gap the requirement fell through; filed separately.
+   *
+   * Both legs are asserted, because the withholding one passes on its own while
+   * the page is broken.
+   */
+  test("resolves an approved photo, and withholds one that is not", async ({ database }) => {
+    vi.stubEnv("PHOTO_PUBLIC_BASE", "https://photos.recomencemos.test");
+    vi.stubEnv("PHOTO_TRANSFORMATIONS", "off");
+
+    const slug = await aPublishedProfile(database);
+    const key = `photos/${"c".repeat(21)}.webp`;
+
+    await database.db
+      .update(schema.capabilityProfile)
+      .set({ photoState: "approved", photoKey: key })
+      .where(eq(schema.capabilityProfile.slug, slug));
+
+    expect((await findGatedIdentity(database.db, slug))?.photoUrl).toContain("c".repeat(21));
+
+    await database.db
+      .update(schema.capabilityProfile)
+      .set({ photoState: "pending" })
+      .where(eq(schema.capabilityProfile.slug, slug));
+
+    expect((await findGatedIdentity(database.db, slug))?.photoUrl).toBeNull();
+  });
+
   test("returns nothing for a slug no profile holds", async ({ database }) => {
     await aPublishedProfile(database);
 
