@@ -22,6 +22,7 @@
  * remove something.
  */
 
+import { photoUrl, publicBase, transformationsEnabled } from "@repo/storage/photo-url";
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import type { CityId } from "#policy/cities";
@@ -74,6 +75,7 @@ export async function findGatedIdentity(
       headline: schema.capabilityProfile.headline,
       about: schema.capabilityProfile.about,
       photoState: schema.capabilityProfile.photoState,
+      photoKey: schema.capabilityProfile.photoKey,
       publishedAt: schema.capabilityProfile.publishedAt,
       skills: skillsOfProfile.as("skills"),
     })
@@ -106,9 +108,28 @@ export async function findGatedIdentity(
     phone: "",
     email: "",
     photoState: row.photoState as PhotoState,
-    // No photo path exists yet, so there is no URL to resolve; the projection
-    // withholds it at every state but `approved` regardless.
-    photoUrl: null,
+    /**
+     * **Resolved here, and gated exactly as `listing.ts` gates it** — the state
+     * first, then `photoUrl`'s own refusal of any key that is not a *public*
+     * one, so a row whose two columns had somehow disagreed still cannot name a
+     * quarantine object.
+     *
+     * This was `null` behind a comment reading "no photo path exists yet", which
+     * was true when it was written and stopped being true the moment the photo
+     * path landed. Nothing went red: the pure projection is covered but this
+     * read is not, and `gated-profile-view.tsx` already branches on
+     * `profile.photoUrl`, so its image branch was simply dead. The visible
+     * symptom was the wrong way round — a **signed-in** reader saw the initial
+     * where an **anonymous** Wall visitor saw the approved face.
+     */
+    photoUrl:
+      row.photoState === "approved" && row.photoKey
+        ? photoUrl({
+            key: row.photoKey,
+            base: publicBase(),
+            transformations: transformationsEnabled(),
+          })
+        : null,
     skills: row.skills,
     workHistory: [],
     publishedAt: row.publishedAt,

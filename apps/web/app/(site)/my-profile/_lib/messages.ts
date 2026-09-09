@@ -57,6 +57,15 @@ export const EMAIL_TERM = "Correo";
 export const NOTHING_MORE = "No escribiste nada más. Está bien así.";
 
 /**
+ * The `alt` on her own photo.
+ *
+ * **What the image shows, and nothing about her.** The voice guide's rule for
+ * every meaningful image, applied to the one image in this product that is a
+ * person: it names the thing, never the circumstances of whoever is in it.
+ */
+export const OWN_PHOTO_ALT = "Tu foto de perfil";
+
+/**
  * The photo, **described rather than badged** (intent Q3), and this is the one
  * surface where the description and the picture disagree with every other one.
  *
@@ -77,15 +86,6 @@ export const NOTHING_MORE = "No escribiste nada más. Está bien así.";
  * two facts are most easily confused: publishing waited for nobody, and the
  * photo is with a person.
  */
-/**
- * The `alt` on her own photo.
- *
- * **What the image shows, and nothing about her.** The voice guide's rule for
- * every meaningful image, applied to the one image in this product that is a
- * person: it names the thing, never the circumstances of whoever is in it.
- */
-export const OWN_PHOTO_ALT = "Tu foto de perfil";
-
 export const PHOTO_ABSENT = "Todavía no tienes foto. En su lugar se muestra tu inicial.";
 export const PHOTO_PENDING =
   "Una persona está mirando tu foto. Tu perfil ya está publicado; la foto aparece cuando la revisen.";

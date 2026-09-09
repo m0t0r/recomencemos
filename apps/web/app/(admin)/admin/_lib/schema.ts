@@ -168,8 +168,16 @@ function field(raw: FormData, name: string): string {
  * nothing does arithmetic on it. No message, because no person can provoke this
  * — the id comes from the row, and a forged one meets the refusals the action
  * already answers.
+ *
+ * **The length bound is not cosmetic.** Unbounded, `^\d+$` accepts a
+ * million-digit string, and `readPendingKey` calls `BigInt(profileId)` *outside*
+ * the transaction — so a forged bound argument buys quadratic parsing on the
+ * 1 GB machine and then a thrown range error that reaches `handleServerError`
+ * and spends a Sentry event. An Admin is trusted, which is why this is a bound
+ * rather than a finding; 20 digits is past every id this table can issue and
+ * far short of anything worth parsing.
  */
-export const photoProfileArg = z.string().regex(/^\d+$/);
+export const photoProfileArg = z.string().regex(/^\d+$/).max(20);
 
 /**
  * **The payload of an action that has none.**

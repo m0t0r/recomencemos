@@ -51,12 +51,19 @@ export interface ProfileCardProps {
   /**
    * The `alt` for a real photo. Never a description of her circumstances.
    *
-   * **The default is `""`, which is right on a public list and wrong on her own
-   * page.** Beside a name, a photo is decorative and an empty `alt` keeps a
-   * screen reader from reading the same person twice. On `/my-profile` the photo
-   * is the subject of the sentence under it, so that surface passes a real one —
-   * and with the default it was absent from the accessibility tree entirely,
-   * which is how the omission was found.
+   * **The default is `""`, and every caller overrides it — which is the honest
+   * state rather than the one this comment used to describe.** It read as though
+   * the empty default were serving a public list, where a photo beside a name is
+   * decorative and an empty `alt` keeps a screen reader from reading the same
+   * person twice. That argument is sound and it is not this component's: the
+   * Wall and `/profiles` render `profile-row.tsx`, and `ProfileCard`'s only
+   * caller is `/my-profile`, where the photo is the subject of the sentence under
+   * it and a real `alt` is always passed.
+   *
+   * So the default is a fallback nobody takes, kept because a card rendered
+   * without one should degrade to decorative rather than to a wrong name. With
+   * it in force the image was absent from the accessibility tree entirely, which
+   * is how the omission was found running.
    */
   readonly photoAlt?: string;
   /**
