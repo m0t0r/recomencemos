@@ -22,7 +22,7 @@ the instruction.
 
 **§§1–5 have a wizard: [`scripts/go-live.sh`](../../scripts/go-live.sh).** It opens each dashboard,
 captures each value, stages the secrets on Fly over stdin, and **runs the verification commands
-itself** — the `dig`s, the unauthenticated `curl` at the quarantine prefix, `SHOW max_connections`,
+itself** — the `dig`s, the pair of unauthenticated `curl`s at the photo origin, `SHOW max_connections`,
 `fly secrets list` — appending each command and its output to a gitignored transcript. That
 transcript is what a human pastes onto the ticket, because the ticket's last criterion asks for a
 command and its output rather than an assertion that it was done. It is idempotent: stop with Ctrl-C
@@ -43,7 +43,7 @@ the cache key and travels with the artifact under remote caching.
 | 2   | PlanetScale **direct** connection string | Same                                | Same                                 | Migrations, and the C43 break-glass. Higher blast radius than #1 — treat as the most dangerous string in the list                                                          |
 | 3   | `RESEND_API_KEY`                         | Resend → API Keys                   | Create new, deploy, delete old       | Sending-scoped, not full access                                                                                                                                            |
 | 4   | Resend **webhook signing secret**        | Resend → Webhooks                   | Rotate at the endpoint               | Without it a forged bounce is an account-denial primitive                                                                                                                  |
-| 5   | R2 access key + secret                   | Cloudflare → R2 → Manage API tokens | Create new, deploy, delete old       | Scope to the one bucket                                                                                                                                                    |
+| 5   | R2 access key + secret                   | Cloudflare → R2 → Manage API tokens | Create new, deploy, delete old       | Scope to **both** photo buckets and nothing else — §3 splits reviewed from unreviewed across two, and one key reads and writes both                                        |
 | 6   | Google OAuth **client secret**           | Google Cloud console → Credentials  | Rotate; existing sessions unaffected | The redirect URI must match the deployed origin exactly                                                                                                                    |
 | 7   | `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`           | **See the warning below**            | 32+ chars. Better Auth rejects placeholders in production                                                                                                                  |
 | 8   | `JOB_SHARED_SECRET`                      | `openssl rand -base64 32`           | Rotate in both places at once        | The only thing Trigger.dev holds. Set identically as a Fly secret **and** as a Trigger.dev environment variable — rotating one without the other stops every scheduled job |
@@ -83,17 +83,24 @@ fly secrets list                                          # names and digests on
 ## 3. Object storage (DD6)
 
 **Two buckets, and which bucket an object is in is the whole of NFR6.** R2 states public access as a
-**single switch per bucket** — there is no per-prefix ACL and no S3-style bucket policy underneath
-it, so "the quarantine prefix is not publicly readable" is a sentence R2 has no mechanism to make
-true. It is written here because that sentence stood in this runbook for a while with nothing behind
-it ([#251](https://github.com/m0t0r/recomencemos/issues/251)), and because the answer a later reader
-reaches for — a WAF custom rule on the zone — is a second mechanism to keep in agreement with a first.
-Do not add one and do not put both prefixes in one bucket. `object-store-access` in
-[`../policy/data.md`](../policy/data.md) is the key.
+**single switch per bucket** — no per-prefix ACL, no S3-style bucket policy underneath it — so a
+rule about the `quarantine/` prefix is not something R2 can be asked to enforce, however the sentence
+is worded. `object-store-access` in [`../policy/data.md`](../policy/data.md) is the key, and it is
+answered as two buckets rather than one.
+
+**Two things not to do here**, both of which look like reasonable substitutes and are not. Do not put
+both prefixes in one bucket. And do not reach for a WAF custom rule or an Access policy on the zone
+to deny `/quarantine/*`: it would work, and it would make NFR6 depend on a second mechanism in a
+second dashboard that has to stay in agreement with the first — where the whole value of the split is
+that an unreviewed object is unreachable because nothing serves it, not because something refuses it.
+[#251](https://github.com/m0t0r/recomencemos/issues/251) is where that was decided.
 
 - [ ] **Two buckets created.** `PHOTO_S3_BUCKET` holds approved photos; `PHOTO_S3_QUARANTINE_BUCKET`
-      holds everything an Admin has not yet decided on. Both names go into `fly secrets` with the
-      rest of §1.
+      holds everything an Admin has not yet decided on. **Neither name is a secret** — they are
+      configuration a person could read over your shoulder without consequence, which is `fly.toml`'s
+      own test for what belongs under `[env]` rather than in §1's list of eight. The app refuses to
+      start a photo flow without both, so getting them there is not optional: today `[env]` carries
+      neither, and nothing in this repository sets them.
 - [ ] **The photos bucket has public access enabled**, and a custom domain on the Cloudflare zone in
       front of it — the `/cdn-cgi/image/…` transformation path requires one. That domain is
       `PHOTO_PUBLIC_BASE`.
@@ -102,11 +109,16 @@ Do not add one and do not put both prefixes in one bucket. `object-store-access`
       unreachable because no public route to that bucket exists, not because a rule declines to serve
       one. NFR6 bounds the stored object, not the page — a pending photo at a readable URL that
       nothing links to defeats the rule while appearing to satisfy it.
-- [ ] **Proven, not asserted:** put a known object under `quarantine/` in that bucket, then request it
-      with no credentials at the address you would use if it were public. The pass is a **denial** of
-      an object that is really there. A `404` for a key nobody wrote proves nothing — that trap is why
-      `packages/storage/src/photos.store.test.ts` uploads before it asks, and `scripts/go-live.sh` §3
-      now does the same.
+- [ ] **Proven, not asserted, and it takes two requests.** Put a known object in each bucket, then
+      request both **on the public origin** with no credentials: `${PHOTO_PUBLIC_BASE}/<photos key>`
+      and `${PHOTO_PUBLIC_BASE}/<quarantine key>`. The pass is **200 then 404** — the origin is
+      really serving, and the quarantine object is not on it. - A `404` on its own proves nothing, because a dead hostname answers the same way. That is why
+      the first request is not optional. - A `401` or `403` on the second is **not** a pass here. A denial means something is declining
+      to serve an object that is in the public bucket, and the only things that could be are a
+      per-prefix rule R2 does not have or a zone rule nothing in this repository names. Both prefixes
+      are in one bucket; go back two boxes. - `scripts/go-live.sh` §3 runs exactly this pair and records both codes; it also asks you to
+      confirm the quarantine object is really at that key, which no credential-free request can
+      check.
 - [ ] **A lifecycle rule on the quarantine bucket**, so objects nobody ever reviewed are collected
       rather than kept. `promoteToPublic` deliberately leaves the original in place on approval.
 - [ ] Domain on Cloudflare as a zone, with **image transformations enabled** — a dashboard step, and

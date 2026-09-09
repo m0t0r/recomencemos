@@ -32,18 +32,19 @@ export interface PhotoStore {
 }
 
 /**
- * Which bucket a key lives in, decided by the key's own shape.
+ * Which bucket a key lives in, for the one caller that does not know statically.
  *
- * **One function, so no call site picks.** The two buckets differ in exactly one
- * property and it is the one that matters — one of them is readable by anybody —
- * so a caller choosing between two similarly-named strings is a caller that can
- * write an unreviewed photo into the readable one. The key already carries its
- * prefix; this is the only thing that reads it for this purpose.
+ * **Three of the four callers do know.** `presignUpload` and `presignReview`
+ * name `quarantineBucket`, and `promoteToPublic` names both because crossing
+ * from one to the other is what it is for — each is written against a fixed
+ * bucket, and reading it off a key there would hide a constant behind a
+ * function. `discard` is the exception: it takes either prefix, because the
+ * same act deletes a rejected photo and a published one.
  *
  * **It asks whether the key is a public one rather than whether it is a
  * quarantine one**, so that anything unrecognised lands in the bucket nobody
- * can read. That is the safe side of the only mistake this can make. Every
- * caller validates the shape and refuses before reaching here, so the case is a
+ * can read. That is the safe side of the only mistake this can make. `discard`
+ * validates the shape and refuses before reaching here, so the case is a
  * backstop rather than a route — but a backstop that defaulted the other way
  * would be one that published on a spelling error.
  */

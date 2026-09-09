@@ -20,7 +20,12 @@ import { bucketFor, photoStore } from "#client";
 import { publicBase, type StorageEnv, transformationsEnabled } from "#config";
 import { isPublicKey, isQuarantineKey } from "#key-shapes";
 import { mintPublicKey, mintQuarantineKey } from "#keys";
-import { MAX_UPLOAD_BYTES, PUBLIC_FORMAT, UPLOADABLE_CONTENT_TYPES } from "#limits";
+import {
+  isUploadableContentType,
+  MAX_UPLOAD_BYTES,
+  PUBLIC_FORMAT,
+  UPLOADABLE_CONTENT_TYPES,
+} from "#limits";
 import { photoUrl } from "#photo-url";
 import { reencodeForPublic } from "#reencode";
 import { assertServerOnly } from "#server-only";
@@ -121,7 +126,7 @@ export async function presignUpload(
     });
   }
 
-  if (!UPLOADABLE_CONTENT_TYPES.includes(contentType)) {
+  if (!isUploadableContentType(contentType)) {
     throw new AppError({
       code: "photo_content_type_not_allowed",
       status: 415,
