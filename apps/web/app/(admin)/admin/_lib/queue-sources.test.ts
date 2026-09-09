@@ -1,10 +1,17 @@
 /**
+ * @vitest-environment node
+ *
  * NFR7's oldest-item arithmetic, which is the one figure on `/admin` that is
  * computed rather than displayed.
  *
  * Pure, so it is tested here rather than at seam 3: the clock is a parameter
  * precisely so that "19 hours old" is a fact a test can fix instead of a race
  * against the wall clock.
+ *
+ * **A Node environment, because the module under test binds three domain
+ * facades** and a facade imports the pooled connection, whose package refuses to
+ * load where a `window` exists. Nothing here asserts against a DOM, so the
+ * declaration costs the file nothing and says what it already was.
  */
 
 import {

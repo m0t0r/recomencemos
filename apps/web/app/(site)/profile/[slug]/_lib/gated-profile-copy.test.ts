@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment node
+ *
  * `/profile/[slug]`'s copy, plus the one string it borrows: the ceiling's
  * refusal, which lives with the ceiling because it quotes a count and a wait
  * this surface does not know and must not guess.
@@ -6,6 +8,11 @@
  * What is **not** here is the half no test reaches: whether the care is aimed at
  * the process rather than at the person. On this surface that reading matters
  * more than on any other, because it is the one page that is *about* somebody.
+ *
+ * **A Node environment, because the borrowed string comes from
+ * `@repo/domain/rate-limit`**, which imports the pooled connection — a package
+ * that refuses to load where a `window` exists. Every assertion here is over
+ * strings.
  */
 
 import { CEILING_REFUSALS } from "@repo/domain/rate-limit";

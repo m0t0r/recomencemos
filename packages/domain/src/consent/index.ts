@@ -30,6 +30,7 @@ import {
   CURRENT_CONSENT_VERSIONS,
   versionsAreCurrent,
 } from "#consent/registry";
+import { db as pooledDatabase } from "#connection";
 import type { DomainDatabase, DomainTransaction } from "#database";
 import * as schema from "#schema";
 import { CONSENT_VERSION_STALE } from "#user-messages";
@@ -133,11 +134,8 @@ export async function hasConsented(
 /**
  * **The pooled binding: what a Server Action calls.**
  *
- * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass. The
- * dynamic import is the mechanism `ceilings` and `admin` already use, and for the
- * same reason: `#connection` carries `import "server-only"`, which throws under
- * plain `node`, and a static import here would make this module unimportable at
- * seam 1 and seam 2 — the two places its logic is actually tested.
+ * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass and
+ * reaches the database through this object or not at all.
  *
  * **Only the read is bound.** {@link recordConsent} has no entry here on purpose:
  * binding it to the pooled connection would hand `apps/web` a way to write a
@@ -146,7 +144,6 @@ export async function hasConsented(
  */
 export const consent = {
   async hasConsented(accountId: string, side: ConsentSide): Promise<boolean> {
-    const { db } = await import("#connection");
-    return hasConsented(db(), accountId, side);
+    return hasConsented(pooledDatabase(), accountId, side);
   },
 };

@@ -504,6 +504,25 @@ middleware an action opts into by naming its principals. Three rules, all in
 
 **Inside `@repo/domain`, internal imports are `#`-prefixed** — `#config`, `#schema`, `#connection` — declared in the package's `imports` field. This is not style. The package withholds most of its own modules, so a self-reference through `@repo/domain/...` fails for exactly the reason it is supposed to; and a relative `./config.js` specifier resolves under Vite but **not** under plain `node`, which is what `packages/domain/src/migrate/cli.ts` runs as in a Fly `release_command`. The `imports` field is the one form Node, Vite and `tsc` all resolve identically, and a `#` specifier is private to the package that declares it, so it is not a second door into the domain.
 
+**A dynamic import carries a comment naming the module it keeps out of which graph, or it is a static
+import** (#243). `await import(...)` inside a function reads as a decision, so it gets copied as one:
+twenty-nine `@repo/domain` facade methods opened by importing `#connection`, each arguing at length
+that a static import would make its module unimportable at seam 1 and seam 2 — and six further sites
+took the shape where no marker existed at all. **That argument was about the test runner, and one
+line answers it**: a `resolve.alias` mapping `server-only` to an empty module, which both
+`packages/domain/vitest.config.mts` and `apps/web/vitest.config.mts` now carry with its measurement
+beside it. `db()` was already lazy, so a static import opens no pool. An `apps/web` test that loads a
+server module also declares `@vitest-environment node`, because the runtime backstop fires on a
+`window` and an alias does not touch that.
+
+**One of the twenty-nine survived, and it is the shape of reason the rule is asking for.**
+`rate-limit.ts` is reached by `#auth/config`, which `admin/enrol-cli.ts` imports — so it sits on the
+graph of a command that runs as plain `node`, which sets no `react-server` condition and cannot load
+`#connection` at all. Made static, `pnpm admin:enrol` dies before printing its usage line. Its
+comment says that, and says which graph the deferral keeps `#connection` off. The other two survivors
+are `@repo/storage` deferring the AWS SDK so `missingConfig()` answers without loading it, and Next's
+own late binding in `instrumentation*.ts`. A site with no such sentence is a static import.
+
 **An Admin comes into existence from a shell and nowhere else** (#17, #103, runbook §6). No form
 creates one; `isAdmin` is declared `input: false`, so no request body sets the grant on any Better
 Auth route, and neither command below is in `@repo/domain`'s `exports` map. Both run over the

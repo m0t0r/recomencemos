@@ -33,6 +33,7 @@
  */
 
 import { asc, eq, or } from "drizzle-orm";
+import { db as pooledDatabase } from "#connection";
 import type { ConsentSide } from "#consent/registry";
 import type { DomainDatabase } from "#database";
 import {
@@ -374,13 +375,11 @@ async function exportedProfile(
 }
 
 /**
- * **The pooled binding: what a Server Action calls.** Same mechanism and same
- * reason as `ceilings`, `admin` and `consent` — see `./consent` for why the
- * dynamic import is not optional here.
+ * **The pooled binding: what a Server Action calls.** ADR-0010 withholds
+ * `#connection`, so `apps/web` has no handle to pass.
  */
 export const subjectAccess = {
   async build(accountId: string): Promise<SubjectAccessExport | null> {
-    const { db } = await import("#connection");
-    return buildSubjectAccessExport(db(), accountId);
+    return buildSubjectAccessExport(pooledDatabase(), accountId);
   },
 };

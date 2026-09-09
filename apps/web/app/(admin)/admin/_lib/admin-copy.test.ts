@@ -1,10 +1,16 @@
 /**
+ * @vitest-environment node
+ *
  * The two sentences on this surface that are claims about the queue rather than
  * labels on it — and one rule that binds every string here.
  *
  * A label being wrong is a label being wrong. These two being wrong is an Admin
  * concluding a branch is clear when nothing is counting it, which is the
  * unreviewed Offer the whole surface exists to prevent.
+ *
+ * **A Node environment, because `./messages` reaches the queue sources** and
+ * those bind domain facades, which import the pooled connection — a package that
+ * refuses to load where a `window` exists. Every assertion here is over strings.
  */
 
 import {

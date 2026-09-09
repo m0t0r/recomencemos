@@ -12,6 +12,7 @@
  */
 
 import { eq } from "drizzle-orm";
+import { db as pooledDatabase } from "#connection";
 import type { DomainDatabase } from "#database";
 import {
   asOfferSendingState,
@@ -76,15 +77,12 @@ function stateOfRow(stored: string | undefined): OfferSendingState {
 /**
  * **The pooled binding: what a Server Component or Server Action calls.**
  *
- * The dynamic import is the shape every public subpath here uses, and for the
- * reason `#rate-limit` sets out at length: `#connection` carries
- * `import "server-only"`, which throws under plain `node`, and a static import
- * would make this module unimportable at seam 1 and seam 2.
+ * ADR-0010 withholds `#connection`, so a caller outside this package has no
+ * handle to pass and reaches the database through this object or not at all.
  */
 export const accounts = {
   async offerSendingState(accountId: string): Promise<OfferSendingState> {
-    const { db } = await import("#connection");
-    return readOfferSendingState(db(), accountId);
+    return readOfferSendingState(pooledDatabase(), accountId);
   },
 };
 

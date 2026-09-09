@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // Seam 1 and seam 2 as two **projects** in one config (spec 0002,
@@ -31,6 +32,24 @@ const shared = {
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
+    // **What lets a facade import `#connection` statically.** `server-only`
+    // resolves to an empty module under the `react-server` condition and to a
+    // bare `throw` under every other, and Vitest sets none — so before this
+    // line, a static import of the connection module made the facade around it
+    // unimportable at both seams, and every facade method opened by importing
+    // it dynamically instead. This is the `moduleNameMapper` Next's own testing
+    // docs prescribe for Jest, in Vite's spelling.
+    //
+    // It is declared here at the root rather than in either project, so both
+    // inherit it — Vitest 5 defaults an inline project's `extends` to `true`.
+    //
+    // **It narrows what the test runner sees and nothing else.** The marker
+    // stays on `connection.ts` and `health.ts`, where it is a build guarantee,
+    // and `pnpm build` is what says so. The runtime backstop `#server-only` is
+    // untouched and still fires on a `window`.
+    alias: {
+      "server-only": fileURLToPath(new URL("./src/testing/server-only-stub.ts", import.meta.url)),
+    },
   },
   test: {
     // Coverage is measured by v8 and reported, never enforced. The two

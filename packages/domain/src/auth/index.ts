@@ -40,6 +40,7 @@ import {
   MAGIC_LINK_TTL_MINUTES,
 } from "#auth/config";
 import { readSignInChallengeFromHeaders } from "#admin/challenge";
+import { db as pooledDatabase } from "#connection";
 import { ADMIN_CODE_RATE_LIMITED_CODE } from "#auth/admin-door";
 import { safeReturnPath } from "#auth/return-path";
 import type { DomainDatabase } from "#database";
@@ -393,7 +394,7 @@ export function createAuthHandler(dependencies: AuthDependencies): AuthHandler {
 
   const resolve = () => {
     instance ??= (async () => {
-      const db = dependencies.db ?? (await import("#connection")).db();
+      const db = dependencies.db ?? pooledDatabase();
       return { auth: betterAuth(authOptions({ ...dependencies, db })), db };
     })();
     return instance;

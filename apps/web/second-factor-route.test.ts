@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment node
+ *
  * The one string that is spelled in two packages, and the assertion that keeps
  * the two spellings the same.
  *
@@ -12,6 +14,10 @@
  * from every side except that one.
  *
  * So the check is the filesystem, which is what the framework itself reads.
+ *
+ * **A Node environment, because `@repo/domain/auth-handler` imports the pooled
+ * connection**, and that package refuses to load where a `window` exists. A test
+ * whose every assertion is `existsSync` had no use for a DOM anyway.
  */
 
 import { existsSync } from "node:fs";
@@ -19,10 +25,10 @@ import { resolve } from "node:path";
 import { SECOND_FACTOR_ROUTE } from "@repo/domain/auth-handler";
 
 /**
- * Vitest runs each workspace's suite from that workspace's own directory, and
- * `import.meta.url` is not a `file:` URL under happy-dom — so this is the one
- * anchor available. The assertion below that `app/layout.tsx` is here is what
- * keeps a wrong anchor from reading as a passing test.
+ * Vitest runs each workspace's suite from that workspace's own directory, which
+ * is what makes the working directory a usable anchor. The assertion below that
+ * `app/layout.tsx` is here is what keeps a wrong anchor from reading as a
+ * passing test.
  */
 const app = (group: string, route: string) => resolve(process.cwd(), `app/${group}${route}`);
 

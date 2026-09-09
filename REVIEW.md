@@ -99,6 +99,33 @@ other hook is copied into a fixture tree and read, which is what keeps `build-gu
 messages honest. `//#test:gates` already declares `.claude/hooks/**` as an input, so editing one
 re-runs the case.
 
+### A doc comment states the constraint, not the history — blocking
+
+**A doc comment says what constraint the code satisfies and where that is verified. It does not
+record what the code used to be, and it does not restate an ADR the file already cites.** Two
+findings, both narrow enough to point at a line:
+
+|     | What to check                                                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Does it narrate a draft?** _"the first draft was…"_, _"it said X first"_, _"an earlier version put…"_. That belongs in the commit message and the ADR, which is where this repository's traceability lives — the reader of the code needs the rule, not the route to it |
+| 2   | **Does it restate an ADR the file already cites?** One sentence naming the constraint and the ADR is the comment; the argument is the ADR's, once. A file carrying the second copy is where the two start disagreeing, and the copy is the one nobody updates             |
+
+**Density is not the test, and saying so is what keeps this from becoming a word count.** #243
+measured 55–59 % of non-test lines in `packages/domain`, `packages/storage`,
+`packages/observability` and `apps/web/lib` as comment, but a long comment carrying a measurement
+nobody can re-derive is worth its lines and a short one narrating a draft is not. The
+`docker-compose` floor, the `vmThreads` numbers and the happy-dom probe are all long and all stay.
+
+**What this is for**, from the finding that produced it: twenty-nine call sites each argued at
+length for the same workaround, and the length was what made it look load-bearing. A reader who
+finds an argument in front of them tests the argument; a reader who finds a constraint tests the
+constraint. The one-line experiment that showed the premise did not hold went unrun for nine
+copies.
+
+**It applies to the files the PR already touches** — never as a separate sweep, and never as a
+reason to open a diff wider. A file the PR does not otherwise change is out of scope for this pass
+however its comments read.
+
 ### Recorded proof for a visible change — blocking
 
 **A change that alters what a person sees carries a recorded artifact, and the Evidence table's
