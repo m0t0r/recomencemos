@@ -78,23 +78,35 @@ function RowsSkeleton() {
   );
 }
 
-export default async function SentOffersPage({
-  searchParams,
-}: {
-  readonly searchParams: SearchParams;
-}) {
-  /**
-   * **Awaited, and that is what keeps this page dynamic** — the read below sits
-   * behind its own boundary, and removing this `await` would move the whole
-   * shell into the prerender.
-   *
-   * The flag is the confirmation `sendOffer` redirects with. It says the same
-   * three things the form said before he wrote, which is the point: he has just
-   * been told he cannot change it, so the page he lands on had better not imply
-   * that he can.
-   */
+/**
+ * The line he lands on after sending, and the whole of why it is its own
+ * component.
+ *
+ * **`await searchParams` at the page's top level fails the build** — Cache
+ * Components refuses a route that reads request data outside a `<Suspense>`,
+ * and it names the three ways out: `[stream]`, `[cache]`, `[block]`. This is
+ * `[stream]`, chosen because the other two are wrong here rather than merely
+ * unnecessary: nothing about one person's `?sent=1` may be cached, and blocking
+ * the route would cost `pnpm page-weight` its prerendered document for a line
+ * that renders on one arrival in twenty.
+ *
+ * Measured at seam 3 rather than predicted: the page built, and the first real
+ * redirect into it rendered the error boundary.
+ *
+ * The fallback is `null` because there is nothing to hold: the line is absent on
+ * every arrival but one, so a skeleton would promise a row that is not coming.
+ */
+async function SentConfirmation({ searchParams }: { readonly searchParams: SearchParams }) {
   const { sent } = await searchParams;
 
+  if (sent !== "1") return null;
+
+  // `status` rather than `alert`: it is the outcome of something he did, and it
+  // is good news. It interrupts nothing.
+  return <output className="text-foreground font-medium">{OFFER_JUST_SENT}</output>;
+}
+
+export default function SentOffersPage({ searchParams }: { readonly searchParams: SearchParams }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
       <header className="flex flex-col gap-2">
@@ -102,11 +114,9 @@ export default async function SentOffersPage({
         <p className="text-muted-foreground">{SENT_OFFERS_LEAD}</p>
       </header>
 
-      {sent === "1" ? (
-        // `status` rather than `alert`: it is the outcome of something he did,
-        // and it is good news. It interrupts nothing.
-        <output className="text-foreground font-medium">{OFFER_JUST_SENT}</output>
-      ) : null}
+      <Suspense fallback={null}>
+        <SentConfirmation searchParams={searchParams} />
+      </Suspense>
 
       <Suspense fallback={<RowsSkeleton />}>
         <SentOffersPanel />

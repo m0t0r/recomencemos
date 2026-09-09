@@ -27,19 +27,26 @@ import { announcedCount } from "../../_lib/lists/messages";
 export interface CountAnnouncementProps {
   readonly count: number;
   /**
-   * What the count is *of*, as the finished sentence.
+   * The finished sentence, where the count is not a count of profiles.
    *
    * A parameter since story 6, because a third streamed list arrived that is not
-   * a list of profiles: `/sent-offers` announces *3 propuestas*. The default is
-   * the two public lists' own sentence, so neither call site changed — and the
-   * noun stays in a messages module rather than being assembled here from a
-   * number and a word, which is how a plural rule ends up living in a component.
+   * a list of profiles: `/sent-offers` announces *3 propuestas*. It defaults to
+   * the two public lists' own sentence, so neither of their call sites changed.
+   *
+   * **A string rather than the formatter, and that is not a preference.** This
+   * module is `"use client"`, and a function cannot cross that boundary — a
+   * Server Component passing one gets _"Functions cannot be passed directly to
+   * Client Components"_ at render, which is a 500 rather than a build failure and
+   * which no test in this suite can see. Found by opening the page (#24). The
+   * plural rule stays in each surface's messages module, where the rest of its
+   * copy is; what crosses is the sentence it produced.
    */
-  readonly announce?: (count: number) => string;
+  readonly label?: string;
 }
 
-export function CountAnnouncement({ count, announce = announcedCount }: CountAnnouncementProps) {
-  const [announcement, setAnnouncement] = useState("");
+export function CountAnnouncement({ count, label }: CountAnnouncementProps) {
+  const announcement = label ?? announcedCount(count);
+  const [announced, setAnnounced] = useState("");
 
   /*
     The external system this effect synchronizes with is the accessibility tree,
@@ -51,14 +58,14 @@ export function CountAnnouncement({ count, announce = announcedCount }: CountAnn
   */
   useEffect(() => {
     // oxlint-disable-next-line set-state-in-effect, no-deriving-state-in-effects -- see above.
-    setAnnouncement(announce(count));
-  }, [announce, count]);
+    setAnnounced(announcement);
+  }, [announcement]);
 
   // `output` rather than a `p` with `role="status"`: its implicit role is `status`,
   // so the semantics are identical and the element says what it is.
   return (
     <output aria-live="polite" className="sr-only">
-      {announcement}
+      {announced}
     </output>
   );
 }
