@@ -26,6 +26,10 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireAccountPage } from "@/lib/account";
 import { PublishForm } from "./_components/publish-form";
+// PROTOTYPE (#18 Act 5). Leaves `dev` with the losing variants; see
+// `_components/photo-variants/README.md`.
+import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
+import { PHOTO_VARIANTS } from "./_components/photo-variants";
 import { PUBLISH_INTRO, PUBLISH_PAGE_TITLE, PUBLISH_TITLE } from "@/app/_lib/profile-form/messages";
 
 export const metadata: Metadata = {
@@ -70,7 +74,32 @@ function PanelSkeleton() {
   );
 }
 
-export default function PublishPage() {
+/**
+ * PROTOTYPE (#18 Act 5). Its own component behind its own `<Suspense>`, because
+ * reading `searchParams` in the page body is uncached data outside a boundary
+ * and Cache Components refuses to prerender the route — `[stream]` from its own
+ * menu, which is the right pick for chrome that is not the page.
+ */
+async function VariantSwitcher({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const variant = (await searchParams).variant;
+
+  return (
+    <PrototypeSwitcher
+      variants={PHOTO_VARIANTS}
+      current={typeof variant === "string" ? variant : "A"}
+    />
+  );
+}
+
+export default function PublishPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
       <div className="flex flex-col gap-2">
@@ -80,6 +109,11 @@ export default function PublishPage() {
 
       <Suspense fallback={<PanelSkeleton />}>
         <PublishPanel />
+      </Suspense>
+
+      {/* PROTOTYPE (#18 Act 5). Hidden in production builds. */}
+      <Suspense fallback={null}>
+        <VariantSwitcher searchParams={searchParams} />
       </Suspense>
     </main>
   );

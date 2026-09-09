@@ -26,6 +26,10 @@ import { useProfileFields } from "@/app/_lib/profile-form/use-profile-fields";
 import { INITIAL_RESULT, useProfileForm } from "@/app/_lib/profile-form/use-profile-form";
 import { publishProfile } from "../actions";
 import { PhotoField } from "./photo-field";
+// PROTOTYPE (#18 Act 5) -- this import and the switcher below leave `dev` with
+// the losing variants. See `photo-variants/README.md`.
+import { useSearchParams } from "next/navigation";
+import { VariantB, VariantC } from "./photo-variants";
 import { PublishLayout } from "./publish-layout";
 
 export interface PublishFormProps {
@@ -65,6 +69,27 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
   const form = useProfileFields(prefill, machine.refusedValues);
   const base = useId();
 
+  /**
+   * PROTOTYPE (#18 Act 5). `?variant=` picks which photo control renders; A is
+   * the shipped one, so a visit with no parameter is exactly today's page and
+   * the comparison stays honest.
+   */
+  // `?.` because `useSearchParams()` is null with no router context, which is
+  // every case in `publish-form.test.tsx`.
+  const variant = useSearchParams()?.get("variant") ?? "A";
+  const photoSlot =
+    variant === "B" ? (
+      <VariantB
+        onPhotoKeyChange={setPhotoKey}
+        hydrated={machine.hydrated}
+        firstName={form.state.values.firstName ?? ""}
+      />
+    ) : variant === "C" ? (
+      <VariantC onPhotoKeyChange={setPhotoKey} hydrated={machine.hydrated} firstName="" />
+    ) : (
+      <PhotoField onPhotoKeyChange={setPhotoKey} hydrated={machine.hydrated} />
+    );
+
   const idFor = (field: PublishFieldName, index?: number) =>
     index === undefined ? `${base}-${field}` : `${base}-${field}-${index}`;
 
@@ -81,7 +106,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
         vocabulary={vocabulary}
         idFor={idFor}
         serverErrorFor={(field, index) => serverFieldError(machine.serverErrors, field, index)}
-        photoSlot={<PhotoField onPhotoKeyChange={setPhotoKey} hydrated={machine.hydrated} />}
+        photoSlot={photoSlot}
       />
     </form>
   );
