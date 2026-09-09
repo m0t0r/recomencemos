@@ -61,20 +61,32 @@ RUN --mount=type=bind,from=store,source=/pnpm/store,target=/pnpm/store,rw \
     pnpm install --frozen-lockfile --offline
 
 # Baked into the build output, which is why they are build arguments rather than
-# Fly secrets. `turbo.json` declares all four on `build`; `scripts/deploy.sh` is
+# Fly secrets. `turbo.json` declares all six on `build`; `scripts/deploy.sh` is
 # what supplies them.
 #
 # `NEXT_PUBLIC_RELEASE` is NFR25's: without it every log line reads
 # `release: "unknown"` while Sentry events carry a plugin-injected one, and the
 # two halves of the same incident disagree about which deploy they came from.
+#
+# **The two photo origins are here because the CSP is baked too** (#232). Next
+# writes `headers()` into `routes-manifest.json` at build time, so a deploy that
+# carries them only as runtime values ships a `Content-Security-Policy` naming
+# neither — and the first symptom is a photo upload the browser blocks with the
+# server logging nothing. Unlike the R2 key pair beside them they are non-secret
+# origins, so a build argument (recorded in the image history) is the right
+# instrument rather than the mounted secret below.
 ARG NEXT_PUBLIC_RELEASE
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG SENTRY_ORG
 ARG SENTRY_PROJECT
+ARG PHOTO_S3_ENDPOINT
+ARG PHOTO_PUBLIC_BASE
 ENV NEXT_PUBLIC_RELEASE=$NEXT_PUBLIC_RELEASE
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 ENV SENTRY_ORG=$SENTRY_ORG
 ENV SENTRY_PROJECT=$SENTRY_PROJECT
+ENV PHOTO_S3_ENDPOINT=$PHOTO_S3_ENDPOINT
+ENV PHOTO_PUBLIC_BASE=$PHOTO_PUBLIC_BASE
 
 # **A secret, so a mount and not an `ARG`.** A build argument is recorded in the
 # image's own history and is readable by anyone who can pull it; this token is

@@ -32,7 +32,8 @@ hand needs a reason, and it refuses any branch but `main` unless you say so:
 
 ```sh
 # From `main`, when CI itself is what is broken:
-NEXT_PUBLIC_SENTRY_DSN=… SENTRY_ORG=… SENTRY_PROJECT=… SENTRY_AUTH_TOKEN=… ./scripts/deploy.sh
+NEXT_PUBLIC_SENTRY_DSN=… SENTRY_ORG=… SENTRY_PROJECT=… SENTRY_AUTH_TOKEN=… \
+  PHOTO_S3_ENDPOINT=… PHOTO_PUBLIC_BASE=… ./scripts/deploy.sh
 
 # A deliberate rehearsal from a branch — proving the health gate aborts a bad build, say:
 DEPLOY_ALLOW_BRANCH=1 ./scripts/deploy.sh
@@ -42,6 +43,14 @@ DEPLOY_ALLOW_BRANCH=1 ./scripts/deploy.sh
 `NEXT_PUBLIC_RELEASE` from the commit SHA, and passes the Sentry token as a **build secret** rather
 than a build argument — a build argument is recorded in the image's history and readable by anyone who
 can pull it.
+
+**`PHOTO_S3_ENDPOINT` and `PHOTO_PUBLIC_BASE` are on that line because the CSP is baked into the
+build** (#232), not only because the app reads them at runtime. Next writes `headers()` into
+`routes-manifest.json`, so an origin absent from the build is an origin the deployed
+`Content-Security-Policy` does not name — and that failure is silent on the server and fatal in the
+browser: the presigned PUT is blocked by `connect-src` and the Admin's review image by `img-src`,
+while the machine logs a clean request. The script warns when either is unset rather than refusing,
+and CI supplies both from the repository environment.
 
 Everything else is `fly.toml`, and three lines in it carry the whole design:
 

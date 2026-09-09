@@ -23,13 +23,27 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
-      "env": ["NEXT_PUBLIC_SENTRY_DSN", "SENTRY_ORG", "SENTRY_PROJECT", "NEXT_PUBLIC_RELEASE"]
+      "env": [
+        "NEXT_PUBLIC_SENTRY_DSN",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT",
+        "NEXT_PUBLIC_RELEASE",
+        "PHOTO_S3_ENDPOINT",
+        "PHOTO_PUBLIC_BASE"
+      ]
     },
     "web#build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
-      "env": ["NEXT_PUBLIC_SENTRY_DSN", "SENTRY_ORG", "SENTRY_PROJECT", "NEXT_PUBLIC_RELEASE"],
+      "env": [
+        "NEXT_PUBLIC_SENTRY_DSN",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT",
+        "NEXT_PUBLIC_RELEASE",
+        "PHOTO_S3_ENDPOINT",
+        "PHOTO_PUBLIC_BASE"
+      ],
       "passThroughEnv": ["SENTRY_AUTH_TOKEN"]
     },
     "check-types": {
