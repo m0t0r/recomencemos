@@ -36,7 +36,7 @@ import type { AdminActionOutcome } from "#admin/index";
 import { and, asc, count, eq, isNotNull, lt, min } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
-import { PHOTO_NOT_PENDING, PHOTO_NO_PROFILE } from "#user-messages";
+import { ADMIN_PHOTO_ALREADY_REVIEWED, PHOTO_NOT_PENDING, PHOTO_NO_PROFILE } from "#user-messages";
 
 /** What `createUpload` hands the browser: where to PUT, and what to call it afterwards. */
 export interface PhotoUploadTicket {
@@ -418,7 +418,7 @@ async function readPendingKey(
           "re-encoded and no AdminAction was written. This is the read before the object " +
           "work; the handler repeats it under a lock, which is what settles a race between " +
           "two Admins.",
-        userMessage: PHOTO_NOT_PENDING,
+        userMessage: ADMIN_PHOTO_ALREADY_REVIEWED,
         context: { profile_id: profileId, photo_state: row?.photoState ?? null },
       }),
     };

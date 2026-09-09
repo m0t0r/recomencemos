@@ -1,6 +1,8 @@
 /**
- * What a photo may be, as numbers — and the one module in this package a
- * browser may resolve.
+ * What a photo may be, as numbers — and the strictest of the two modules in
+ * this package a browser may resolve. `./photo-url` is the other; it reaches
+ * `#config` and earns its crossing on a narrower argument, written down in
+ * `browser-refusal.ts`.
  *
  * **Isomorphic by construction, exactly as `@repo/errors` is.** It imports
  * nothing, reads no environment, opens no connection and holds no credential,
