@@ -614,23 +614,30 @@ export const CEILING_REFUSALS: Record<
     `Mientras tanto, ${OTHER_DOORS_OPEN}.`,
 
   /**
-   * **The third sentence is fixed by #18's acceptance criterion**, which asks
-   * that the refusal say the profile _"is already live without the photo"_.
+   * **The third sentence is what #18's acceptance criterion asks for, with one
+   * word changed — and the word is the whole finding.**
    *
-   * It is the only ceiling here whose last sentence is about something that
-   * already worked. Every other one refuses a thing she was trying to do; this
-   * one refuses an addition to a profile that is published and findable right
-   * now, and a sentence that left her thinking she had lost it would be worse
-   * than the refusal itself. The voice guide's own example of a banned
-   * construction — _"tu perfil está en revisión"_ — is the same confusion said
-   * the other way round.
+   * The criterion asks that the refusal say the profile _"is already live
+   * without the photo"_, and that was written imagining `/my-profile`, where it
+   * is simply true. The first caller is `/publish`, where the ceiling is met
+   * **before any profile exists** — so the sentence promised her something
+   * findable that she had not made yet, which is precisely the "sentence she can
+   * catch being wrong" the voice guide refuses.
+   *
+   * So it says the thing that is true on both surfaces instead: the photo is not
+   * what the profile depends on. It is still the only ceiling here whose last
+   * sentence is reassurance rather than a refusal — every other one refuses a
+   * thing she was trying to do, and this one refuses an *addition*, so a
+   * sentence that left her thinking she had lost the rest would be worse than
+   * the refusal itself. The voice guide's own banned construction — _"tu perfil
+   * está en revisión"_ — is the same confusion said the other way round.
    */
   createPhotoUpload: (ceiling, retryAfter, scope) =>
     (scope === "ip"
       ? `Se intentaron muchas fotos hoy ${SHARED_CONNECTION}. `
       : `Intentaste poner una foto ${ceiling.max} veces hoy, que es el máximo. `) +
     `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
-    "Tu perfil ya está publicado y la gente puede verlo, con foto o sin ella.",
+    "La foto es opcional y tu perfil no depende de ella.",
 };
 
 /**

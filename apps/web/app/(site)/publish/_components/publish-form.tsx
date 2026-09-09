@@ -81,7 +81,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
         vocabulary={vocabulary}
         idFor={idFor}
         serverErrorFor={(field, index) => serverFieldError(machine.serverErrors, field, index)}
-        photoSlot={<PhotoField onPhotoKeyChange={setPhotoKey} />}
+        photoSlot={<PhotoField onPhotoKeyChange={setPhotoKey} hydrated={machine.hydrated} />}
       />
     </form>
   );

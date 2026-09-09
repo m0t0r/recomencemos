@@ -14,15 +14,15 @@
  *   screen reader announces one control with one name. The lint rule for that
  *   cannot see through Base UI's `render` prop — the disable comment in the
  *   component points here, so this is the assertion that has to be real.
- * - **NFR4's exception is stated where the field is**, in a `<noscript>`, rather
- *   than in a footnote or not at all.
+ * - **NFR4's exception is stated where the field is**, and the sentence stands
+ *   *in place of* the control rather than beside it.
  * - **No hidden input mirrors the key** (ADR-0015). That absence is unassertable
  *   any other way, which is the escape hatch `CLAUDE.md` names by name.
  */
 
 import { render, screen } from "@testing-library/react";
 import { PHOTO_INPUT_ACCEPT } from "@repo/storage/limits";
-import { PHOTO_CHOOSE, PHOTO_HELP } from "@/app/_lib/profile-form/messages";
+import { PHOTO_CHOOSE, PHOTO_HELP, PHOTO_NOTE } from "@/app/_lib/profile-form/messages";
 import { PhotoField } from "./photo-field";
 
 /**
@@ -43,8 +43,14 @@ const { createPhotoUpload } = vi.hoisted(() => ({ createPhotoUpload: vi.fn() }))
 
 vi.mock("../actions", () => ({ createPhotoUpload }));
 
-function renderField() {
-  return render(<PhotoField onPhotoKeyChange={() => {}} />);
+/**
+ * `hydrated` defaults to `true` because that is the state every case below is
+ * about — the control exists and she is using it. The unhydrated branch is its
+ * own case at the bottom of the file, and it is the one that matters most, so
+ * it passes `false` explicitly rather than relying on a default.
+ */
+function renderField(hydrated = true) {
+  return render(<PhotoField onPhotoKeyChange={() => {}} hydrated={hydrated} />);
 }
 
 describe("PhotoField", () => {
@@ -78,33 +84,47 @@ describe("PhotoField", () => {
   it("describes the control with the sentence that says publishing does not wait", () => {
     renderField();
 
+    // A `RegExp` rather than `expect.stringContaining(...) as unknown as string`:
+    // jest-dom accepts one natively, so the double cast was only there to get
+    // past a type it did not need to fight.
     expect(screen.getByLabelText(PHOTO_CHOOSE)).toHaveAccessibleDescription(
-      expect.stringContaining(PHOTO_HELP) as unknown as string,
+      new RegExp(PHOTO_HELP.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
     );
   });
 
   /**
-   * NFR4 names the photo as its single exception and requires the form to say
-   * so **where the field appears**. A `<noscript>` is the only element whose
-   * content shows exactly when the control cannot work.
+   * **The case the old one could not make, and the defect it was hiding.**
    *
-   * **What this can assert is that the element is there, and no more — measured
-   * rather than assumed.** React writes a `<noscript>`'s children into the
-   * *server-rendered HTML* and renders the element empty on the client, so
-   * under happy-dom its `innerHTML` is `""`. A first version of this case
-   * asserted on the sentence and failed against `"<noscript></noscript>"`.
+   * NFR4 names the photo as its single exception and requires the form to say so
+   * where the field appears. That used to be a `<noscript>` wrapping the
+   * sentence while the input stayed a *sibling* — and `<noscript>` gates only
+   * its own children, so the served document carried the explanation **and** a
+   * working camera-roll button that then did nothing. The brief refuses exactly
+   * that: "the no-JS branch renders the sentence in place of the control rather
+   * than rendering a control that does nothing."
    *
-   * That is not a gap in the feature: by the time a client render happens,
-   * JavaScript is running and the `<noscript>` is correctly irrelevant. The
-   * sentence's presence is a property of the document `next dev` serves, so it
-   * verifies at seam 3 by reading that document — which is also the only place
-   * "with JavaScript unavailable" is a real condition rather than a simulated
-   * one.
+   * The old case asserted only that a `<noscript>` element existed, which was
+   * true the whole time the control was broken. It could not do better: React
+   * writes a `<noscript>`'s children into the server HTML and renders it empty
+   * on the client, so under happy-dom there is no sentence to find.
+   *
+   * Gating on `hydrated` makes the branch an ordinary render, so both halves are
+   * assertable here — and both are asserted, because "the sentence is present"
+   * without "the control is absent" is the bug passing again.
    */
-  it("carries a noscript beside the field for the exception to live in", () => {
-    const { container } = renderField();
+  it("renders the sentence in place of the control before hydration", () => {
+    renderField(false);
 
-    expect(container.querySelector("noscript")).not.toBeNull();
+    expect(screen.getByText(PHOTO_NOTE)).toBeInTheDocument();
+    expect(screen.queryByLabelText(PHOTO_CHOOSE)).toBeNull();
+  });
+
+  /** And the other way round, so neither half can be satisfied on its own. */
+  it("renders the control and not the sentence once hydrated", () => {
+    renderField();
+
+    expect(screen.getByLabelText(PHOTO_CHOOSE)).toBeInTheDocument();
+    expect(screen.queryByText(PHOTO_NOTE)).toBeNull();
   });
 
   /**
