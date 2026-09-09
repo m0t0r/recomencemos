@@ -33,6 +33,8 @@ import { offers } from "@repo/domain/offers";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
+import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
+import { variantFrom } from "@/app/_lib/prototype-variants";
 import { requireAccountPage } from "@/lib/account";
 import { SentOfferList } from "./_components/sent-offer-list";
 import {
@@ -49,9 +51,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-type SearchParams = Promise<{ readonly sent?: string }>;
+type SearchParams = Promise<{ readonly sent?: string; readonly variant?: string }>;
 
-async function SentOffersPanel() {
+/* PROTOTYPE — throwaway, with the variants. */
+const ROW_VARIANTS = [
+  { key: "a", name: "El estado primero" },
+  { key: "b", name: "La persona primero" },
+  { key: "c", name: "Dos columnas" },
+] as const;
+
+async function SentOffersPanel({ searchParams }: { readonly searchParams: SearchParams }) {
   /**
    * Signed out → `/sign-in` with a way back. There is no not-the-sender case on
    * this route: the read is scoped by the principal in its own `where` clause, so
@@ -62,7 +71,19 @@ async function SentOffersPanel() {
 
   const sent = await offers.listSent(session.accountId, new Date());
 
-  return <SentOfferList offers={sent} />;
+  /*
+    PROTOTYPE — throwaway. Read here rather than at the page's top level: this
+    panel is already the dynamic boundary, and reading request data outside one
+    is what Cache Components refuses.
+  */
+  const variant = variantFrom((await searchParams).variant, ROW_VARIANTS);
+
+  return (
+    <>
+      <SentOfferList offers={sent} variant={variant} />
+      <PrototypeSwitcher variants={ROW_VARIANTS} current={variant} />
+    </>
+  );
 }
 
 /** Held at the shape the rows take, so the heading above them does not move. */
@@ -134,7 +155,7 @@ export default function SentOffersPage({ searchParams }: { readonly searchParams
       </Suspense>
 
       <Suspense fallback={<RowsSkeleton />}>
-        <SentOffersPanel />
+        <SentOffersPanel searchParams={searchParams} />
       </Suspense>
 
       {/*
