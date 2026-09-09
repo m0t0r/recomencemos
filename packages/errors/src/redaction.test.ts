@@ -711,6 +711,46 @@ describe("the one enumerated credential-bearing route", () => {
     expect(scrubbed.request.headers.Referer).toBe(`https://recomencemos.test${REDUCED}`);
   });
 
+  /**
+   * Both shapes were shown to pass through byte-identical, token and all, by the
+   * adversarial read of this change. Neither is reachable with a *live* token —
+   * Next routes case-sensitively and the page validates only a token arriving on
+   * the exact segment — so they were hardening notes rather than findings. They
+   * are closed anyway, because a control at the egress that depends on the
+   * emitter being well behaved is not doing the job it exists for.
+   */
+  it("reduces the route whatever case it arrives in", () => {
+    const scrubbed = scrubEvent({
+      request: { url: `https://recomencemos.test/Admin/Enrol/${TOKEN}` },
+    });
+
+    expect(scrubbed.request.url).toBe("https://recomencemos.test/Admin/Enrol/[token]");
+  });
+
+  it("reduces the route through a repeated slash", () => {
+    const scrubbed = scrubEvent({
+      spans: [{ data: { "url.path": `/admin/enrol//${TOKEN}` } }],
+    });
+
+    expect(scrubbed.spans[0]?.data["url.path"]).toBe("/admin/enrol//[token]");
+  });
+
+  /**
+   * The other half of tolerating those two: neither relaxation may rewrite a
+   * string it was not aimed at. The capture group replays exactly what it
+   * matched, so the casing and the doubled slash survive the reduction rather
+   * than being normalised into it.
+   */
+  it("normalises nothing else while tolerating them", () => {
+    const scrubbed = scrubEvent({
+      request: { url: "https://recomencemos.test/Perfil//abc" },
+      spans: [{ data: { "url.path": "/ADMIN/ENROLMENTS" } }],
+    });
+
+    expect(scrubbed.request.url).toBe("https://recomencemos.test/Perfil//abc");
+    expect(scrubbed.spans[0]?.data["url.path"]).toBe("/ADMIN/ENROLMENTS");
+  });
+
   it("is idempotent, so an already-reduced path survives a second pass unchanged", () => {
     const scrubbed = scrubEvent({ request: { url: REDUCED } });
 
