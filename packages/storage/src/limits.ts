@@ -82,9 +82,25 @@ export type DecodableFormat = (typeof DECODABLE_FORMATS)[number];
  * `canvas.toBlob` produced — WebP, JPEG, or silently PNG — so no path this
  * product owns reaches for one of the other two.
  */
-export const UPLOADABLE_CONTENT_TYPES: readonly string[] = DECODABLE_FORMATS.map(
-  (format) => `image/${format}`,
+export type UploadableContentType = `image/${DecodableFormat}`;
+
+export const UPLOADABLE_CONTENT_TYPES: readonly UploadableContentType[] = DECODABLE_FORMATS.map(
+  (format) => `image/${format}` as const,
 );
+
+/**
+ * Whether a string a browser sent is one of them.
+ *
+ * **A predicate rather than a bare `includes`**, which is the shape `#key-shapes`
+ * already uses for the other closed set in this package: the caller's value is a
+ * `string` off the wire, and what it needs on the far side of the check is the
+ * narrowed type. Written as `includes` the call would not type-check at all
+ * against a literal-union array, and widening the array back to `string[]` to
+ * make it compile would throw away the only compile-time help there is.
+ */
+export function isUploadableContentType(value: string): value is UploadableContentType {
+  return (UPLOADABLE_CONTENT_TYPES as readonly string[]).includes(value);
+}
 
 /**
  * The `accept` attribute the file input carries.

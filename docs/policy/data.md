@@ -114,12 +114,16 @@ exactly this class of thing. It was left open because the drifting surface was t
 username across two files, and the fix is a new script and a new turbo task — with the note that
 _"if the surface grows, this is the first thing to revisit"_.
 
-**It has grown.** The object store added six more values to the same two files —
-`PHOTO_S3_ENDPOINT`, `PHOTO_S3_BUCKET`, `PHOTO_S3_ACCESS_KEY_ID`, `PHOTO_S3_SECRET_ACCESS_KEY`,
-`PHOTO_PUBLIC_BASE` and `PHOTO_TRANSFORMATIONS` — and two of them are read by a test suite rather
-than only by `pnpm dev`, so drift there breaks `test:store` for the next clone as well. The
-condition this paragraph set for revisiting is met; the check is not written yet, and saying so is
-the point of leaving the sentence here rather than deleting it.
+**It has grown.** The object store added seven more values to the same two files —
+`PHOTO_S3_ENDPOINT`, `PHOTO_S3_BUCKET`, `PHOTO_S3_QUARANTINE_BUCKET`, `PHOTO_S3_ACCESS_KEY_ID`,
+`PHOTO_S3_SECRET_ACCESS_KEY`, `PHOTO_PUBLIC_BASE` and `PHOTO_TRANSFORMATIONS` — and three of them
+are read by a test suite rather than only by `pnpm dev`, so drift there breaks `test:store` for the
+next clone as well. **Two of the seven now name buckets whose difference is the whole of NFR6**, and
+a `docker-compose.yaml` that renamed one without `.env.example` following would leave the app
+signing PUTs into a bucket that does not exist — which is the loudest of these failures rather than
+the quietest, but it is one more reason the condition this paragraph set for revisiting is met. The
+check is not written yet, and saying so is the point of leaving the sentence here rather than
+deleting it.
 
 ## Classification vocabulary
 

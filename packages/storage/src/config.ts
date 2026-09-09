@@ -151,7 +151,7 @@ export function storageConfig(env: StorageEnv = process.env): StorageConfig {
         "written or read until it is. Both buckets are created by hand, once, before a deploy " +
         "can accept a photo.",
       userMessage: PHOTO_UNAVAILABLE,
-      // The names of absent variables, never a value: one of the four is a
+      // The names of absent variables, never a value: one of the five is a
       // secret, and a line naming which are set is a line naming which are not.
       context: { missing: [...missing] },
     });

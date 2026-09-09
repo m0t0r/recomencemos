@@ -328,11 +328,11 @@ export const photoKeyArg = z
  * declared. Neither decides anything: the server-side re-encode reads the format
  * out of the bytes, because this string is a header the browser composed.
  *
- * **The type sentence is one this comment used to get wrong**, which is why it
- * is spelled out. Naming `ContentType` on the command does not sign it — the
- * presigner drops `content-type` into `unsignableHeaders` unconditionally — so
- * for a while the claim above was true of the length and false of the type. It
- * is `@repo/storage`'s `presignUpload` that makes it true of both.
+ * **The type is signed only because `presignUpload` asks for it explicitly.**
+ * Naming `ContentType` on the command does not sign it — the presigner drops
+ * `content-type` into `unsignableHeaders` unconditionally — so the sentence
+ * above is true of the length by default and true of the type only through
+ * `@repo/storage`.
  *
  * No messages, because no sentence from here reaches a person: the browser is
  * what fills this in, and a payload that fails it is not a form somebody typed.

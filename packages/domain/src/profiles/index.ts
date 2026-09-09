@@ -599,9 +599,9 @@ export async function findOwnProfile(
  * - **`approved`** is the public object, read through the transformation origin
  *   like everybody else's.
  * - **`pending`** is a **signed, one-minute read of the quarantined object**,
- *   because the quarantine prefix refuses anonymous reads by bucket policy —
- *   which is the whole of NFR6. There is no other way to show it to her, and
- *   showing it to her is the requirement.
+ *   because the quarantine bucket has no public access and no origin in front
+ *   of it — which is the whole of NFR6. There is no other way to show it to
+ *   her, and showing it to her is the requirement.
  *
  * `absent` and `rejected` have no object at all: `rejectPhoto` sets `photoKey`
  * to `NULL` and deletes the bytes, so both render her initial and the sentence
