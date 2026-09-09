@@ -10,6 +10,8 @@ import { OwnProfileView } from "./own-profile-view";
 import {
   EDIT_LINK,
   HELD_HEADING,
+  PHOTO_ABSENT,
+  PHOTO_PENDING,
   PUBLISHED_CONFIRMATION,
   SAVED_CONFIRMATION,
   WALL_LINK,
@@ -101,5 +103,59 @@ describe("the tiers", () => {
     render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
 
     expect(screen.getByRole("heading", { name: HELD_HEADING })).toBeInTheDocument();
+  });
+});
+
+/**
+ * **Her own photo: described, never flagged.**
+ *
+ * The criterion is the dignity one -- "her own photo, described as under review,
+ * not flagged" -- and the defect found running was its accessibility half:
+ * `alt=""` took the image out of the tree entirely, so a screen-reader user got
+ * no photo and no state on the one surface whose whole argument is that she sees
+ * her own face. The fixture at the top of this file pins `photoState: "absent"`,
+ * so nothing here could have caught it.
+ *
+ * **What this environment can and cannot answer, stated rather than worked
+ * around.** `ProfileCard` renders Base UI's `AvatarImage`, which puts no `<img>`
+ * in the DOM until the image *loads* -- and nothing loads under happy-dom. So a
+ * `getByRole("img", { name: OWN_PHOTO_ALT })` here asserts the environment
+ * rather than the component, and the accessible-name half genuinely verifies at
+ * seam 3 against a running browser. That is the split `CLAUDE.md` draws, and it
+ * was arrived at by writing the role query first and watching it fail for the
+ * wrong reason.
+ *
+ * What is assertable here is the other half of the criterion, and it is the half
+ * the copy lives in: the sentence is present, and it is not an alert.
+ */
+describe("her own photo", () => {
+  const pending: OwnProfile = {
+    ...profile,
+    photoUrl: "https://photos.recomencemos.test/photos/aaaaaaaaaaaaaaaaaaaaa.webp",
+    photoState: "pending",
+  };
+
+  it("says a person is looking at it", () => {
+    render(<OwnProfileView profile={pending} justPublished={false} justSaved={false} />);
+
+    expect(screen.getByText(PHOTO_PENDING)).toBeInTheDocument();
+  });
+
+  /**
+   * **Not flagged.** An `alert` role, a `FieldError`, or anything announcing this
+   * as a problem would be the surface telling her something is wrong with her
+   * face. The state is a sentence, and a sentence is all it is.
+   */
+  it("does not announce the wait as a problem", () => {
+    render(<OwnProfileView profile={pending} justPublished={false} justSaved={false} />);
+
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  /** And the absent state says the other cause of the same shape. */
+  it("names the initial as what stands in for a photo she has not added", () => {
+    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
+
+    expect(screen.getByText(PHOTO_ABSENT)).toBeInTheDocument();
   });
 });

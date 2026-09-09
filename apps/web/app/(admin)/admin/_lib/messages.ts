@@ -255,7 +255,11 @@ export const SKILL_REQUESTS_LABEL = "Capacidades pedidas";
  * travels in a link, one is read on the form. An Admin who reads only the labels
  * still gets it right.
  */
-export const PROMOTE_HEADING = "Agregar al listado de capacidades";
+// `listado` is on `NEVER_SAY` — with `directorio` and `servicio`, because this
+// product introduces two people and steps out of the way rather than being a
+// place things are listed. Found by wiring this surface into the voice checks
+// for the first time; the word had been here since the section was written.
+export const PROMOTE_HEADING = "Agregar una capacidad al vocabulario";
 export const PROMOTE_SLUG_LABEL = "Identificador";
 export const PROMOTE_SLUG_HELP = "En inglés, con guiones. Viaja en los enlaces de búsqueda.";
 export const PROMOTE_LABEL_LABEL = "Nombre que se lee";
@@ -331,7 +335,7 @@ export const PHOTO_REJECTING = "Quitando…";
  * _"no se puede deshacer"_, which is on its Say list for exactly this kind of
  * act. Rejecting deletes the object; there is no undo and no second look.
  */
-export const PHOTO_REJECT_WARNING = "Al no publicarla, la foto se borra. No se puede deshacer.";
+export const PHOTO_REJECT_WARNING = "Al no publicarla, borramos la foto. No se puede deshacer.";
 
 /**
  * The decision did not go through and it was not the Admin's doing.
@@ -344,7 +348,7 @@ export const PHOTO_DECISION_FAILED = "No pudimos guardar esa decisión. Vuelve a
 
 /** Afterwards, in the row's own announced region. */
 export const PHOTO_APPROVED = "Publicamos la foto. Ya se ve en su perfil.";
-export const PHOTO_REJECTED = "Borramos la foto. Ella puede subir otra.";
+export const PHOTO_REJECTED = "Borramos la foto. Puede subir otra.";
 
 /** How long this one has been waiting, in the same words and format `requestedOn` uses. */
 export const photoWaitingSince = (at: Date) =>
