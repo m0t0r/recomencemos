@@ -714,6 +714,11 @@ describe("the branch an Admin has to work through", () => {
    * of Offers already read, and a handful waiting. That is the shape the partial
    * predicate exists for, and a balanced fixture would let a sequential scan look
    * reasonable to the planner.
+   *
+   * **The rows are not what this costs — see the `analyze` below.** 5,000 is the
+   * scale the neighbouring listing suite already seeds, and at 1,000:1 the partial
+   * index is unambiguously the cheaper answer, which is what makes the assertion
+   * about the plan rather than about a tie.
    */
   describe("the plan behind the Admin's branch", () => {
     const A_HISTORY = 5_000;
@@ -738,9 +743,16 @@ describe("the branch an Admin has to work through", () => {
         from generate_series(1, ${A_HISTORY}) as n;
       `);
 
-      // Its own call: `exec` wraps a multi-statement string in one transaction,
-      // and `VACUUM` refuses to run inside one.
-      await database.client.exec("vacuum analyze offer;");
+      /**
+       * **`ANALYZE` rather than `VACUUM ANALYZE`, and the difference is measured
+       * rather than stylistic.** What the planner needs here is statistics; the
+       * vacuum's storage pass buys nothing on a table that has just been filled
+       * and never updated. It is not free either: seam-2 files run in parallel,
+       * and the vacuum's CPU cost showed up as a **different** file timing out at
+       * its own five seconds, one run in three. Statistics alone put the suite
+       * back inside its baseline.
+       */
+      await database.client.exec("analyze offer;");
     }
 
     test("reads both figures off the pending index rather than scanning the history", async ({
