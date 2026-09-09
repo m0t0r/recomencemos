@@ -758,18 +758,20 @@ export async function chargeCeiling(
  * NFR26's and they count in `rate_counter`; that table is Better Auth's and it
  * counts `/api/auth/*`.
  *
- * **The import is dynamic, and that is not style.** `#connection` carries
- * `import "server-only"`, which resolves to an empty module under the
- * `react-server` condition and to a bare `throw` under every other — and plain
- * `node`, which is what a Node-environment Vitest file is, sets none. A static
- * import here would therefore make this whole module unimportable at seam 1 and
- * at seam 2, which is the same bridging problem the ticket raised, one level up:
- * the query module would again be untestable through its own exported functions.
- * Deferring it to the call keeps `server-only` doing its job on the path that
- * has a browser to protect, and off the path that has none. It also matches what
- * `db()` already does — the pool opens on first use, not at import.
+ * **The import is dynamic here and static in every other facade, and this is the
+ * one module where that is a reason rather than a habit.** `#auth/config`
+ * imports `chargeCeiling` from this file, and `admin/enrol-cli.ts` imports
+ * `#auth/config` — so this module is on the import graph of a command that runs
+ * as plain `node`, which sets no `react-server` condition and therefore cannot
+ * load `#connection` at all. Measured, both ways: static here, and
+ * `pnpm admin:enrol` dies before printing its usage line; dynamic, and it prints
+ * a setup link.
  *
- * Every later query module's binding takes this shape for the same reason.
+ * What the dynamic import keeps out of which graph, stated plainly: it keeps
+ * `#connection` — the `server-only` marker, `pg`, and `@repo/observability`'s
+ * `@sentry/nextjs` dependency — off the enrolment command's graph. Every other
+ * facade in this package is reached only from a request path and imports the
+ * handle statically.
  */
 export const ceilings = {
   async charge(principal: CeilingPrincipal, action: CeilingedAction): Promise<CeilingOutcome> {

@@ -31,9 +31,18 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
+import { logger } from "@repo/observability/logger";
+import {
+  discard,
+  isQuarantineKey,
+  presignReview,
+  presignUpload,
+  promoteToPublic,
+} from "@repo/storage/photos";
 import type { AdminActor } from "#admin/actor";
-import type { AdminActionOutcome } from "#admin/index";
+import { type AdminActionOutcome, runAdminAction } from "#admin/index";
 import { and, asc, count, eq, isNotNull, lt, min } from "drizzle-orm";
+import { db as pooledDatabase } from "#connection";
 import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
 import { ADMIN_PHOTO_ALREADY_REVIEWED, PHOTO_NOT_PENDING, PHOTO_NO_PROFILE } from "#user-messages";
@@ -141,8 +150,6 @@ export async function createPhotoUpload(
   accountId: string,
   input: { readonly byteLength: number; readonly contentType: string },
 ): Promise<PhotoUploadTicket> {
-  const { presignUpload } = await import("@repo/storage/photos");
-
   const ticket = await presignUpload(input);
 
   /**
@@ -232,8 +239,6 @@ export async function attachPhoto(
   | { readonly ok: true; readonly photoState: "pending" }
   | { readonly ok: false; readonly error: AppError }
 > {
-  const { isQuarantineKey } = await import("@repo/storage/photos");
-
   if (!isQuarantineKey(photoKey)) {
     return {
       ok: false,
@@ -328,11 +333,6 @@ export async function approvePhoto(
   actor: AdminActor,
   profileId: string,
 ): Promise<AdminActionOutcome<"approvePhoto">> {
-  const [{ runAdminAction }, { promoteToPublic }] = await Promise.all([
-    import("#admin/index"),
-    import("@repo/storage/photos"),
-  ]);
-
   const waiting = await readPendingKey(db, profileId);
   if (!waiting.ok) return { ok: false, error: waiting.error };
 
@@ -364,12 +364,6 @@ export async function rejectPhoto(
   actor: AdminActor,
   profileId: string,
 ): Promise<AdminActionOutcome<"rejectPhoto">> {
-  const [{ runAdminAction }, { discard }, { logger }] = await Promise.all([
-    import("#admin/index"),
-    import("@repo/storage/photos"),
-    import("@repo/observability/logger"),
-  ]);
-
   const outcome = await runAdminAction(db, actor, "rejectPhoto", { profileId });
 
   if (!outcome.ok) return outcome;
@@ -430,39 +424,31 @@ async function readPendingKey(
 /**
  * **The pooled bindings: what a Server Action calls.**
  *
- * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass. The
- * dynamic import is the mechanism every other public subpath uses, and for the
- * same reason: `#connection` carries `import "server-only"`, which throws under
- * plain `node`, and a static import here would make this module unimportable at
- * seam 1 and seam 2.
+ * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass and
+ * reaches the database through this object or not at all.
  */
 export const photos = {
   async createUpload(
     accountId: string,
     input: { readonly byteLength: number; readonly contentType: string },
   ): Promise<PhotoUploadTicket> {
-    const { db } = await import("#connection");
-    return createPhotoUpload(db(), accountId, input);
+    return createPhotoUpload(pooledDatabase(), accountId, input);
   },
 
   async attach(accountId: string, photoKey: string) {
-    const { db } = await import("#connection");
-    return attachPhoto(db(), accountId, photoKey);
+    return attachPhoto(pooledDatabase(), accountId, photoKey);
   },
 
   async approve(actor: AdminActor, profileId: string) {
-    const { db } = await import("#connection");
-    return approvePhoto(db(), actor, profileId);
+    return approvePhoto(pooledDatabase(), actor, profileId);
   },
 
   async reject(actor: AdminActor, profileId: string) {
-    const { db } = await import("#connection");
-    return rejectPhoto(db(), actor, profileId);
+    return rejectPhoto(pooledDatabase(), actor, profileId);
   },
 
   async pending(displayCap: number): Promise<PendingPhotoBranch> {
-    const { db } = await import("#connection");
-    return pendingPhotos(db(), displayCap);
+    return pendingPhotos(pooledDatabase(), displayCap);
   },
 
   /**
@@ -476,7 +462,6 @@ export const photos = {
    * a key it did not get from the queue.
    */
   async reviewUrl(quarantineKey: string): Promise<string> {
-    const { presignReview } = await import("@repo/storage/photos");
     return presignReview(quarantineKey);
   },
 };

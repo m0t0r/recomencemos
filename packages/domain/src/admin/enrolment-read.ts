@@ -21,6 +21,8 @@
  */
 
 import { type AdminEnrolmentSecrets, readAdminEnrolment } from "#admin/enrolment";
+import { authSecret } from "#auth/config";
+import { db as pooledDatabase } from "#connection";
 
 export type { AdminEnrolmentSecrets };
 
@@ -28,11 +30,7 @@ export type { AdminEnrolmentSecrets };
  * **The pooled binding: what the enrolment page calls.**
  *
  * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass — the one
- * place the handle-first rule cannot be literal. The dynamic import is the
- * mechanism `ceilings` and `admin` already use and for the same reason:
- * `#connection` carries `import "server-only"`, which throws under plain `node`,
- * and a static import here would make this module unimportable at seam 2 and in
- * the CLI — the two places its logic actually runs.
+ * place the handle-first rule cannot be literal.
  *
  * **Only the read is bound, and now only the read is even published.** Minting
  * and completing belong to the command, over the direct connection; a pooled
@@ -45,9 +43,6 @@ export type { AdminEnrolmentSecrets };
  */
 export const enrolments = {
   async read(token: string): Promise<AdminEnrolmentSecrets | null> {
-    const { db } = await import("#connection");
-    const { authSecret } = await import("#auth/config");
-
-    return readAdminEnrolment(db(), { token, key: authSecret(process.env) });
+    return readAdminEnrolment(pooledDatabase(), { token, key: authSecret(process.env) });
   },
 };

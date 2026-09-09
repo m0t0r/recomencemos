@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
@@ -16,6 +17,26 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     tsconfigPaths: true,
+    // **Four test files here reach a `@repo/domain` facade, and a facade now
+    // imports the connection statically.** `server-only` resolves to a bare
+    // `throw` under every condition Vitest sets, so without this line those four
+    // fail at resolution — the same entry `packages/domain/vitest.config.mts`
+    // carries, for the same reason.
+    //
+    // **It removes the marker layer in this suite and not the backstop.** A
+    // `"use client"` module that pulled in `@repo/domain`, `@repo/observability`
+    // or `@repo/notifications` still throws under happy-dom, because
+    // `assertServerOnly` reads `window` and this alias does not touch it. What
+    // the build guarantees is unchanged either way: the `exports` map is
+    // mechanism 1, `domain-boundary.test.ts` asserts it through **Node's own
+    // resolver**, and a Vite alias cannot reach that.
+    //
+    // A test that loads a server module also needs `@vitest-environment node`,
+    // because the backstop above fires on a `window`. The four that do say so in
+    // their own docblocks.
+    alias: {
+      "server-only": fileURLToPath(new URL("./testing/server-only-stub.ts", import.meta.url)),
+    },
   },
   test: {
     globals: true,

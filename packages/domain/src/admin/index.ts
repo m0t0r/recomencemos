@@ -45,6 +45,7 @@ import {
   type AdminActionResult,
 } from "#admin/handlers";
 import { ADMIN_ACTION_NAMES, type AdminActionName } from "#admin/names";
+import { db as pooledDatabase } from "#connection";
 import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
 import { ADMIN_ACTION_FAILED } from "#user-messages";
@@ -160,11 +161,7 @@ export async function runAdminAction<K extends AdminActionName>(
  * **The pooled binding: what a Server Action calls.**
  *
  * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass — the one
- * place the handle-first rule cannot be literal. The dynamic import is the same
- * mechanism `ceilings` uses and for the same reason: `#connection` carries
- * `import "server-only"`, which throws under plain `node`, and a static import
- * here would make this module unimportable at seam 1 and seam 2 — the two places
- * its logic is actually tested.
+ * place the handle-first rule cannot be literal.
  */
 export const admin = {
   async run<K extends AdminActionName>(
@@ -172,7 +169,6 @@ export const admin = {
     action: K,
     input: AdminActionInput<K>,
   ): Promise<AdminActionOutcome<K>> {
-    const { db } = await import("#connection");
-    return runAdminAction(db(), actor, action, input);
+    return runAdminAction(pooledDatabase(), actor, action, input);
   },
 };

@@ -63,6 +63,7 @@
  */
 
 import { and, count, eq, inArray, min, sql } from "drizzle-orm";
+import { db as pooledDatabase } from "#connection";
 import { hasConsented, recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
 import type { DomainDatabase, DomainTransaction } from "#database";
@@ -517,11 +518,8 @@ export async function pendingOffers(
 /**
  * **The pooled binding: what a Server Component or a Server Action calls.**
  *
- * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass. The
- * dynamic import is the mechanism `ceilings`, `consent` and `admin` already use,
- * and for the same reason: `#connection` carries `import "server-only"`, which
- * throws under plain `node`, and a static import here would make this module
- * unimportable at seam 1 and seam 2 — the two places its logic is tested.
+ * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass and
+ * reaches the database through this object or not at all.
  *
  * **Delivering an Offer has no entry here.** It is an Admin action, so it is
  * reached through `runAdminAction`, which writes the `AdminAction` row in the
@@ -530,18 +528,15 @@ export async function pendingOffers(
  */
 export const offers = {
   async send(accountId: string, input: SendOfferInput): Promise<SendOfferOutcome> {
-    const { db } = await import("#connection");
-    return sendOffer(db(), accountId, input);
+    return sendOffer(pooledDatabase(), accountId, input);
   },
 
   async listSent(accountId: string, now: Date): Promise<readonly SentOffer[]> {
-    const { db } = await import("#connection");
-    return listSentOffers(db(), accountId, now);
+    return listSentOffers(pooledDatabase(), accountId, now);
   },
 
   async pending(displayCap: number) {
-    const { db } = await import("#connection");
-    return pendingOffers(db(), displayCap);
+    return pendingOffers(pooledDatabase(), displayCap);
   },
 };
 

@@ -24,7 +24,9 @@
  * connection for `apps/web`, which ADR-0010 leaves with no handle of its own.
  */
 
+import { presignReview, publicPhotoUrl } from "@repo/storage/photos";
 import { and, asc, count, eq, gte, inArray } from "drizzle-orm";
+import { db as pooledDatabase } from "#connection";
 import { recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
 import type { DomainDatabase } from "#database";
@@ -614,8 +616,6 @@ async function ownPhotoUrl(state: PhotoState, key: string | null): Promise<strin
   if (!key) return null;
 
   try {
-    const { presignReview, publicPhotoUrl } = await import("@repo/storage/photos");
-
     if (state === "approved") return publicPhotoUrl(key);
     if (state === "pending") return await presignReview(key);
   } catch {
@@ -628,36 +628,28 @@ async function ownPhotoUrl(state: PhotoState, key: string | null): Promise<strin
 /**
  * **The pooled bindings: what a Server Component or Server Action calls.**
  *
- * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass. The
- * dynamic import is the mechanism every other public subpath uses, and for the
- * same reason: `#connection` carries `import "server-only"`, which throws under
- * plain `node`, and a static import here would make this module unimportable at
- * seam 1 and seam 2.
+ * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass and
+ * reaches the database through this object or not at all.
  */
 export const profiles = {
   async publish(accountId: string, input: PublishProfileInput): Promise<PublishProfileOutcome> {
-    const { db } = await import("#connection");
-    return publishProfile(db(), accountId, input);
+    return publishProfile(pooledDatabase(), accountId, input);
   },
 
   async update(accountId: string, input: UpdateProfileInput): Promise<UpdateProfileOutcome> {
-    const { db } = await import("#connection");
-    return updateProfile(db(), accountId, input);
+    return updateProfile(pooledDatabase(), accountId, input);
   },
 
   async has(accountId: string): Promise<boolean> {
-    const { db } = await import("#connection");
-    return hasProfile(db(), accountId);
+    return hasProfile(pooledDatabase(), accountId);
   },
 
   async prefill(accountId: string): Promise<{ readonly fullName: string }> {
-    const { db } = await import("#connection");
-    return readPublishPrefill(db(), accountId);
+    return readPublishPrefill(pooledDatabase(), accountId);
   },
 
   async findOwn(accountId: string): Promise<OwnProfile | null> {
-    const { db } = await import("#connection");
-    return findOwnProfile(db(), accountId);
+    return findOwnProfile(pooledDatabase(), accountId);
   },
 
   /**
@@ -672,13 +664,11 @@ export const profiles = {
    * both checks, and `accounts.offerSendingState` is the second of them.
    */
   async findGated(slug: string): Promise<GatedIdentity | null> {
-    const { db } = await import("#connection");
-    return findGatedIdentity(db(), slug);
+    return findGatedIdentity(pooledDatabase(), slug);
   },
 
   async gatedWorkHistory(slug: string): Promise<readonly string[]> {
-    const { db } = await import("#connection");
-    return findGatedWorkHistory(db(), slug);
+    return findGatedWorkHistory(pooledDatabase(), slug);
   },
 
   /**
@@ -691,8 +681,7 @@ export const profiles = {
    * here is worth paying before he is asked to register.
    */
   async wall(options?: ListOptions): Promise<ProfileListPage> {
-    const { db } = await import("#connection");
-    return listWall(db(), options);
+    return listWall(pooledDatabase(), options);
   },
 
   /**
@@ -703,8 +692,7 @@ export const profiles = {
    * they are all optional: a caller that sets none reads the whole list.
    */
   async browse(options?: BrowseOptions): Promise<ProfileListPage> {
-    const { db } = await import("#connection");
-    return listBrowse(db(), options);
+    return listBrowse(pooledDatabase(), options);
   },
 
   /**
@@ -716,8 +704,7 @@ export const profiles = {
    * figure on the screen it renders into.
    */
   async publishedSince(since: Date): Promise<number> {
-    const { db } = await import("#connection");
-    return countPublishedSince(db(), since);
+    return countPublishedSince(pooledDatabase(), since);
   },
 };
 

@@ -39,6 +39,8 @@
  */
 
 import { createInterface } from "node:readline/promises";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import {
   ADMIN_SETUP_TOKEN_TTL_MINUTES,
   completeAdminEnrolment,
@@ -104,8 +106,6 @@ async function main(): Promise<void> {
    * not a request path, and it should not be reaching for the pool a Worker's
    * sign-in shares.
    */
-  const { drizzle } = await import("drizzle-orm/node-postgres");
-  const { Pool } = await import("pg");
   const pool = new Pool(directConfig());
   const db = drizzle(pool, { schema });
 

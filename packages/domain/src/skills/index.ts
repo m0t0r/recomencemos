@@ -30,6 +30,7 @@
  */
 
 import { asc, count, eq, inArray, min } from "drizzle-orm";
+import { db as pooledDatabase } from "#connection";
 import type { DomainDatabase } from "#database";
 import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-details";
 import * as schema from "#schema";
@@ -234,31 +235,23 @@ export async function readPendingSkillRequests(
 /**
  * **The pooled bindings: what a Server Component or Server Action calls.**
  *
- * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass. The
- * dynamic import is the mechanism `ceilings`, `admin` and `consent` already use,
- * and for the same reason: `#connection` carries `import "server-only"`, which
- * throws under plain `node`, and a static import here would make this module
- * unimportable at seam 1 and seam 2 — the two places its logic is actually
- * tested.
+ * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass and
+ * reaches the database through this object or not at all.
  */
 export const skills = {
   async listActive(): Promise<VocabularyEntry[]> {
-    const { db } = await import("#connection");
-    return listActiveSkills(db());
+    return listActiveSkills(pooledDatabase());
   },
 
   async findBySlug(slugs: readonly string[]): Promise<VocabularyEntry[]> {
-    const { db } = await import("#connection");
-    return findSkillsBySlug(db(), slugs);
+    return findSkillsBySlug(pooledDatabase(), slugs);
   },
 
   async request(accountId: string, text: string): Promise<SkillRequestOutcome> {
-    const { db } = await import("#connection");
-    return requestSkill(db(), accountId, text);
+    return requestSkill(pooledDatabase(), accountId, text);
   },
 
   async pendingRequests(limit: number): Promise<PendingSkillRequests> {
-    const { db } = await import("#connection");
-    return readPendingSkillRequests(db(), limit);
+    return readPendingSkillRequests(pooledDatabase(), limit);
   },
 };
