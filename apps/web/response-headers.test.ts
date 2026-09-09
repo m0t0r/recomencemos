@@ -270,6 +270,43 @@ describe("an absent origin is absent rather than interpolated", () => {
     expect(directivesOf(CI_BUILD)["img-src"]).toEqual(["'self'", "data:", "blob:"]);
   });
 
+  /**
+   * Parsing is not the test. Each of these parses; none of them is an origin a
+   * source expression may carry, and the security review is where they were
+   * enumerated against this tree's own Node.
+   */
+  it.each([
+    // `new URL` yields the literal string "null" for a non-special scheme — a
+    // host-source matching nothing, which is a misconfiguration wearing the
+    // shape of a configuration.
+    ["javascript:alert(1)"],
+    ["data:text/html,x"],
+    // `;` would truncate the directive and open one whose name is the next token.
+    ["http://a;b"],
+    // `*` in a host is a wildcard nobody configured.
+    ["https://*.example.com"],
+  ])("drops %s, which parses but is not an origin", (value) => {
+    const hostile = { ...CI_BUILD, PHOTO_S3_ENDPOINT: value };
+
+    expect(directivesOf(hostile)["connect-src"]).toEqual(["'self'"]);
+    expect(contentSecurityPolicy(hostile)).not.toContain(";;");
+  });
+
+  /**
+   * The characters that would split a header or forge a directive never survive
+   * `new URL` at all — a space throws, a tab and a newline are stripped — so
+   * this pins the property rather than the parser.
+   */
+  it("cannot be made to carry a second directive", () => {
+    const injected = { ...CI_BUILD, PHOTO_PUBLIC_BASE: "https://ex.test; script-src *" };
+
+    expect(directivesOf(injected)["img-src"]).toEqual(["'self'", "data:", "blob:"]);
+    // Unchanged from the same environment without the injected value, which is
+    // the assertion — not that `script-src` is narrow, but that nothing the
+    // value carried reached it.
+    expect(directivesOf(injected)["script-src"]).toEqual(directivesOf(CI_BUILD)["script-src"]);
+  });
+
   it("drops a value that will not parse as a URL", () => {
     // A typo would otherwise reach the header as a source expression matching
     // nothing: a broken photo path presented as a configured one.

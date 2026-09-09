@@ -337,23 +337,30 @@ carries the rule: **log at the dynamic boundary, never inside a cached function.
 
 ## 8. CSP hosts
 
-**No Content-Security-Policy ships yet, and that is deliberate.** A CSP is a real
-surface with real breakage risk; shipping a "reasonable default" nobody understands is how a policy
-silently blocks the browser SDK six months later, with no signal. `csp-policy` in
-[`docs/policy/security.md`](../policy/security.md) now **states the policy to ship** — and its
-`connect-src` carries a `<sentry-ingest>` placeholder, which is the one host this section exists to
-resolve. What follows is that input:
+**The CSP now ships, and there is nothing to add by hand here.** This section used to open "no
+Content-Security-Policy ships yet"; #232 made that false, and the correction matters more than the
+sentence, because acting on the old version means adding a `connect-src` at a proxy or a CDN — a
+second place the header is described, and the first place the two can disagree.
 
-**Read the host off your own DSN.** A DSN has the shape
+**The ingest host is derived, not configured.** `apps/web/lib/response-headers.ts` reads
+`NEXT_PUBLIC_SENTRY_DSN` and puts its **origin** into `connect-src`, so setting the DSN (§1) is the
+whole of the work. A DSN has the shape
 `https://<publicKey>@o<orgId>.ingest.<region>.sentry.io/<projectId>`, and the browser SDK POSTs
-envelopes to that origin. So:
+envelopes to that origin; `new URL(dsn).origin` drops the public key, so nothing secret-shaped
+reaches the header even though the DSN is public anyway.
 
-```
-connect-src 'self' https://o<orgId>.ingest.<region>.sentry.io;
+- [ ] **Confirm it on the deployed origin** rather than assuming the derivation ran — the DSN is
+      **build-time** (`turbo.json` declares it on `build`), so a deploy that set it only as a runtime
+      secret ships a `connect-src` that does not name Sentry, and the symptom is events silently not
+      arriving from browsers:
+
+```sh
+curl -sSI https://<production-origin>/ | grep -io "connect-src[^;]*"   # must name o<orgId>.ingest.<region>.sentry.io
 ```
 
-Substitute the org id and region (`us`, `de`, …) — or, if you would rather not pin a region,
-`https://*.ingest.sentry.io` and `https://*.ingest.*.sentry.io`.
+Do **not** widen it to `https://*.ingest.sentry.io`. The derivation pins the exact origin at build
+time, which is strictly better than a wildcard, and editing the module to relax it would be a change
+to `csp-policy` rather than a runbook step.
 
 Two additions that do **not** apply to what ships today, listed so they are not discovered by
 outage:
@@ -362,7 +369,11 @@ outage:
   ≤ 15.4 does not support `worker-src`, so a `child-src` entry is needed alongside it. Replay is not
   installed here.
 - **Security-policy reporting** (having browsers POST CSP violation reports _to_ Sentry) needs Sentry
-  in `default-src` or `connect-src` for the report endpoint itself. Not configured here.
+  in `default-src` or `connect-src` for the report endpoint itself. Not configured here — and it is
+  the one of these two that is worth revisiting, because the shipped policy carries
+  `script-src 'unsafe-inline'` as a recorded temporary decision and nothing currently measures what
+  a browser actually refuses. [#253](https://github.com/m0t0r/recomencemos/issues/253) is where that
+  trade is weighed, and a report endpoint is the instrument it lacks.
 
 Nothing else is required: the SDK is bundled with the app rather than loaded from a CDN, so no
 `script-src` entry is needed for it.
