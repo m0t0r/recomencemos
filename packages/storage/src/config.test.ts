@@ -15,7 +15,7 @@
 import { bucketFor, type PhotoStore } from "#client";
 import { missingConfig, QUARANTINE_BUCKET_VARIABLE, storageConfig } from "#config";
 import { mintPublicKey, mintQuarantineKey } from "#keys";
-import { UPLOADABLE_CONTENT_TYPES } from "#limits";
+import { isUploadableContentType, UPLOADABLE_CONTENT_TYPES } from "#limits";
 
 const COMPLETE = {
   PHOTO_S3_ENDPOINT: "https://example.r2.cloudflarestorage.com",
@@ -135,4 +135,61 @@ describe("the types a presigned PUT may declare", () => {
       expect(UPLOADABLE_CONTENT_TYPES).not.toContain(type);
     },
   );
+});
+
+/**
+ * The predicate `presignUpload` actually calls, tested directly rather than
+ * only through it.
+ *
+ * **It is the check, so it is worth its own cases.** Reached only through
+ * `presignUpload` it would be exercised only by the opt-in store suite, which
+ * needs a running MinIO and never runs in CI — so a change that widened it
+ * would go green everywhere a person looks.
+ */
+describe("isUploadableContentType", () => {
+  it.each(["image/jpeg", "image/png", "image/webp", "image/avif", "image/heif"])(
+    "admits %s",
+    (type) => {
+      expect(isUploadableContentType(type)).toBe(true);
+    },
+  );
+
+  /**
+   * **The one that matters**, and the reason the set is closed rather than left
+   * to the signature: binding `content-type` makes a PUT agree with its own
+   * declaration and does nothing at all about what the declaration says, so
+   * without this a caller could declare `text/html`, send `text/html`, and be
+   * inside the signature the whole way.
+   */
+  it("refuses text/html, which is what the signature alone would have allowed", () => {
+    expect(isUploadableContentType("text/html")).toBe(false);
+  });
+
+  /**
+   * SVG is absent from the decoder's list deliberately — it is a document
+   * format that can carry script — so it must be absent here too, or an object
+   * is stored and served as one before anything decodes it.
+   */
+  it("refuses image/svg+xml", () => {
+    expect(isUploadableContentType("image/svg+xml")).toBe(false);
+  });
+
+  /**
+   * **Exact string matching, and that is the right strictness here.** The
+   * signature compares the header byte for byte, so a value this admitted but
+   * the store would not match on is a signed URL whose PUT always fails — and a
+   * value it admitted loosely would be a second spelling of the same type that
+   * the stored object could carry.
+   */
+  it.each([
+    ["a case variant", "IMAGE/WEBP"],
+    ["a charset suffix", "image/webp; charset=utf-8"],
+    ["leading whitespace", " image/webp"],
+    ["a trailing space", "image/webp "],
+    ["a prefix match", "image/webpx"],
+    ["the empty string", ""],
+    ["a bare type", "image"],
+  ])("refuses %s", (_name, type) => {
+    expect(isUploadableContentType(type)).toBe(false);
+  });
 });
