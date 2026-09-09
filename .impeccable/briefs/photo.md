@@ -70,11 +70,18 @@ exact register this product refuses. The sentence carries the state; the image c
 **The control is a real file input, and drag-and-drop is not the default.** Two reasons, both
 measurable rather than aesthetic. The primary surface is 390 px, where there is nothing to drag
 from and the whole value is the camera roll that `<input type="file" accept="image/*">` opens on the
-first tap. And `/publish` has roughly 17 KB of gzip headroom against NFR3's 250 KB ceiling, which a
-drag-and-drop library is a real fraction of. `[assumed]` — this is the decision `/prototype` is
-asked to overturn if a richer control wins on the real route; the `@kibo-ui/dropzone` registry
-component is built as one of the variants so the choice is made against something rather than
-against a description of something.
+first tap. And the page-weight argument, **which has since inverted and is left here corrected
+rather than quietly restated**: this brief was written expecting roughly 17 KB of gzip headroom
+against NFR3's 250 KB ceiling. Re-taken with `pnpm page-weight /publish` once the photo step landed,
+the route is **293 KB gzip — 43 KB over**. So a drag-and-drop library is not "affordable but
+unnecessary"; nothing new is affordable, and something has to come off this route whichever control
+wins. That is filed rather than decided here, because the ceiling is a spec number and not a brief's
+to move.
+
+`[assumed]` — the control's form is the decision `/prototype` is asked to overturn if a richer one
+wins on the real route; the `@kibo-ui/dropzone` registry component is built as one of the variants
+so the choice is made against something rather than against a description of something. **Judge the
+variants against the real budget**, not the 17 KB this paragraph used to claim.
 
 **She never waits for an upload.** The downscale and the PUT start the moment she picks, and run
 beside the rest of the form. If she submits before they finish, the profile publishes without the
