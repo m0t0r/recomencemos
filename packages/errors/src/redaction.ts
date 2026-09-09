@@ -51,9 +51,9 @@ const REDACTED_KEY_SPELLINGS: readonly string[] = [
   //
   // Naming the carrier is what makes the fix independent of which cookies this
   // product sets: the map collapses whole, so the next cookie name somebody adds
-  // cannot defeat it. It is order-independent with the `request.cookies` entry
-  // in {@link CARRIER_PATHS} — that walk then meets a string and returns it
-  // unchanged.
+  // cannot defeat it. It is also why {@link CARRIER_PATHS} no longer needs a
+  // `request.cookies` root: that entry existed to keep the depth budget under a
+  // map this now never descends into.
   "cookies",
   "credentials",
   "password",
@@ -133,17 +133,24 @@ const MAX_DEPTH = 4;
  * `data`, while `beforeSendTransaction` brings `spans`. All three are listed, so
  * one scrubber serves every hook.
  *
- * `request` is named **as well as** `request.headers` and `request.cookies`, and
- * the apparent redundancy is load-bearing. The narrow pair alone was narrower
- * than the SDK — `RequestEventData` also carries `query_string` and `data`, the
- * request body, so a name on the shipped list could sit directly on `request` and
- * be out of the walk's reach at the same time. But the broad root does **not**
- * subsume them, because {@link MAX_DEPTH} is counted *from the carrier root*:
- * reached through `["request"]`, a header is already one level down, and
+ * `request` is named **as well as** `request.headers`, and the apparent
+ * redundancy is load-bearing. The narrow root alone was narrower than the SDK —
+ * `RequestEventData` also carries `query_string` and `data`, the request body, so
+ * a name on the shipped list could sit directly on `request` and be out of the
+ * walk's reach at the same time. But the broad root does **not** subsume it,
+ * because {@link MAX_DEPTH} is counted *from the carrier root*: reached through
+ * `["request"]`, a header is already one level down, and
  * `request.headers.a.b.c.token` stops being redacted. Review caught that as a
  * silent narrowing of NFR18, so both are listed and the subtree is walked twice.
  * The second walk sees an already-scrubbed copy, so the two compose to the union
  * of their reach rather than fighting.
+ *
+ * **`request.cookies` is deliberately not a third root.** It was one, for the
+ * depth-budget reason above. It stopped being able to do anything the moment
+ * `cookies` joined the key list: the `["request"]` walk now collapses the whole
+ * map to a string on sight, so a second walk into it reaches a string and returns
+ * it unchanged. An entry that cannot fire is worse than no entry, because it
+ * reads as though the map were still being walked.
  *
  * **What key names cannot reach**: a secret in a URL rather than under a key —
  * `request.url` holding `?token=…`. Matching by key name structurally cannot see
@@ -157,7 +164,6 @@ const CARRIER_PATHS: readonly (readonly string[])[] = [
   ["data"],
   ["request"],
   ["request", "headers"],
-  ["request", "cookies"],
   ["contexts"],
   ["extra"],
   ["tags"],
