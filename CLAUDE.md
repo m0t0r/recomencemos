@@ -764,7 +764,7 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
   spot because every tree answered on one origin; now the hostname names the tree, and
   `agent-browser`'s `--scope worktree` session id lines up with it.
 
-- `next-partial-prefetching-adoption` — moves the app onto Partial Prefetching (one shared App Shell). Requires Cache Components, which is already on. This is a workflow, not a lookup: it audits `<Link prefetch>` calls with the user first.
+- `next-partial-prefetching-adoption` — moves an app onto Partial Prefetching (one shared App Shell). **This app is already on it**: `partialPrefetching: true` landed with #228, and the comment on that key in `apps/web/next.config.ts` carries what it bought and what it cost. The skill's step 1 — auditing `<Link prefetch={true}>` calls — still finds nothing here, and its remaining steps are about the deeper `'use cache'` half that ADR-0011 refuses for this app's session-shaped reads. This is a workflow, not a lookup.
 - `turborepo` — task graph, caching, and filtering reference.
 - `implement` — the Build session. Vendored **thin on purpose**: it delegates to `/tdd` and `/code-review` and knows nothing of the frontier query, the ticket claim, or the PR. That is this repo's, and it lives in `docs/agents/issue-tracker.md`. Do not fork the skill to add it.
 - `tdd` — red/green, and "no test is written at an unconfirmed seam". The seams were already confirmed at Design, so read the spec's `## Testing Decisions` section rather than re-interviewing the user.
