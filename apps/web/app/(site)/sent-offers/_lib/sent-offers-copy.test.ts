@@ -9,7 +9,9 @@
 import { OFFER_STATES } from "@repo/domain/policy";
 import { describeSurfaceCopy } from "@/testing/surface-copy";
 import {
-  OFFER_JUST_SENT,
+  OFFER_JUST_SENT_HEADING,
+  OFFER_JUST_SENT_IMMUTABLE,
+  OFFER_JUST_SENT_REVIEW,
   OFFER_PAY_LABEL,
   OFFER_PROFILE_LINK,
   OFFER_REVIEW_DELAYED,
@@ -22,7 +24,10 @@ import {
   SENT_OFFERS_EMPTY_BODY,
   SENT_OFFERS_EMPTY_HEADING,
   SENT_OFFERS_EMPTY_LINK,
-  SENT_OFFERS_FAILED,
+  SENT_OFFERS_FAILED_EXPLANATION,
+  SENT_OFFERS_FAILED_RETRY,
+  SENT_OFFERS_FAILED_RETRYING,
+  SENT_OFFERS_FAILED_TITLE,
   SENT_OFFERS_HEADING,
   SENT_OFFERS_LEAD,
   SENT_OFFERS_TITLE,
@@ -37,8 +42,13 @@ describeSurfaceCopy({
     ["SENT_OFFERS_EMPTY_HEADING", SENT_OFFERS_EMPTY_HEADING],
     ["SENT_OFFERS_EMPTY_BODY", SENT_OFFERS_EMPTY_BODY],
     ["SENT_OFFERS_EMPTY_LINK", SENT_OFFERS_EMPTY_LINK],
-    ["SENT_OFFERS_FAILED", SENT_OFFERS_FAILED],
-    ["OFFER_JUST_SENT", OFFER_JUST_SENT],
+    ["SENT_OFFERS_FAILED_TITLE", SENT_OFFERS_FAILED_TITLE],
+    ["SENT_OFFERS_FAILED_EXPLANATION", SENT_OFFERS_FAILED_EXPLANATION],
+    ["SENT_OFFERS_FAILED_RETRY", SENT_OFFERS_FAILED_RETRY],
+    ["SENT_OFFERS_FAILED_RETRYING", SENT_OFFERS_FAILED_RETRYING],
+    ["OFFER_JUST_SENT_HEADING", OFFER_JUST_SENT_HEADING],
+    ["OFFER_JUST_SENT_REVIEW", OFFER_JUST_SENT_REVIEW],
+    ["OFFER_JUST_SENT_IMMUTABLE", OFFER_JUST_SENT_IMMUTABLE],
     ["OFFER_REVIEW_DELAYED", OFFER_REVIEW_DELAYED],
     ["OFFER_TERMS_LABEL", OFFER_TERMS_LABEL],
     ["OFFER_WORK_LABEL", OFFER_WORK_LABEL],
@@ -54,6 +64,8 @@ describeSurfaceCopy({
   ],
   labels: [
     ["SENT_OFFERS_EMPTY_LINK", SENT_OFFERS_EMPTY_LINK],
+    ["SENT_OFFERS_FAILED_RETRY", SENT_OFFERS_FAILED_RETRY],
+    ["SENT_OFFERS_FAILED_RETRYING", SENT_OFFERS_FAILED_RETRYING],
     ["OFFER_PROFILE_LINK", OFFER_PROFILE_LINK],
     ["OFFER_TERMS_LABEL", OFFER_TERMS_LABEL],
     ["OFFER_WORK_LABEL", OFFER_WORK_LABEL],
@@ -131,6 +143,35 @@ describe("what a row never says", () => {
     const sentence = OFFER_STATE_SENTENCES.declined.toLowerCase();
 
     expect(sentence).not.toMatch(/lo siento|lamentab|desafortunad|porque/);
+  });
+});
+
+describe("the confirmation, after he sends", () => {
+  /**
+   * **The acceptance criterion is that all three are here**, and the third is the
+   * one that would otherwise go missing: the page's lead carries the human review
+   * and the row carries the window, so without this the thing he was warned about
+   * before writing is never confirmed after sending.
+   *
+   * They were written once already, in the Offer form's own messages module, and
+   * rendered nowhere — the send redirects here. A copy test passing over strings
+   * no surface renders is how a criterion comes to look satisfied.
+   */
+  it("says a person reads it first", () => {
+    expect(OFFER_JUST_SENT_REVIEW).toContain("Una persona la lee");
+  });
+
+  it("says it usually takes under a day", () => {
+    expect(OFFER_JUST_SENT_REVIEW).toContain("menos de un día");
+  });
+
+  it("says he cannot change it", () => {
+    expect(OFFER_JUST_SENT_IMMUTABLE.toLowerCase()).toContain("no se puede cambiar");
+  });
+
+  /** He has not achieved anything yet, and a person still has to read it. */
+  it("carries no exclamation mark, though a success state may", () => {
+    expect(OFFER_JUST_SENT_HEADING).not.toContain("!");
   });
 });
 

@@ -36,7 +36,9 @@ import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { SentOfferList } from "./_components/sent-offer-list";
 import {
-  OFFER_JUST_SENT,
+  OFFER_JUST_SENT_HEADING,
+  OFFER_JUST_SENT_IMMUTABLE,
+  OFFER_JUST_SENT_REVIEW,
   SENT_OFFERS_HEADING,
   SENT_OFFERS_LEAD,
   SENT_OFFERS_TITLE,
@@ -101,9 +103,22 @@ async function SentConfirmation({ searchParams }: { readonly searchParams: Searc
 
   if (sent !== "1") return null;
 
-  // `status` rather than `alert`: it is the outcome of something he did, and it
-  // is good news. It interrupts nothing.
-  return <output className="text-foreground font-medium">{OFFER_JUST_SENT}</output>;
+  /**
+   * `status` rather than `alert`: it is the outcome of something he did, and it
+   * is good news. It interrupts nothing.
+   *
+   * **All three clauses, because that is the criterion.** The page's lead
+   * carries the human review and the row carries the window; neither says he
+   * cannot change it, so without this the one thing he was warned about before
+   * writing would never be confirmed after sending.
+   */
+  return (
+    <output className="border-border flex flex-col gap-1 border-l-2 pl-4">
+      <span className="text-foreground font-medium">{OFFER_JUST_SENT_HEADING}</span>
+      <span className="text-muted-foreground text-sm">{OFFER_JUST_SENT_REVIEW}</span>
+      <span className="text-muted-foreground text-sm">{OFFER_JUST_SENT_IMMUTABLE}</span>
+    </output>
+  );
 }
 
 export default function SentOffersPage({ searchParams }: { readonly searchParams: SearchParams }) {

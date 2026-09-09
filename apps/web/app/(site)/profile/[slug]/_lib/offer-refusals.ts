@@ -8,9 +8,7 @@
  */
 
 import type { OfferRefusal } from "@repo/domain/offers";
-import { AppError, projectClientError } from "@repo/errors/app-error";
-import { logRequestError } from "@repo/observability/log-request-error";
-import { returnActionError } from "@/lib/safe-action";
+import { refuseWith } from "@/app/_lib/form/refuse-with";
 import {
   HIRER_NAME_REQUIRED,
   HIRER_PHONE_LOOKS_WRONG,
@@ -50,36 +48,18 @@ export function treeFromOfferRefusals(refusals: readonly OfferRefusal[]): OfferE
 }
 
 /**
- * Refuse by return, with the tree and his values.
+ * Refuse by return, with the tree and his values — this surface's `summaryKept`
+ * bound to the general helper in `_lib/form/refuse-with.ts`.
  *
- * Logged at `warn` because a returned error bypasses `handleServerError`, which
- * is where every thrown one is logged — a refusal nothing records is a failure
- * nothing records. It is an error rather than data so that a postback on the
- * unhydrated path actually completes (see `ActionError.fieldErrors`).
+ * The six lines under it were written twice, once here and once for the
+ * publishing form, and review of this change caught the copy. What stays here is
+ * the one thing that is this surface's: the sentence a person reads.
  */
-export function refuseOfferWith<Values>({
-  code,
-  message,
-  errors,
-  values,
-}: {
-  /** This surface's refusal code, so the browser can tell it from a ceiling. */
+export function refuseOfferWith<Values>(options: {
   readonly code: string;
-  /** Operator-facing English. Never reaches a browser. */
   readonly message: string;
   readonly errors: OfferErrorTree;
   readonly values: Values;
 }): never {
-  const refusal = new AppError({
-    code,
-    status: 422,
-    message,
-    // The sentence the summary already says; the tree carries the rest.
-    userMessage: OFFER_SUMMARY_KEPT,
-    // Field names only — identifiers, never what he typed (NFR18).
-    context: { fields: Object.keys(errors) },
-  });
-
-  logRequestError(refusal, { level: "warn" });
-  return returnActionError({ ...projectClientError(refusal), fieldErrors: errors, input: values });
+  return refuseWith({ ...options, summaryKept: OFFER_SUMMARY_KEPT });
 }

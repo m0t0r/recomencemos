@@ -42,6 +42,16 @@
  * a stale consent version — which is genuinely unexpected and rolls the whole
  * collection back with it.
  *
+ * **DD9 asks for a refusal when the Block or state read *throws*, and this
+ * throws instead — a deliberate divergence, named here rather than discovered.**
+ * The requirement it is protecting is "fail closed", and that holds either way:
+ * the transaction rolls back, the Offer is not written, and the surface refuses.
+ * What differs is the cost, one Sentry event, and it is the right one — a
+ * database that is not answering is a real incident, which is the argument
+ * `#rate-limit` already makes in as many words for its own store. Reading a
+ * failed connection as an ordinary refusal is how an outage becomes invisible.
+ * A crawler cannot provoke it: every refusal a request can *cause* is returned.
+ *
  * **Immutability is the product, and it is enforced by absence.** There is no
  * function here that rewrites an Offer's terms, and no `CHECK` could add one:
  * `offers.integration.test.ts` asserts the absence rather than leaving it
@@ -52,7 +62,7 @@
  * for `apps/web`, which ADR-0010 leaves with no handle of its own.
  */
 
-import { and, count, eq, min, sql } from "drizzle-orm";
+import { and, count, eq, inArray, min, sql } from "drizzle-orm";
 import { hasConsented, recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
 import type { DomainDatabase, DomainTransaction } from "#database";
@@ -461,7 +471,15 @@ export async function pendingOffers(
   readonly total: number;
   readonly oldestSentAt: Date | null;
 }> {
-  const waiting = sql`${schema.offer.state} in ('pending_review', 'on_hold')`;
+  /**
+   * The pending predicate, from the registry rather than spelled out.
+   *
+   * The literal it replaced was a second source for one set — and the set is
+   * also what the partial index's `WHERE` is generated from, so a state added
+   * to `PENDING_OFFER_STATES` would have widened the index and left this query
+   * reading the old pair.
+   */
+  const waiting = inArray(schema.offer.state, PENDING_OFFER_STATES);
 
   const rows = await db
     .select({

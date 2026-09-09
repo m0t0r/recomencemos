@@ -61,17 +61,15 @@ export const HIRER_PHONE_HELP = "Se lo damos solo si ella acepta. Nadie lo compr
 export const SEND_OFFER_BUTTON = "Enviar la propuesta";
 export const SEND_OFFER_PENDING = "Enviando…";
 
-/**
- * The confirmation, and all three of the story's clauses.
- *
- * A success state may carry one exclamation mark and this one carries none: he
- * has not achieved anything yet, and a person still has to read it.
- */
-export const OFFER_SENT_HEADING = "Tu propuesta va en camino";
-export const OFFER_SENT_REVIEW =
-  "Una persona la lee antes de que le llegue. Normalmente toma menos de un día.";
-export const OFFER_SENT_IMMUTABLE = "Ya no se puede cambiar: lo que escribiste es lo que ella lee.";
-export const OFFER_SENT_LINK = "Ver las propuestas que enviaste";
+/*
+  **The confirmation is not here, and its absence is the fix.** Four constants
+  sat in this module — a heading, the review sentence, the immutability sentence
+  and a link — written for a confirmation this surface never renders: the send
+  redirects, so what a person actually reads afterwards is `/sent-offers`. They
+  were copy-tested and rendered nowhere, which is the worst of both, and the
+  review of this change is what found them. The three clauses now live in that
+  route's own messages module, beside the page that says them.
+*/
 
 /** The form-level summary, where focus lands on a failed submit. */
 export function offerSummaryHeading(count: number): string {

@@ -43,6 +43,11 @@ const SENTINEL = {
   // half, and a shared sentinel would let the export carry one and pass for both.
   hirerName: "SentinelNombreDeQuienEnvia",
   hirerPhone: "+573001112233",
+  // The three things one person wrote to another (story 6). `personal`, held
+  // about both of them, and the export carries them from whichever side.
+  workDescription: "SentinelDescripcionDelTrabajo",
+  payTerms: "SentinelCondicionesDePago",
+  whenText: "SentinelCuandoEsElTrabajo",
 } as const;
 
 async function anAccountWithEverything(database: TestDatabase): Promise<string> {
@@ -87,7 +92,54 @@ async function anAccountWithEverything(database: TestDatabase): Promise<string> 
     await recordConsent(tx, { accountId, side: "hirer", versions: CURRENT_CONSENT_VERSIONS });
   });
 
+  await anOfferSentBy(database, accountId);
+
   return accountId;
+}
+
+/**
+ * One Offer this Account sent, so the export has both sides of a person in it.
+ *
+ * **Addressed to somebody else's profile**, which is what makes `side` mean
+ * something: a row matching both keys at once would be an Offer to oneself,
+ * which `sendOffer` refuses and which would leave this fixture unable to tell
+ * the two sides apart.
+ *
+ * Inserted directly for the reason `hirerName` above is: what is under test is
+ * whether the export's `select` list reaches every column, and driving another
+ * aggregate's whole transaction would make this fixture depend on story 6's
+ * refusals rather than on the schema.
+ */
+async function anOfferSentBy(database: TestDatabase, accountId: string): Promise<void> {
+  await database.db.insert(schema.user).values({
+    id: "the-addressee",
+    name: "",
+    email: "addressee@recomencemos.test",
+    emailVerified: true,
+  });
+
+  const [addressee] = await database.db
+    .insert(schema.capabilityProfile)
+    .values({
+      accountId: "the-addressee",
+      slug: "k7m2qx6vb4tn5rzd",
+      fullName: "Luz Marina Ospina",
+      firstName: "Luz",
+      lastInitial: "O",
+      city: "pereira",
+      headline: "Arreglo tuberías y baños",
+      phone: "+573005556677",
+      searchText: "luz pereira tuberias",
+    })
+    .returning({ id: schema.capabilityProfile.id });
+
+  await database.db.insert(schema.offer).values({
+    capabilityProfileId: (addressee as { id: bigint }).id,
+    hirerAccountId: accountId,
+    workDescription: SENTINEL.workDescription,
+    payTerms: SENTINEL.payTerms,
+    whenText: SENTINEL.whenText,
+  });
 }
 
 describe("the subject-access export", () => {
@@ -221,6 +273,16 @@ const EXPORTED_BY_COLUMN: Record<string, string> = {
   // Both halves of the join reach the export as the Skill labels she chose.
   "profile_skill.capabilityProfileId": "skills",
   "profile_skill.skillId": "skills",
+  // Three things one person wrote to another, held about both of them.
+  "offer.workDescription": "workDescription",
+  "offer.payTerms": "payTerms",
+  "offer.whenText": "whenText",
+  "offer.state": "state",
+  "offer.createdAt": "sentAt",
+  "offer.deliveredAt": "deliveredAt",
+  // Which side of the Offer this Account stands on, derived from which key
+  // matched rather than stored — so a row cannot be mislabelled.
+  "offer.hirerAccountId": "side",
 };
 
 /**
@@ -256,14 +318,43 @@ const EXCLUDED: Record<string, string> = {
   "work_history_entry.capabilityProfileId": "the join this export is already scoped by",
   "work_history_entry.createdAt": "bookkeeping; the profile's publishedAt is the date",
   "profile_skill.createdAt": "bookkeeping; the profile's publishedAt is the date",
+  "offer.id": "a surrogate key; it reaches a URL she holds, not a fact about her",
+  // The export is served to one person about herself, and naming the other party
+  // would make a habeas data request a way of learning about somebody who did
+  // not make one.
+  "offer.capabilityProfileId": "the counterpart, deliberately withheld",
+  /**
+   * **A Block is her decision about him, and it is hers alone.**
+   *
+   * Exported to *her* it would be a fact about a person she chose not to
+   * explain herself about; exported to *him* it would tell him he was Blocked,
+   * which is precisely what `CONTEXT.md` and this product's copy refuse to say
+   * — it is permanent and reasonless by design, and an export is not the door
+   * that reveals it. Story 13's deletion still reaches the rows.
+   */
+  "block.workerProfileId": "her decision about him; disclosed to neither party",
+  "block.hirerAccountId": "her decision about him; disclosed to neither party",
+  "block.createdAt": "her decision about him; disclosed to neither party",
 };
 
+/**
+ * The tables the classification check reads.
+ *
+ * **A table absent from here is a table nobody has decided about**, and that is
+ * a bigger hole than an undecided column: story 6 added `offer` with three
+ * `personal` free-text columns and `block`, and neither was covered until they
+ * were added below — the guard reported a clean tree over five tables while two
+ * new ones sat outside it. A story that adds a table adds its row here in the
+ * same change.
+ */
 const TABLES = {
   user: schema.user,
   consent: schema.consent,
   capability_profile: schema.capabilityProfile,
   work_history_entry: schema.workHistoryEntry,
   profile_skill: schema.profileSkill,
+  offer: schema.offer,
+  block: schema.block,
 };
 
 const COLUMNS = Object.entries(TABLES).flatMap(([table, definition]) =>
@@ -298,10 +389,14 @@ describe("every column is classified", () => {
     const consent = subject?.consents[0];
     expect(consent).toBeDefined();
 
+    const offer = subject?.offers[0];
+    expect(offer, "the fixture Account is party to no Offer").toBeDefined();
+
     const onTheWire = new Set([
       ...Object.keys(subject?.account ?? {}),
       ...Object.keys(consent ?? {}),
       ...Object.keys(subject?.profile ?? {}),
+      ...Object.keys(offer ?? {}),
     ]);
 
     for (const field of Object.values(EXPORTED_BY_COLUMN)) {

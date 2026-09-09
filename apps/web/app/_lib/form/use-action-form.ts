@@ -44,7 +44,7 @@ import {
 } from "react";
 import type { z } from "zod";
 import type { ActionError } from "@/lib/safe-action";
-import { type Feedback, feedbackFor } from "@/app/_lib/profile-form/feedback";
+import { type Feedback, feedbackFor } from "./feedback";
 
 /**
  * The parts of a `useActionState` result this machine reads.
@@ -62,7 +62,7 @@ export interface ActionFormResult {
 /** What a form's `useActionState` starts on: nothing has been submitted. */
 export const INITIAL_RESULT: ActionFormResult = {};
 
-export type { Feedback } from "@/app/_lib/profile-form/feedback";
+export type { Feedback } from "./feedback";
 
 /**
  * The action, **already bound by its caller**.

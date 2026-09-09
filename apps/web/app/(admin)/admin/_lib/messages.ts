@@ -328,7 +328,7 @@ export const OFFER_PAY_FIELD = "El pago";
 export const OFFER_WHEN_FIELD = "Cuándo";
 
 /** When it was sent — the same long-form date `requestedOn` uses, for its reason. */
-export const offerSentOn = (at: Date) =>
+export const offerSentOnQueue = (at: Date) =>
   `Enviada el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
 
 /**
