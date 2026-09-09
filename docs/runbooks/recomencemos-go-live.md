@@ -205,6 +205,10 @@ default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; 
       reaches a user only when their browser updates. Tick this box by recording the decision either
       way; adding `preload` means editing `hsts` in [`../policy/security.md`](../policy/security.md)
       first, and then submitting at <https://hstspreload.org>.
+      **`includeSubDomains` reaches subdomains of the host that sent it and nothing else.** If the
+      app ends up on `www.recomencemos.online` while the photo zone is a **sibling** rather than a
+      child, the app's HSTS does not cover the photo host — check that host separately, on its own
+      response.
 
 - [ ] **`'unsafe-inline'` in `script-src` is known, recorded and open.** It is what keeps this app's
       prerendered shells, because a nonce is incompatible with Partial Prerendering. Scan the

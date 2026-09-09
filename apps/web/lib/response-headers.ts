@@ -38,6 +38,15 @@
  */
 export const ALL_ROUTES = "/(.*)";
 
+/**
+ * **One response class it does not reach, measured rather than assumed.** Next
+ * emits its trailing-slash and path-normalisation `308` *ahead* of the
+ * custom-headers stage, so `GET /privacy/` and `GET //` answer with none of the
+ * seven. There is no body, no script and the `Location` is same-origin, so
+ * there is nothing there to protect — but `/(.*)` reads like "literally every
+ * response" and it is not quite that.
+ */
+
 /** What `next.config.ts` hands in: `process.env`, and in a test whatever the row says. */
 export type HeaderEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -78,7 +87,12 @@ export const STRICT_TRANSPORT_SECURITY = "max-age=63072000; includeSubDomains";
 export const GOOGLE_AUTHORIZATION_ORIGIN = "https://accounts.google.com";
 
 /**
- * Deny-all for every capability this product does not use.
+ * Ten named capabilities, denied. **Not "deny-all", and the difference is worth
+ * the sentence:** a `Permissions-Policy` restricts only the features it names,
+ * so everything unnamed — `fullscreen`, `clipboard-read`, `picture-in-picture`,
+ * `serial` and the rest — keeps its default allowlist. What makes that
+ * acceptable rather than a gap is `frame-ancestors 'none'`: no third-party
+ * frame can inherit anything, and this app loads no cross-origin script.
  *
  * The photo path is a **file input**, not a `getUserMedia` capture, so denying
  * the camera costs this product nothing today — and the day a surface wants one
@@ -121,11 +135,25 @@ export const PERMISSIONS_POLICY = [
  */
 function originOf(value: string | undefined): string | undefined {
   if (!value) return undefined;
+
+  let origin: string;
   try {
-    return new URL(value).origin;
+    origin = new URL(value).origin;
   } catch {
     return undefined;
   }
+
+  /**
+   * **Parsing is not enough, and the gap was measured against this tree's
+   * Node.** A `javascript:` or `data:` value parses and yields the literal
+   * string `"null"`, which would reach the header as a host-source matching
+   * nothing — a misconfiguration wearing the shape of a configuration, which is
+   * the one thing this function exists to prevent. And `new URL` keeps `;` and
+   * `*` inside a host, so a value carrying either would truncate a directive or
+   * widen one. It cannot carry a space, CR, LF or tab — those throw or are
+   * stripped — so header injection was never reachable; this closes the rest.
+   */
+  return /^https?:\/\/[^;*\s]+$/.test(origin) ? origin : undefined;
 }
 
 /** Drops the absent and the repeated, preserving order. */
@@ -238,6 +266,15 @@ export function contentSecurityPolicy(environment: HeaderEnvironment): string {
    * not, the source expressions are already the stronger rule: an
    * `http://` URL does not match an `https://` origin, so it is **blocked**
    * rather than upgraded.
+   *
+   * **Degrading rather than refusing is deliberate**, and the obvious
+   * alternative was tried on paper and rejected: throwing on a plaintext origin
+   * under `NODE_ENV === "production"` would fail every **local** `pnpm build`
+   * too, because a developer's `.env.local` points at MinIO — and `pnpm build`
+   * is what `pnpm page-weight` reads, so the byte budget would become
+   * unmeasurable. The operator-facing check lives in the go-live runbook
+   * instead: an absent `upgrade-insecure-requests` on the deployed origin means
+   * one of the three configured origins is `http://`.
    */
   const admitsPlaintext = [photoDelivery, photoStore, sentryIngest].some((origin) =>
     origin?.startsWith("http:"),

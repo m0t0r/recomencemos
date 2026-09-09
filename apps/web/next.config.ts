@@ -123,6 +123,16 @@ const nextConfig: NextConfig = {
     return [...securityHeaderRules(process.env), ...gatedRouteHeaders()];
   },
 
+  /**
+   * `X-Powered-By: Next.js` is off, and it belongs with the header set rather
+   * than on its own: this is the one header the app was sending that it had no
+   * reason to. It names the framework to anyone scanning, with no version and
+   * no exploit behind it — so this is tidiness rather than a fix, and the honest
+   * reason to take it is that a change titled "the headers ship, as a group" is
+   * the only natural place it will ever come up.
+   */
+  poweredByHeader: false,
+
   logging: {
     // Forward browser console errors and warnings into the `next dev` terminal
     // so an agent reading stdout sees client-side failures it would otherwise
