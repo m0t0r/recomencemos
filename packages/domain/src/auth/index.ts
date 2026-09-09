@@ -359,11 +359,11 @@ export interface AuthSession {
  * **The Better Auth instance is built lazily and memoised**, and both halves are
  * load-bearing rather than tuning. Memoised, because Better Auth resolves its
  * whole plugin and endpoint graph at construction and one process wants one of
- * those. Lazily, because building it needs the pooled connection — and
- * `#connection` carries `import "server-only"`, which throws under plain `node`.
- * A connection resolved at module scope would therefore make this subpath
- * unimportable from `apps/web/domain-boundary.test.ts`, which is the test whose
- * whole job is importing it.
+ * those. Lazily, because building it calls `db()`, which opens the pool — and
+ * `next build` imports every server module it traces, so an instance built at
+ * module scope would open a pool during a build that was never going to use one.
+ * That is the argument `#connection` already makes for `db()` itself; this is the
+ * caller keeping it true.
  *
  * **`db` is optional here for the same reason it is required everywhere else in
  * this package.** ADR-0010 withholds `#connection`, so `apps/web` has no handle

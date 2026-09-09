@@ -77,8 +77,8 @@ function stateOfRow(stored: string | undefined): OfferSendingState {
 /**
  * **The pooled binding: what a Server Component or Server Action calls.**
  *
- * ADR-0010 withholds `#connection`, so a caller outside this package has no
- * handle to pass and reaches the database through this object or not at all.
+ * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass and
+ * reaches the database through this object or not at all.
  */
 export const accounts = {
   async offerSendingState(accountId: string): Promise<OfferSendingState> {

@@ -375,8 +375,10 @@ async function exportedProfile(
 }
 
 /**
- * **The pooled binding: what a Server Action calls.** ADR-0010 withholds
- * `#connection`, so `apps/web` has no handle to pass.
+ * **The pooled binding: what a Server Action calls.**
+ *
+ * ADR-0010 withholds `#connection`, so `apps/web` has no handle to pass and
+ * reaches the database through this object or not at all.
  */
 export const subjectAccess = {
   async build(accountId: string): Promise<SubjectAccessExport | null> {

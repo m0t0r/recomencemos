@@ -10,8 +10,7 @@
  *
  * **A Node environment, because the module under test binds three domain
  * facades** and a facade imports the pooled connection, whose package refuses to
- * load where a `window` exists. Nothing here asserts against a DOM, so the
- * declaration costs the file nothing and says what it already was.
+ * load where a `window` exists. Nothing here asserts against a DOM.
  */
 
 import {

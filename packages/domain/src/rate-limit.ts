@@ -768,10 +768,11 @@ export async function chargeCeiling(
  * a setup link.
  *
  * What the dynamic import keeps out of which graph, stated plainly: it keeps
- * `#connection` — the `server-only` marker, `pg`, and `@repo/observability`'s
- * `@sentry/nextjs` dependency — off the enrolment command's graph. Every other
- * facade in this package is reached only from a request path and imports the
- * handle statically.
+ * `#connection` — the `server-only` marker, and `@repo/observability`, whose
+ * `@sentry/nextjs` dependency has no named exports under plain `node` — off the
+ * enrolment command's graph. Not `pg`: that command opens the **direct**
+ * connection itself and imports `pg` either way. Every other facade in this
+ * package is reached only from a request path and imports the handle statically.
  */
 export const ceilings = {
   async charge(principal: CeilingPrincipal, action: CeilingedAction): Promise<CeilingOutcome> {
