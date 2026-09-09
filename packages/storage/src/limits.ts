@@ -62,6 +62,31 @@ export const DECODABLE_FORMATS = ["jpeg", "png", "webp", "avif", "heif"] as cons
 export type DecodableFormat = (typeof DECODABLE_FORMATS)[number];
 
 /**
+ * The types a presigned PUT may **declare**.
+ *
+ * **Derived from {@link DECODABLE_FORMATS} rather than written out**, so the
+ * set a browser may claim and the set the decoder will accept cannot drift
+ * apart — a type that could be declared and never decoded is a quarantined
+ * object that will always fail promotion, and one that could be decoded and
+ * never declared is a photo refused before it is looked at.
+ *
+ * **It bounds what may be declared; it decides nothing** (#251). Binding
+ * `Content-Type` into the signature makes a PUT agree with its own declaration,
+ * and nothing about that stops the declaration being `text/html` — so this is
+ * the half that closes the set, and the signature is the half that holds the
+ * request to it. Neither is the format check: that is the decoder's, on the
+ * bytes, at promotion, and it is the only one that ever decides.
+ *
+ * `image/heic` is absent because `heif` is the container `sharp` reports and
+ * this list is one-for-one with what it reports. The browser sends what
+ * `canvas.toBlob` produced — WebP, JPEG, or silently PNG — so no path this
+ * product owns reaches for one of the other two.
+ */
+export const UPLOADABLE_CONTENT_TYPES: readonly string[] = DECODABLE_FORMATS.map(
+  (format) => `image/${format}`,
+);
+
+/**
  * The `accept` attribute the file input carries.
  *
  * Deliberately **not** built from {@link DECODABLE_FORMATS}. That list is what

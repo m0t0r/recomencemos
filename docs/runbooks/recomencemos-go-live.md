@@ -82,11 +82,38 @@ fly secrets list                                          # names and digests on
 
 ## 3. Object storage (DD6)
 
-- [ ] Bucket created, with a **quarantine prefix that is not publicly readable**. NFR6 bounds the
-      stored object, not the page: a pending photo at a readable URL that nothing links to defeats
-      the rule while appearing to satisfy it.
+**Two buckets, and which bucket an object is in is the whole of NFR6.** R2 states public access as a
+**single switch per bucket** — there is no per-prefix ACL and no S3-style bucket policy underneath
+it, so "the quarantine prefix is not publicly readable" is a sentence R2 has no mechanism to make
+true. It is written here because that sentence stood in this runbook for a while with nothing behind
+it ([#251](https://github.com/m0t0r/recomencemos/issues/251)), and because the answer a later reader
+reaches for — a WAF custom rule on the zone — is a second mechanism to keep in agreement with a first.
+Do not add one and do not put both prefixes in one bucket. `object-store-access` in
+[`../policy/data.md`](../policy/data.md) is the key.
+
+- [ ] **Two buckets created.** `PHOTO_S3_BUCKET` holds approved photos; `PHOTO_S3_QUARANTINE_BUCKET`
+      holds everything an Admin has not yet decided on. Both names go into `fly secrets` with the
+      rest of §1.
+- [ ] **The photos bucket has public access enabled**, and a custom domain on the Cloudflare zone in
+      front of it — the `/cdn-cgi/image/…` transformation path requires one. That domain is
+      `PHOTO_PUBLIC_BASE`.
+- [ ] **The quarantine bucket has public access never enabled, and no custom domain at all.** There is
+      nothing to switch off and nothing to write a rule against, which is the point: the object is
+      unreachable because no public route to that bucket exists, not because a rule declines to serve
+      one. NFR6 bounds the stored object, not the page — a pending photo at a readable URL that
+      nothing links to defeats the rule while appearing to satisfy it.
+- [ ] **Proven, not asserted:** put a known object under `quarantine/` in that bucket, then request it
+      with no credentials at the address you would use if it were public. The pass is a **denial** of
+      an object that is really there. A `404` for a key nobody wrote proves nothing — that trap is why
+      `packages/storage/src/photos.store.test.ts` uploads before it asks, and `scripts/go-live.sh` §3
+      now does the same.
+- [ ] **A lifecycle rule on the quarantine bucket**, so objects nobody ever reviewed are collected
+      rather than kept. `promoteToPublic` deliberately leaves the original in place on approval.
 - [ ] Domain on Cloudflare as a zone, with **image transformations enabled** — a dashboard step, and
       photos serve at full size until it is done.
+- [ ] Worth having, and not what makes NFR6 true: a Cloudflare **Transform Rule** adding
+      `X-Content-Type-Options: nosniff` on the photo origin. Nothing in this repository can set that
+      header on a host it does not serve.
 
 ---
 

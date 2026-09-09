@@ -140,7 +140,7 @@ services:
       retries: 12
       start_period: 5s
 
-  # The object store. Photos, in two prefixes with two different policies.
+  # The object store. Photos, in two buckets with two different lifetimes.
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     command: ["server", "/data", "--console-address", ":9001"]
@@ -171,7 +171,7 @@ services:
       retries: 12
       start_period: 5s
 
-  # Runs once, exits, and is what makes the two prefixes different.
+  # Runs once, exits, and is what makes the two buckets different.
   minio-init:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     depends_on:
@@ -180,19 +180,23 @@ services:
     # `--ignore-existing` and `anonymous set` are both idempotent, so this is
     # safe to re-run on every `pnpm db:up` rather than only on a fresh volume.
     #
-    # **`anonymous set download … /photos` and nothing for `quarantine`.** That
-    # asymmetry is the whole point of this service: the public prefix is
-    # readable without a credential because that is how Cloudflare reads it, and
-    # the quarantine prefix is readable with one and only with one. Runbook §3
-    # is the same two acts performed by a human against R2.
+    # **`anonymous set download` on the whole photos bucket and nothing at all
+    # on the quarantine one.** That asymmetry is the point of this service, and
+    # it is stated at the *bucket* rather than at a prefix because that is the
+    # only place R2 can state it: public access there is one switch per bucket,
+    # with no per-prefix policy and no S3-style bucket policy behind it (#251).
+    # A prefix-scoped rule here would be a local capability production has no
+    # way to reproduce — which is the failure a fixture is supposed to prevent
+    # rather than commit. Runbook §3 is these same acts performed by a human.
     entrypoint:
       - /bin/sh
       - -c
       - |
         mc alias set local http://minio:9000 recomencemos recomencemos
         mc mb --ignore-existing local/recomencemos-photos
-        mc anonymous set download local/recomencemos-photos/photos
-        mc anonymous set none local/recomencemos-photos/quarantine
+        mc mb --ignore-existing local/recomencemos-photos-quarantine
+        mc anonymous set download local/recomencemos-photos
+        mc anonymous set none local/recomencemos-photos-quarantine
 
 volumes:
   # Named, so `pnpm db:down` keeps the data and `pnpm db:reset` is the deliberate

@@ -183,7 +183,7 @@ finish() {
 # STAGES: author this section. One stage() per step the human takes.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=23
+TOTAL_STAGES=24
 
 # Runbook §§1–5 of docs/runbooks/recomencemos-go-live.md, for ticket #7.
 #
@@ -370,7 +370,7 @@ printf '\n'
 require fly "sections 1 and 5 set and read Fly secrets and machine size" || true
 require dig "section 4 verifies SPF, DKIM and DMARC" || true
 require psql "section 2 reads the connection limit and creates the extensions" || true
-require curl "section 3 proves the quarantine prefix is not publicly readable" || true
+require curl "section 3 proves the public origin does not serve a quarantine key" || true
 require gh "section 5 fires the needs-triage dispatch" || true
 require openssl "section 1 generates two of the eight secrets" || true
 pause "Press Enter to begin."
@@ -660,59 +660,155 @@ attest "Both stores were restored together, not the database alone" ||
 # 3 — Object storage (DD6)
 # ══════════════════════════════════════════════════════════════════════════
 
-section "3 — Object storage: the bucket, the quarantine prefix, transformations"
+section "3 — Object storage: two buckets, and transformations"
 
-# ── Stage 12: the bucket, and a quarantine prefix that is really closed ───
-# NFR6 is the rule these three lines state: 0 unmoderated photo OBJECTS
-# retrievable by an unauthenticated request, which is reachability rather than
-# routing (DD6).
-stage "R2: the bucket, and a quarantine prefix that is not publicly readable"
+# ── Stage 12: two buckets, and a quarantine one that is really unreachable ───
+# NFR6 is the rule this stage states: 0 unmoderated photo OBJECTS retrievable by
+# an unauthenticated request, which is reachability rather than routing (DD6).
+#
+# **It is two buckets rather than two prefixes because R2 has no per-prefix
+# ACL** — public access there is one switch for a whole bucket, so "the
+# quarantine prefix is not publicly readable" is a sentence R2 cannot make true.
+# That was this stage's premise until #251, and both halves of what it checked
+# were wrong: it named a mechanism production does not have, and it accepted a
+# 404 from a URL nobody had put an object at.
+stage "R2: two buckets, and a quarantine one with no public route at all"
 say "What has to be unreachable is the STORED OBJECT, not merely the page."
 warn "A pending photo at a readable URL that nothing links to defeats the rule"
 note "while appearing to satisfy it. So this stage ends in a failed request, by design."
 open_url "https://dash.cloudflare.com"
-step "Cloudflare, then R2. Create the bucket."
-step "Create the quarantine prefix and confirm it is in no public bucket path."
-ask R2_BUCKET "Bucket name:"
+step "Cloudflare, then R2. Create BOTH buckets — the photos one and the quarantine one."
+step "Enable public access on the photos bucket only, behind its custom domain."
+step "Leave the quarantine bucket with public access off and no custom domain."
+ask R2_BUCKET "Photos bucket name:"
 [[ -n "$R2_BUCKET" ]] && write_env R2_BUCKET "$R2_BUCKET"
-ask R2_QUARANTINE_URL "A full URL to an object under the quarantine prefix:"
-if [[ -n "$R2_QUARANTINE_URL" ]] && command -v curl >/dev/null 2>&1; then
-  write_env R2_QUARANTINE_URL "$R2_QUARANTINE_URL"
-  say "Requesting it with no credentials at all."
-  note "The pass is a real DENIAL — 401, 403 or 404. Not merely 'anything but 200':"
-  note "a timeout or an unbound domain also fails to return 200, and proves nothing."
-  run "curl -s -o /dev/null -w '%{http_code}' <quarantine-url>" -- \
-    curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 "$R2_QUARANTINE_URL"
-  # Branch on the bytes that went into the transcript. Asking the human to
-  # re-type the code they just saw turns the measurement back into the
-  # assertion this ticket's last criterion exists to exclude.
-  QCODE=$(run_value)
-  printf -- '\n- Quarantine prefix, unauthenticated status: **%s** (measured)\n' \
-    "${QCODE:-none}" >> "$EVIDENCE"
-  case "$QCODE" in
-  401 | 403 | 404)
-    say "$QCODE — not served to an unauthenticated request. That is the pass."
-    ;;
-  200)
-    warn "200 means the quarantine prefix IS publicly readable."
-    note "The object itself has to be unreachable, and it is not. This is that failure."
-    SKIPPED+=("section 3 — quarantine prefix returned 200, so unreviewed photos are readable")
-    ;;
-  000 | "")
-    warn "No HTTP response at all — a timeout, DNS failure, or no bound domain."
-    note "This proves nothing either way. It is not a pass."
-    SKIPPED+=("section 3 — quarantine check reached nothing ($QCODE). Re-run against a bound URL")
-    ;;
-  *)
-    warn "$QCODE is neither a denial nor a success."
-    SKIPPED+=("section 3 — quarantine check was inconclusive ($QCODE). A pass is 401, 403 or 404")
-    ;;
-  esac
-else
-  defer "section 3 quarantine non-readability" "no quarantine URL given, so nothing was proven"
+ask R2_QUARANTINE_BUCKET "Quarantine bucket name:"
+[[ -n "$R2_QUARANTINE_BUCKET" ]] && write_env R2_QUARANTINE_BUCKET "$R2_QUARANTINE_BUCKET"
+
+# The rule being restated in the warning is NFR6: 0 unmoderated photo objects
+# retrievable by an unauthenticated request.
+if [[ "$R2_BUCKET" == "$R2_QUARANTINE_BUCKET" && -n "$R2_BUCKET" ]]; then
+  warn "Those are the same bucket, so every unreviewed photo is in the public one."
+  SKIPPED+=("section 3 — one bucket was named twice, so unreviewed photos share the public one")
 fi
 
-# ── Stage 13: the zone, and image transformations ─────────────────────────
+attest "The quarantine bucket has public access OFF and no custom domain bound to it" ||
+  SKIPPED+=("section 3 — quarantine bucket public access was not confirmed off")
+
+# ── Stage 13: the pair of requests, and why it is a pair ──────────────────
+#
+# **A 404 alone is not a denial, and it used to be recorded as one.** This stage
+# asked for "a full URL to an object under the quarantine prefix" without ever
+# requiring an object to be at it, then accepted 404 as the pass — so a
+# publicly-readable prefix with nothing at that key answered 404 and went into
+# the transcript as proof of the opposite (#251).
+#
+# So it is two requests against the SAME public origin, and each one is the
+# other's control:
+#
+#   the approved object   → 200 proves the origin is really serving
+#   the quarantine key    → 404 then means the object is not in that bucket
+#
+# A 404 on the second with anything but 200 on the first proves nothing at all —
+# a dead hostname answers exactly that way. `photos.store.test.ts` runs the same
+# pair against MinIO, which is where the shape comes from.
+stage "The pair of requests: the origin is serving, and the quarantine key is not on it"
+say "Upload one real object to EACH bucket first. Nothing below proves anything without them."
+step "Photos bucket: upload any small image under photos/ — note the key you gave it."
+step "Quarantine bucket: upload any small file under quarantine/ — note that key too."
+note "Both objects are yours and disposable. Delete them when this section is green."
+ask R2_PUBLIC_BASE "The public origin — the same value PHOTO_PUBLIC_BASE will hold:"
+ask R2_PUBLIC_KEY "The key of the object in the PHOTOS bucket (e.g. photos/probe.webp):"
+ask R2_QUARANTINE_KEY "The key of the object in the QUARANTINE bucket (e.g. quarantine/probe):"
+
+# **The half no credential-free command can reach, so it is attested rather than
+# skipped.** The quarantine bucket has no public route — that is the property
+# under test — so nothing here can confirm the object is really at that key. If
+# it is not, the 404 below is trivially true and proves nothing, which is
+# precisely the shape of the false pass #251 found in the earlier version of
+# this stage. Recording the question and the answer is what stops it being
+# assumed silently.
+attest "You really did upload an object to that exact key in the quarantine bucket" ||
+  SKIPPED+=("section 3 — no object was confirmed at the quarantine key, so a 404 there proves nothing")
+
+if [[ -n "$R2_PUBLIC_BASE" && -n "$R2_PUBLIC_KEY" && -n "$R2_QUARANTINE_KEY" ]] &&
+  command -v curl >/dev/null 2>&1; then
+  write_env R2_PUBLIC_BASE "$R2_PUBLIC_BASE"
+  write_env R2_PUBLIC_KEY "$R2_PUBLIC_KEY"
+  write_env R2_QUARANTINE_KEY "$R2_QUARANTINE_KEY"
+
+  # **Both URLs are built from one base**, rather than one being typed whole and
+  # the other derived from it. The pair is only a control if the two requests
+  # reach the same origin, and two separately-typed URLs are two chances for
+  # them not to. The trailing slash is trimmed for the same reason the reader in
+  # `@repo/storage` trims it: an operator pastes it about half the time.
+  R2_BASE="${R2_PUBLIC_BASE%/}"
+  R2_CONTROL_URL="${R2_BASE}/${R2_PUBLIC_KEY#/}"
+  # The attacker's string: PHOTO_PUBLIC_BASE is a bucket root and a key carries
+  # its own prefix, so this concatenation is one anybody can build.
+  R2_CONSTRUCTED="${R2_BASE}/${R2_QUARANTINE_KEY#/}"
+
+  say "First the control: the approved object, with no credentials."
+  run "curl -s -o /dev/null -w '%{http_code}' <public-base>/<photos-key>" -- \
+    curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 "$R2_CONTROL_URL"
+  PUBCODE=$(run_value)
+
+  say "Then the subject: the quarantine key on that same origin."
+  run "curl -s -o /dev/null -w '%{http_code}' <public-base>/<quarantine-key>" -- \
+    curl -s -o /dev/null -w '%{http_code}\n' --max-time 20 "$R2_CONSTRUCTED"
+  QCODE=$(run_value)
+
+  # Branch on the bytes that went into the transcript. Asking the human to
+  # re-type the code they just saw turns the measurement back into the
+  # assertion this stage exists to exclude.
+  printf -- '\n- Approved object, unauthenticated status: **%s** (measured)\n' \
+    "${PUBCODE:-none}" >> "$EVIDENCE"
+  printf -- '\n- Quarantine key on the public origin, unauthenticated status: **%s** (measured)\n' \
+    "${QCODE:-none}" >> "$EVIDENCE"
+
+  if [[ "$PUBCODE" != "200" ]]; then
+    warn "The control did not answer 200 — it answered ${PUBCODE:-nothing}."
+    note "So the origin is not serving, and NOTHING the second request returned means anything."
+    note "A dead hostname answers 404 too. Fix the origin, then re-run this section."
+    SKIPPED+=("section 3 — control request returned ${PUBCODE:-nothing}, so the quarantine result proves nothing")
+  else
+    case "$QCODE" in
+    404)
+      say "200 then 404 — the origin serves, and the quarantine object is not on it."
+      say "That is the pass, and it is a pass because the control is 200."
+      ;;
+    200)
+      warn "200 means the quarantine object IS being served from the public origin."
+      note "Either both prefixes are in one bucket, or the wrong bucket is public."
+      SKIPPED+=("section 3 — the quarantine key returned 200, so unreviewed photos are readable")
+      ;;
+    # A denial here is the arrangement #251 refused: it means something is
+    # actively declining to serve an object that is in the public bucket, and
+    # the only mechanisms that could be doing so are a per-prefix rule R2 does
+    # not have, or a zone rule nothing in this repository names.
+    401 | 403)
+      warn "$QCODE is a DENIAL, which means a rule is refusing rather than the object being absent."
+      note "So the object is in the public bucket and something is declining to serve it —"
+      note "either both prefixes share a bucket, or a zone rule nobody has written down."
+      SKIPPED+=("section 3 — the quarantine key returned $QCODE, a rule refusing rather than an absent object")
+      ;;
+    000 | "")
+      warn "No HTTP response at all — a timeout or DNS failure on the second request."
+      note "This proves nothing either way. It is not a pass."
+      SKIPPED+=("section 3 — the quarantine check reached nothing ($QCODE). Re-run against a bound URL")
+      ;;
+    *)
+      warn "$QCODE is neither an absent object nor a success."
+      SKIPPED+=("section 3 — the quarantine check was inconclusive ($QCODE). A pass is 404 behind a 200 control")
+      ;;
+    esac
+  fi
+else
+  defer "section 3 quarantine non-readability" \
+    "no public base and two object keys given, so nothing was proven"
+fi
+
+# ── Stage 14: the zone, and image transformations ─────────────────────────
 stage "Cloudflare: the zone, and image transformations turned on"
 say "A dashboard step, and photos serve at full size until it is done."
 step "Cloudflare: add your domain as a zone, nameservers pointed at Cloudflare."
@@ -730,14 +826,14 @@ ask IMAGE_HOST "The image host that will appear in the CSP's img-src (section 5)
 
 section "4 — Sending domain: the step whose lead time is measured in weeks"
 
-# ── Stage 14: the domain, and the sending subdomain ───────────────────────
+# ── Stage 15: the domain, and the sending subdomain ───────────────────────
 stage "Resend: the sending subdomain"
 warn "This is the step that cannot be compressed at the end."
 say "Warm-up guidance is 50-100 sends/day in week 1, and 200-500 in week 2."
 say "The announcement is a spike onto a domain that has never sent anything."
 printf '\n'
 step "Resend, then Domains. Add a SUBDOMAIN for sending, not the root domain."
-step "Resend shows the DNS records; publish them in the zone from stage 13."
+step "Resend shows the DNS records; publish them in the zone from stage 14."
 open_url "https://resend.com/domains"
 ask ROOT_DOMAIN "Root domain (e.g. example.co):"
 ask SENDING_SUBDOMAIN "Sending subdomain (e.g. mail.example.co):"
@@ -745,7 +841,7 @@ ask SENDING_SUBDOMAIN "Sending subdomain (e.g. mail.example.co):"
 [[ -n "$SENDING_SUBDOMAIN" ]] && write_env SENDING_SUBDOMAIN "$SENDING_SUBDOMAIN"
 pause "Records published in Cloudflare? Press Enter."
 
-# ── Stage 15: dig, three times, and no assuming ───────────────────────────
+# ── Stage 16: dig, three times, and no assuming ───────────────────────────
 stage "DNS: SPF, DKIM and DMARC each verified with dig"
 say "Verified, not assumed. Section 4 is explicit about that."
 # dig_txt LABEL NAME digs once, and judges the answer that went into the
@@ -777,7 +873,7 @@ else
   defer "section 4 DNS verification" "dig is missing, or no sending subdomain was given"
 fi
 
-# ── Stage 16: the fallback ────────────────────────────────────────────────
+# ── Stage 17: the fallback ────────────────────────────────────────────────
 stage "The fallback subdomain, held and warmed in parallel"
 say "So a reputation problem on the primary is a DNS change rather than a rebuild."
 note "Held and WARMED in parallel — an unwarmed fallback is not a fallback."
@@ -796,7 +892,7 @@ else
   SKIPPED+=("section 4 — no fallback held. A reputation problem becomes a rebuild")
 fi
 
-# ── Stage 17: the date the clock started ──────────────────────────────────
+# ── Stage 18: the date the clock started ──────────────────────────────────
 stage "Warm-up: the date it started, recorded"
 say "The ticket asks for this date specifically, and this is where it exists."
 note "Every ticket's test sends count toward the curve. There is no separate"
@@ -814,7 +910,7 @@ note "So volume tracks the curve rather than outrunning it."
 attest "A staged announcement plan is written down somewhere durable" ||
   SKIPPED+=("section 4 — write the staged announcement plan; the curve is the constraint")
 
-# ── Stage 18: the check most likely to be faked ───────────────────────────
+# ── Stage 19: the check most likely to be faked ───────────────────────────
 stage "Deliverability: into real Colombian inboxes, by eye"
 warn "This is the check most likely to be ticked without being done."
 note "Section 4 says exactly that, and says its failure is silent: sends are"
@@ -854,7 +950,7 @@ record "hotmail.com placement" "$HOTMAIL_RESULT"
 
 section "5 — Application configuration: memory, CSP, probe, digest, triage"
 
-# ── Stage 19: machine memory ──────────────────────────────────────────────
+# ── Stage 20: machine memory ──────────────────────────────────────────────
 stage "Fly: machine memory of at least 1 GB"
 if command -v fly >/dev/null 2>&1 && [[ -n "${FLY_APP:-}" ]] && fly status --app "$FLY_APP" >/dev/null 2>&1; then
   run "fly scale show --app $FLY_APP" -- fly scale show --app "$FLY_APP"
@@ -867,7 +963,7 @@ else
     "nothing has deployed yet, and a machine arrives with the first deploy"
 fi
 
-# ── Stage 20: the CSP ─────────────────────────────────────────────────────
+# ── Stage 21: the CSP ─────────────────────────────────────────────────────
 stage "CSP: shipped and enforced, not report-only"
 say "frame-ancestors 'none' is the load-bearing directive."
 warn "Without it acceptOffer is clickjackable — one click releasing a displaced"
@@ -889,7 +985,7 @@ else
     "no CSP in apps/web yet; it ships with the app, which has not deployed"
 fi
 
-# ── Stage 21: the uptime probe ────────────────────────────────────────────
+# ── Stage 22: the uptime probe ────────────────────────────────────────────
 stage "Uptime: probe every 60 s, alert after 2 consecutive failures"
 say "With on-call-rotation at NOBODY, detection latency is the entire mitigation."
 ask HEALTH_URL "Deployed health URL (blank if nothing is deployed yet):"
@@ -907,7 +1003,7 @@ else
     "the health route ships with the app, which has not deployed"
 fi
 
-# ── Stage 22: the digest, which is the human half of alert-destination ────
+# ── Stage 23: the digest, which is the human half of alert-destination ────
 # The depths and the age of the oldest are NFR7's two halves; the digest that
 # carries them daily is C10.
 stage "Daily digest at 08:00 America/Bogota"
@@ -926,7 +1022,7 @@ else
     "it runs through the notification seam, on the queue-digest schedule from section 5b"
 fi
 
-# ── Stage 23: machine bands reach a human, through triage ─────────────────
+# ── Stage 24: machine bands reach a human, through triage ─────────────────
 stage "Machine bands open a needs-triage issue from CI"
 # ADR-0001 fixes the destination.
 say "The destination is fixed: a finding reaches planning only through triage."

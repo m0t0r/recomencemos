@@ -28,6 +28,7 @@ database without ever deciding one. #49 is where that was noticed and answered.
 | `retention-backups`         | **7 days.** Deletion is complete when that window rolls past, and the deletion copy says so                                                                                                                                                                                                                                                                |
 | `remote-cache-handler`      | **none**                                                                                                                                                                                                                                                                                                                                                   | The store under `use cache: remote`, wired through `cacheHandlers` in `next.config.ts`, or an explicit "none"                                                                                                                                                                                      |
 | `backup-rpo` / `backup-rto` | **≤ 1 h / ≤ 4 h**, proven by one real restore — rows and storage objects together — before the announcement                                                                                                                                                                                                                                                | How much data a restore may lose, and how long it may take                                                                                                                                                                                                                                         |
+| `object-store-access`       | **Two buckets, and the boundary between reviewed and unreviewed is which bucket an object is in.** The photos bucket has public access enabled in whole; the quarantine bucket never has it enabled at all. No per-prefix rule, no WAF rule and no Access policy is relied on by anything. See the section below                                           | How the production object store expresses "0 unmoderated photo objects are retrievable by an unauthenticated request". Set by [#251](https://github.com/m0t0r/recomencemos/issues/251), which found that the previous answer — a policy on the `quarantine/` prefix — is one R2 cannot state       |
 
 ## The local database, and why it is not a plain Postgres
 
@@ -49,13 +50,21 @@ So **two URLs pointing at one unpooled Postgres would not satisfy this key.** Th
 nothing, which is the failure the key exists to prevent.
 
 **MinIO is here on the same argument, one store over.** NFR6 — _"0 unmoderated photo objects are
-retrievable by any caller, by any URL, guessed or not"_ — is true because a **bucket policy**
-refuses, not because our code declines to hand the URL out. That is not a claim any mock can be
-asked about: a double that refuses on our behalf asserts our own belief about a configuration file.
-MinIO speaks the same S3 protocol Cloudflare R2 does, and `minio-init` performs the same two acts a
-human performs against R2 at runbook §3 — `anonymous set download` on the public prefix, `anonymous
-set none` on the quarantine one — so the presign code exercised in development is the production
-code path against something very close to the production policy.
+retrievable by any caller, by any URL, guessed or not"_ — is true because **the store** refuses, not
+because our code declines to hand the URL out. That is not a claim any mock can be asked about: a
+double that refuses on our behalf asserts our own belief about a configuration file. MinIO speaks the
+same S3 protocol Cloudflare R2 does, and `minio-init` performs the same acts a human performs against
+R2 at runbook §3 — `anonymous set download` on the whole photos bucket, and nothing at all on the
+quarantine one — so the presign code exercised in development is the production code path against
+something very close to the production configuration.
+
+**That last sentence was not true until [#251](https://github.com/m0t0r/recomencemos/issues/251), and
+the way it was false is the reason `object-store-access` is now a key.** The pair used to be two
+prefixes in one bucket with `anonymous set none` on `quarantine/`, which MinIO expresses happily and
+**R2 cannot**: public access on R2 is a single bucket-level switch, with no per-prefix ACL and no
+S3-style bucket policy underneath it. So the fixture was demonstrating a refusal production had no
+mechanism to perform, and `PHOTO_PUBLIC_BASE` is a bucket root — `${base}/quarantine/<key>` is a URL
+anybody can construct. Two buckets is the answer that both stores can state the same way.
 
 It is opt-in on the same terms as the database, and the boundary is the same one: `pnpm test` never
 touches it, CI starts no such service, and the suite that does — `pnpm --filter @repo/storage

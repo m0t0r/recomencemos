@@ -16,15 +16,15 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
-import { photoStore } from "#client";
+import { bucketFor, photoStore } from "#client";
 import { publicBase, type StorageEnv, transformationsEnabled } from "#config";
 import { isPublicKey, isQuarantineKey } from "#key-shapes";
 import { mintPublicKey, mintQuarantineKey } from "#keys";
-import { MAX_UPLOAD_BYTES, PUBLIC_FORMAT } from "#limits";
+import { MAX_UPLOAD_BYTES, PUBLIC_FORMAT, UPLOADABLE_CONTENT_TYPES } from "#limits";
 import { photoUrl } from "#photo-url";
 import { reencodeForPublic } from "#reencode";
 import { assertServerOnly } from "#server-only";
-import { PHOTO_TOO_LARGE, PHOTO_UNAVAILABLE } from "#user-messages";
+import { PHOTO_TOO_LARGE, PHOTO_UNAVAILABLE, PHOTO_UNREADABLE } from "#user-messages";
 
 assertServerOnly("photos");
 
@@ -80,9 +80,16 @@ export interface PresignUploadInput {
   /**
    * What the browser says it is sending.
    *
-   * **Signed for the same reason and trusted for none.** It bounds what may be
-   * PUT and it is never read again: the re-encode decides the format from the
-   * bytes, because this value is a header on a request the browser composed.
+   * **Bounded by two things, and it took both** (#251). It is checked against
+   * {@link UPLOADABLE_CONTENT_TYPES} before anything is signed, so the set of
+   * types that may be declared is closed; and `content-type` is named in
+   * `signableHeaders` below, so the PUT that arrives has to carry the type that
+   * was declared. Either half alone leaves a hole — a closed set the store does
+   * not enforce, or an enforced declaration that may say anything.
+   *
+   * **And it is still trusted for none.** It is never read again: the re-encode
+   * decides the format from the bytes, because this value is a header on a
+   * request the browser composed.
    */
   readonly contentType: string;
 }
@@ -114,7 +121,25 @@ export async function presignUpload(
     });
   }
 
-  const [{ PutObjectCommand }, { getSignedUrl }, { client, bucket }] = await Promise.all([
+  if (!UPLOADABLE_CONTENT_TYPES.includes(contentType)) {
+    throw new AppError({
+      code: "photo_content_type_not_allowed",
+      status: 415,
+      message:
+        `createPhotoUpload was asked to sign a PUT declaring "${contentType}", which is not one ` +
+        `of ${UPLOADABLE_CONTENT_TYPES.join(", ")}. No URL was signed. The type is signed into ` +
+        "the URL, so a declaration the store will hold the request to is also a declaration " +
+        "that decides what the stored object is served as — which is why the set it may come " +
+        "from is closed here rather than left to the re-encode to notice afterwards.",
+      userMessage: PHOTO_UNREADABLE,
+      // The declared type, which is a header the browser composed rather than
+      // anything about a person. It is the value a caller probing this would be
+      // varying, and it is what an operator needs to see.
+      context: { content_type: contentType },
+    });
+  }
+
+  const [{ PutObjectCommand }, { getSignedUrl }, { client, quarantineBucket }] = await Promise.all([
     import("@aws-sdk/client-s3"),
     import("@aws-sdk/s3-request-presigner"),
     photoStore(env),
@@ -125,7 +150,7 @@ export async function presignUpload(
   const uploadUrl = await getSignedUrl(
     client,
     new PutObjectCommand({
-      Bucket: bucket,
+      Bucket: quarantineBucket,
       Key: photoKey,
       ContentLength: byteLength,
       ContentType: contentType,
@@ -138,7 +163,7 @@ export async function presignUpload(
       // the review gate rather than merely widening it: the Admin's queue reads
       // the object once to render it and `promoteToPublic` reads it *again* on
       // approval, so a holder who overwrites between the two gets bytes no
-      // human ever saw published to the anonymously-readable prefix. Same
+      // human ever saw published to the anonymously-readable bucket. Same
       // length and same content type, both of which the signature pins, are the
       // holder's own declared values and are trivially matched.
       //
@@ -152,7 +177,33 @@ export async function presignUpload(
       // replay answers 412; without it, the replay answers 200.
       IfNoneMatch: "*",
     }),
-    { expiresIn: UPLOAD_URL_TTL_SECONDS },
+    {
+      expiresIn: UPLOAD_URL_TTL_SECONDS,
+      // **`ContentType` on the command above does not sign anything, and this
+      // is what makes it a control rather than a claim** (#251).
+      //
+      // `@aws-sdk/s3-request-presigner` adds `content-type` to
+      // `unsignableHeaders` *unconditionally* — there is no branch above the
+      // line and both presign paths reach it — so the type lands in the
+      // canonical request and then never appears in `X-Amz-SignedHeaders`. The
+      // store therefore checks nothing about it, and a holder of the URL could
+      // declare `image/webp` to us and PUT `text/html` of the declared length.
+      // `@smithy/signature-v4` lets `signableHeaders` override that list, and
+      // `getSignedUrl` forwards the option through; this is the whole of the
+      // fix.
+      //
+      // Measured against the MinIO in `docker-compose.yaml` rather than read
+      // off a changelog: without the option the signed headers are
+      // `content-length;host;if-none-match` and the mismatched PUT answers 200;
+      // with it they are `content-length;content-type;host;if-none-match`, the
+      // mismatched PUT answers 403, and the matching one still answers 200.
+      // `photos.store.test.ts` holds all three.
+      //
+      // It binds the request to its own declaration and bounds nothing by
+      // itself — the closed set the declaration comes from is
+      // `UPLOADABLE_CONTENT_TYPES`, checked above.
+      signableHeaders: new Set(["content-type"]),
+    },
   );
 
   return { uploadUrl, photoKey, expiresInSeconds: UPLOAD_URL_TTL_SECONDS };
@@ -193,15 +244,17 @@ export async function presignReview(
     });
   }
 
-  const [{ GetObjectCommand }, { getSignedUrl }, { client, bucket }] = await Promise.all([
+  const [{ GetObjectCommand }, { getSignedUrl }, { client, quarantineBucket }] = await Promise.all([
     import("@aws-sdk/client-s3"),
     import("@aws-sdk/s3-request-presigner"),
     photoStore(env),
   ]);
 
-  return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: quarantineKey }), {
-    expiresIn: REVIEW_URL_TTL_SECONDS,
-  });
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({ Bucket: quarantineBucket, Key: quarantineKey }),
+    { expiresIn: REVIEW_URL_TTL_SECONDS },
+  );
 }
 
 export interface PromotedPhoto {
@@ -252,12 +305,16 @@ export async function promoteToPublic(
   // is an oracle for the private one, published on every Wall card.
   const publicKey = mintPublicKey();
 
-  const [{ GetObjectCommand, PutObjectCommand }, { client, bucket }] = await Promise.all([
-    import("@aws-sdk/client-s3"),
-    photoStore(env),
-  ]);
+  const [{ GetObjectCommand, PutObjectCommand }, { client, publicBucket, quarantineBucket }] =
+    await Promise.all([import("@aws-sdk/client-s3"), photoStore(env)]);
 
-  const object = await client.send(new GetObjectCommand({ Bucket: bucket, Key: quarantineKey }));
+  // The one operation that crosses. Everything the review gate is for happens
+  // between these two lines: bytes leave the bucket nobody can read, are decoded
+  // and re-encoded here, and what is written to the readable one is a different
+  // object in a format this repository produced.
+  const object = await client.send(
+    new GetObjectCommand({ Bucket: quarantineBucket, Key: quarantineKey }),
+  );
 
   if (!object.Body) {
     throw new AppError({
@@ -279,7 +336,7 @@ export async function promoteToPublic(
 
   await client.send(
     new PutObjectCommand({
-      Bucket: bucket,
+      Bucket: publicBucket,
       Key: publicKey,
       Body: bytes,
       ContentType: `image/${PUBLIC_FORMAT}`,
@@ -322,16 +379,21 @@ export async function discard(key: string, env: StorageEnv = process.env): Promi
     });
   }
 
-  const [{ DeleteObjectCommand }, { client, bucket }] = await Promise.all([
+  const [{ DeleteObjectCommand }, store] = await Promise.all([
     import("@aws-sdk/client-s3"),
     photoStore(env),
   ]);
+
+  // Either prefix arrives here, so the bucket is read off the key rather than
+  // chosen — `bucketFor` is the one place that decides, and the shape check
+  // above is what guarantees it is deciding between two known answers.
+  const bucket = bucketFor(store, key);
 
   // S3 delete is idempotent — a key that is already gone is a 204, not a 404 —
   // so a retried rejection and a rejection of an object a lifecycle rule already
   // collected both succeed. That is what lets the caller treat this as part of
   // an act that must complete rather than as one that might have to be undone.
-  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  await store.client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
 /**
