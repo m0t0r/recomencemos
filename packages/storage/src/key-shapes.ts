@@ -15,16 +15,24 @@
  */
 
 /**
- * The prefix nothing may read.
+ * The prefix of a key in the quarantine **bucket**.
  *
- * **NFR6 is a statement about this prefix's bucket policy, not about our
- * routing.** _"**0** unmoderated photo **objects** are retrievable by an
- * unauthenticated request"_ — which is true because the bucket refuses, and
- * would be false the moment it were true only because no page links there.
+ * **NFR6 is a statement about which bucket an object is in, not about our
+ * routing and — since #251 — not about a policy on this prefix either.**
+ * _"**0** unmoderated photo **objects** are retrievable by an unauthenticated
+ * request"_ is true because the bucket these keys name has never had public
+ * access turned on, and it would be false the moment it were true only because
+ * no page links there.
+ *
+ * **The prefix survives the split and is not redundant.** It is what
+ * distinguishes a reviewed key from an unreviewed one in a row, in a validator
+ * and in `bucketFor`, and it is why `photoUrl` can refuse to build a public URL
+ * for one by shape. What it is no longer is the thing a bucket policy is
+ * written against — R2 has no per-prefix ACL to write one with.
  */
 export const QUARANTINE_PREFIX = "quarantine";
 
-/** The prefix the transformation URL reads from. Public by bucket policy. */
+/** The prefix of a key in the public bucket, which is the one the transformation URL reads. */
 export const PUBLIC_PREFIX = "photos";
 
 /**

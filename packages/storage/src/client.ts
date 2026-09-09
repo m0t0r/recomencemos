@@ -18,13 +18,37 @@
 
 import { assertServerOnly } from "#server-only";
 import { storageConfig, type StorageConfig, type StorageEnv } from "#config";
+import { isPublicKey } from "#key-shapes";
 
 assertServerOnly("client");
 
-/** What this module hands back: a configured client, and the bucket it is pointed at. */
+/** What this module hands back: a configured client, and the two buckets it addresses. */
 export interface PhotoStore {
   readonly client: import("@aws-sdk/client-s3").S3Client;
-  readonly bucket: string;
+  /** Publicly readable in whole. Only re-encoded, approved objects are written here. */
+  readonly publicBucket: string;
+  /** Public access never turned on. Everything an Admin has not yet decided on. */
+  readonly quarantineBucket: string;
+}
+
+/**
+ * Which bucket a key lives in, decided by the key's own shape.
+ *
+ * **One function, so no call site picks.** The two buckets differ in exactly one
+ * property and it is the one that matters — one of them is readable by anybody —
+ * so a caller choosing between two similarly-named strings is a caller that can
+ * write an unreviewed photo into the readable one. The key already carries its
+ * prefix; this is the only thing that reads it for this purpose.
+ *
+ * **It asks whether the key is a public one rather than whether it is a
+ * quarantine one**, so that anything unrecognised lands in the bucket nobody
+ * can read. That is the safe side of the only mistake this can make. Every
+ * caller validates the shape and refuses before reaching here, so the case is a
+ * backstop rather than a route — but a backstop that defaulted the other way
+ * would be one that published on a spelling error.
+ */
+export function bucketFor(store: PhotoStore, key: string): string {
+  return isPublicKey(key) ? store.publicBucket : store.quarantineBucket;
 }
 
 let cached: { readonly store: PhotoStore; readonly config: StorageConfig } | undefined;
@@ -54,7 +78,8 @@ export async function photoStore(env: StorageEnv = process.env): Promise<PhotoSt
         secretAccessKey: config.secretAccessKey,
       },
     }),
-    bucket: config.bucket,
+    publicBucket: config.publicBucket,
+    quarantineBucket: config.quarantineBucket,
   };
 
   cached = { store, config };
@@ -65,7 +90,8 @@ export async function photoStore(env: StorageEnv = process.env): Promise<PhotoSt
 function sameConfig(a: StorageConfig, b: StorageConfig): boolean {
   return (
     a.endpoint === b.endpoint &&
-    a.bucket === b.bucket &&
+    a.publicBucket === b.publicBucket &&
+    a.quarantineBucket === b.quarantineBucket &&
     a.accessKeyId === b.accessKeyId &&
     a.secretAccessKey === b.secretAccessKey
   );

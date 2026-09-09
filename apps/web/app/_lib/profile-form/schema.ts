@@ -323,12 +323,26 @@ export const photoKeyArg = z
  * **Both values are signed into the presigned URL and neither is trusted.** The
  * length becomes a `Content-Length` condition on the signature — which is what
  * makes DD6's ceiling a property of the bucket rather than of our code — and the
- * type bounds what may be PUT while deciding nothing: the server-side re-encode
- * reads the format out of the bytes, because this string is a header the browser
- * composed.
+ * type is checked against a closed set and then named in the signature's
+ * `signableHeaders`, so the PUT that arrives has to carry the type that was
+ * declared. Neither decides anything: the server-side re-encode reads the format
+ * out of the bytes, because this string is a header the browser composed.
+ *
+ * **The type sentence is one this comment used to get wrong**, which is why it
+ * is spelled out. Naming `ContentType` on the command does not sign it — the
+ * presigner drops `content-type` into `unsignableHeaders` unconditionally — so
+ * for a while the claim above was true of the length and false of the type. It
+ * is `@repo/storage`'s `presignUpload` that makes it true of both.
  *
  * No messages, because no sentence from here reaches a person: the browser is
  * what fills this in, and a payload that fails it is not a form somebody typed.
+ *
+ * **`contentType` is a bounded string here rather than the allowlist itself**,
+ * and that is a decision rather than an omission. The closed set lives beside
+ * the code that signs with it, because the set and the signature have to agree
+ * and a second copy at the boundary is the copy that drifts. What this stops is
+ * an unbounded string reaching a signer; deciding which types are photographs
+ * is `@repo/storage`'s.
  */
 export const photoUploadSchema = z.object({
   byteLength: z.number().int().positive(),

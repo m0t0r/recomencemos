@@ -88,8 +88,13 @@ driven rather than assumed.
 
 **What this header set does not reach.** `img-src` constrains what the _app's pages_ load; it places
 no constraint whatsoever on a browser navigated **directly** to the photo origin, which is a distinct
-host by construction. Content served from that origin is a separate question, tracked as
-[#251](https://github.com/m0t0r/recomencemos/issues/251), and this key is not an answer to it.
+host by construction. Content served from that origin is a separate question, and this key is not an
+answer to it. **The answer is [data.md](data.md)'s `object-store-access`**, set by
+[#251](https://github.com/m0t0r/recomencemos/issues/251): unreviewed photos live in a bucket whose
+public access is never turned on, so what bounds them is which bucket they are in rather than any
+header. `connect-src` naming `PHOTO_S3_ENDPOINT` sharpens the point rather than softening it — the
+policy explicitly permits the browser to PUT to the store, and still says nothing about what the
+store serves back to anyone who asks it directly.
 
 ### Why `dependency-policy` and `audit-report-threshold` are two keys
 

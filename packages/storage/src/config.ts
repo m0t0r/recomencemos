@@ -6,10 +6,10 @@
  * then trusted forever belongs at seam 1, with a test, rather than inside the
  * module that acts on it. Nothing here opens a connection or signs anything.
  *
- * **The five names follow `UI_PROOF_S3_*`**, which is the repository's existing
+ * **The names follow `UI_PROOF_S3_*`**, which is the repository's existing
  * spelling for "an S3-compatible store, addressed by endpoint". They are a
  * different store with a different lifetime and a different key, so they are
- * five more variables rather than a reuse of those.
+ * more variables rather than a reuse of those.
  */
 
 import { AppError } from "@repo/errors/app-error";
@@ -18,8 +18,35 @@ import { PHOTO_UNAVAILABLE } from "#user-messages";
 /** The account endpoint. R2 has no regions, so the endpoint is the whole address. */
 export const ENDPOINT_VARIABLE = "PHOTO_S3_ENDPOINT";
 
-/** The one bucket. Both prefixes live in it; only one of them is publicly readable. */
+/**
+ * The bucket approved photos live in, and the one that is publicly readable.
+ *
+ * Public access on R2 is a **bucket-level switch** — there is no per-prefix ACL
+ * and no S3-style bucket policy behind it — so "publicly readable" is a property
+ * this bucket has in whole, and anything that must not be readable cannot be in
+ * it. That is the sentence {@link QUARANTINE_BUCKET_VARIABLE} exists for.
+ */
 export const BUCKET_VARIABLE = "PHOTO_S3_BUCKET";
+
+/**
+ * The bucket unreviewed photos live in, whose public access is never turned on.
+ *
+ * **A second bucket rather than a second prefix, and the difference is what
+ * NFR6 rests on** (#251). _"0 unmoderated photo objects are retrievable by an
+ * unauthenticated request"_ used to be stated as a policy on the `quarantine/`
+ * prefix — which MinIO can express and R2 cannot. Since `PHOTO_PUBLIC_BASE` is
+ * a bucket root and a key carries its own prefix, `${base}/quarantine/<key>`
+ * was a URL anybody could construct, and whether it served bytes turned on a
+ * per-prefix rule with no R2 mechanism under it. Keys still carry their
+ * prefixes — they are how a caller tells the two apart, and how one bucket is
+ * chosen over the other — but the refusal is now the absence of the object
+ * rather than a rule about its name.
+ *
+ * It is **required**, not optional. A deploy that leaves it unset would have
+ * nowhere to put an unreviewed photo, and the fallback nobody wants is the one
+ * that quietly puts it in the readable bucket.
+ */
+export const QUARANTINE_BUCKET_VARIABLE = "PHOTO_S3_QUARANTINE_BUCKET";
 
 /** The credential. `fly secrets` in production (NFR24), never a `.env` in this repo. */
 export const ACCESS_KEY_VARIABLE = "PHOTO_S3_ACCESS_KEY_ID";
@@ -69,7 +96,13 @@ export type StorageEnv = Readonly<Partial<Record<string, string>>>;
 
 export interface StorageConfig {
   readonly endpoint: string;
-  readonly bucket: string;
+  /**
+   * Named rather than left as `bucket`, because after the split an unqualified
+   * name is how a later call site reaches for the wrong store — and the wrong
+   * store here is the readable one.
+   */
+  readonly publicBucket: string;
+  readonly quarantineBucket: string;
   readonly accessKeyId: string;
   readonly secretAccessKey: string;
   readonly region: typeof REGION;
@@ -78,6 +111,7 @@ export interface StorageConfig {
 const REQUIRED = [
   ENDPOINT_VARIABLE,
   BUCKET_VARIABLE,
+  QUARANTINE_BUCKET_VARIABLE,
   ACCESS_KEY_VARIABLE,
   SECRET_KEY_VARIABLE,
 ] as const;
@@ -114,8 +148,8 @@ export function storageConfig(env: StorageEnv = process.env): StorageConfig {
       status: 503,
       message:
         `The photo store is not configured: ${missing.join(", ")} unset. No object can be ` +
-        "written or read until it is. The bucket and its two prefixes are created by hand, " +
-        "once, before a deploy can accept a photo.",
+        "written or read until it is. Both buckets are created by hand, once, before a deploy " +
+        "can accept a photo.",
       userMessage: PHOTO_UNAVAILABLE,
       // The names of absent variables, never a value: one of the four is a
       // secret, and a line naming which are set is a line naming which are not.
@@ -125,7 +159,8 @@ export function storageConfig(env: StorageEnv = process.env): StorageConfig {
 
   return {
     endpoint: env[ENDPOINT_VARIABLE] as string,
-    bucket: env[BUCKET_VARIABLE] as string,
+    publicBucket: env[BUCKET_VARIABLE] as string,
+    quarantineBucket: env[QUARANTINE_BUCKET_VARIABLE] as string,
     accessKeyId: env[ACCESS_KEY_VARIABLE] as string,
     secretAccessKey: env[SECRET_KEY_VARIABLE] as string,
     region: REGION,

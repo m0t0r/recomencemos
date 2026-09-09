@@ -6,13 +6,21 @@
  * > guessed or not (NFR6). Verified by attempting to read a quarantined object
  * > directly and failing.
  *
- * **A bucket policy is not testable against a mock.** NFR6 is true because the
- * store refuses, so a double that refuses on our behalf would be asserting our
- * own belief about a configuration file. `docker-compose.yaml` runs MinIO,
+ * **A store's refusal is not testable against a mock.** NFR6 is true because
+ * the store refuses, so a double that refuses on our behalf would be asserting
+ * our own belief about a configuration file. `docker-compose.yaml` runs MinIO,
  * which speaks the same S3 protocol Cloudflare R2 does, and `minio-init`
- * performs the same two acts a human performs against R2 at runbook §3 — so
- * what is exercised here is the production code path and something very close
- * to the production policy.
+ * performs the same acts a human performs against R2 at runbook §3 — so what is
+ * exercised here is the production code path against something very close to
+ * the production configuration.
+ *
+ * **Two buckets, and the second one is what makes that sentence true** (#251).
+ * The pair used to be two prefixes in one bucket, with an anonymous policy on
+ * one of them — which MinIO expresses and R2 cannot: public access there is a
+ * single bucket-level switch with no per-prefix ACL. So the fixture was proving
+ * a property production had no way to state. Quarantine now lives in a bucket
+ * whose public access is simply never turned on, which is the same act in both
+ * stores.
  *
  * **It is deliberately not part of `pnpm test`.** The suffix keeps it out of
  * `vitest.config.mts`'s `include`; `pnpm test:store` is what runs it, and it
@@ -30,11 +38,22 @@ import { discard, presignReview, presignUpload, promoteToPublic, publicPhotoUrl 
 const ENV = {
   PHOTO_S3_ENDPOINT: "http://127.0.0.1:9000",
   PHOTO_S3_BUCKET: "recomencemos-photos",
+  PHOTO_S3_QUARANTINE_BUCKET: "recomencemos-photos-quarantine",
   PHOTO_S3_ACCESS_KEY_ID: "recomencemos",
   PHOTO_S3_SECRET_ACCESS_KEY: "recomencemos",
   PHOTO_PUBLIC_BASE: "http://127.0.0.1:9000/recomencemos-photos",
   PHOTO_TRANSFORMATIONS: "off",
 } as const;
+
+/**
+ * The quarantine bucket's own address.
+ *
+ * **Nothing in the product ever builds this string** — no origin is configured
+ * for that bucket and `photoUrl` refuses a quarantine key by shape. It is built
+ * here so the refusal can be asked for directly, which is the only way to show
+ * that the store is what refuses.
+ */
+const QUARANTINE_BASE = `${ENV.PHOTO_S3_ENDPOINT}/${ENV.PHOTO_S3_QUARANTINE_BUCKET}`;
 
 /** A generated photo. Never a real face, for the reason `docs/policy/security.md` gives. */
 async function photoBytes(width = 900, height = 700): Promise<Buffer> {
@@ -68,7 +87,7 @@ async function uploadToQuarantine(bytes: Buffer): Promise<string> {
   return photoKey;
 }
 
-describe("the quarantine prefix", () => {
+describe("the quarantine bucket", () => {
   it("refuses an anonymous read of an object that is really there", async () => {
     const key = await uploadToQuarantine(await photoBytes());
 
@@ -76,7 +95,7 @@ describe("the quarantine prefix", () => {
     // here is the policy refusing rather than the object being absent. That
     // distinction is the whole test: a 404 would pass a naive assertion while
     // proving nothing about NFR6.
-    const anonymous = await fetch(`${ENV.PHOTO_PUBLIC_BASE}/${key}`);
+    const anonymous = await fetch(`${QUARANTINE_BASE}/${key}`);
 
     expect(anonymous.status).toBe(403);
 
@@ -88,11 +107,40 @@ describe("the quarantine prefix", () => {
   });
 
   it("refuses a guessed key in the same way, so absence is not distinguishable", async () => {
-    const guessed = await fetch(
-      `${ENV.PHOTO_PUBLIC_BASE}/${QUARANTINE_PREFIX}/aaaaaaaaaaaaaaaaaaaaa`,
-    );
+    const guessed = await fetch(`${QUARANTINE_BASE}/${QUARANTINE_PREFIX}/aaaaaaaaaaaaaaaaaaaaa`);
 
     expect(guessed.status).toBe(403);
+  });
+
+  /**
+   * **The composite in #251, closed by the object not being there rather than
+   * bounded by a rule that refuses it.**
+   *
+   * `PHOTO_PUBLIC_BASE` is a bucket root and a key carries its own prefix, so
+   * `${base}/quarantine/<21 chars>` is a string anybody can construct. While
+   * both prefixes lived in one bucket, whether that string served bytes turned
+   * on a per-prefix anonymous policy — which MinIO has and **R2 does not**:
+   * public access there is one switch for the whole bucket. So the property
+   * this file was proving locally was one production could not express.
+   *
+   * With quarantine in a bucket of its own, the answer no longer depends on a
+   * policy at all. The two assertions are the pair that says so: the public
+   * origin really is readable, and the quarantine key is simply not in it.
+   */
+  it("holds no object the public origin can name", async () => {
+    const key = await uploadToQuarantine(await photoBytes());
+
+    const { publicKey } = await promoteToPublic(key, ENV);
+
+    // The origin is open — this is the object it is open for.
+    expect((await fetch(`${ENV.PHOTO_PUBLIC_BASE}/${publicKey}`)).status).toBe(200);
+
+    // Same origin, same credentials, the quarantine key concatenated on. A 404
+    // rather than a 403: nothing is refusing, because there is nothing there.
+    expect((await fetch(`${ENV.PHOTO_PUBLIC_BASE}/${key}`)).status).toBe(404);
+
+    await discard(key, ENV);
+    await discard(publicKey, ENV);
   });
 
   it("will not sign a review URL for anything that is not a quarantine key", async () => {
@@ -124,6 +172,118 @@ describe("the presigned PUT", () => {
     });
 
     expect(response.ok).toBe(false);
+  });
+
+  /**
+   * The type is covered too, and it is covered only because the option below is
+   * passed — which is the whole of what this case exists to hold in place.
+   *
+   * The installed presigner adds `content-type` to its `unsignableHeaders`
+   * unconditionally, so a `ContentType` on the command lands in the canonical
+   * request and then never appears in `X-Amz-SignedHeaders`. The result is a
+   * declaration the store does not check: a client could declare `image/webp`
+   * to us and PUT `text/html` with a body of the declared length, and the
+   * object would be stored, served with that type, and read back by whatever
+   * fetched it next. `signableHeaders` is the documented override.
+   */
+  it("refuses a body whose type is not the one the signature covers", async () => {
+    const bytes = await photoBytes();
+    const { uploadUrl } = await presignUpload(
+      { byteLength: bytes.byteLength, contentType: "image/webp" },
+      ENV,
+    );
+
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      body: new Uint8Array(bytes),
+      headers: {
+        "Content-Type": "text/html",
+        "Content-Length": String(bytes.byteLength),
+        "If-None-Match": "*",
+      },
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("accepts the same PUT when the type is the one that was declared", async () => {
+    const bytes = await photoBytes();
+    const { uploadUrl, photoKey } = await presignUpload(
+      { byteLength: bytes.byteLength, contentType: "image/jpeg" },
+      ENV,
+    );
+
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      body: new Uint8Array(bytes),
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Content-Length": String(bytes.byteLength),
+        "If-None-Match": "*",
+      },
+    });
+
+    expect(response.status).toBe(200);
+
+    await discard(photoKey, ENV);
+  });
+
+  /**
+   * The control for the pair above, on the shape the conditional-write case
+   * already uses: sign the same PUT **without** the option and show the
+   * mismatched type accepted. Without it a green refusal could equally mean the
+   * store was refusing for some other reason, and this is the defect as it
+   * shipped — it is what #251 measured.
+   */
+  it("would accept a mismatched type if the header were not signable", async () => {
+    const [{ PutObjectCommand, S3Client }, { getSignedUrl }] = await Promise.all([
+      import("@aws-sdk/client-s3"),
+      import("@aws-sdk/s3-request-presigner"),
+    ]);
+
+    const bytes = await photoBytes();
+    const key = `${QUARANTINE_PREFIX}/${"unsigned".padEnd(21, "0")}`;
+    const unbound = await getSignedUrl(
+      new S3Client({
+        region: "auto",
+        endpoint: ENV.PHOTO_S3_ENDPOINT,
+        forcePathStyle: true,
+        credentials: {
+          accessKeyId: ENV.PHOTO_S3_ACCESS_KEY_ID,
+          secretAccessKey: ENV.PHOTO_S3_SECRET_ACCESS_KEY,
+        },
+      }),
+      new PutObjectCommand({
+        Bucket: ENV.PHOTO_S3_QUARANTINE_BUCKET,
+        Key: key,
+        ContentLength: bytes.byteLength,
+        ContentType: "image/webp",
+      }),
+      { expiresIn: 300 },
+    );
+
+    const response = await fetch(unbound, {
+      method: "PUT",
+      body: new Uint8Array(bytes),
+      headers: { "Content-Type": "text/html", "Content-Length": String(bytes.byteLength) },
+    });
+
+    expect(response.status).toBe(200);
+
+    await discard(key, ENV);
+  });
+
+  /**
+   * The other half, and the reason the signing fix alone is not the whole
+   * answer: binding the header makes the request agree with its own
+   * declaration, and nothing about that stops the declaration being
+   * `text/html`. So the set of types that may be declared is closed before
+   * anything is signed.
+   */
+  it("refuses to sign a type it would not decode", async () => {
+    await expect(
+      presignUpload({ byteLength: 1024, contentType: "text/html" }, ENV),
+    ).rejects.toMatchObject({ code: "photo_content_type_not_allowed" });
   });
 
   /**
@@ -196,7 +356,7 @@ describe("the presigned PUT", () => {
         },
       }),
       new PutObjectCommand({
-        Bucket: ENV.PHOTO_S3_BUCKET,
+        Bucket: ENV.PHOTO_S3_QUARANTINE_BUCKET,
         Key: `quarantine/${"control".padEnd(21, "0")}`,
         ContentLength: bytes.byteLength,
         ContentType: "image/jpeg",
@@ -223,7 +383,7 @@ describe("the presigned PUT", () => {
 });
 
 describe("promoteToPublic", () => {
-  it("puts a re-encoded object where the public prefix can be read anonymously", async () => {
+  it("puts a re-encoded object where the public bucket can be read anonymously", async () => {
     const key = await uploadToQuarantine(await photoBytes());
 
     const { publicKey } = await promoteToPublic(key, ENV);

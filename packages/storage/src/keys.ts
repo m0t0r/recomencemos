@@ -13,9 +13,9 @@
  * half that mints and so pulls in `nanoid`.
  *
  * Pure, so seam 1 covers the whole of it: nothing here reads an environment or
- * touches a store. What a prefix *means* — which one is publicly readable — is
- * the bucket's policy and a human's step (runbook §3); what this module owns is
- * that the two are never spelled twice.
+ * touches a store. What a prefix *means* — which bucket the key goes in, and
+ * therefore whether anybody can read it — is `bucketFor`'s and a human's step
+ * (runbook §3); what this module owns is that the two are never spelled twice.
  */
 
 import { nanoid } from "nanoid";
