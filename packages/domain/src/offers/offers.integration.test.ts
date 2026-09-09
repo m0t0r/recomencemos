@@ -25,7 +25,7 @@
 
 import { drizzle } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
-import { CURRENT_CONSENT_VERSIONS } from "#consent/index";
+import { CURRENT_CONSENT_VERSIONS, recordConsent } from "#consent/index";
 import { listSentOffers, pendingOffers, sendOffer, type SendOfferInput } from "#offers";
 import { publishProfile } from "#profiles";
 import * as schema from "#schema";
@@ -196,6 +196,52 @@ describe("sending an Offer", () => {
       reason: "refused",
       refusals: [{ field: "hirerPhone", code: "phone_unrecognised" }],
     });
+  });
+
+  /**
+   * **The coupling "is this his first Offer" actually rests on, pinned.**
+   *
+   * The question is answered from his **Consent row**, not from an Offer count —
+   * because the *autorización* is taken once, before his first Offer takes a
+   * field, so its presence is the fact. That holds only while `sendOffer` is the
+   * sole writer of a `hirer`-side Consent row: a later surface that recorded one
+   * somewhere else would make his name unaskable and leave the Admin queue
+   * rendering no name at all, silently.
+   *
+   * So the coupling is asserted rather than assumed. If this goes red, the fix is
+   * not here — it is that something else now writes that row, and `sendOffer`
+   * needs a different question.
+   */
+  test("treats an Account that already consented as a Hirer as a repeat sender", async ({
+    database,
+  }) => {
+    const worker = await aWorker(database);
+    const hirer = await aHirer(database);
+
+    await database.db.transaction(async (tx) => {
+      await recordConsent(tx, {
+        accountId: hirer,
+        side: "hirer",
+        versions: CURRENT_CONSENT_VERSIONS,
+      });
+    });
+
+    // No identity on the input, and it is not asked for: the row already exists.
+    const outcome = await sendOffer(
+      database.db,
+      hirer,
+      anOffer(worker.slug, { identity: undefined }),
+    );
+
+    expect(outcome).toMatchObject({ ok: true });
+
+    const [account] = await database.db
+      .select({ hirerName: schema.user.hirerName })
+      .from(schema.user)
+      .where(eq(schema.user.id, hirer));
+
+    // Nothing was written onto the Account, because nothing was collected.
+    expect(account?.hirerName).toBeNull();
   });
 
   /**

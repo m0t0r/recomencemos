@@ -1,4 +1,4 @@
-import { PUBLISH_FAILED } from "./messages";
+import { PUBLISH_FAILED } from "@/app/_lib/profile-form/messages";
 import { feedbackFor } from "./feedback";
 
 describe("feedbackFor", () => {

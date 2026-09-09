@@ -30,7 +30,7 @@ import {
   DELIVER_OFFER_SUBMIT,
   DELIVER_OFFER_SUBMITTING,
   offerDelivered,
-  offerSentOn,
+  offerSentOnQueue,
 } from "../_lib/messages";
 import type { QueueItem } from "../_lib/queue-sources";
 import { deliverOffer } from "../actions";
@@ -79,7 +79,7 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
         ))}
       </dl>
 
-      <p className="text-muted-foreground text-xs">{offerSentOn(item.arrivedAt)}</p>
+      <p className="text-muted-foreground text-xs">{offerSentOnQueue(item.arrivedAt)}</p>
 
       <p
         ref={announcementRef}

@@ -1,7 +1,12 @@
 /**
- * What the feedback region says, or nothing — pure, and apart from the hook
- * so it can be tested without importing the Server Action (whose module
- * carries `server-only`).
+ * What the feedback region says, or nothing — pure, and apart from the hook so
+ * it can be tested without importing the Server Action (whose module carries
+ * `server-only`).
+ *
+ * **It lives beside the machine rather than under `profile-form/`**, which is
+ * where it started: nothing in it is about a profile, and leaving it there made
+ * the deliberately profile-free `use-action-form.ts` import the specific layer
+ * it had just been lifted out of.
  */
 
 import { SESSION_REQUIRED_CODE } from "@/app/_lib/session/codes";

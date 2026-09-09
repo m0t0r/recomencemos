@@ -25,12 +25,38 @@ export const SENT_OFFERS_EMPTY_BODY =
   "Una propuesta dice qué trabajo necesitas, cuánto pagas y cuándo. Escríbele a alguien de la lista.";
 export const SENT_OFFERS_EMPTY_LINK = "Ver todos los perfiles";
 
-/** The confirmation, when he has just sent one. */
-export const OFFER_JUST_SENT = "Tu propuesta va en camino.";
+/**
+ * The confirmation, when he has just sent one — **all three of the story's
+ * clauses, and it is the criterion that all three are here.**
+ *
+ * The form said the same three things before he wrote; this says them again at
+ * the moment they stop being a warning and become a fact. The immutability is
+ * the clause that would otherwise never appear after the send: the page's lead
+ * carries the human review and the row carries the window, and neither of them
+ * says he cannot change it.
+ *
+ * No exclamation mark, though a success state is allowed one — he has not
+ * achieved anything yet, and a person still has to read it.
+ */
+export const OFFER_JUST_SENT_HEADING = "Tu propuesta va en camino";
+export const OFFER_JUST_SENT_REVIEW =
+  "Una persona la lee antes de que le llegue. Normalmente toma menos de un día.";
+export const OFFER_JUST_SENT_IMMUTABLE =
+  "Ya no se puede cambiar: lo que escribiste es lo que ella lee.";
 
-/** The list failed to load. What failed, and that retrying helps. */
-export const SENT_OFFERS_FAILED =
-  "No pudimos cargar tus propuestas. Vuelve a cargar la página para intentarlo otra vez.";
+/**
+ * The `error` cell: what failed, that retrying helps, and the one fact that
+ * matters to somebody who just sent something.
+ *
+ * **The last sentence is the point.** A failed *read* is not a failed *send*,
+ * and a page that only said "we could not load this" would leave him wondering
+ * whether the Offer he wrote five seconds ago exists.
+ */
+export const SENT_OFFERS_FAILED_TITLE = "No pudimos cargar tus propuestas";
+export const SENT_OFFERS_FAILED_EXPLANATION =
+  "Falló la carga, no el envío: las propuestas que enviaste siguen su curso. Vuelve a intentarlo.";
+export const SENT_OFFERS_FAILED_RETRY = "Volver a cargar";
+export const SENT_OFFERS_FAILED_RETRYING = "Cargando…";
 
 /** What a row says about where its Offer is. One sentence per state. */
 export const OFFER_STATE_SENTENCES = {

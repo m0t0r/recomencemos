@@ -32,7 +32,7 @@
  * the half a diff can satisfy.
  */
 
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, or } from "drizzle-orm";
 import type { ConsentSide } from "#consent/registry";
 import type { DomainDatabase } from "#database";
 import {
@@ -126,12 +126,42 @@ export interface ExportedAccount {
   readonly registeredAt: Date;
 }
 
+/**
+ * One Offer this Account is a party to, from whichever side it stands on.
+ *
+ * **Both sides are carried, and the reason is the requirement's own wording**:
+ * *everything held about one person*. An Offer he sent holds three things he
+ * wrote; an Offer sent to her is held against her profile, is the reason her
+ * delivered-Offer count moved, and is what a person read about her before
+ * deciding to write. `side` is what tells the two apart in the document —
+ * without it, a *titular* who is both a Worker and a Hirer would read a list
+ * whose rows have no attribution.
+ *
+ * **The counterpart is not named**, which is the one thing this shape withholds.
+ * An export is served to *one* person about *herself*, and identifying the
+ * other party would make a habeas data request a way of learning about somebody
+ * who did not make one — the same rule the `ReceivedOffer` projection follows
+ * one boundary over, applied to a document rather than to a page.
+ */
+export interface ExportedOffer {
+  readonly side: "sent" | "received";
+  readonly workDescription: string;
+  readonly payTerms: string;
+  readonly whenText: string;
+  readonly state: string;
+  readonly sentAt: Date;
+  /** When a person read it and let it through. `null` while it is still waiting. */
+  readonly deliveredAt: Date | null;
+}
+
 /** Everything this platform holds about one person, as of today's schema. */
 export interface SubjectAccessExport {
   readonly account: ExportedAccount;
   readonly consents: readonly ExportedConsent[];
   /** `null` until she publishes; an Account is not obliged to hold one. */
   readonly profile: ExportedProfile | null;
+  /** Both sides, oldest first. Empty for an Account that is party to none. */
+  readonly offers: readonly ExportedOffer[];
 }
 
 /**
@@ -182,6 +212,7 @@ export async function buildSubjectAccessExport(
     .orderBy(asc(schema.consent.createdAt));
 
   const profile = await exportedProfile(db, accountId);
+  const offers = await exportedOffers(db, accountId);
 
   return {
     account: {
@@ -213,7 +244,62 @@ export async function buildSubjectAccessExport(
       consentedAt: consent.createdAt,
     })),
     profile,
+    offers,
   };
+}
+
+/**
+ * Every Offer this Account is a party to, oldest first.
+ *
+ * **One statement over both sides**, keyed on his Account id for the ones he
+ * sent and on her profile for the ones she received — a `LEFT JOIN` rather than
+ * two queries, because an Account can be both and a *titular* who is both should
+ * read one history rather than two lists that have to be merged by eye.
+ *
+ * `side` is derived from which key matched, in SQL, so a row cannot be
+ * mislabelled by anything this function does after reading it.
+ *
+ * Oldest first, for the reason the consents are: an export read by a person is a
+ * history, and a history reads forwards.
+ */
+async function exportedOffers(
+  db: DomainDatabase,
+  accountId: string,
+): Promise<readonly ExportedOffer[]> {
+  const rows = await db
+    .select({
+      sent: eq(schema.offer.hirerAccountId, accountId),
+      workDescription: schema.offer.workDescription,
+      payTerms: schema.offer.payTerms,
+      whenText: schema.offer.whenText,
+      state: schema.offer.state,
+      sentAt: schema.offer.createdAt,
+      deliveredAt: schema.offer.deliveredAt,
+    })
+    .from(schema.offer)
+    .leftJoin(
+      schema.capabilityProfile,
+      eq(schema.capabilityProfile.id, schema.offer.capabilityProfileId),
+    )
+    .where(
+      or(
+        eq(schema.offer.hirerAccountId, accountId),
+        eq(schema.capabilityProfile.accountId, accountId),
+      ),
+    )
+    .orderBy(asc(schema.offer.createdAt));
+
+  // Field by field, like every other projection here, and the counterpart is
+  // absent by construction rather than by being dropped afterwards.
+  return rows.map((row) => ({
+    side: row.sent ? ("sent" as const) : ("received" as const),
+    workDescription: row.workDescription,
+    payTerms: row.payTerms,
+    whenText: row.whenText,
+    state: row.state,
+    sentAt: row.sentAt,
+    deliveredAt: row.deliveredAt,
+  }));
 }
 
 async function exportedProfile(

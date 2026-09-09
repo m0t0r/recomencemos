@@ -48,6 +48,18 @@ import {
   SKILL_REQUESTS_LABEL,
 } from "./messages";
 
+/**
+ * One labelled thing an item carries, where its summary line cannot hold it.
+ *
+ * Named rather than left inline because four more sections are expected to use
+ * it, and because both halves are subject to NFR11 exactly as the summary is —
+ * a type with a name is a type a reader can be told that about.
+ */
+export interface QueueItemField {
+  readonly label: string;
+  readonly value: string;
+}
+
 /** One row a person acts on. `id` is what an Admin action names as its target. */
 export interface QueueItem {
   readonly id: string;
@@ -78,7 +90,7 @@ export interface QueueItem {
    * as {@link QueueItem.summary} is: what an Offer item may carry is the body and
    * the Worker's display identity, and **no** phone number.
    */
-  readonly fields?: readonly { readonly label: string; readonly value: string }[];
+  readonly fields?: readonly QueueItemField[];
   /** When it arrived. The oldest across all sources is what renders first. */
   readonly arrivedAt: Date;
 }

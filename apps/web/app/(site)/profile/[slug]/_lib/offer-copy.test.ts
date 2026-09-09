@@ -28,10 +28,6 @@ import {
   OFFER_SEND_FAILED,
   OFFER_SENDING_BANNED,
   OFFER_SENDING_FROZEN,
-  OFFER_SENT_HEADING,
-  OFFER_SENT_IMMUTABLE,
-  OFFER_SENT_LINK,
-  OFFER_SENT_REVIEW,
   OFFER_SUMMARY_KEPT,
   OFFER_SUMMARY_LABEL,
   offerContactDetailRefusal,
@@ -70,10 +66,6 @@ describeSurfaceCopy({
     ["HIRER_PHONE_HELP", HIRER_PHONE_HELP],
     ["SEND_OFFER_BUTTON", SEND_OFFER_BUTTON],
     ["SEND_OFFER_PENDING", SEND_OFFER_PENDING],
-    ["OFFER_SENT_HEADING", OFFER_SENT_HEADING],
-    ["OFFER_SENT_REVIEW", OFFER_SENT_REVIEW],
-    ["OFFER_SENT_IMMUTABLE", OFFER_SENT_IMMUTABLE],
-    ["OFFER_SENT_LINK", OFFER_SENT_LINK],
     ["OFFER_SUMMARY_KEPT", OFFER_SUMMARY_KEPT],
     ["OFFER_SUMMARY_LABEL", OFFER_SUMMARY_LABEL],
     ["OFFER_BLOCKED", OFFER_BLOCKED],
@@ -106,7 +98,6 @@ describeSurfaceCopy({
     ["HIRER_PHONE_LABEL", HIRER_PHONE_LABEL],
     ["SEND_OFFER_BUTTON", SEND_OFFER_BUTTON],
     ["SEND_OFFER_PENDING", SEND_OFFER_PENDING],
-    ["OFFER_SENT_LINK", OFFER_SENT_LINK],
   ],
 });
 
@@ -130,12 +121,12 @@ describe("the two facts he is told before he writes", () => {
     expect(OFFER_IMMUTABLE_NOTICE.toLowerCase()).toContain("cambiar");
   });
 
-  /** All three again on the confirmation, because that is the criterion too. */
-  it("says all three again after he sends", () => {
-    expect(OFFER_SENT_REVIEW).toContain("Una persona la lee");
-    expect(OFFER_SENT_REVIEW).toContain("menos de un día");
-    expect(OFFER_SENT_IMMUTABLE.toLowerCase()).toContain("no se puede cambiar");
-  });
+  /*
+    The confirmation says all three again, and its copy is asserted where it
+    lives: `/sent-offers`, which is the page the send redirects to. It used to be
+    asserted here against constants this surface rendered nowhere — a copy test
+    passing over dead strings, which is how the criterion came to look satisfied.
+  */
 });
 
 describe("the refusals", () => {
