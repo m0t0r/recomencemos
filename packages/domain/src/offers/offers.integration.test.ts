@@ -86,6 +86,85 @@ async function aHirer(database: TestDatabase, email = "carlos@recomencemos.test"
   return signedInAccountId(database, email);
 }
 
+/**
+ * A pending branch of `count` Offers, one hour apart, oldest first — and the
+ * arrivals it pinned, ascending.
+ *
+ * **The arrivals are written rather than observed**, which is what lets the cap
+ * case assert the age-of-oldest as a value. Left on `defaultNow()` the five rows
+ * land inside one PGlite millisecond, so both the ordering and the minimum become
+ * facts about how fast the run went rather than about the query under test.
+ *
+ * Backdating a column directly is not a hole in the immutability the aggregate
+ * promises: the promise is that **`#offers` publishes no function** that rewrites
+ * an Offer, which the case one describe block up asserts over the module's own
+ * exports. This is a fixture reaching for the handle it was handed.
+ */
+async function aBranchOf(database: TestDatabase, count: number): Promise<Date[]> {
+  const worker = await aWorker(database);
+  const hirer = await aHirer(database);
+  const arrivals: Date[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    // Sequential on purpose: each send takes a row lock on the same Account, and
+    // the order they arrive in is what the age-of-oldest is about.
+    // oxlint-disable-next-line no-await-in-loop
+    const sent = await sendOffer(database.db, hirer, anOffer(worker.slug));
+    if (!sent.ok) throw new Error("the fixture Offer did not send");
+
+    const arrivedAt = new Date(NOW.getTime() - (count - index) * 3_600_000);
+
+    // oxlint-disable-next-line no-await-in-loop
+    await database.db
+      .update(schema.offer)
+      .set({ createdAt: arrivedAt })
+      .where(eq(schema.offer.id, sent.offerId));
+
+    arrivals.push(arrivedAt);
+  }
+
+  return arrivals;
+}
+
+/**
+ * The two statements the Admin's branch issues, as the planner sees them.
+ *
+ * Taken from Drizzle's own logger rather than re-typed, so the planner is asked
+ * about the reads the app actually issues. Parameters are substituted as literals
+ * because `EXPLAIN` on a `$1` answers about a generic plan rather than about this
+ * one.
+ */
+async function plansForTheBranch(database: TestDatabase): Promise<string[]> {
+  const statements: string[] = [];
+  const logged = drizzle(database.client, {
+    schema,
+    logger: {
+      logQuery(query, parameters) {
+        statements.push(
+          query.replaceAll(/\$(\d+)/g, (_whole, index: string) => {
+            const value = parameters[Number(index) - 1];
+            return typeof value === "number"
+              ? String(value)
+              : `'${String(value).replaceAll("'", "''")}'`;
+          }),
+        );
+      },
+    },
+  });
+
+  await pendingOffers(logged, 20);
+
+  const plans: string[] = [];
+
+  for (const statement of statements) {
+    // oxlint-disable-next-line no-await-in-loop -- two statements, in order.
+    const explained = await database.client.query<{ "QUERY PLAN": string }>(`explain ${statement}`);
+    plans.push(explained.rows.map((row) => row["QUERY PLAN"]).join("\n"));
+  }
+
+  return plans;
+}
+
 describe("sending an Offer", () => {
   test("writes the terms, the Consent row and his asserted identity together", async ({
     database,
@@ -600,21 +679,82 @@ describe("the branch an Admin has to work through", () => {
    * of it.
    */
   test("caps the rows it renders and counts the whole branch", async ({ database }) => {
-    const worker = await aWorker(database);
-    const hirer = await aHirer(database);
-
-    for (let index = 0; index < 5; index += 1) {
-      // Sequential on purpose: each send takes a row lock on the same Account,
-      // and the order they arrive in is what the age-of-oldest is about.
-      // oxlint-disable-next-line no-await-in-loop
-      await sendOffer(database.db, hirer, anOffer(worker.slug));
-    }
+    const arrivals = await aBranchOf(database, 5);
 
     const branch = await pendingOffers(database.db, 2);
 
     expect(branch.items).toHaveLength(2);
     expect(branch.total).toBe(5);
-    expect(branch.oldestSentAt).toBeInstanceOf(Date);
+
+    /**
+     * **The age-of-oldest is the branch's, asserted as a value rather than as a
+     * type.** `toBeInstanceOf(Date)` passed here for a slice and would go on
+     * passing if the figure were computed over the *page* — which is the exact
+     * defect C55 is about, and the one NFR7's detector would be disabled by.
+     * Pinned against the first arrival, which is a fixture constant rather than
+     * anything read back out of the same query under test.
+     */
+    expect(branch.oldestSentAt).toEqual(arrivals[0]);
+
+    /** Oldest first: the order the queue is worked in, and the one the partial
+        index already holds. Twenty decisions start at the top of the backlog. */
+    expect(branch.items.map((item) => item.sentAt)).toEqual(arrivals.slice(0, 2));
+  });
+
+  /**
+   * **The index is what keeps the age-of-oldest cheap as the history grows**, and
+   * that is a claim about the *plan* rather than about the DDL. A `CREATE INDEX`
+   * in a migration proves the index exists; what NFR7's detector depends on is
+   * that both statements the branch issues reach for it, and that neither degrades
+   * into a scan of every Offer ever sent — which is the failure that arrives
+   * silently, gets slower exactly as the product succeeds, and is invisible to
+   * every other case in this file.
+   *
+   * The population is deliberately lopsided the way a real one is: a long history
+   * of Offers already read, and a handful waiting. That is the shape the partial
+   * predicate exists for, and a balanced fixture would let a sequential scan look
+   * reasonable to the planner.
+   */
+  describe("the plan behind the Admin's branch", () => {
+    const A_HISTORY = 5_000;
+    const STILL_WAITING = 5;
+
+    async function aBacklogUnderAHistory(database: TestDatabase): Promise<void> {
+      const worker = await aWorker(database);
+      const hirer = await aHirer(database);
+
+      await database.client.exec(`
+        insert into offer
+          (id, capability_profile_id, hirer_account_id, work_description, pay_terms,
+           when_text, state, created_at, delivered_at)
+        select
+          gen_random_uuid(),
+          ${worker.profileId},
+          '${hirer}',
+          'Cocinar almuerzos', '$120.000 por el día', 'El sábado',
+          case when n <= ${STILL_WAITING} then 'pending_review' else 'delivered' end,
+          timestamptz '2026-01-01 00:00:00+00' + (n * interval '1 hour'),
+          case when n <= ${STILL_WAITING} then null else timestamptz '2026-08-01 00:00:00+00' end
+        from generate_series(1, ${A_HISTORY}) as n;
+      `);
+
+      // Its own call: `exec` wraps a multi-statement string in one transaction,
+      // and `VACUUM` refuses to run inside one.
+      await database.client.exec("vacuum analyze offer;");
+    }
+
+    test("reads both figures off the pending index rather than scanning the history", async ({
+      database,
+    }) => {
+      await aBacklogUnderAHistory(database);
+
+      const [rows, figures] = await plansForTheBranch(database);
+
+      for (const plan of [rows, figures]) {
+        expect(plan).toContain("offer_pending_idx");
+        expect(plan).not.toContain("Seq Scan on offer");
+      }
+    });
   });
 
   test("counts an Offer held because its sender was frozen", async ({ database }) => {

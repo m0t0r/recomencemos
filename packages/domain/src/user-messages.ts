@@ -175,9 +175,9 @@ export const ADMIN_SKILL_SLUG_TAKEN =
   "Ya hay una capacidad con ese identificador. Escribe otro y vuelve a intentarlo.";
 
 /**
- * The two refusals delivering an Offer can meet, and they are the Skill
- * request's two one section over — for the same reason, which is that two people
- * work one queue.
+ * The two refusals either decision about an Offer can meet — delivering it or
+ * stopping it — and they are the Skill request's two one section over, for the
+ * same reason, which is that two people work one queue.
  *
  * Admin register (Warmth 5→2, Sophistication 2→4): one operator, mid-queue,
  * who needs to know what changed under them and what to do next.

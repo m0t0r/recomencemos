@@ -64,7 +64,10 @@ export type RevokeSessionsInput = z.output<typeof revokeSessionsFields>;
 export const promoteSkillRequestArg = z.string().regex(/^\d+$/);
 
 /**
- * The Offer a delivery acts on, as a **bound argument** for the reason above it.
+ * The Offer a decision acts on, as a **bound argument** for the reason above it.
+ *
+ * **One parse for both decisions**, because delivering and refusing name their
+ * target the same way and a second copy is a second place for the shape to drift.
  *
  * A UUID rather than digits, because DD2 makes `Offer.id` the one UUIDv7 in this
  * schema — `/offers/[id]` puts it in a URL, and a `BIGINT` there would publish
@@ -75,26 +78,9 @@ export const promoteSkillRequestArg = z.string().regex(/^\d+$/);
  * No message, because no person can provoke this — the id comes from the row,
  * and a forged one meets the refusals the domain already answers.
  */
-export const deliverOfferArg = z
+export const offerIdArg = z
   .string()
   .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-
-/**
- * Delivering takes nothing an Admin types: the Offer is the bound argument and
- * the act is the button.
- *
- * **It still declares a schema, and the `preprocess` is why.** A `.stateAction()`
- * dispatched from a `<form action>` is handed a `FormData`, which
- * next-safe-action does not convert — so an action whose input is a bare
- * `z.object({})` is one a form cannot submit at all, and the failure is a type
- * error rather than anything a person would see. Reducing the `FormData` to the
- * empty object it means keeps the form native, which is what NFR4 asks of every
- * control on this queue.
- */
-export const deliverOfferSchema = z.preprocess(
-  (raw) => (raw instanceof FormData ? {} : raw),
-  z.object({}),
-);
 
 /** The label is read on the publishing form, so it is the length of a label. */
 export const PROMOTE_LABEL_MAX = 80;
@@ -182,8 +168,11 @@ export const photoProfileArg = z.string().regex(/^\d+$/).max(20);
 /**
  * **The payload of an action that has none.**
  *
- * Both photo decisions carry their target as a bound argument and their verb as
- * which button was pressed, so there is nothing typed into either. `z.void()`
+ * All four queue decisions — both photo ones and both Offer ones — carry their
+ * target as a bound argument and their verb as which button was pressed, so
+ * there is nothing typed into any of them. The Offer pair reached this from the
+ * other direction, through a `z.object({})` of its own that worked and was a
+ * second spelling of one idea; one is enough. `z.void()`
  * was the first spelling and it is wrong: a `<form action={…}>` dispatch hands
  * next-safe-action `{}` rather than `undefined`, so every submission failed the
  * boundary parse — silently, because the row rendered `serverError` and a
