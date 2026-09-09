@@ -174,8 +174,11 @@ dig @1.1.1.1 +short TXT _dmarc.recomencemos.online   # ticks this box when it an
 curl -sSI https://<production-origin>/ | grep -iE 'content-security-policy|strict-transport|x-frame|x-content-type|referrer-policy|permissions-policy'
 ```
 
-      The CSP must match `csp-policy` in [`../policy/security.md`](../policy/security.md) verbatim,
-      with the three placeholders resolved to the configured origins:
+      The CSP must match `csp-policy` in [`../policy/security.md`](../policy/security.md) with the
+      three placeholders resolved to the configured origins. `upgrade-insecure-requests` is the one
+      directive that can legitimately be absent — the app withholds it wherever the policy admits a
+      plaintext origin, so its absence here means one of the three is `http://` and that is the
+      thing to fix:
 
 ```
 default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://accounts.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: <PHOTO_PUBLIC_BASE origin> <PHOTO_S3_ENDPOINT origin>; connect-src 'self' <sentry ingest origin> <PHOTO_S3_ENDPOINT origin>; font-src 'self'; upgrade-insecure-requests

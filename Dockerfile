@@ -68,13 +68,11 @@ RUN --mount=type=bind,from=store,source=/pnpm/store,target=/pnpm/store,rw \
 # `release: "unknown"` while Sentry events carry a plugin-injected one, and the
 # two halves of the same incident disagree about which deploy they came from.
 #
-# **The two photo origins are here because the CSP is baked too** (#232). Next
-# writes `headers()` into `routes-manifest.json` at build time, so a deploy that
-# carries them only as runtime values ships a `Content-Security-Policy` naming
-# neither — and the first symptom is a photo upload the browser blocks with the
-# server logging nothing. Unlike the R2 key pair beside them they are non-secret
-# origins, so a build argument (recorded in the image history) is the right
-# instrument rather than the mounted secret below.
+# **The two photo origins are here because the CSP is baked too** (#232) —
+# `apps/web/lib/response-headers.ts` is where that is argued. Unlike the R2 key
+# pair they belong to, they are non-secret origins, so a build argument
+# (recorded in the image history) is the right instrument rather than the
+# mounted secret below.
 ARG NEXT_PUBLIC_RELEASE
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG SENTRY_ORG

@@ -45,12 +45,10 @@ than a build argument — a build argument is recorded in the image's history an
 can pull it.
 
 **`PHOTO_S3_ENDPOINT` and `PHOTO_PUBLIC_BASE` are on that line because the CSP is baked into the
-build** (#232), not only because the app reads them at runtime. Next writes `headers()` into
-`routes-manifest.json`, so an origin absent from the build is an origin the deployed
-`Content-Security-Policy` does not name — and that failure is silent on the server and fatal in the
-browser: the presigned PUT is blocked by `connect-src` and the Admin's review image by `img-src`,
-while the machine logs a clean request. The script warns when either is unset rather than refusing,
-and CI supplies both from the repository environment.
+build** (#232), not only because the app reads them at runtime — `csp-policy` in
+[`../policy/security.md`](../policy/security.md) is the value and
+`apps/web/lib/response-headers.ts` is where the build-time argument is made. The script warns when
+either is unset rather than refusing, and CI supplies both from the repository's Actions variables.
 
 Everything else is `fly.toml`, and three lines in it carry the whole design:
 

@@ -55,14 +55,6 @@ export type ResponseHeader = { key: string; value: string };
 export const STRICT_TRANSPORT_SECURITY = "max-age=63072000; includeSubDomains";
 
 /**
- * Deny-all for every capability this product does not use.
- *
- * The photo path is a **file input**, not a `getUserMedia` capture, so denying
- * the camera costs this product nothing today — and the day a surface wants one
- * it will fail loudly here rather than quietly acquiring a permission nobody
- * reviewed.
- */
-/**
  * Where the Google door sends a browser, and the one origin `form-action` has
  * to admit besides this app's own.
  *
@@ -85,8 +77,25 @@ export const STRICT_TRANSPORT_SECURITY = "max-age=63072000; includeSubDomains";
  */
 export const GOOGLE_AUTHORIZATION_ORIGIN = "https://accounts.google.com";
 
+/**
+ * Deny-all for every capability this product does not use.
+ *
+ * The photo path is a **file input**, not a `getUserMedia` capture, so denying
+ * the camera costs this product nothing today — and the day a surface wants one
+ * it will fail loudly here rather than quietly acquiring a permission nobody
+ * reviewed.
+ *
+ * **`browsing-topics=()` stands where the brief asked for `interest-cohort=()`.**
+ * That token was FLoC's, and Chrome withdrew FLoC in 2022 — no shipping browser
+ * recognises it, so sending it denies nothing and teaches the next reader to
+ * copy a dead string. `browsing-topics` gates the interest-inference API that
+ * exists in its place, which is what the FLoC entry was reaching for. An
+ * unrecognised feature is ignored on its own rather than voiding the header, so
+ * naming it costs a browser without it nothing.
+ */
 export const PERMISSIONS_POLICY = [
   "accelerometer=()",
+  "browsing-topics=()",
   "camera=()",
   "geolocation=()",
   "gyroscope=()",
@@ -135,6 +144,12 @@ function sources(...candidates: readonly (string | undefined)[]): string[] {
  * undo and reaches every other project they run. An unset `NODE_ENV` therefore
  * has to read as development. Missing HSTS in production is a header the
  * go-live scan finds; HSTS in development is a browser somebody has to repair.
+ *
+ * **`NODE_ENV` is deliberately not declared in `turbo.json`.** Next sets it
+ * inside its own process — `production` for `next build`, `development` for
+ * `next dev` — so it survives whatever Turborepo's strict mode filters out of
+ * the environment it spawns. Declaring it on `build` would add to the cache key
+ * a value that never varies.
  */
 function isProduction(environment: HeaderEnvironment): boolean {
   return environment.NODE_ENV === "production";
@@ -192,6 +207,11 @@ export function contentSecurityPolicy(environment: HeaderEnvironment): string {
     // `data:` is the design system's inline SVG chevron, reached as a CSS
     // `background-image`, which `img-src` governs.
     "img-src": sources("'self'", "data:", "blob:", photoDelivery, photoStore),
+    // **No `ws:` source, and that is a measurement rather than an omission.**
+    // Turbopack's HMR socket is same-host, and CSP Level 3 matches it against
+    // `'self'` — driven on a running dev server, the console prints
+    // `[HMR] connected` with no violation. A `ws:` source added "to be safe"
+    // would be a development-only relaxation nothing needs.
     "connect-src": sources("'self'", sentryIngest, photoStore),
     "font-src": ["'self'"],
   };
