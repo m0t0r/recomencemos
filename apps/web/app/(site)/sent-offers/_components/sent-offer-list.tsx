@@ -38,7 +38,11 @@ export function SentOfferList({ offers }: { readonly offers: readonly SentOffer[
 
   return (
     <>
-      <CountAnnouncement count={offers.length} announce={sentOffersCount} />
+      {/*
+        The sentence rather than the formatter: `CountAnnouncement` is a Client
+        Component and a function cannot cross that boundary. See its own props.
+      */}
+      <CountAnnouncement count={offers.length} label={sentOffersCount(offers.length)} />
       <ul className="flex flex-col">
         {offers.map((offer) => (
           <SentOfferRow key={offer.id} offer={offer} />
