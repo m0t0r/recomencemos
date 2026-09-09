@@ -16,11 +16,25 @@
  * act but an ongoing capability.
  *
  * **`./limits` and `./photo-url` are exported without this condition, and that
- * is not an inconsistency.** Both are leaves: no imports, no environment, no
- * I/O, no credential — three numbers and a URL builder, which the client-side
- * downscale and the `next/image` loader genuinely need. `@repo/errors` is
- * isomorphic on exactly that argument, and mechanism 1 is about withholding what
- * must not cross rather than about a package-wide label.
+ * is not an inconsistency** — but the two earn it differently, and saying so is
+ * the point. `./limits` is a leaf in the strict sense: no imports, no
+ * environment, no I/O, no credential, three numbers. `./photo-url` is not. It
+ * imports `#key-shapes` and `#limits`, and it re-exports `publicBase` and
+ * `transformationsEnabled` from `#config`, which does read the environment.
+ *
+ * What makes that safe is narrower than "it is a leaf", so it is worth stating
+ * exactly: `#config` reads through a **computed** lookup — `env[VARIABLE]`, with
+ * the name held in a const — and a bundler can only inline a static
+ * `process.env.FOO` member expression. So no `PHOTO_S3_*` value can be baked
+ * into client output, and the two functions that do cross read
+ * `PHOTO_PUBLIC_BASE` and `PHOTO_TRANSFORMATIONS`, which are a public URL and a
+ * feature flag rather than credentials. The credential-bearing entry points of
+ * `#config` are reachable only from `./photos`, which carries the condition.
+ *
+ * The client-side downscale and the `next/image` loader genuinely need both
+ * subpaths. `@repo/errors` is isomorphic on a similar argument, and mechanism 1
+ * is about withholding what must not cross rather than about a package-wide
+ * label.
  *
  * The `throw` below is not what a named import hits — that fails earlier, on the
  * missing export, which is the loud failure at build time this file exists to
