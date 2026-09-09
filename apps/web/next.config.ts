@@ -42,6 +42,56 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
 
   /**
+   * **A prefetch is one shell per route, not one payload per link** (#228).
+   *
+   * Every row on `/` and `/profiles` is a `<Link>` to `/profile/[slug]`, and
+   * with this off each row the router reaches costs a route tree **plus its own
+   * copy of the page payload** — 796 + 4,733 = **5,529 bytes**, per row, for a
+   * payload byte-identical across slugs. With it on the payload is fetched once
+   * for the route and each further row costs its tree alone: **795 bytes**, an
+   * 86% cut in the marginal cost of a row. Measured on a production build
+   * behind a counting proxy, not recalled; the spec's NFR3 carries the figures
+   * and the procedure.
+   *
+   * **It is not free, and the two costs are on the same page as the saving.**
+   * Every document grows about 5 KB (`/` 31.6 → 37.1 KB, `/profiles`
+   * 23.5 → 28.3 KB, gzip, medians of fifteen) and every navigation that stays
+   * inside a route — the city and Skill filters on `/profiles` — grows about
+   * 4.3 KB. So a reader who lands and reads is 12-17% cheaper and a reader who
+   * changes the filter four times is 11% dearer.
+   *
+   * **A single reading of either is not a measurement**, which is worth knowing
+   * before anyone re-takes one: both responses stream, so gzip's flush
+   * boundaries move between runs and the same document came back at 28,308 and
+   * 29,692 bytes. The prefetch figures above need no such care — a prefetch
+   * response is buffered, and repeats were byte-identical.
+   *
+   * **The trade is taken because the exposure it bounds is one-sided.** The only
+   * reason the flag-off numbers are small today is that the router stops
+   * prefetching after about three links per document — a client scheduling
+   * behaviour, not a designed property, and one a patch release could remove. A
+   * probe that removed that ceiling (a per-segment `prefetch` export, kept out
+   * of this change) measured **132 KB** of prefetch for one 24-row screen,
+   * against this flag's 24 KB for the same screen.
+   *
+   * **`page-weight` cannot see any of this**, which is why it is written here.
+   * That script reads `<script src>` off a prerendered document; a prefetch is a
+   * request it never observes, and so is the document's own growth.
+   *
+   * **It changes the default for every future route**, which is the part worth
+   * saying out loud once rather than discovering later: the segment-level
+   * `prefetch` default becomes `'partial'` app-wide. A per-segment `prefetch`
+   * export still wins, and `export const instant = false` is untouched — the
+   * three deliberately blocking routes (`/admin`, `/admin/enrol/[token]`,
+   * `/continue`) neither benefit nor are disturbed. It requires
+   * `cacheComponents`, which is on above.
+   *
+   * `'unstable_eager'` is the other accepted value and is not a candidate: Next
+   * documents it as an internal migration aid outside the public API.
+   */
+  partialPrefetching: true,
+
+  /**
    * NFR8's header half, for every gated route at once.
    *
    * The list is data in `lib/gated-routes.ts` and `gated-routes.test.ts` drives
