@@ -11,14 +11,39 @@
 # `turbo run` lives in package.json, not here.
 name: CI
 
-# `pull_request` is the gate. `push` on the default branch is what makes the
-# Turborepo cache worth having: GitHub scopes a cache to the branch that wrote it
-# plus that branch's descendants, so without a run on `dev` there is nothing for
-# a new pull request to restore from and every one of them starts cold.
+# `pull_request` is the whole gate and the only trigger a person's work reaches:
+# a merge into the default branch re-runs nothing. The commit that lands on `dev`
+# is the commit the gate already passed on the pull request that produced it, so
+# a second run of the same jobs re-answers a question that has an answer.
+#
+# **What that gave up, measured rather than argued.** GitHub scopes a cache to
+# the branch that wrote it plus that branch's descendants, so a run on `dev` was
+# the only thing that could leave a warm Turborepo cache for a pull request
+# branch that does not exist yet. Three jobs stayed on the merge run for that
+# reason, at 147 runner-seconds a merge. Run 34356751566 is the next pull request
+# to restore what they wrote, and it is what those seconds bought:
+#
+#     build        83s of the 147   ->  0 cached, 1 total. A miss.
+#     test         42s              ->  4 of 9 cached
+#     check-types  22s              ->  6 of 6 cached, 26ms of task time
+#
+# The largest job warmed nothing and never could: `apps/web`'s build hash
+# includes the app's own source, which is the one thing every pull request
+# changes. What the other two saved is single-digit seconds of task time, against
+# a 12-second setup step paid either way. So this is not a gate traded for speed
+# -- the gate is untouched, and every job it ever ran still runs on every pull
+# request. A new branch's first run is colder; every push after it restores that
+# branch's own cache through the `restore-keys` prefix, which is the case that
+# actually repeats.
 on:
+  # Opened, pushed to, reopened. That is GitHub's own default for this event,
+  # written out because it is the requirement rather than an inherited default:
+  # a `types:` key added later for some fourth activity replaces this list
+  # rather than extending it, and an unwritten default is the thing such an edit
+  # silently drops. `reopened` belongs with the other two -- a branch reopened
+  # weeks later has a base it was never gated against.
   pull_request:
-  push:
-    branches: [dev]
+    types: [opened, synchronize, reopened]
 
   # Called by `deploy.yml` before it ships anything to Fly, so the checks a
   # pull request had to pass are the same checks, run by the same jobs, on the
@@ -37,16 +62,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# The `push` run on the default branch exists to warm the Turborepo cache and
-# for nothing else -- the gate already ran on the pull request that produced
-# the commit. `lint`, `format` and `audit` set `turbo-cache: "false"`, so on
-# that event they warmed nothing at the cost of a checkout and an install each:
-# 136 runner-seconds per merge, measured on run 34041546988. They skip it. The
-# `workflow_call` from `deploy.yml` arrives as a `push` to the release branch,
-# which is not the default one, so a deploy still runs every check.
+# Every job runs on every event that reaches this file, and there is no `if:`
+# anywhere below. Three used to skip `lint`, `format` and `audit` on the merge
+# run; with that run gone the conditions were dead, and a dead condition is
+# worse than an absent one -- it describes an event this workflow no longer has,
+# and it is the line the next job gets written by copying.
+#
+# `turbo-cache: "false"` on those same three jobs stays, and it never had
+# anything to do with the event: oxlint and `node` are not Turborepo tasks, so
+# the cache would be written once per run and read by nothing.
+# `.github/actions/setup` carries that reasoning.
 jobs:
   lint:
-    if: github.event_name != 'push' || github.ref_name != github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -67,7 +94,6 @@ jobs:
   # `turbo-cache: "false"` for the same reason `lint` sets it: oxfmt reads the
   # whole tree in under a second, so a cache restore costs more than the work.
   format:
-    if: github.event_name != 'push' || github.ref_name != github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -97,9 +123,16 @@ jobs:
   # On a `pull_request` it reads GITHUB_BASE_REF, which GitHub sets and which is
   # the PR's own base -- the stacked-PR case DD13 depends on. On a `push` that
   # variable does not exist, so the gate falls back to `refs/remotes/origin/HEAD`,
-  # the ref every `git clone` writes and `actions/checkout` does not. The run on
-  # `dev` therefore exited 2 the day the first migration landed -- for the
-  # neighbouring reason, one step earlier than the paragraph above predicted.
+  # the ref every `git clone` writes and `actions/checkout` does not. The merge
+  # run on `dev` exited 2 the day the first migration landed for exactly that --
+  # one step earlier than the paragraph above predicted.
+  #
+  # **That run is gone and this step is not**, which is the trap in deleting it
+  # as dead weight along with the trigger that first needed it: the
+  # `workflow_call` from `deploy.yml` still arrives here as a `push`, to the
+  # release branch, carrying no GITHUB_BASE_REF either. Without these three
+  # lines the gate would now exit 2 on every deploy rather than on every merge,
+  # and it would do it at the one moment nobody wants to debug CI.
   #
   # The branch is read from the webhook payload rather than asked of the remote
   # (`set-head --auto`) or written here as `dev`: the payload carries it on both
@@ -130,7 +163,6 @@ jobs:
   # High or above in a *direct* dependency only. The script says why, and
   # `gate-test.sh` holds its cases.
   audit:
-    if: github.event_name != 'push' || github.ref_name != github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

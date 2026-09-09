@@ -17,14 +17,23 @@
 # judge.
 name: coverage
 
-# `pull_request` only. `ci.yml` also runs on `push` to `dev` because a Turborepo
-# cache is scoped to the branch that wrote it, so a pull request has nothing to
-# restore from without one — but this workflow's answer is a comment on a pull
-# request, and a run on `dev` would produce no comment for anyone. The
-# `restore-keys` prefix below still makes the second and later pushes to a branch
-# warm, which is the case that actually repeats.
+# `pull_request` only, which is now the same answer `ci.yml` gives rather than a
+# difference between the two. `ci.yml` used to run on `push` to `dev` as well, to
+# leave a warm Turborepo cache for pull request branches that did not exist yet;
+# that run was measured against what it actually bought and removed, and the
+# reasoning is written at that file's `on:` block rather than repeated here.
+# Nothing about this workflow changed: a run on `dev` would have produced no
+# comment for anyone, since the answer here *is* a comment on a pull request.
+#
+# The `restore-keys` prefix below still makes the second and later pushes to a
+# branch warm, which is the case that actually repeats.
+#
+# The `types:` list is GitHub's own default for this event, written out for the
+# reason `ci.yml` gives: a fourth activity added later replaces the list rather
+# than extending it, and an unwritten default is what such an edit drops.
 on:
   pull_request:
+    types: [opened, synchronize, reopened]
 
 # `pull-requests: write` is what lets the report be posted, and it is the only
 # thing widened past `ci.yml`'s read-only default. Nothing here checks out or
