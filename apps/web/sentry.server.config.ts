@@ -33,8 +33,9 @@ Sentry.init({
   //
   // **What `false` actually withholds, read out of the installed SDK rather than
   // assumed.** `defaultPiiToCollectionOptions` in `@sentry/core@10.73.0` maps
-  // this flag onto a collection object, and on the `false` branch that object is
-  // `userInfo: false`, `httpBodies: []`, `genAI` inputs and outputs off, and
+  // this flag onto a collection object, and on the `false` branch that object
+  // carries `userInfo: false` — the IP address, and the headers it can be read
+  // out of — plus `httpBodies: []`, `genAI` inputs and outputs off, and
   // `databaseQueryData: false`. Those four are real and are what this line buys.
   //
   // **What it does not withhold — and this comment used to say it did.** Cookies

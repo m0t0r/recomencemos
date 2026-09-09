@@ -31,6 +31,15 @@ const sdk = vi.hoisted(() => ({
 vi.mock("@sentry/nextjs", () => sdk);
 
 /**
+ * `process.env` is worker-wide, and this suite runs on `vmThreads` — so a
+ * variable left set here is one the next file in the same worker inherits. The
+ * neighbouring instrumentation suite clears the same key for the same reason.
+ */
+afterEach(() => {
+  delete process.env.NEXT_PUBLIC_SENTRY_DSN;
+});
+
+/**
  * The options the entry point hands `init`, with the module evaluated afresh —
  * and the scrubber **from that same evaluation**.
  *

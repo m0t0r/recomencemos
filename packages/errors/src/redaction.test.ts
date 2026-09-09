@@ -25,6 +25,11 @@ const SHIPPED_KEY_NAMES = [
   "auth",
   "cookie",
   "set-cookie",
+  // The parsed cookie map's own key. It is a carrier name rather than a value
+  // name, and it is on this fixture so the sweeps below reach it in every hook
+  // shape — not only at `request.cookies`, which is where the cases further down
+  // exercise it.
+  "cookies",
   "credentials",
   "password",
   "passwd",
@@ -644,12 +649,34 @@ describe("the one enumerated credential-bearing route", () => {
     expect(scrubbed.spans[0]?.data["url.path"]).toBe(REDUCED);
   });
 
-  it("reduces the path and drops the query when a URL carries both", () => {
+  /**
+   * All three shapes again, each carrying a query — the combination is what
+   * exercises the ordering inside `reduceUrl`, where the route replacement runs
+   * ahead of the guard that would otherwise return a clean string unparsed, and
+   * ahead of the two branches that cut a query off.
+   */
+  it("reduces the path and drops the query when an absolute URL carries both", () => {
     const scrubbed = scrubEvent({
       request: { url: `https://recomencemos.test/admin/enrol/${TOKEN}?next=/admin` },
     });
 
     expect(scrubbed.request.url).toBe(`https://recomencemos.test${REDUCED}`);
+  });
+
+  it("reduces the path and drops the query on a path-absolute reference", () => {
+    const scrubbed = scrubEvent({
+      breadcrumbs: [{ data: { url: `/admin/enrol/${TOKEN}?next=/admin` } }],
+    });
+
+    expect(scrubbed.breadcrumbs[0]?.data.url).toBe(REDUCED);
+  });
+
+  it("reduces the path and drops the fragment on a bare path", () => {
+    const scrubbed = scrubEvent({
+      spans: [{ data: { "url.path": `/admin/enrol/${TOKEN}#recovery` } }],
+    });
+
+    expect(scrubbed.spans[0]?.data["url.path"]).toBe(REDUCED);
   });
 
   /**
