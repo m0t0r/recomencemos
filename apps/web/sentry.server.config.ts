@@ -25,13 +25,27 @@ Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
   // Explicit rather than inherited, on the server for the same reason as on the
-  // browser: the wizard-generated config sets this `true`, which sends IP
-  // address, cookies and headers — every one of them `personal` under
-  // `docs/policy/data.md` — to a processor nobody here chose for that purpose.
-  // Sentry was chosen to receive errors and traces, and `/privacy` names it to
-  // the people it concerns on exactly those terms; `sendDefaultPii` would widen
-  // that silently. It is already `false` by default in 10.70.0; pinning it is
-  // what stops a wizard re-run or an SDK default quietly flipping it.
+  // browser: the wizard-generated config sets this `true`, which widens what
+  // reaches a processor nobody here chose for that purpose. Sentry was chosen to
+  // receive errors and traces, and `/privacy` names it to the people it concerns
+  // on exactly those terms. Pinning the flag is what stops a wizard re-run or an
+  // SDK default quietly flipping it.
+  //
+  // **What `false` actually withholds, read out of the installed SDK rather than
+  // assumed.** `defaultPiiToCollectionOptions` in `@sentry/core@10.73.0` maps
+  // this flag onto a collection object, and on the `false` branch that object is
+  // `userInfo: false`, `httpBodies: []`, `genAI` inputs and outputs off, and
+  // `databaseQueryData: false`. Those four are real and are what this line buys.
+  //
+  // **What it does not withhold — and this comment used to say it did.** Cookies
+  // and headers are *not* switched off by it. The same `false` branch maps them
+  // to `cookies: { deny: … }` and `httpHeaders: { request: { deny: … } }` —
+  // objects, not `false` — so `requestDataIntegration`'s `cookies !== false` test
+  // passes and both are assembled onto the event. The deny list those objects
+  // carry never runs on the event path at all; it applies only where headers
+  // become span attributes. That is why cookies and headers are turned off by
+  // name in `integrations` below, and why the correction is written here rather
+  // than left for the next reader to re-derive.
   //
   // Not migrated to `dataCollection` on purpose: supplying that object at all
   // switches the SDK's baseline from the privacy-preserving mapping this flag
@@ -74,7 +88,37 @@ Sentry.init({
    * spend a metered allowance (5 GB/month, §3) on lines no drain query reads.
    */
   enableLogs: true,
-  integrations: [Sentry.pinoIntegration()],
+  integrations: [
+    Sentry.pinoIntegration(),
+
+    // **Stop collecting what nothing downstream should have to scrub.** A
+    // non-default instance of an integration replaces the default of the same
+    // name, and `include` is spread last, so declaring this is enough — nothing
+    // needs removing. The event's `request` then arrives as `{ method, url }`.
+    //
+    // This is the layer *behind* `scrubOrDrop`, not a replacement for it. The
+    // scrubber stays the named control at the egress, because it also covers the
+    // browser, the breadcrumbs and everything the app itself puts on an event.
+    //
+    // Cookies are the reason it exists: beside the raw `cookie` header the SDK
+    // writes a **parsed map keyed by cookie name**, which no key-name list can
+    // match by the names inside it. `@repo/errors` now collapses that carrier
+    // whole; this stops it being built at all.
+    //
+    // Headers go with them. Their deny list never runs on this path, so the
+    // referer, the user-agent and the shared-device header shipped verbatim. The
+    // cost is real and worth naming: a server event no longer carries a
+    // user-agent, so a browser-specific report is harder to place. The browser's
+    // own events still carry theirs, and that is where such a bug is diagnosed.
+    //
+    // **Server only, and that is measured rather than symmetric.**
+    // `requestDataIntegration` is not among the browser's defaults and is not on
+    // the client entry; the browser's carrier is `httpContextIntegration`, whose
+    // request data is `{ url, headers: { Referer, User-Agent } }` and holds no
+    // cookie map at all. Declaring this there would be a control that controls
+    // nothing while reading in review as though the browser were covered.
+    Sentry.requestDataIntegration({ include: { cookies: false, headers: false } }),
+  ],
 
   // All three hooks, one function — DD3's parity. `beforeSend` alone would
   // leave the other two egresses unscrubbed: transactions ship at the rate
@@ -83,4 +127,16 @@ Sentry.init({
   beforeSend: scrubOrDrop,
   beforeSendTransaction: scrubOrDrop,
   beforeBreadcrumb: scrubOrDrop,
+
+  // **The fourth egress, and the one that had no hook in front of it.** A log
+  // envelope is not an event: it routes through `beforeSendLog` and reaches
+  // none of the three above. With `enableLogs` on, every forwarded pino line —
+  // the request-completion line included, `context.path` and all — went to the
+  // vendor unscrubbed.
+  //
+  // Same function again, for the reason the other three share it: a second
+  // scrubber is a second thing to keep in agreement. `scrubOrDrop` returning
+  // `null` drops the line rather than sending it half-scrubbed, which is the
+  // behaviour the other hooks already have.
+  beforeSendLog: scrubOrDrop,
 });

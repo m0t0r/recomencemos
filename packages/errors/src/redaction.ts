@@ -39,6 +39,22 @@ const REDACTED_KEY_SPELLINGS: readonly string[] = [
   "auth",
   "cookie",
   "set-cookie",
+  // The **parsed** cookie map, which travels beside the raw header rather than
+  // inside it. Every name above is the name of a *value*; this one is the name
+  // of a *carrier*, and it is listed for exactly that reason.
+  //
+  // `request.headers.cookie` is one string under a name this list already held,
+  // so it was redacted. Beside it the SDK writes the same cookies again as a
+  // record whose **keys are cookie names** — and the walk descended into it and
+  // tested each name, none of which is `cookie`. Every value came out intact,
+  // on error and transaction events alike.
+  //
+  // Naming the carrier is what makes the fix independent of which cookies this
+  // product sets: the map collapses whole, so the next cookie name somebody adds
+  // cannot defeat it. It is order-independent with the `request.cookies` entry
+  // in {@link CARRIER_PATHS} — that walk then meets a string and returns it
+  // unchanged.
+  "cookies",
   "credentials",
   "password",
   "passwd",
@@ -148,6 +164,16 @@ const CARRIER_PATHS: readonly (readonly string[])[] = [
   ["breadcrumbs", "*", "data"],
   ["spans", "*", "data"],
   ["exception", "values", "*", "stacktrace", "frames", "*", "vars"],
+  // A **log envelope**, which is not an event and does not reach `beforeSend`.
+  // The server init forwards pino's lines to the reporting platform, and those
+  // route through `beforeSendLog` — so before this entry the request-completion
+  // line reached the vendor without ever meeting this module.
+  //
+  // The shape is the one the SDK hands that hook: a flat record, built as
+  // `{ ...beforeLog, attributes: processedLogAttributes }` before the serializer
+  // reshapes it into the wire format's `{ value, type }` pairs. An *event* has no
+  // top-level `attributes`, so this entry costs the other three hooks nothing.
+  ["attributes"],
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -209,6 +235,39 @@ const FETCHED_SCHEMES: ReadonlySet<string> = new Set(["http:", "https:", "ws:", 
 const PATH_ABSOLUTE_WITH_QUERY = /^\/\S*[?#]/;
 
 /**
+ * The **one** route this product serves a credential in a path segment on, and
+ * the only path this module rewrites.
+ *
+ * A path is normally where the request *went*, which is the half worth keeping —
+ * so `url.path`, `url.scheme` and `url.port` are deliberately absent from the key
+ * list above. This route is the recorded exception: `secrets-in-url-paths` in
+ * `docs/policy/security.md` is `yes` for `GET /admin/enrol/[token]`, one route,
+ * named and bounded, and an invalid token is `notFound()` before the page
+ * renders — so any event from a *rendered* enrolment page carries a **live**
+ * token by construction.
+ *
+ * **This is not the heuristic [ADR-0006](../../../docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)
+ * refuses.** That ADR refuses a rule that cannot tell a reset token from an order
+ * id and would also land on `/orders/42`. This matches one enumerated literal
+ * prefix and nothing else; naming the exposure is precisely what it asks for. A
+ * second such route is a decision to take deliberately, not a pattern to widen
+ * here.
+ *
+ * The capture group keeps the prefix so the replacement cannot move the path
+ * somewhere else, and `[^/?#]+` stops at the segment boundary so a query, a
+ * fragment and any deeper segment are left for the rest of {@link reduceUrl} to
+ * handle. It is idempotent: re-running it over `/admin/enrol/[token]` reproduces
+ * the same string.
+ *
+ * **Only the reporting egress reduces this.** The request-completion line still
+ * writes the token to stdout under `context.path`; that exposure is sized and
+ * accepted in the security policy, and the go-live runbook's drain step is what
+ * bounds it. Reducing it here and not there is the difference between the two
+ * sinks, not an inconsistency.
+ */
+const ENROLMENT_TOKEN_SEGMENT = /(\/admin\/enrol\/)[^/?#]+/g;
+
+/**
  * Everything a URL can carry beyond where it points, removed — by class, not by
  * the name of the key holding it.
  *
@@ -220,6 +279,10 @@ const PATH_ABSOLUTE_WITH_QUERY = /^\/\S*[?#]/;
  * `https://admin:hunter2@host/` is a credential in a URL wearing neither a query
  * nor a key.
  *
+ * A path segment is the fourth position, and it is handled for exactly one
+ * enumerated route rather than by class — see {@link ENROLMENT_TOKEN_SEGMENT},
+ * which is also where the reason that is not a heuristic is written down.
+ *
  * **A URL with nothing to remove comes back byte-identical**, not merely
  * equivalent. `new URL(…).toString()` normalises — it appends the root path to a
  * bare origin, lowercases the host, drops a default port — so re-serialising
@@ -229,41 +292,59 @@ const PATH_ABSOLUTE_WITH_QUERY = /^\/\S*[?#]/;
  * original string, which is what `@repo/observability`'s `pathnameOf` does with
  * the same input, so the two egresses reduce a path the same way.
  *
- * **Two residues, named rather than guessed at.** A URL *embedded* in a longer
- * string — a message reading `fetch failed for https://…?token=…` — is left
- * alone, and so is a relative reference that does not start with `/`. No scanner
- * can tell a link in an error message from a link that is a credential, and any
- * bound that caught the second would mangle the first.
+ * **"Nothing to remove" now means the enrolment route too**, and that is the one
+ * way the guarantee above narrowed: a string carrying that route comes back
+ * changed even when it holds no query, no fragment and no userinfo. Every other
+ * string in an event is untouched, which is what the byte-identical cases in the
+ * suite pin.
+ *
+ * **The residues, named rather than guessed at.** A URL *embedded* in a longer
+ * string — a message reading `fetch failed for https://…?token=…` — keeps its
+ * query, and so does a relative reference that does not start with `/`. No
+ * scanner can tell a link in an error message from a link that is a credential,
+ * and any bound that caught the second would mangle the first.
  * [ADR-0006](../../../docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)
  * is the precedent for writing the gap down here rather than shipping the
  * heuristic that half-closes it.
+ *
+ * The enrolment route is the exception on this axis as well, and deliberately:
+ * it is reduced wherever it appears, embedded in prose included, because
+ * replacing one enumerated segment destroys none of the surrounding message the
+ * way truncating at a `?` would.
  */
 function reduceUrl(value: string): string {
+  // The enumerated route first, and on the raw string rather than on a parsed
+  // path. One rule then covers every shape the carriers actually use — an
+  // absolute URL, a path-absolute reference, and the bare path a span attribute
+  // holds — and it covers them whether or not a query is present, which the
+  // guard below would otherwise return before.
+  const reduced = value.replace(ENROLMENT_TOKEN_SEGMENT, "$1[token]");
+
   // Nothing a URL carries beyond its destination can be present without one of
   // these three characters, so the overwhelming majority of strings in an event
   // leave here without being parsed at all.
-  if (!value.includes("?") && !value.includes("#") && !value.includes("@")) {
-    return value;
+  if (!reduced.includes("?") && !reduced.includes("#") && !reduced.includes("@")) {
+    return reduced;
   }
 
-  if (PATH_ABSOLUTE_WITH_QUERY.test(value)) {
-    return value.split(/[?#]/, 1)[0] ?? value;
+  if (PATH_ABSOLUTE_WITH_QUERY.test(reduced)) {
+    return reduced.split(/[?#]/, 1)[0] ?? reduced;
   }
 
   let url: URL;
 
   try {
-    url = new URL(value);
+    url = new URL(reduced);
   } catch {
-    return value;
+    return reduced;
   }
 
   if (!FETCHED_SCHEMES.has(url.protocol)) {
-    return value;
+    return reduced;
   }
 
   if (url.search === "" && url.hash === "" && url.username === "" && url.password === "") {
-    return value;
+    return reduced;
   }
 
   url.search = "";

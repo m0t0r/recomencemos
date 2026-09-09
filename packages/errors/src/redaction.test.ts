@@ -540,16 +540,206 @@ describe("a query string travelling beside a URL rather than inside one", () => 
    * subsume `request.headers` — it moved every header one level down and quietly
    * stopped redacting the deepest of them. Review caught it as a narrowing of
    * NFR18. Both roots are listed for this, and this case is what says so.
+   *
+   * This used to make the same assertion about `request.cookies`. It no longer
+   * can, and that is the fix rather than a regression: the parsed cookie map is
+   * now collapsed by its own key before the walk can descend into it, so there
+   * is no depth under it left to budget. The case below is what replaced that
+   * half.
    */
-  it("keeps the full depth budget under headers and cookies, which the broad root shortens", () => {
+  it("keeps the full depth budget under headers, which the broad root shortens", () => {
     const scrubbed = scrubEvent({
       request: {
         headers: { a: { b: { c: { token: SECRET } } } },
-        cookies: { a: { b: { c: { session: SECRET } } } },
       },
     });
 
     expect(scrubbed.request.headers.a.b.c.token).toBe(REDACTED);
-    expect(scrubbed.request.cookies.a.b.c.session).toBe(REDACTED);
+  });
+});
+
+/**
+ * The parsed cookie map is a **carrier**, not a value, and that distinction is
+ * the whole of the bug it replaced. `request.headers.cookie` is one string under
+ * a name the list holds, so it was redacted; beside it the SDK writes the same
+ * cookies again as a parsed record whose *keys are cookie names*. The walk
+ * descended and tested each name — `__Secure-better-auth.session_token` is not
+ * `cookie` — and every value came out intact.
+ *
+ * Redacting it by its own key is what makes the fix independent of which cookies
+ * this product happens to set: the map collapses whole, so the fifth cookie name
+ * somebody adds later cannot defeat it.
+ */
+describe("the parsed cookie map beside the cookie header", () => {
+  it("collapses the whole map by its own key, whatever the cookies inside are called", () => {
+    const scrubbed = scrubEvent({
+      request: {
+        cookies: {
+          "__Secure-better-auth.session_token": SECRET,
+          // Deliberately not one of the four this product sets today. A fix
+          // keyed to today's names would pass the line above and fail here.
+          "a-cookie-nobody-has-invented-yet": SECRET,
+        },
+      },
+    });
+
+    expect(scrubbed.request.cookies).toBe(REDACTED);
+    expect(JSON.stringify(scrubbed)).not.toContain(SECRET);
+  });
+
+  it("still redacts the raw cookie header, which was never the half that leaked", () => {
+    const scrubbed = scrubEvent({
+      request: { headers: { cookie: SECRET }, cookies: { session_token: SECRET } },
+    });
+
+    expect(scrubbed.request.headers.cookie).toBe(REDACTED);
+    expect(scrubbed.request.cookies).toBe(REDACTED);
+  });
+});
+
+/**
+ * The one route this product serves a credential in a path segment on.
+ *
+ * `reduceUrl` takes a URL apart by class and drops the query, the fragment and
+ * userinfo — the three positions a credential normally occupies. A path segment
+ * is the fourth, and it was out of reach by design: a path is where the request
+ * went, which is the half worth keeping, and no scanner can tell a reset token
+ * from an order id. ADR-0006 is why nothing here guesses.
+ *
+ * What makes this route different is that it needs no guessing. The security
+ * policy enumerates it, by name, as the single sanctioned credential-in-a-path
+ * route — so reducing exactly it is what "name the exposure" means rather than a
+ * breach of it.
+ *
+ * The token is reduced at the reporting egress only. What the request-completion
+ * line writes to stdout is unchanged and deliberately so: that exposure is sized
+ * and accepted in the security policy, and the go-live runbook's drain step is
+ * what bounds it.
+ */
+describe("the one enumerated credential-bearing route", () => {
+  const TOKEN = "PLACEHOLDER0000000000000000000000";
+  const REDUCED = "/admin/enrol/[token]";
+
+  it("reduces the token segment of an absolute URL", () => {
+    const scrubbed = scrubEvent({
+      request: { url: `https://recomencemos.test/admin/enrol/${TOKEN}` },
+    });
+
+    expect(scrubbed.request.url).toBe(`https://recomencemos.test${REDUCED}`);
+  });
+
+  it("reduces a path-absolute reference, which is what a fetch breadcrumb records", () => {
+    const scrubbed = scrubEvent({
+      breadcrumbs: [{ data: { url: `/admin/enrol/${TOKEN}` } }],
+    });
+
+    expect(scrubbed.breadcrumbs[0]?.data.url).toBe(REDUCED);
+  });
+
+  it("reduces a bare path, which is the shape a span attribute carries", () => {
+    const scrubbed = scrubEvent({
+      spans: [{ data: { "url.path": `/admin/enrol/${TOKEN}` } }],
+    });
+
+    expect(scrubbed.spans[0]?.data["url.path"]).toBe(REDUCED);
+  });
+
+  it("reduces the path and drops the query when a URL carries both", () => {
+    const scrubbed = scrubEvent({
+      request: { url: `https://recomencemos.test/admin/enrol/${TOKEN}?next=/admin` },
+    });
+
+    expect(scrubbed.request.url).toBe(`https://recomencemos.test${REDUCED}`);
+  });
+
+  /**
+   * The finding's own reproduction, kept as a case. An invalid token is
+   * `notFound()` before the page renders, so any event from a rendered enrolment
+   * page carries a **live** token — and it arrives by four independent carriers,
+   * three of which need no error at all.
+   */
+  it("leaves the token in none of the carriers one event can hold it in", () => {
+    const url = `https://recomencemos.test/admin/enrol/${TOKEN}`;
+    const scrubbed = scrubEvent({
+      request: { url },
+      contexts: {
+        nextjs: { request_path: `/admin/enrol/${TOKEN}` },
+        trace: { data: { "url.full": url, "url.path": `/admin/enrol/${TOKEN}` } },
+      },
+      spans: [{ data: { "url.full": url } }],
+      breadcrumbs: [{ data: { url } }],
+    });
+
+    expect(JSON.stringify(scrubbed)).not.toContain(TOKEN);
+    // Reduced rather than dropped: which route the request reached is the half
+    // worth keeping, and an event with no path at all is one nobody can triage.
+    expect(scrubbed.contexts.nextjs.request_path).toBe(REDUCED);
+  });
+
+  it("reduces a Referer that is itself an enrolment URL, which is the browser's carrier", () => {
+    const scrubbed = scrubEvent({
+      request: { headers: { Referer: `https://recomencemos.test/admin/enrol/${TOKEN}` } },
+    });
+
+    expect(scrubbed.request.headers.Referer).toBe(`https://recomencemos.test${REDUCED}`);
+  });
+
+  it("is idempotent, so an already-reduced path survives a second pass unchanged", () => {
+    const scrubbed = scrubEvent({ request: { url: REDUCED } });
+
+    expect(scrubbed.request.url).toBe(REDUCED);
+  });
+
+  it("leaves a path that merely resembles the route alone", () => {
+    const scrubbed = scrubEvent({
+      request: { url: "https://recomencemos.test/admin/enrolments" },
+      spans: [{ data: { "url.path": "/admin/enrol" } }],
+    });
+
+    expect(scrubbed.request.url).toBe("https://recomencemos.test/admin/enrolments");
+    expect(scrubbed.spans[0]?.data["url.path"]).toBe("/admin/enrol");
+  });
+
+  it("returns every other route byte-identical, which the whole module depends on", () => {
+    const paths = [
+      "https://recomencemos.test/",
+      "https://recomencemos.test/perfil/abc",
+      "/wall",
+      "/orders/42",
+      "not a url at all",
+    ];
+
+    for (const url of paths) {
+      expect(scrubEvent({ request: { url } }).request.url).toBe(url);
+    }
+  });
+});
+
+/**
+ * A log envelope is the fourth egress, and it was the one with no hook in front
+ * of it at all. The server init forwards pino's lines to the reporting platform,
+ * and those route through `beforeSendLog` rather than `beforeSend` — so the
+ * request-completion line, `context.path` and all, reached the vendor without
+ * ever meeting this module.
+ *
+ * The shape asserted here is the one the SDK hands the hook: a flat `attributes`
+ * record, built as `{ ...beforeLog, attributes: processedLogAttributes }` before
+ * the serializer reshapes it into the wire format.
+ */
+describe("a log envelope, which reaches its own hook and not beforeSend", () => {
+  it("scrubs attributes, the carrier a forwarded log line puts its fields in", () => {
+    const scrubbed = scrubEvent({
+      level: "info",
+      message: "request complete",
+      attributes: {
+        "context.path": "/admin/enrol/PLACEHOLDER0000000000000000000000",
+        authorization: SECRET,
+        route: "/admin/enrol/[token]",
+      },
+    });
+
+    expect(scrubbed.attributes["context.path"]).toBe("/admin/enrol/[token]");
+    expect(scrubbed.attributes.authorization).toBe(REDACTED);
+    expect(scrubbed.attributes.route).toBe("/admin/enrol/[token]");
   });
 });
