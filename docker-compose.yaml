@@ -188,6 +188,18 @@ services:
     # A prefix-scoped rule here would be a local capability production has no
     # way to reproduce — which is the failure a fixture is supposed to prevent
     # rather than commit. Runbook §3 is these same acts performed by a human.
+    #
+    # **One direction of infidelity is left, and it is named rather than fixed.**
+    # MinIO's bucket-scope `download` policy also grants anonymous `ListBucket`
+    # — measured: `GET /recomencemos-photos/?list-type=2` answers 200 here,
+    # while the quarantine bucket answers 403 — and an R2 public bucket serves
+    # objects and never lists. So this fixture is *more* permissive than
+    # production on listing, which is the safe direction for a fixture to err
+    # in: nothing here can pass that production would refuse. It is harmless
+    # besides, since that bucket holds only photos the Wall already publishes.
+    # Do not close it by narrowing the policy back to the `photos` prefix —
+    # that trades a listing difference for the access-model difference #251 was
+    # about.
     entrypoint:
       - /bin/sh
       - -c

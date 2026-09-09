@@ -157,6 +157,39 @@ export function storageConfig(env: StorageEnv = process.env): StorageConfig {
     });
   }
 
+  /**
+   * **The two buckets may not be the same bucket, and this is the one line that
+   * says so in code.**
+   *
+   * Set alike, every unreviewed photo lands in the bucket that is public in
+   * whole, `${PHOTO_PUBLIC_BASE}/quarantine/<key>` serves it, and nothing else
+   * here notices: `bucketFor` keeps returning a valid name, every presign
+   * succeeds, and the only symptom is that NFR6 is false. That is precisely the
+   * state this package was in before the split, restored by a typo.
+   *
+   * It is checked here rather than left to the runbook because the split moved
+   * an invariant *out* of code — it used to be `anonymous set none` on a prefix,
+   * an act the store performed — and into prose plus a wizard stage that warns.
+   * Prose does not run on a deploy. Raised by the security review of the pull
+   * request that made the split.
+   */
+  if (env[BUCKET_VARIABLE] === env[QUARANTINE_BUCKET_VARIABLE]) {
+    throw new AppError({
+      code: "photo_buckets_not_distinct",
+      status: 503,
+      message:
+        `${BUCKET_VARIABLE} and ${QUARANTINE_BUCKET_VARIABLE} name the same bucket. No object ` +
+        "can be written until they differ. One of these buckets is readable by anybody and the " +
+        "other must never be, so pointing both at one is a configuration in which no unreviewed " +
+        "photo is unreachable — which is the whole of what the review gate is for.",
+      userMessage: PHOTO_UNAVAILABLE,
+      // The two variable names, never the value they share: a bucket name is
+      // not a secret, but this error's whole subject is a value an operator
+      // mistyped, and echoing it back is not what tells them which line to fix.
+      context: { variables: [BUCKET_VARIABLE, QUARANTINE_BUCKET_VARIABLE] },
+    });
+  }
+
   return {
     endpoint: env[ENDPOINT_VARIABLE] as string,
     publicBucket: env[BUCKET_VARIABLE] as string,

@@ -57,6 +57,42 @@ describe("the quarantine bucket variable", () => {
   });
 
   /**
+   * **The typo that would restore the defect, refused in code.**
+   *
+   * Both variables set to one bucket is a configuration in which every
+   * unreviewed photo is written to the bucket that is public in whole — and
+   * nothing else notices, because `bucketFor` still returns a valid name and
+   * every presign still succeeds. The split moved this invariant out of the
+   * store's own policy and into prose; this is what puts it back where a deploy
+   * runs it. Raised by the security review.
+   */
+  it("refuses a configuration where both buckets are the same bucket", () => {
+    expect(() =>
+      storageConfig({ ...COMPLETE, PHOTO_S3_QUARANTINE_BUCKET: COMPLETE.PHOTO_S3_BUCKET }),
+    ).toThrow(expect.objectContaining({ code: "photo_buckets_not_distinct" }));
+  });
+
+  /**
+   * The refusal names the two variables an operator has to go and edit, and
+   * quotes neither of their values — the same discipline the absent-variable
+   * refusal above keeps, for a slightly different reason: here the value is the
+   * mistake, and echoing it back does not say which line to fix.
+   */
+  it("names the two variables in that refusal and quotes neither value", () => {
+    try {
+      storageConfig({ ...COMPLETE, PHOTO_S3_QUARANTINE_BUCKET: COMPLETE.PHOTO_S3_BUCKET });
+      expect.unreachable("storageConfig accepted one bucket named twice");
+    } catch (error) {
+      const { context, message } = error as { context: unknown; message: string };
+
+      expect(context).toEqual({
+        variables: ["PHOTO_S3_BUCKET", "PHOTO_S3_QUARANTINE_BUCKET"],
+      });
+      expect(message).not.toContain(COMPLETE.PHOTO_S3_BUCKET);
+    }
+  });
+
+  /**
    * The names of the absent variables reach a log line, so what must never be
    * there is a value — and one of the five is the secret access key.
    */
