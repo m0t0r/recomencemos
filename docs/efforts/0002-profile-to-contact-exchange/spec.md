@@ -241,7 +241,37 @@ concerns.
   **Images are bounded separately, because on this page they are the dominant bytes.** Every photo is
   served at a width appropriate to its slot and in a format the browser negotiated — **0** Wall cards
   request an image more than **2×** their rendered CSS width, and resizing happens at the edge rather
-  than on the Fly machine (DD6). **Binds:** 2, 4, 11.
+  than on the Fly machine (DD6).
+  **Prefetch traffic is a second instrument, added 2026-09-08 with #228, and the byte budget above is
+  unchanged.** The two measure different things and neither can see the other: the budget is script
+  bytes a prerendered document requests, read by `pnpm page-weight`; this is router traffic that
+  script then generates, which `page-weight` never observes. It matters here because every row of both
+  lists is a link to one repeated route, so it grows with the list rather than with the page.
+  **The number to hold is the marginal cost of a row, and it is 795 bytes.** With
+  `partialPrefetching` on, a prefetched row costs its route tree and nothing else, because the page
+  payload is fetched once for the route and shared. Measured 2026-09-08 on Next 16.3.4: **795 B** per
+  row, against **5,529 B** (796 tree + 4,733 page) with the flag off. Whole-journey figures from the
+  same runs, gzip on the wire, 390 × 844: reading the Wall end to end **67.8 → 59.8 KB** (−12%),
+  reading `/profiles` end to end **67.7 → 56.3 KB** (−17%), and four city-filter changes on
+  `/profiles` **154.2 → 170.6 KB** (**+11%**) — the one journey the flag makes dearer, by about
+  4.3 KB per in-route navigation, plus about 5 KB on every document.
+  **A single reading of a document or a navigation is not a measurement.** Both stream, so gzip's
+  flush boundaries move between runs and one document came back at 28,308 bytes and at 29,692. The
+  figures above are medians of fifteen for documents and means of four for navigations. Prefetch
+  responses are buffered and repeat byte-identically, which is why the per-row number can be quoted
+  exactly and these cannot.
+  **How to re-take it**, because a figure quoted from memory is what amended this requirement once
+  already. It is a seam-3 procedure rather than a command, since it needs a running server and a
+  browser: build for production and run `next start` — never `next dev`, which does not prefetch —
+  with enough published profiles for four pages; put a counting reverse proxy in front of it that logs
+  each response's header and body bytes; drive the route at 390 × 844 with a fixed scroll script; and
+  classify each request by the header the router sets rather than by its path, since a prefetch
+  (`Next-Router-Prefetch`), a navigation (`RSC` alone) and the infinite-scroll action (a `POST`) all
+  hit the same URLs. **A browser HAR is not an instrument for this**: it reports a streamed RSC
+  response's `bodySize` as whatever had arrived when it was recorded, and gave 363 bytes and 27,336
+  bytes for the same navigation on two runs. Buffered prefetch responses it reports correctly, which
+  is what makes the error easy to miss.
+  **Binds:** 2, 4, 11.
 - **NFR4 — Publishing and editing without JavaScript.** With JavaScript unavailable or still loading,
   a Worker completes **every** field except the photo and submitting produces a published profile —
   **and the same holds for a change to one already published.** The photo is the single documented
