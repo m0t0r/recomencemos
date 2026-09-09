@@ -167,7 +167,9 @@ export function SourceBranch({
   Item?: ComponentType<{ readonly item: QueueItem }>;
 }) {
   return (
-    <ul className="flex flex-col gap-3">
+    // `data-queue-list` is the outer half of `use-queue-row.ts`'s contract: it is
+    // what a row's focus handoff walks to find the rows after it.
+    <ul data-queue-list="" className="flex flex-col gap-3">
       {branch.items.map((item) => (
         <li key={item.id} className="border-border bg-card rounded-lg border p-4">
           {Item ? (
