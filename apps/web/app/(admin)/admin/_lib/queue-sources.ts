@@ -34,9 +34,14 @@
  * waiting, which is NFR7's detector silently disabled.
  */
 
+import { offers } from "@repo/domain/offers";
 import { skills } from "@repo/domain/skills";
 import {
   BOUNCES_LABEL,
+  OFFER_PAY_FIELD,
+  OFFER_WHEN_FIELD,
+  OFFER_WORK_FIELD,
+  offerSummary,
   OFFERS_LABEL,
   PHOTOS_LABEL,
   REPORTS_LABEL,
@@ -59,6 +64,21 @@ export interface QueueItem {
    * and React escapes it on the way out.
    */
   readonly summary: string;
+  /**
+   * The item's own fields, where one summary line cannot carry it.
+   *
+   * **Added by the Offers source, and general because the four sections after it
+   * have the same shape of problem.** An Offer is three things a person wrote —
+   * the work, the pay, the when — and the section's whole rule is that a branch
+   * renders in full so nothing is acted on unread. Flattening them into one
+   * sentence would either lose a field or invent a separator no reader was
+   * promised.
+   *
+   * **Every value here is built by the source and is subject to NFR11**, exactly
+   * as {@link QueueItem.summary} is: what an Offer item may carry is the body and
+   * the Worker's display identity, and **no** phone number.
+   */
+  readonly fields?: readonly { readonly label: string; readonly value: string }[];
   /** When it arrived. The oldest across all sources is what renders first. */
   readonly arrivedAt: Date;
 }
@@ -124,6 +144,36 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
     label: OFFERS_LABEL,
     // NFR7: age of the oldest undelivered Offer ≤ 24 h.
     bandHours: 24,
+    async load(): Promise<QueueBranch> {
+      const branch = await offers.pending(OFFER_DISPLAY_CAP);
+
+      return {
+        /**
+         * **What an Offer item may carry, and what it may not.** NFR11's one
+         * stated exception is bounded per queue item: Offer review renders the
+         * body and her display identity, and **no** phone — hers or his. So the
+         * summary names both people the way the surfaces they appear on name
+         * them, and the three fields are what one person wrote to another.
+         *
+         * His name is badged as declared rather than verified everywhere else it
+         * appears, and an Account that has never named itself carries `null`
+         * here — which is a real state, not a placeholder, and the sentence says
+         * so rather than rendering an empty string.
+         */
+        items: branch.items.map((offer) => ({
+          id: offer.id,
+          summary: offerSummary(offer.workerFirstName, offer.workerLastInitial, offer.hirerName),
+          fields: [
+            { label: OFFER_WORK_FIELD, value: offer.workDescription },
+            { label: OFFER_PAY_FIELD, value: offer.payTerms },
+            { label: OFFER_WHEN_FIELD, value: offer.whenText },
+          ],
+          arrivedAt: offer.sentAt,
+        })),
+        total: branch.total,
+        oldestArrivedAt: branch.oldestSentAt,
+      };
+    },
   },
   {
     key: "photos",
@@ -188,6 +238,17 @@ export function pendingSources(): readonly QueueSource[] {
  * heading is what says whether there are more.
  */
 export const SKILL_REQUEST_DISPLAY_CAP = 20;
+
+/**
+ * How many Offers render at once (C55).
+ *
+ * **The cap is on the rendering and not on the count**, and the domain read
+ * enforces that by computing the depth and the age-of-oldest over the whole
+ * predicate in a second statement. Twenty is a screenful an Admin can work
+ * through in one sitting; the number beside the heading is what says there are
+ * more, and NFR7's band is what says whether that matters today.
+ */
+export const OFFER_DISPLAY_CAP = 20;
 
 /**
  * The age of one instant, in whole hours.

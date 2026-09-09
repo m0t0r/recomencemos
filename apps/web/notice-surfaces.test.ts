@@ -103,12 +103,16 @@ describe("the standing notices reach every surface that owes them", () => {
 
   const required = ALL_SURFACES.filter((surface) => noticesRequiredOn(surface.route));
 
-  it("finds at least the four surfaces that carry them today", () => {
+  it("finds at least the surfaces that carry them today", () => {
     expect(required.map((surface) => surface.route).toSorted()).toEqual([
       "/",
       "/my-profile",
       "/profile/[slug]",
       "/profiles",
+      // Added by story 6. The no-money notice is doing real work here: he is
+      // waiting on an answer about work he offered to pay for, and this platform
+      // holds none of that money.
+      "/sent-offers",
     ]);
   });
 

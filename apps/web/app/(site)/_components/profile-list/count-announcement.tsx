@@ -24,7 +24,21 @@
 import { useEffect, useState } from "react";
 import { announcedCount } from "../../_lib/lists/messages";
 
-export function CountAnnouncement({ count }: { readonly count: number }) {
+export interface CountAnnouncementProps {
+  readonly count: number;
+  /**
+   * What the count is *of*, as the finished sentence.
+   *
+   * A parameter since story 6, because a third streamed list arrived that is not
+   * a list of profiles: `/sent-offers` announces *3 propuestas*. The default is
+   * the two public lists' own sentence, so neither call site changed — and the
+   * noun stays in a messages module rather than being assembled here from a
+   * number and a word, which is how a plural rule ends up living in a component.
+   */
+  readonly announce?: (count: number) => string;
+}
+
+export function CountAnnouncement({ count, announce = announcedCount }: CountAnnouncementProps) {
   const [announcement, setAnnouncement] = useState("");
 
   /*
@@ -37,8 +51,8 @@ export function CountAnnouncement({ count }: { readonly count: number }) {
   */
   useEffect(() => {
     // oxlint-disable-next-line set-state-in-effect, no-deriving-state-in-effects -- see above.
-    setAnnouncement(announcedCount(count));
-  }, [count]);
+    setAnnouncement(announce(count));
+  }, [announce, count]);
 
   // `output` rather than a `p` with `role="status"`: its implicit role is `status`,
   // so the semantics are identical and the element says what it is.

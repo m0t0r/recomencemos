@@ -20,8 +20,8 @@ still holds; what he needs is a **state per row and a number**, not reassurance.
 
 **This surface is the only place the platform's own delay is visible to the person waiting on
 it.** That makes it the surface where an honest instrument matters most: NFR7 gives every Offer
-a 24-hour review band and there is nobody on call. If this page cannot say *this one is taking
-longer than usual*, the operator's queue depth is a number only the operator can see.
+a 24-hour review band and there is nobody on call. If this page cannot say _this one is taking
+longer than usual_, the operator's queue depth is a number only the operator can see.
 
 ## Outcome and proof
 
@@ -31,19 +31,19 @@ longer than usual*, the operator's queue depth is a number only the operator can
 **Success, stated so it can be measured rather than felt** — at 390 × 844, with five Offers in
 mixed states:
 
-| #   | Criterion                                                                                                                                    |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Every row says **who it went to** and **which state it is in**, in that order, without a tap                                                 |
-| 2   | A `pending_review` row **states the normal window up front** — before it has passed it, not only after                                       |
-| 3   | Past 24 hours the row says plainly that **this one is taking longer than usual**, and it is a sentence rather than a colour or a badge        |
-| 4   | The terms he wrote are readable from this page, because "what did I actually promise" is the second question every reader has                |
-| 5   | Nothing on the page is her phone, her email or her full name — none has crossed, and the page shows nothing that suggests otherwise           |
-| 6   | The empty state **routes into `/profiles`** and does not read as an error                                                                    |
-| 7   | Rows stream under a Suspense boundary whose fallback holds the row's height                                                                  |
+| #   | Criterion                                                                                                                              |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Every row says **who it went to** and **which state it is in**, in that order, without a tap                                           |
+| 2   | A `pending_review` row **states the normal window up front** — before it has passed it, not only after                                 |
+| 3   | Past 24 hours the row says plainly that **this one is taking longer than usual**, and it is a sentence rather than a colour or a badge |
+| 4   | The terms he wrote are readable from this page, because "what did I actually promise" is the second question every reader has          |
+| 5   | Nothing on the page is her phone, her email or her full name — none has crossed, and the page shows nothing that suggests otherwise    |
+| 6   | The empty state **routes into `/profiles`** and does not read as an error                                                              |
+| 7   | Rows stream under a Suspense boundary whose fallback holds the row's height                                                            |
 
 **Product-specific truth.** A marketplace's "sent" list is an outbox with read receipts and
 nudges. This one has neither and can have neither: there is no read receipt, because delivery
-means *a person let it through* and not *she opened it*; and there is no nudge, because
+means _a person let it through_ and not _she opened it_; and there is no nudge, because
 principle 1 says the platform introduces and leaves. **The absence of a follow-up control is a
 design decision, and the page must not look like one is missing.**
 
@@ -91,12 +91,12 @@ in his own terms and the person it is about, and the terms he wrote sit undernea
 
 ## States and ranges
 
-| State               | What it shows                                                                                                                        |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| State               | What it shows                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `empty`             | He has sent none. Say what sending one is for, and route into `/profiles`. Never an illustration and never "nothing here yet".        |
-| `loading`           | Row skeletons at the row's height, so the heading above them does not move.                                                          |
-| `partial`           | Some rows painted, the rest streaming.                                                                                               |
-| `error`             | The list failed to load: what failed, that retrying helps, and the page's own chrome still renders.                                  |
+| `loading`           | Row skeletons at the row's height, so the heading above them does not move.                                                           |
+| `partial`           | Some rows painted, the rest streaming.                                                                                                |
+| `error`             | The list failed to load: what failed, that retrying helps, and the page's own chrome still renders.                                   |
 | `permission denied` | Signed out → `/sign-in` with a way back. There is no not-the-sender case: the read is scoped by the principal, so it returns nothing. |
 
 **Ranges:** 0, 1, 5 and 40 rows; every state in `OFFER_STATES` present at least once across the

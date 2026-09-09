@@ -22,8 +22,8 @@ world.** He arrived from the Wall or from `/profiles`, has read her sentence and
 history, and has decided he wants this particular person to do a particular thing. He is not
 browsing any more.
 
-He is **not the person this product's voice protects**, and the tone matrix says so: *Writing an
-Offer* is Warmth 5→3, Confidence 4→5. What he needs is not encouragement. It is to know, before
+He is **not the person this product's voice protects**, and the tone matrix says so: _Writing an
+Offer_ is Warmth 5→3, Confidence 4→5. What he needs is not encouragement. It is to know, before
 he types, that **a person reads this before she does** and that **he cannot change it
 afterwards** — because both change what he writes.
 
@@ -39,21 +39,21 @@ reads, unchanged, after a person has read it first.
 **Success, stated so it can be measured rather than felt** — at 390 × 844, signed in, on a
 profile with a 103-character headline:
 
-| #   | Criterion                                                                                                                                       |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | The two facts — **a person reads it first**, **he cannot change it** — are on screen **before the first field**, not after the submit button    |
-| 2   | The form does not displace her identity: her portrait, name and sentence are still the first thing on the page                                  |
-| 3   | Three fields, each with a visible label and one line of help saying what the field is **for**                                                   |
-| 4   | On his **first** Offer, the two identity fields are present and labelled as **self-asserted**; on every later one they are absent               |
-| 5   | A refusal names the fragment it objected to and **every field still holds what he typed**                                                       |
-| 6   | The submit button says the verb of its action and names what happens — never *Enviar*                                                          |
-| 7   | It works with JavaScript unavailable: a real `<form action>`, a `.stateAction()`, and no hidden input mirroring client state                    |
+| #   | Criterion                                                                                                                                    |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | The two facts — **a person reads it first**, **he cannot change it** — are on screen **before the first field**, not after the submit button |
+| 2   | The form does not displace her identity: her portrait, name and sentence are still the first thing on the page                               |
+| 3   | Three fields, each with a visible label and one line of help saying what the field is **for**                                                |
+| 4   | On his **first** Offer, the two identity fields are present and labelled as **self-asserted**; on every later one they are absent            |
+| 5   | A refusal names the fragment it objected to and **every field still holds what he typed**                                                    |
+| 6   | The submit button says the verb of its action and names what happens — never _Enviar_                                                        |
+| 7   | It works with JavaScript unavailable: a real `<form action>`, a `.stateAction()`, and no hidden input mirroring client state                 |
 
 **Product-specific truth.** Every neighbouring product — a job board, a marketplace, a
-messaging app — optimises this form for *volume*: send fast, send many, follow up. This one
+messaging app — optimises this form for _volume_: send fast, send many, follow up. This one
 does the opposite, and the inversion is the product. The delay is not a defect to apologise
 for; it is the thing the platform actually does, and the copy says so in the present tense with
-the actor visible (*una persona lee cada propuesta*), never in the passive.
+the actor visible (_una persona lee cada propuesta_), never in the passive.
 
 **The anti-goal that matters most:** nothing here may read as a form for contacting a supplier.
 She is a person deciding whether to spend her week on this.
@@ -63,7 +63,7 @@ She is a person deciding whether to spend her week on this.
 **Structural thesis: the promise comes before the fields, and the fields are three sentences he
 would say out loud.**
 
-The three things an Offer names — *the work, the pay, the when* — are the story's own words and
+The three things an Offer names — _the work, the pay, the when_ — are the story's own words and
 they are the form's structure. Not a subject line, not a message body, not attachments: three
 short fields, because a person answering has to be able to judge all three at a glance, and
 because a free-form message is where a phone number goes.
@@ -72,8 +72,8 @@ because a free-form message is where a phone number goes.
 
 - **The two standing notices stay** where `gated-profile.md` put them, as `disclosure` at the
   foot. This form does not restate non-verification; it is one tap from it.
-- **The immutability and the human review are stated before he writes** (tone matrix, *Writing
-  an Offer*), and the confirmation says both again plus **that this usually takes under a day**.
+- **The immutability and the human review are stated before he writes** (tone matrix, _Writing
+  an Offer_), and the confirmation says both again plus **that this usually takes under a day**.
 - **No countdown, no urgency, no "N personas ya escribieron".** Energy 2, Optimism 3.
 - **The identity fields are labelled self-asserted**, because they are, and because story 11's
   notice already tells her the same thing from the other side.
@@ -108,14 +108,14 @@ because a free-form message is where a phone number goes.
 
 ## States and ranges
 
-| State               | What it shows                                                                                                                                                                     |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `empty`             | The form as it first renders. Nothing is pre-filled but the two identity fields on a repeat sender, which are absent rather than filled.                                          |
-| `loading`           | Per-control, never a whole-form spinner. The submit control is busy and the fields stay readable.                                                                                 |
-| `error`             | Per-field messages **and** a focused form-level summary. A contact detail names the fragment in guillemets and keeps everything typed.                                            |
+| State               | What it shows                                                                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `empty`             | The form as it first renders. Nothing is pre-filled but the two identity fields on a repeat sender, which are absent rather than filled.                                                                                        |
+| `loading`           | Per-control, never a whole-form spinner. The submit control is busy and the fields stay readable.                                                                                                                               |
+| `error`             | Per-field messages **and** a focused form-level summary. A contact detail names the fragment in guillemets and keeps everything typed.                                                                                          |
 | `permission denied` | Signed out → `/sign-in` with a way back. Frozen or banned → he is told plainly, because the export already tells him the same thing. Blocked → he is told this person is not receiving Offers from him; see the decision below. |
-| `rate limited`      | The seventh state: his count, when he may send again, and that the Offers already sent are on their way and nothing he typed was lost.                                            |
-| `success`           | The confirmation. **A person reads it first · usually under a day · he cannot change it**, plus a route into `/sent-offers`.                                                       |
+| `rate limited`      | The seventh state: his count, when he may send again, and that the Offers already sent are on their way and nothing he typed was lost.                                                                                          |
+| `success`           | The confirmation. **A person reads it first · usually under a day · he cannot change it**, plus a route into `/sent-offers`.                                                                                                    |
 
 **Ranges, and every variant is judged against both ends.** `workDescription` 20–600 characters;
 `payTerms` 3–120; `whenText` 3–120; `hirerName` 2–80; `hirerPhone` a Colombian or international

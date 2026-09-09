@@ -63,6 +63,39 @@ export type RevokeSessionsInput = z.output<typeof revokeSessionsFields>;
  */
 export const promoteSkillRequestArg = z.string().regex(/^\d+$/);
 
+/**
+ * The Offer a delivery acts on, as a **bound argument** for the reason above it.
+ *
+ * A UUID rather than digits, because DD2 makes `Offer.id` the one UUIDv7 in this
+ * schema — `/offers/[id]` puts it in a URL, and a `BIGINT` there would publish
+ * the platform's total Offer count. The pattern is version-agnostic: what this
+ * refuses is a string that is not a UUID at all, and which version it carries is
+ * the minter's business rather than this parse's.
+ *
+ * No message, because no person can provoke this — the id comes from the row,
+ * and a forged one meets the refusals the domain already answers.
+ */
+export const deliverOfferArg = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
+/**
+ * Delivering takes nothing an Admin types: the Offer is the bound argument and
+ * the act is the button.
+ *
+ * **It still declares a schema, and the `preprocess` is why.** A `.stateAction()`
+ * dispatched from a `<form action>` is handed a `FormData`, which
+ * next-safe-action does not convert — so an action whose input is a bare
+ * `z.object({})` is one a form cannot submit at all, and the failure is a type
+ * error rather than anything a person would see. Reducing the `FormData` to the
+ * empty object it means keeps the form native, which is what NFR4 asks of every
+ * control on this queue.
+ */
+export const deliverOfferSchema = z.preprocess(
+  (raw) => (raw instanceof FormData ? {} : raw),
+  z.object({}),
+);
+
 /** The label is read on the publishing form, so it is the length of a label. */
 export const PROMOTE_LABEL_MAX = 80;
 
