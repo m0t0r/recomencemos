@@ -92,29 +92,45 @@ describe("the two facts, before he writes", () => {
   });
 
   /**
-   * **Before the first field**, in the document's own order — which is the order
-   * a screen reader takes it in and the order the criterion is about.
+   * **Where each fact sits is the composition's own argument**, so the assertion
+   * follows it rather than the other way round (`/prototype`, variant C).
+   *
+   * The review and the window are on the **closed control**, which is the state
+   * he meets first — so they precede every field. The immutability is at the
+   * **submit**, because that is where the decision is taken and a promise read at
+   * the head of a panel is read too early to change what he writes. It therefore
+   * comes *after* the fields on purpose, and an assertion demanding otherwise
+   * would be pinning the composition C replaced.
    */
   it.each([false, true])(
-    "says them ahead of every field label in the document (first Offer: %s)",
+    "puts the review and the window ahead of every field (first Offer: %s)",
     (alreadyIdentified) => {
       const { container } = renderForm(alreadyIdentified);
       const text = container.textContent ?? "";
 
-      const notices = [
-        text.indexOf(OFFER_REVIEW_NOTICE),
-        text.indexOf(OFFER_REVIEW_WINDOW),
-        text.indexOf(OFFER_IMMUTABLE_NOTICE),
-      ];
+      const notices = [text.indexOf(OFFER_REVIEW_NOTICE), text.indexOf(OFFER_REVIEW_WINDOW)];
 
       const fields = [WORK_LABEL, PAY_LABEL, WHEN_LABEL]
         .concat(alreadyIdentified ? [] : [HIRER_NAME_LABEL, HIRER_PHONE_LABEL])
         .map((label) => text.indexOf(label));
 
-      // Every notice is present, and every one of them lands before the first
-      // label a person reads.
       expect(notices.every((at) => at >= 0)).toBe(true);
       expect(Math.max(...notices)).toBeLessThan(Math.min(...fields));
+    },
+  );
+
+  it.each([false, true])(
+    "puts the immutability at the submit, where the decision is taken (first Offer: %s)",
+    (alreadyIdentified) => {
+      const { container } = renderForm(alreadyIdentified);
+      const text = container.textContent ?? "";
+
+      const immutable = text.indexOf(OFFER_IMMUTABLE_NOTICE);
+
+      expect(immutable).toBeGreaterThan(-1);
+      // Said before he can press the thing it is about, and after the fields.
+      expect(immutable).toBeLessThan(text.indexOf(SEND_OFFER_BUTTON));
+      expect(immutable).toBeGreaterThan(text.indexOf(WORK_LABEL));
     },
   );
 });

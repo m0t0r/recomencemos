@@ -38,6 +38,19 @@ export const SIGN_OUT = "Salir";
 export const ACCOUNT = "Tu cuenta";
 
 /**
+ * The way to `/sent-offers`.
+ *
+ * The same words the page titles itself with, because link text names its
+ * destination (`docs/policy/voice.md`) and a person who presses this should land
+ * on a page that calls itself what the link called it.
+ *
+ * **Absent from `/admin`'s shell**, for `ACCOUNT`'s reason: these are the
+ * Offers *this Account* sent, and from a moderation queue the row navigates out
+ * of the surface being worked.
+ */
+export const SENT_OFFERS = "Propuestas que enviaste";
+
+/**
  * The accessible name of the control that opens the session menu.
  *
  * The visible text inside it is her address, so the accessible name **contains**

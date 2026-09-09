@@ -57,10 +57,7 @@ import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { type CeilingRefusal, chargeCeilings } from "@/lib/ceilings";
 import { clientIp } from "@/lib/client-ip";
-import { PrototypeSwitcher } from "@/app/_components/prototype-switcher";
-import { variantFrom } from "@/app/_lib/prototype-variants";
 import { GatedProfileView } from "./_components/gated-profile-view";
-import { OfferFormVariantB, OfferFormVariantC } from "./_components/offer-form-variants";
 import { OfferForm } from "./_components/offer-form";
 import { ReadPaused } from "./_components/read-paused";
 import { PROFILE_PAGE_TITLE } from "./_lib/messages";
@@ -71,15 +68,6 @@ export const metadata: Metadata = {
 };
 
 type Params = Promise<{ readonly slug: string }>;
-
-/* PROTOTYPE — throwaway, with the variants. `?variant=` picks a composition. */
-type SearchParams = Promise<{ readonly variant?: string }>;
-
-const OFFER_FORM_VARIANTS = [
-  { key: "a", name: "Al pie, abierto" },
-  { key: "b", name: "La promesa es el marco" },
-  { key: "c", name: "Un control, luego el panel" },
-] as const;
 
 /**
  * NFR26's two windows against this Account and this address — four counters,
@@ -106,13 +94,7 @@ async function chargeReadCeilings(accountId: string): Promise<CeilingRefusal | u
   );
 }
 
-async function ProfilePanel({
-  params,
-  searchParams,
-}: {
-  readonly params: Params;
-  readonly searchParams: SearchParams;
-}) {
+async function ProfilePanel({ params }: { readonly params: Params }) {
   const { slug } = await params;
 
   /**
@@ -204,9 +186,6 @@ async function ProfilePanel({
    */
   const alreadyIdentified = await consent.hasConsented(session.accountId, "hirer");
 
-  // PROTOTYPE — throwaway, with the variants.
-  const variant = variantFrom((await searchParams).variant, OFFER_FORM_VARIANTS);
-
   return (
     <>
       <GatedProfileView profile={profile} workHistory={workHistory} />
@@ -218,33 +197,11 @@ async function ProfilePanel({
         keeps the form's own JSX free of any mirror of them, and what makes the
         slug something an attacker cannot edit to address the Offer elsewhere.
       */}
-      {/*
-        PROTOTYPE — throwaway. `?variant=` swaps the composition and nothing
-        else: same fields, same copy, same machine, same refusals. Read inside
-        this panel because it is already the dynamic boundary — reading it at the
-        page's top level would fail the prerender.
-      */}
-      {variant === "b" ? (
-        <OfferFormVariantB
-          profileSlug={slug}
-          consentVersions={CURRENT_CONSENT_VERSIONS}
-          alreadyIdentified={alreadyIdentified}
-        />
-      ) : variant === "c" ? (
-        <OfferFormVariantC
-          profileSlug={slug}
-          consentVersions={CURRENT_CONSENT_VERSIONS}
-          alreadyIdentified={alreadyIdentified}
-        />
-      ) : (
-        <OfferForm
-          profileSlug={slug}
-          consentVersions={CURRENT_CONSENT_VERSIONS}
-          alreadyIdentified={alreadyIdentified}
-        />
-      )}
-
-      <PrototypeSwitcher variants={OFFER_FORM_VARIANTS} current={variant} />
+      <OfferForm
+        profileSlug={slug}
+        consentVersions={CURRENT_CONSENT_VERSIONS}
+        alreadyIdentified={alreadyIdentified}
+      />
     </>
   );
 }
@@ -283,17 +240,11 @@ function PanelSkeleton() {
   );
 }
 
-export default function ProfilePage({
-  params,
-  searchParams,
-}: {
-  readonly params: Params;
-  readonly searchParams: SearchParams;
-}) {
+export default function ProfilePage({ params }: { readonly params: Params }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
       <Suspense fallback={<PanelSkeleton />}>
-        <ProfilePanel params={params} searchParams={searchParams} />
+        <ProfilePanel params={params} />
       </Suspense>
 
       {/*
