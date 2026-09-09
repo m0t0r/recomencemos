@@ -17,11 +17,11 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     tsconfigPaths: true,
-    // **Four test files here reach a `@repo/domain` facade, and a facade now
+    // **Three test files here reach a `@repo/domain` facade, and a facade
     // imports the connection statically.** `server-only` resolves to a bare
-    // `throw` under every condition Vitest sets, so without this line those four
-    // fail at resolution — the same entry `packages/domain/vitest.config.mts`
-    // carries, for the same reason.
+    // `throw` under every condition Vitest sets, so without this line those
+    // three fail at resolution — the same entry
+    // `packages/domain/vitest.config.mts` carries, for the same reason.
     //
     // **It removes the marker layer in this suite and not the backstop.** A
     // `"use client"` module that pulled in `@repo/domain`, `@repo/observability`
@@ -32,8 +32,8 @@ export default defineConfig({
     // resolver**, and a Vite alias cannot reach that.
     //
     // A test that loads a server module also needs `@vitest-environment node`,
-    // because the backstop above fires on a `window`. The four that do say so in
-    // their own docblocks.
+    // because the backstop above fires on a `window`. The three that do say so
+    // in their own docblocks.
     alias: {
       "server-only": fileURLToPath(new URL("./testing/server-only-stub.ts", import.meta.url)),
     },

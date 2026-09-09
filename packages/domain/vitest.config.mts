@@ -34,11 +34,10 @@ export default defineConfig({
     tsconfigPaths: true,
     // **What lets a facade import `#connection` statically.** `server-only`
     // resolves to an empty module under the `react-server` condition and to a
-    // bare `throw` under every other, and Vitest sets none — so before this
-    // line, a static import of the connection module made the facade around it
-    // unimportable at both seams, and every facade method opened by importing
-    // it dynamically instead. This is the `moduleNameMapper` Next's own testing
-    // docs prescribe for Jest, in Vite's spelling.
+    // bare `throw` under every other, and Vitest sets none — so without this
+    // line a facade that imports the connection module is unimportable at both
+    // seams. This is the `moduleNameMapper` Next's own testing docs prescribe
+    // for Jest, in Vite's spelling.
     //
     // It is declared here at the root rather than in either project, so both
     // inherit it — Vitest 5 defaults an inline project's `extends` to `true`.
