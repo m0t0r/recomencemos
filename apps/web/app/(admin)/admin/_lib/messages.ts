@@ -336,17 +336,51 @@ export const offerSentOnQueue = (at: Date) =>
   `Enviada el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
 
 /**
- * The one action this section ships, and what it does said in the verb.
+ * The section's two actions, and what each does said in the verb.
  *
  * *Entregar* rather than *Aprobar*: an Admin is not approving a person or her
- * work, they are letting a message through to somebody. `rejectOffer` is the
- * other half and belongs to the Admin section's own ticket.
+ * work, they are letting a message through to somebody. Its pair is
+ * *No entregar* rather than *Rechazar* for the same reason from the other side —
+ * what is being refused is the delivery, not the person who wrote it, and the
+ * voice guide's boundary rule is that the care is directed at the process. The
+ * two verbs are deliberately the same verb, one negated: an Admin reading twenty
+ * rows is choosing between two outcomes of one decision, not between two
+ * unrelated acts.
+ *
+ * **Both are on every row, in this order, always.** The affordances do not move
+ * and do not appear conditionally — a control whose position depends on the row
+ * is a control that gets pressed by mistake on the twentieth one.
  */
 export const DELIVER_OFFER_SUBMIT = "Entregar";
 export const DELIVER_OFFER_SUBMITTING = "Entregando…";
+export const REJECT_OFFER_SUBMIT = "No entregar";
+export const REJECT_OFFER_SUBMITTING = "Deteniendo…";
 
 /** What the Admin is told afterwards: which row moved, and where it went. */
 export const offerDelivered = (workerFirstName: string) => `Se la entregamos a ${workerFirstName}.`;
+/**
+ * The other outcome, and it states the consequence rather than the state.
+ *
+ * *"No le llegó a nadie"* is what an Admin needs to be able to say later, and it
+ * is the same sentence the Hirer reads on his own list — one fact, told to both
+ * people in the same words. The name of nobody appears in it: an Offer stopped
+ * here reached no Worker, so naming one would describe something that did not
+ * happen.
+ */
+export const OFFER_REJECTED = "No la dejamos pasar. No le llegó a nadie.";
+
+/**
+ * What a row says about itself once the decision is made and the queue has not
+ * been reloaded.
+ *
+ * **The row stays, and it stops being actionable.** Removing it on the spot would
+ * take the outcome off the screen and shift every row below it under a cursor
+ * that is mid-queue; leaving the buttons live would invite a second press against
+ * a state the server has already moved. So it holds its place and says what
+ * happened, and the next reload is what clears it.
+ */
+export const OFFER_ROW_RESOLVED = "Ya decidida.";
+
 /* --------------------------------------------------------------------------
  * The photo section.
  *

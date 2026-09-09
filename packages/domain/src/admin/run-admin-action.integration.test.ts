@@ -48,14 +48,14 @@ const QUARANTINE_KEY = "quarantine/aaaaaaaaaaaaaaaaaaaaa";
 const PUBLIC_KEY = "photos/aaaaaaaaaaaaaaaaaaaaa.webp";
 
 /**
- * The Offer `deliverOffer` acts on, pinned for the same reason.
+ * The Offer both Offer decisions act on, pinned for the same reason.
  *
  * An Offer's key is a UUIDv7 minted in the application rather than a generated
  * identity, so pinning it needs no `OVERRIDING SYSTEM VALUE` — the seed simply
  * writes this value. It is a real v7 rather than an arbitrary UUID so that
  * anything ordering by key sees what production would.
  *
- * The refusal case runs with nothing seeded, which is `deliverOffer`'s "act that
+ * The refusal case runs with nothing seeded, which is either decision's "act that
  * did not happen": an Offer id no row carries.
  */
 const OFFER_ID = "0199a1f0-2b3c-7def-8000-0123456789ab";
@@ -89,6 +89,7 @@ const INPUTS = {
     labelEs: "Arreglo máquinas de coser",
   },
   deliverOffer: { offerId: OFFER_ID },
+  rejectOffer: { offerId: OFFER_ID },
   approvePhoto: { profileId: PROFILE_ID, publicKey: PUBLIC_KEY },
   rejectPhoto: { profileId: PROFILE_ID },
 } satisfies { [K in AdminActionName]: AdminActionInput<K> };
@@ -203,6 +204,7 @@ async function seedFor(database: TestDatabase, action: AdminActionName): Promise
   if (action === "revokeSessions") await targetWithSessions(database);
   if (action === "promoteSkill") await pendingRequest(database);
   if (action === "deliverOffer") await pendingOffer(database);
+  if (action === "rejectOffer") await pendingOffer(database);
   if (action === "approvePhoto" || action === "rejectPhoto") {
     await profileWithPendingPhoto(database);
   }
@@ -393,6 +395,115 @@ describe("revokeSessions", () => {
 
     const remaining = await database.db.select().from(schema.session);
     expect(remaining).toHaveLength(1);
+  });
+});
+
+/**
+ * The other side of the queue's one decision.
+ *
+ * **What is asserted here is mostly what does *not* move.** Refusal is a state
+ * change and nothing else, and every way it could go wrong is a write that
+ * belongs to delivery leaking into it — the fairness counter, the delivery
+ * timestamp, the terms he wrote.
+ */
+describe("rejectOffer", () => {
+  const offer = (database: TestDatabase) =>
+    database.db.select().from(schema.offer).where(eq(schema.offer.id, OFFER_ID));
+
+  test("stops the Offer and stamps no delivery", async ({ database }) => {
+    await pendingOffer(database);
+
+    const outcome = await runAdminAction(database.db, actor, "rejectOffer", { offerId: OFFER_ID });
+
+    expect(outcome).toMatchObject({ ok: true, result: { offerId: OFFER_ID } });
+    expect((await offer(database))[0]).toMatchObject({
+      state: "rejected_by_admin",
+      deliveredAt: null,
+    });
+  });
+
+  /**
+   * **NFR22's ordering input counts Offers that reached a Worker.** One stopped
+   * here reached none, so moving her down the browsable list for it would charge
+   * her for work she was never shown.
+   */
+  test("does not move the delivered-Offer count", async ({ database }) => {
+    await pendingOffer(database);
+
+    await runAdminAction(database.db, actor, "rejectOffer", { offerId: OFFER_ID });
+
+    const [profile] = await database.db
+      .select({ delivered: schema.capabilityProfile.deliveredOfferCount })
+      .from(schema.capabilityProfile);
+
+    expect(profile).toMatchObject({ delivered: 0 });
+  });
+
+  /**
+   * **An Offer held because its sender was frozen is still work somebody owes an
+   * answer on** (C22), so it is refusable from where it stands — the transition
+   * table says so, and this is that reading exercised end to end rather than at
+   * seam 1.
+   */
+  test("stops an Offer that was held rather than pending", async ({ database }) => {
+    await pendingOffer(database);
+    await database.db
+      .update(schema.offer)
+      .set({ state: "on_hold" })
+      .where(eq(schema.offer.id, OFFER_ID));
+
+    const outcome = await runAdminAction(database.db, actor, "rejectOffer", { offerId: OFFER_ID });
+
+    expect(outcome.ok).toBe(true);
+    expect((await offer(database))[0]).toMatchObject({ state: "rejected_by_admin" });
+  });
+
+  /** Two Admins on one queue: the second one meets a state, not a mystery. */
+  test("refuses one the other Admin already delivered, and leaves it delivered", async ({
+    database,
+  }) => {
+    await pendingOffer(database);
+    await runAdminAction(database.db, actor, "deliverOffer", { offerId: OFFER_ID });
+
+    const outcome = await runAdminAction(database.db, actor, "rejectOffer", { offerId: OFFER_ID });
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+
+    expect(outcome.error).toBeInstanceOf(AppError);
+    expect(outcome.error.status).toBe(409);
+    expect((await offer(database))[0]).toMatchObject({ state: "delivered" });
+    // The delivery's row, and nothing for the attempt that did not happen.
+    expect(await audit(database)).toHaveLength(1);
+  });
+
+  test("refuses an Offer id no row carries", async ({ database }) => {
+    const outcome = await runAdminAction(database.db, actor, "rejectOffer", {
+      offerId: "0199a1f0-2b3c-7def-8000-ffffffffffff",
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+
+    expect(outcome.error.status).toBe(404);
+    expect(await audit(database)).toEqual([]);
+  });
+
+  /**
+   * **The row a _reclamo_ is reconstructed from a year later is the row the Admin
+   * read.** Refusal moves a state; it never edits what he wrote, and the absence
+   * of any function that could is what `#offers` asserts one file over.
+   */
+  test("leaves the terms exactly as he wrote them", async ({ database }) => {
+    await pendingOffer(database);
+
+    await runAdminAction(database.db, actor, "rejectOffer", { offerId: OFFER_ID });
+
+    expect((await offer(database))[0]).toMatchObject({
+      workDescription: "Cocinar almuerzos para ocho personas",
+      payTerms: "$120.000 por el día",
+      whenText: "Sábado desde las 7 de la mañana",
+    });
   });
 });
 

@@ -18,12 +18,13 @@
  * Node-environment Vitest run sets no `react-server` condition and `server-only`
  * throws there. `queue-data.ts` beside this file is where the gate goes.
  *
- * **Three of the five have no `load`, and they are absent rather than stubbed.**
- * Offers, Reports and bounced addresses read tables that stories 6, 10 and 15
- * create. A source with no resolver reports **no count and no age** — never a
- * zero. Zero is the good news an Admin scans for, and reporting it for a branch
- * nobody queried is the instrument that lies about exactly the thing this surface
- * exists to prevent. `coverageNotice` is the visible half of the same fact.
+ * **Two of the five have no `load`, and they are absent rather than stubbed.**
+ * Reports and bounced addresses read tables later stories create; Offers, photos
+ * and Skill requests are live. A source with no resolver reports **no count and
+ * no age** — never a zero. Zero is the good news an Admin scans for, and
+ * reporting it for a branch nobody queried is the instrument that lies about
+ * exactly the thing this surface exists to prevent. `coverageNotice` is the
+ * visible half of the same fact.
  *
  * **Each branch is `LIMIT`-capped for display while its count and age-of-oldest
  * are computed over the whole branch** (C55). That is a property of a `load`

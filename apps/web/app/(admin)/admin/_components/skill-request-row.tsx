@@ -16,11 +16,12 @@
  * What is here is what has to be true whatever that section looks like: her words
  * in full, two named fields, one action, and an answer that is announced.
  *
- * **Focus returns to the row, not to the top of the page.** The queue is worked
- * top to bottom by one person; a page that scrolled home after every promotion
- * would cost that person their position several hundred times a day. The rule and
- * its reasoning are `sessions-panel.tsx`'s, copied rather than extracted — this is
- * the second instance, and three is when a hook stops being a guess.
+ * **Focus and the announcement are `use-queue-row.ts`'s now.** This file used to
+ * carry its own copy of the effect, marked as the second instance of a rule
+ * `sessions-panel.tsx` wrote down and deliberately did not extract. The Offer row
+ * is the third, so the hook exists — and with it the rule's queue-item form: a
+ * promotion that lands hands the keyboard to the next request rather than back to
+ * the one just resolved.
  */
 
 import { Button } from "@repo/design-system/components/button";
@@ -33,7 +34,7 @@ import {
   FieldSet,
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
-import { useActionState, useEffect, useId, useRef } from "react";
+import { useActionState, useId } from "react";
 import { promoteSkill } from "../actions";
 import {
   PROMOTE_CUOC_HELP,
@@ -49,6 +50,7 @@ import {
   skillPromoted,
 } from "../_lib/messages";
 import type { QueueItem } from "../_lib/queue-sources";
+import { useQueueRow } from "../_lib/use-queue-row";
 
 type Result = Awaited<ReturnType<typeof promoteSkill>>;
 
@@ -69,15 +71,7 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
   const labelHelpId = useId();
   const cuocId = useId();
   const cuocHelpId = useId();
-  const announcementRef = useRef<HTMLParagraphElement>(null);
-
-  // Read from `result` rather than a derived boolean, so the second outcome moves
-  // focus too — `result` is a fresh object per dispatch.
-  useEffect(() => {
-    if (result.data ?? result.serverError ?? result.validationErrors) {
-      announcementRef.current?.focus();
-    }
-  }, [result]);
+  const { rowRef, announcementRef } = useQueueRow(result);
 
   // next-safe-action's own formatted-error shape; `_errors` is its name, not ours.
   /* oxlint-disable no-underscore-dangle */
@@ -91,14 +85,28 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
     : (result.serverError?.message ?? slugError ?? labelError ?? cuocError);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      ref={rowRef}
+      data-queue-row=""
+      data-resolved={result.data ? "true" : undefined}
+      className="flex flex-col gap-3"
+    >
       {/*
         Her words, in full and unedited. The spec's rule for every branch is that
         it renders in full so nothing is acted on unread, and on this source that
         is not a formality: the Admin is about to translate this sentence into a
         label the whole product renders.
+
+        It is also where focus lands when the request above it is resolved — the
+        next thing an Admin does with a request is read it.
       */}
-      <p className="text-foreground text-sm leading-5">{item.summary}</p>
+      <p
+        tabIndex={-1}
+        data-queue-anchor=""
+        className="focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]"
+      >
+        {item.summary}
+      </p>
       <p className="text-muted-foreground text-xs">{requestedOn(item.arrivedAt)}</p>
 
       <p

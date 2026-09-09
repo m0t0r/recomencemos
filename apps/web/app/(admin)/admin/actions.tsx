@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * The Admin's actions. Three today; eight more arrive with the stories that create
+ * The Admin's actions. Four today; seven more arrive with the stories that create
  * what they act on.
  *
  * **Each authorizes independently, and on this surface that is not a formality.**
@@ -39,9 +39,8 @@ import { logRequestError } from "@repo/observability/log-request-error";
 import { adminActionClient } from "@/lib/admin";
 import { returnActionError } from "@/lib/safe-action";
 import {
-  deliverOfferArg,
-  deliverOfferSchema,
   noPayloadSchema,
+  offerIdArg,
   photoProfileArg,
   promoteSkillRequestArg,
   promoteSkillSchema,
@@ -123,6 +122,27 @@ export const promoteSkill = adminActionClient
     },
   );
 
+/**
+ * One line per safety-relevant transition of an Offer, carrying an id and
+ * nothing else.
+ *
+ * **The two names are on the spec's closed list of logged transitions**, and
+ * membership in that list is a spec amendment rather than a judgment made here —
+ * which is why this takes the name as a parameter typed to the two it may emit
+ * rather than accepting any string.
+ *
+ * **After the commit, never before.** The transaction is what decides whether the
+ * transition happened, so a line written inside it would survive a rollback as a
+ * record of something that did not occur — the same argument that puts the
+ * delivery mail after the commit one paragraph down.
+ *
+ * Ids and enum values only, which satisfies NFR18 by construction rather than by
+ * discipline: there is nothing else in scope here to leak.
+ */
+function offerTransition(event: "offer.delivered" | "offer.rejected_by_admin", offerId: string) {
+  logger.info({ event, offer_id: offerId }, "An Admin decided an Offer");
+}
+
 /** What the queue tells the Admin afterwards: which row moved, and where it went. */
 export interface OfferDelivered {
   readonly workerFirstName: string;
@@ -149,8 +169,8 @@ export interface OfferDelivered {
  * already looking at.
  */
 export const deliverOffer = adminActionClient
-  .bindArgsSchemas([deliverOfferArg])
-  .inputSchema(deliverOfferSchema)
+  .bindArgsSchemas([offerIdArg])
+  .inputSchema(noPayloadSchema)
   .stateAction<OfferDelivered>(async ({ bindArgsParsedInputs: [offerId], ctx: { actor } }) => {
     const outcome = await admin.run(actor, "deliverOffer", { offerId });
 
@@ -168,6 +188,8 @@ export const deliverOffer = adminActionClient
       recipientAccountId,
       offerId: delivered,
     } = outcome.result;
+
+    offerTransition("offer.delivered", delivered);
 
     /**
      * **A failed send does not undo the delivery**, and it does not fail the
@@ -206,6 +228,50 @@ export const deliverOffer = adminActionClient
      * needed them, and neither belongs in an RSC payload (NFR11, NFR18).
      */
     return { workerFirstName };
+  });
+
+/** What the queue tells the Admin afterwards: the row that stops here. */
+export interface OfferRejected {
+  readonly offerId: string;
+}
+
+/**
+ * Stop one Offer, so it reaches nobody.
+ *
+ * **The other half of the queue's one decision, and the thinner half by design.**
+ * Delivering an Offer is a state change plus a counter plus a mail; refusing one
+ * is a state change. There is nobody to write to — the catalogue of sends is a
+ * closed list with no entry for this, and the Hirer already reads the outcome on
+ * his own list of sent Offers, where story 6 shipped both a badge and a sentence
+ * for the state. Adding a mail here would be a new kind of send chosen at Build
+ * time by whoever happened to write this action.
+ *
+ * **It is terminal, and it carries no confirmation step.** That is argued where
+ * the schema is: this person is clearing a backlog against a clock, and a dialog
+ * on the path they take most is friction the surface's whole brief refuses. The
+ * photo queue below reaches the same answer from the other direction — it says
+ * *no se puede deshacer* on the row, before the button rather than after it.
+ *
+ * **The id comes back and nothing else does.** It is what the row already bound,
+ * it is an identifier, and it is the only value this act produces — there is no
+ * name to quote, because nobody was reached.
+ */
+export const rejectOffer = adminActionClient
+  .bindArgsSchemas([offerIdArg])
+  .inputSchema(noPayloadSchema)
+  .stateAction<OfferRejected>(async ({ bindArgsParsedInputs: [offerId], ctx: { actor } }) => {
+    const outcome = await admin.run(actor, "rejectOffer", { offerId });
+
+    if (!outcome.ok) {
+      // Returned, not thrown, for `deliverOffer`'s reason: an Offer somebody else
+      // already handled is an ordinary answer on a shared queue.
+      logRequestError(outcome.error, { level: "warn" });
+      return returnActionError(projectClientError(outcome.error));
+    }
+
+    offerTransition("offer.rejected_by_admin", outcome.result.offerId);
+
+    return { offerId: outcome.result.offerId };
   });
 
 /** What the queue tells the Admin afterwards about a photo: that it is decided. */

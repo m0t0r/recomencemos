@@ -28,7 +28,7 @@ import { AppError } from "@repo/errors/app-error";
 import { eq, sql } from "drizzle-orm";
 import type { AdminActionName } from "#admin/names";
 import type { DomainDatabase } from "#database";
-import { asOfferState, mayTransitionOffer } from "#policy/offer-states";
+import { asOfferState, mayTransitionOffer, type OfferState } from "#policy/offer-states";
 import * as schema from "#schema";
 import {
   ADMIN_ACCOUNT_NOT_FOUND,
@@ -106,6 +106,31 @@ export interface AdminActionShapes {
       readonly recipientAccountId: string;
       readonly offerId: string;
     };
+  };
+
+  /**
+   * Stops one Offer here, so it reaches nobody.
+   *
+   * **The other side of `deliverOffer`, and deliberately the poorer result of the
+   * two.** Delivery has to hand its caller an address and a name because a send
+   * follows it; refusal is finished when the transaction commits, so the only
+   * thing on this result is the id of the row that moved — an identifier, which
+   * is all NFR18 lets the audit beside it hold either.
+   *
+   * **Nobody is written to.** DD11's catalogue of sends is closed and holds no
+   * entry for this transition, and the Hirer reads the outcome where story 6 put
+   * it: `/sent-offers` renders a badge and a sentence for this state. A mail here
+   * would be a new kind chosen at Build time, which is the judgment call that
+   * closed list exists to refuse.
+   *
+   * **No counter moves.** `delivered_offer_count` is NFR22's ordering input and
+   * it counts Offers that reached a Worker; an Offer stopped here reached none,
+   * so incrementing it would push her down the browsable list for work nobody
+   * ever showed her.
+   */
+  rejectOffer: {
+    input: { readonly offerId: string };
+    result: { readonly offerId: string };
   };
 
   promoteSkill: {
@@ -199,6 +224,77 @@ export type AdminActionHandler<K extends AdminActionName> = (
   tx: DomainDatabase,
   input: AdminActionInput<K>,
 ) => Promise<AdminActionHandlerResult<K>>;
+
+/**
+ * The row both Offer decisions begin from: locked, and narrowed to a state the
+ * move is permitted from.
+ *
+ * **Extracted because there are two of them now, and they must not drift.** An
+ * Admin reading a row decides one of two things about it, and the preconditions
+ * are the same decision seen twice — the same lock, the same two refusals, the
+ * same sentences. Written twice, the pair that diverges first is the lock: the
+ * cheaper-looking `UPDATE … WHERE state = …` is a standing temptation on the
+ * refusal, which needs no row back, and taking it would leave one of the two
+ * decisions racing the other.
+ *
+ * **`FOR UPDATE` rather than a conditional `UPDATE` returning a count.** Two
+ * Admins on one queue is ordinary rather than exotic — the product has more than
+ * one and they work the same backlog — and the two refusals below are different
+ * facts about what is in front of them: an Offer that is not there, and one
+ * somebody else has already handled. A count of zero cannot tell them apart.
+ *
+ * **The state is narrowed through the transition table**, so what may be refused
+ * and what may be delivered are read out of the one place the product's moves are
+ * written down. Anything absent from that table is refused, which is what makes a
+ * state added later refused everywhere until somebody says where it may go.
+ */
+async function lockOfferForDecision(
+  tx: DomainDatabase,
+  offerId: string,
+  action: AdminActionName,
+  to: OfferState,
+): Promise<{ readonly id: string; readonly capabilityProfileId: bigint }> {
+  const [offer] = await tx
+    .select({
+      id: schema.offer.id,
+      state: schema.offer.state,
+      capabilityProfileId: schema.offer.capabilityProfileId,
+    })
+    .from(schema.offer)
+    .where(eq(schema.offer.id, offerId))
+    .for("update")
+    .limit(1);
+
+  if (!offer) {
+    throw new AppError({
+      code: "admin_offer_not_found",
+      status: 404,
+      message:
+        `${action} was given an Offer id no row carries. Nothing changed and no AdminAction ` +
+        "was written, because nothing happened.",
+      // The id is an identifier and carries nothing either party wrote (NFR18).
+      userMessage: ADMIN_OFFER_GONE,
+      context: { offer_id: offerId },
+    });
+  }
+
+  const state = asOfferState(offer.state);
+
+  if (!state || !mayTransitionOffer(state, to)) {
+    throw new AppError({
+      code: "admin_offer_not_pending",
+      status: 409,
+      message:
+        `${action} was asked to move an Offer in state "${offer.state}" to "${to}", which is ` +
+        "not a move this product has. Nothing changed; the transaction rolls back with no " +
+        "AdminAction row.",
+      userMessage: ADMIN_OFFER_RESOLVED,
+      context: { offer_id: offerId, state: offer.state },
+    });
+  }
+
+  return offer;
+}
 
 /**
  * The registry.
@@ -388,56 +484,13 @@ export const ADMIN_ACTION_HANDLERS = {
 
   async deliverOffer(tx, { offerId }) {
     /**
-     * **Locked, for `promoteSkill`'s reason and one of its own.** Two Admins
-     * working the same queue is ordinary rather than exotic, and here a second
+     * **The lock matters here for one reason beyond the shared one.** A second
      * delivery would not merely write a second `AdminAction` — it would
      * increment `delivered_offer_count` twice, and that column is NFR22's
-     * ordering input. A double delivery would push her *down* the browsable
-     * list for work she was contacted about once.
-     *
-     * `FOR UPDATE` rather than a conditional `UPDATE` returning a count, because
-     * the two refusals below are different sentences: an Offer that is not there
-     * and one somebody else has already handled are different facts about the
-     * queue in front of them.
+     * ordering input. A double delivery would push her *down* the browsable list
+     * for work she was contacted about once.
      */
-    const [offer] = await tx
-      .select({
-        id: schema.offer.id,
-        state: schema.offer.state,
-        capabilityProfileId: schema.offer.capabilityProfileId,
-      })
-      .from(schema.offer)
-      .where(eq(schema.offer.id, offerId))
-      .for("update")
-      .limit(1);
-
-    if (!offer) {
-      throw new AppError({
-        code: "admin_offer_not_found",
-        status: 404,
-        message:
-          "deliverOffer was given an Offer id no row carries. Nothing was delivered and no " +
-          "AdminAction was written, because nothing happened.",
-        // The id is an identifier and carries nothing either party wrote (NFR18).
-        userMessage: ADMIN_OFFER_GONE,
-        context: { offer_id: offerId },
-      });
-    }
-
-    const state = asOfferState(offer.state);
-
-    if (!state || !mayTransitionOffer(state, "delivered")) {
-      throw new AppError({
-        code: "admin_offer_not_deliverable",
-        status: 409,
-        message:
-          `deliverOffer was asked to deliver an Offer in state "${offer.state}", which is not a ` +
-          "state it can be delivered from. Nothing was delivered; the transaction rolls back " +
-          "with no AdminAction row and the counter untouched.",
-        userMessage: ADMIN_OFFER_RESOLVED,
-        context: { offer_id: offerId, state: offer.state },
-      });
-    }
+    const offer = await lockOfferForDecision(tx, offerId, "deliverOffer", "delivered");
 
     await tx
       .update(schema.offer)
@@ -492,6 +545,30 @@ export const ADMIN_ACTION_HANDLERS = {
         offerId: offer.id,
       },
     };
+  },
+
+  async rejectOffer(tx, { offerId }) {
+    const offer = await lockOfferForDecision(tx, offerId, "rejectOffer", "rejected_by_admin");
+
+    /**
+     * **One statement, and the shortness is the point.** Everything the delivery
+     * above does after its own move exists because an Offer reached somebody: the
+     * counter is the fairness input for Offers that arrived, and the recipient
+     * read is for a mail. Neither is true of an Offer stopped here, so neither
+     * happens — and no `deliveredAt` is stamped, because that column answers
+     * *when did she get it* and the answer is that she did not.
+     *
+     * **The terms are left exactly as he wrote them.** Refusal is a state change
+     * and never an edit: `#offers` publishes no function that rewrites an Offer,
+     * and the row a *reclamo* is reconstructed from a year later has to be the row
+     * the Admin actually read.
+     */
+    await tx
+      .update(schema.offer)
+      .set({ state: "rejected_by_admin" })
+      .where(eq(schema.offer.id, offer.id));
+
+    return { targetId: offer.id, result: { offerId: offer.id } };
   },
 } as const satisfies { [K in AdminActionName]: AdminActionHandler<K> };
 
