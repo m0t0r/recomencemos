@@ -190,9 +190,6 @@ export const PHOTO_REPLACE = "Elegir otra";
 export const PHOTO_HELP =
   "Opcional. Una persona la mira antes de que se vea. Tu perfil se publica al instante.";
 
-/** The `alt` on her own preview: the role of the image, never a description of her. */
-export const PHOTO_PREVIEW_ALT = "La foto que elegiste";
-
 /**
  * The two working states, which are real states rather than flashes: on a 5 MB
  * phone photo the canvas work takes a moment, and the upload takes longer.
@@ -213,8 +210,6 @@ export const PHOTO_READY = "Tu foto está lista. Se guarda cuando publiques.";
 export const PHOTO_TOO_LARGE = "Esa foto es muy pesada y no pudimos reducirla. Elige otra.";
 export const PHOTO_UNREADABLE = "No pudimos leer esa foto. Elige otra desde tu teléfono.";
 export const PHOTO_UPLOAD_FAILED = "No pudimos subir tu foto. Vuelve a elegirla.";
-export const PHOTO_REMOVED = "Quitamos la foto. Puedes elegir otra o publicar sin ella.";
-export const PHOTO_REMOVE = "Quitar la foto";
 
 /**
  * The store itself could not be asked. A fact about our deploy rather than
@@ -378,15 +373,12 @@ export const PUBLISH_COPY = {
   PHOTO_CHOOSE,
   PHOTO_REPLACE,
   PHOTO_HELP,
-  PHOTO_PREVIEW_ALT,
   PHOTO_PREPARING,
   PHOTO_UPLOADING,
   PHOTO_READY,
   PHOTO_TOO_LARGE,
   PHOTO_UNREADABLE,
   PHOTO_UPLOAD_FAILED,
-  PHOTO_REMOVED,
-  PHOTO_REMOVE,
   PHOTO_UPLOAD_UNAVAILABLE,
   PREVIEW_HEADING,
   PUBLISH_BUTTON,
@@ -418,7 +410,6 @@ export const PUBLISH_LABELS = {
   PHOTO_LABEL,
   PHOTO_CHOOSE,
   PHOTO_REPLACE,
-  PHOTO_REMOVE,
   CAPABILITY_LEGEND,
   IDENTITY_LEGEND,
   CONTACT_LEGEND,

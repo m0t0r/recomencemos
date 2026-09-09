@@ -30,7 +30,6 @@
  */
 
 import { Avatar, AvatarFallback, AvatarImage } from "@repo/design-system/components/avatar";
-import { Button } from "@repo/design-system/components/button";
 import { buttonVariants } from "@repo/design-system/components/button-variants";
 import {
   Field,
@@ -40,6 +39,7 @@ import {
 } from "@repo/design-system/components/field";
 import { cn } from "@repo/design-system/lib/utils";
 import { PHOTO_INPUT_ACCEPT } from "@repo/storage/limits";
+import { CameraIcon, UserRoundIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPhotoUpload } from "../actions";
 import { downscale, type DownscaleRefusal } from "../_lib/downscale";
@@ -49,10 +49,7 @@ import {
   PHOTO_LABEL,
   PHOTO_NOTE,
   PHOTO_PREPARING,
-  PHOTO_PREVIEW_ALT,
   PHOTO_READY,
-  PHOTO_REMOVE,
-  PHOTO_REMOVED,
   PHOTO_REPLACE,
   PHOTO_TOO_LARGE,
   PHOTO_UNREADABLE,
@@ -74,12 +71,12 @@ type PhotoStep =
   | { readonly step: "uploading"; readonly previewUrl: string }
   | { readonly step: "ready"; readonly previewUrl: string; readonly photoKey: string }
   /**
-   * A sentence in place of progress. `tone` is what keeps a removal from
-   * rendering as a failure: taking her own photo off is something she chose,
-   * and a `FieldError` under it would be the form telling her she got something
-   * wrong.
+   * A refusal in place of progress, and every one of them is a failure now that
+   * there is no removal to report. It had a `tone` while _"Quitamos la foto"_
+   * existed, so that something she chose was not rendered as something she got
+   * wrong; with the remove affordance gone the discriminator had one arm.
    */
-  | { readonly step: "said"; readonly message: string; readonly tone: "error" | "note" };
+  | { readonly step: "said"; readonly message: string };
 
 export interface PhotoFieldProps {
   /**
@@ -151,7 +148,7 @@ export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
     if (!current()) return;
 
     if (!prepared.ok) {
-      setState({ step: "said", message: REFUSALS[prepared.reason], tone: "error" });
+      setState({ step: "said", message: REFUSALS[prepared.reason] });
       return;
     }
 
@@ -178,7 +175,6 @@ export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
       setState({
         step: "said",
         message: signed?.serverError?.message ?? PHOTO_UPLOAD_FAILED,
-        tone: "error",
       });
       URL.revokeObjectURL(preview);
       return;
@@ -212,20 +208,18 @@ export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
         return;
       }
 
-      setState({ step: "said", message: PHOTO_UPLOAD_FAILED, tone: "error" });
+      setState({ step: "said", message: PHOTO_UPLOAD_FAILED });
       URL.revokeObjectURL(preview);
     }
   }
 
-  function remove() {
-    // Invalidates any pick still in flight: without this, an upload she started
-    // and then removed still resolves and re-attaches itself.
-    pickToken.current += 1;
-    onPhotoKeyChange(null);
-    setState({ step: "said", message: PHOTO_REMOVED, tone: "note" });
-    if (inputRef.current) inputRef.current.value = "";
-  }
-
+  /**
+   * **Progress only, because a refusal is already announced next door.**
+   * `FieldError` renders `role="alert"`, so routing the same sentence through
+   * this `role="status"` too printed it twice — muted, then red — and announced
+   * it twice, once assertively and once politely. Seen running, not reasoned
+   * about.
+   */
   const announcement =
     state.step === "preparing"
       ? PHOTO_PREPARING
@@ -233,9 +227,7 @@ export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
         ? PHOTO_UPLOADING
         : state.step === "ready"
           ? PHOTO_READY
-          : state.step === "said"
-            ? state.message
-            : "";
+          : "";
 
   const busy = state.step === "preparing" || state.step === "uploading";
 
@@ -268,30 +260,25 @@ export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
       */}
       {hydrated ? (
         <>
-          {previewUrl ? (
-            // Her own picture, at the size the card will show it. `AvatarImage`
-            // is Base UI rather than `next/image`, so a `blob:` URL for bytes
-            // that exist only in this tab is fine — and it brings the ring and
-            // the fallback the hand-rolled `<img>` had to go without.
-            <Avatar className="size-32" aria-describedby={statusId}>
-              <AvatarImage src={previewUrl} alt={PHOTO_PREVIEW_ALT} />
-              <AvatarFallback>{PHOTO_PREVIEW_ALT.slice(0, 1)}</AvatarFallback>
-            </Avatar>
-          ) : null}
+          {/*
+            **The wrapper exists because `Field` sets `*:w-full` on its own
+            direct children**, at a specificity (0,1,1) no `size-*` class on the
+            child can beat. Without it the picture below rendered 358 × 128 on a
+            390 px screen — a letterboxed ellipse with her chin cropped off,
+            which is what shipped.
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/*
-              **The input precedes the label, and that ordering is the focus
-              ring.** The focusable element is the `sr-only` input; the visible
-              affordance is the `<label>`, which never receives focus — so
-              `buttonVariants`' own `:focus-visible` styles an element the
-              keyboard never reaches, and the control had *no* visible focus
-              state at all (WCAG 2.2 AA, 2.4.7). Every other `buttonVariants`
-              use in this app sits on a natively-focusable `<Link>`, which is
-              why the gap was new here. `peer` + `peer-focus-visible:` is the
-              fix, and Tailwind's sibling selector only looks *forward*, so the
-              input has to come first in the DOM.
-            */}
+            **The input and the label both live inside it, and that pairing is
+            the focus ring.** The focusable element is the `sr-only` input; the
+            visible affordance is the `<label>`, which never receives focus — so
+            a `:focus-visible` rule on the label styles an element the keyboard
+            never reaches, and the control would have *no* visible focus state at
+            all (WCAG 2.2 AA, 2.4.7). `peer` + `peer-focus-visible:` is the fix,
+            and it compiles to a *sibling* combinator that looks only forward:
+            the input has to precede the label **and share a parent with it**.
+            Leaving the input outside this wrapper silently dropped the ring,
+            which a real Tab caught and reading the class list would not have.
+          */}
+          <div className="w-full">
             <input
               ref={inputRef}
               id={inputId}
@@ -308,37 +295,74 @@ export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
             />
 
             {/*
-              A `<label>` styled as a button and pointing at a real input, rather
-              than a button that clicks a hidden input for you: the label *is* the
-              accessible name of the control, so a screen reader announces one thing
-              instead of two, and the keyboard path is the browser's own.
-            */}
-            {/*
-              **`buttonVariants` on a plain `<label>`, never `<Button render={<label/>}>`.**
-              This is `own-profile-view.tsx`'s rule applied to the other native
-              element, and for the same reason: Base UI's `render` puts button
-              semantics onto whatever it is handed. Driven against the running
-              server, that produced a `<label>` carrying its own `tabindex` and
-              `onclick` — so one control had two tab stops and the input announced
-              as a button rather than as a file input. A label needs neither; the
-              browser's own `htmlFor` behaviour is the whole interaction.
+              **One control in both states, and once she has picked, the picture
+              *is* it.** `.impeccable/briefs/photo.md`: _"the control is replaced
+              by the picture itself … There is no second 'remove' affordance
+              hiding in a corner: pick again is the whole interaction."_ What
+              shipped before was the opposite — the picture appeared *above* an
+              unchanged button and a third control beside it, so the one object
+              she is deciding about was spread across three targets.
+
+              **`buttonVariants` on a plain `<label>`, never `<Button
+              render={<label/>}>`.** This is `own-profile-view.tsx`'s rule
+              applied to the other native element, and for the same reason: Base
+              UI's `render` puts button semantics onto whatever it is handed.
+              Driven against the running server, that produced a `<label>`
+              carrying its own `tabindex` and `onclick` — so one control had two
+              tab stops and the input announced as a button rather than as a file
+              input. A label needs neither; the browser's own `htmlFor`
+              behaviour is the whole interaction.
             */}
             <label
               htmlFor={inputId}
               className={cn(
-                buttonVariants({ variant: "outline" }),
-                "peer-focus-visible:border-ring peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50",
-                busy && "pointer-events-none opacity-50",
+                "peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 peer-focus-visible:outline-none",
+                previewUrl
+                  ? "group/photo relative block w-fit cursor-pointer rounded-full"
+                  : cn(buttonVariants({ variant: "outline" }), "peer-focus-visible:border-ring"),
+                busy && "pointer-events-none opacity-60",
               )}
             >
-              {previewUrl ? PHOTO_REPLACE : PHOTO_CHOOSE}
-            </label>
+              {previewUrl ? (
+                <>
+                  {/*
+                    **`alt=""`, and that is the one place this deviates from the
+                    brief's letter.** The brief asks the preview to carry an alt
+                    saying what it shows, and it was written for a preview that
+                    sat *beside* a button. Here the picture is inside the control
+                    it has become, so an alt would join the label's text and name
+                    the input twice — "La foto que elegiste, Elegir otra" — which
+                    is the exact two-names bug `FieldTitle` was demoted to fix.
+                    The verb names the control; the `role="status"` line below,
+                    already joined by `aria-describedby`, says what happened to
+                    the picture.
+                  */}
+                  <Avatar className="size-32">
+                    <AvatarImage src={previewUrl} alt="" />
+                    <AvatarFallback>
+                      <UserRoundIcon className="size-10" aria-hidden="true" />
+                    </AvatarFallback>
+                  </Avatar>
 
-            {state.step === "ready" ? (
-              <Button type="button" variant="ghost" onClick={remove}>
-                {PHOTO_REMOVE}
-              </Button>
-            ) : null}
+                  {/*
+                    The affordance, because a bare circle does not say it can be
+                    tapped. It is a `<span>` inside the one `<label>` rather than
+                    a control of its own: one tab stop, one name, and nothing new
+                    in the accessibility tree.
+                  */}
+                  <span
+                    aria-hidden="true"
+                    className="bg-background text-foreground ring-background border-border absolute -right-0.5 -bottom-0.5 grid size-9 place-items-center rounded-full border shadow-sm ring-2 transition-colors duration-150 group-hover/photo:bg-accent"
+                  >
+                    <CameraIcon className="size-4" />
+                  </span>
+
+                  <span className="sr-only">{PHOTO_REPLACE}</span>
+                </>
+              ) : (
+                PHOTO_CHOOSE
+              )}
+            </label>
           </div>
         </>
       ) : (
@@ -359,9 +383,7 @@ export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
         {announcement}
       </FieldDescription>
 
-      {state.step === "said" && state.tone === "error" ? (
-        <FieldError>{state.message}</FieldError>
-      ) : null}
+      {state.step === "said" ? <FieldError>{state.message}</FieldError> : null}
     </Field>
   );
 }
