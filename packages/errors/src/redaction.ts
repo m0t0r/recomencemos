@@ -187,6 +187,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function scrubBranch(value: unknown, depth: number): unknown {
+  // **{@link MAX_DEPTH} bounds this rule as well as the key rule, and the phrasing
+  // below used to hide that.** A *container* at the depth limit is returned whole,
+  // before any string inside it is visited — so a URL nested deeper than the
+  // budget from its carrier root is not reduced either. Every carrier this module
+  // is aimed at is a flat attribute map two or three levels from its root, so
+  // nothing currently relies on reach it does not have; a carrier root added
+  // deeper than that would silently stop being scrubbed, which is the reason this
+  // is written down rather than left to be rediscovered.
+  //
   // The second rule, and the only one in this module that reads a *value*
   // instead of a key. It rides the same walk rather than taking one of its own,
   // which is what keeps both rules answering for the same region of the event:
@@ -265,13 +274,23 @@ const PATH_ABSOLUTE_WITH_QUERY = /^\/\S*[?#]/;
  * handle. It is idempotent: re-running it over `/admin/enrol/[token]` reproduces
  * the same string.
  *
+ * **Case-insensitive, and tolerant of a repeated slash, because a scrubber's job
+ * is what the app did not intend.** Next routes case-sensitively and the page
+ * only validates a token reached by the exact segment, so this app cannot emit
+ * `/Admin/Enrol/…` or `/admin/enrol//…` for a *live* token — both were shown to
+ * pass through byte-identical before this. That made it a hardening note rather
+ * than a finding, and it is closed anyway: the whole value of a control at the
+ * egress is that it does not depend on the emitter being well behaved. The
+ * capture group replays whatever it matched, so neither the original casing nor
+ * a doubled slash is rewritten anywhere else in the string.
+ *
  * **Only the reporting egress reduces this.** The request-completion line still
  * writes the token to stdout under `context.path`; that exposure is sized and
  * accepted in the security policy, and the go-live runbook's drain step is what
  * bounds it. Reducing it here and not there is the difference between the two
  * sinks, not an inconsistency.
  */
-const ENROLMENT_TOKEN_SEGMENT = /(\/admin\/enrol\/)[^/?#]+/g;
+const ENROLMENT_TOKEN_SEGMENT = /(\/admin\/enrol\/+)[^/?#]+/gi;
 
 /**
  * Everything a URL can carry beyond where it points, removed — by class, not by
