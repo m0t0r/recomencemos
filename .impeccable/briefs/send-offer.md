@@ -2,7 +2,9 @@
 
 **Target:** `apps/web/app/(site)/profile/[slug]/` — the form and its two states · **Mode:**
 Operate · **Ticket:** [#24](https://github.com/m0t0r/recomencemos/issues/24), story 6 ·
-**Shaped:** 2026-09-08 · **Locked:** _open — variants go to `/prototype` on the real route_
+**Shaped:** 2026-09-08 · **Locked:** 2026-09-09, **variant C** ("un control, luego el panel") — three compositions
+built and compared running at 390px; the losing two are in
+[#237](https://github.com/m0t0r/recomencemos/pull/237)
 
 **Mode is Operate, and it sits under a surface whose mode is Read.** `gated-profile.md` shaped
 this route for comprehension: one person, understood well enough to decide whether to write to
@@ -84,13 +86,18 @@ because a free-form message is where a phone number goes.
 
 **`[open]`, and each becomes a variant:**
 
-1. **Where the form lives.** Inline at the foot of her profile, under its own heading; or
-   behind a control that reveals it; or on a route of its own. The trade is between her page
-   staying a page about her, and the form being findable without a second navigation.
-2. **How the promise is presented.** A short paragraph above the fields; a bordered panel; or
-   two lines carried on the submit control itself where the decision is made.
-3. **How the first-Offer identity fields are grouped.** Above the three terms (who is writing),
-   or below them (how she reaches you), or in their own step.
+1. ~~Where the form lives.~~ **Behind a control**, so her page ends with an affordance rather
+   than a task and stays a page about her. A native `<details>`, so it costs no JavaScript.
+2. ~~How the promise is presented.~~ **On the control, and again at the submit.** Closed is the
+   state he meets first, so it carries the human review and the window; the immutability is said
+   again where the decision is actually taken, because a promise read once at the head of a
+   panel is read too early to change what he writes.
+3. ~~How the identity fields are grouped.~~ **Their own step, first**, fenced as a group.
+
+**One flaw was found in the pick and closed in implementation.** Closed, C was a heading and a
+sentence in a bordered box — nothing said it opened. The chevron and the two-column summary row
+are what make it read as a control; without them the variant would have been judged on a defect
+rather than on its idea.
 
 ## Scope and boundaries
 

@@ -7,6 +7,7 @@
  */
 
 import { OFFER_STATES } from "@repo/domain/policy";
+import { offerBadge } from "./state-badge";
 import { describeSurfaceCopy } from "@/testing/surface-copy";
 import {
   OFFER_JUST_SENT_HEADING,
@@ -143,6 +144,48 @@ describe("what a row never says", () => {
     const sentence = OFFER_STATE_SENTENCES.declined.toLowerCase();
 
     expect(sentence).not.toMatch(/lo siento|lamentab|desafortunad|porque/);
+  });
+});
+
+describe("the badge on a row", () => {
+  /**
+   * **Every state has one**, or a row scans as a gap. The set is the domain's, so
+   * a state added there is red here rather than silently unbadged.
+   */
+  it.each(OFFER_STATES)("%s has a label", (state) => {
+    expect(offerBadge(state, false).label.trim().length).toBeGreaterThan(0);
+  });
+
+  /**
+   * **The badge is a label, not a colour** — which is what lets it coexist with
+   * `voice.md`'s refusal of meaning carried by colour alone, and with what the
+   * brief originally settled. Two words is the bound: a badge that wraps has
+   * stopped being scannable, which is the only thing it was for.
+   */
+  it.each(OFFER_STATES)("%s is labelled in two words or fewer", (state) => {
+    expect(offerBadge(state, false).label.split(/\s+/u).length).toBeLessThanOrEqual(2);
+  });
+
+  /**
+   * **Nothing on this surface is red.** A declined Offer is a decision and not a
+   * failure; a delayed review is our fault and not his. `destructive` would make
+   * the page an alarm about a person.
+   */
+  it.each(OFFER_STATES)("%s is never destructive", (state) => {
+    expect(offerBadge(state, false).variant).not.toBe("destructive");
+    expect(offerBadge(state, true).variant).not.toBe("destructive");
+  });
+
+  /**
+   * Delayed outranks the state it is in: an Offer past its window is still
+   * `pending_review`, and a badge reading the ordinary thing would hide the one
+   * case this surface exists to surface.
+   */
+  it("says a delayed review is taking longer, whatever state it is in", () => {
+    expect(offerBadge("pending_review", true).label).not.toBe(
+      offerBadge("pending_review", false).label,
+    );
+    expect(offerBadge("on_hold", true).label).toBe(offerBadge("pending_review", true).label);
   });
 });
 

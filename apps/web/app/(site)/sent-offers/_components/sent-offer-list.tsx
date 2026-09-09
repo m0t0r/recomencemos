@@ -21,16 +21,8 @@ import {
   sentOffersCount,
 } from "../_lib/messages";
 import { SentOfferRow } from "./sent-offer-row";
-import { SentOfferRowVariantB, SentOfferRowVariantC } from "./sent-offer-row-variants";
 
-export function SentOfferList({
-  offers,
-  variant = "a",
-}: {
-  readonly offers: readonly SentOffer[];
-  /** PROTOTYPE — throwaway, with the variants. */
-  readonly variant?: string;
-}) {
+export function SentOfferList({ offers }: { readonly offers: readonly SentOffer[] }) {
   if (offers.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3">
@@ -51,17 +43,10 @@ export function SentOfferList({
         Component and a function cannot cross that boundary. See its own props.
       */}
       <CountAnnouncement count={offers.length} label={sentOffersCount(offers.length)} />
-      {/* PROTOTYPE — throwaway. Same copy in all three; the shape is the question. */}
       <ul className="flex flex-col">
-        {offers.map((offer) =>
-          variant === "b" ? (
-            <SentOfferRowVariantB key={offer.id} offer={offer} />
-          ) : variant === "c" ? (
-            <SentOfferRowVariantC key={offer.id} offer={offer} />
-          ) : (
-            <SentOfferRow key={offer.id} offer={offer} />
-          ),
-        )}
+        {offers.map((offer) => (
+          <SentOfferRow key={offer.id} offer={offer} />
+        ))}
       </ul>
     </>
   );

@@ -33,6 +33,12 @@ export function SiteHeader() {
       /* Her own Account — the only navigation this shell offers. */
       accountHref="/account"
       /*
+        The Offers he has sent. Offered whether or not he has sent one: the page's
+        empty state says what an Offer is for and routes into `/profiles`, which
+        is a better answer than a row that appears once he has used the product.
+      */
+      sentOffersHref="/sent-offers"
+      /*
         The row she came for. One read per page for a signed-in session; a
         profile she holds points at it, and until then the row is the way to
         publish one.

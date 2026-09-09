@@ -2,7 +2,9 @@
 
 **Target:** `apps/web/app/(site)/sent-offers/` · **Mode:** Read · **Ticket:**
 [#24](https://github.com/m0t0r/recomencemos/issues/24), story 6 · **Shaped:** 2026-09-08 ·
-**Locked:** _open — variants go to `/prototype` on the real route_
+**Locked:** 2026-09-09, **variant B** ("la persona primero") — three compositions built and
+compared running at 390px against four Offers in four states; the losing two are in
+[#237](https://github.com/m0t0r/recomencemos/pull/237)
 
 **Written from the spec, `PRODUCT.md`, `docs/policy/voice.md` and `DESIGN.md` with no answer
 round**, on the same terms as `send-offer.md`: `[settled]` where one of those settles it,
@@ -57,9 +59,15 @@ in his own terms and the person it is about, and the terms he wrote sit undernea
 
 **`[settled]`, and out of scope for a variant:**
 
-- **`reviewDelayed` is derived, never stored**, and it is a plain sentence. Not a badge, not
-  red, not an alert: `voice.md` refuses meaning carried by colour alone, and an alarm about our
-  own queue aimed at the person who cannot act on it is pressure, not information.
+- **`reviewDelayed` is derived, never stored.** _Amended 2026-09-09: this said "a plain
+  sentence. Not a badge" — and the row now carries **both**, at the Design lead's call._ The
+  argument the original made is intact and is what shapes the badge: `voice.md` refuses meaning
+  carried by colour alone, so the badge is a **text label**, readable with the stylesheet off
+  and announced by a screen reader; and an alarm aimed at somebody who cannot act on it is
+  pressure, so the delayed badge is `secondary` rather than `destructive` and **no state on this
+  surface is ever red**. What the badge buys is what a sentence cannot: four rows scan as four
+  states in one glance. The sentence stays beside it, because _normalmente toma menos de un día_
+  is the part a label has no room for.
 - **The normal window is stated before it is exceeded.** Do 2 — the absence first — applied to a
   wait: telling him the window only once it has been missed is telling him too late to matter.
 - **No contact detail of hers anywhere on this page**, whatever the state. `SentOffer` carries
@@ -72,13 +80,13 @@ in his own terms and the person it is about, and the terms he wrote sit undernea
 
 **`[open]`, and each becomes a variant:**
 
-1. **The row's shape.** State-led with her identity secondary; her identity led with the state
-   as a line beneath; or a two-column split that reads as a table on a wide screen.
-2. **Where the terms sit.** Always visible in the row; behind a native `<details>`; or on a
-   route of its own per Offer. The trade is between the page being scannable at five rows and
-   answering "what did I promise" without a navigation.
-3. **How a delayed row differs from a waiting one.** A different sentence in the same position;
-   an extra line below it; or a change of the row's own weight.
+1. ~~The row's shape.~~ **Her identity leads**, the state is a line beneath it. He remembers his
+   Offers by who he wrote to, so the nameplate is the scanning anchor.
+2. ~~Where the terms sit.~~ **Always visible.** A disclosure on a list of five is a tap that
+   buys nothing.
+3. ~~How a delayed row differs.~~ **An extra line, plus its own badge.** _Still waiting_ and
+   _taking longer than usual_ are two facts, and overwriting the first with the second loses the
+   window he was promised.
 
 ## Scope and boundaries
 

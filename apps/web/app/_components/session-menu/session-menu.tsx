@@ -44,11 +44,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/design-system/components/dropdown-menu";
-import { IdCardIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
+import { IdCardIcon, LogOutIcon, SendIcon, UserRoundIcon } from "lucide-react";
 import Link from "next/link";
 import { useActionState } from "react";
 import type { signOut } from "./actions";
-import { ACCOUNT, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
+import { ACCOUNT, SENT_OFFERS, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
 import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT, SIGN_OUT_FORM_ID } from "./slots";
 
 /**
@@ -103,6 +103,19 @@ export interface SessionMenuProps {
    */
   readonly accountHref?: string;
   /**
+   * Where "Propuestas que enviaste" goes, or **absent to omit the row**.
+   *
+   * A prop for `accountHref`'s reason rather than a second component: the row is
+   * `(site)`'s and not `(admin)`'s, because these are the Offers this Account
+   * sent and the queue is where somebody reads everybody's.
+   *
+   * **It is offered whether or not he has sent one**, deliberately. The page's
+   * empty state says what an Offer is for and routes into `/profiles`, which is
+   * a better answer than a row that is missing until it is not — a menu whose
+   * shape changes under a person is a menu they stop trusting.
+   */
+  readonly sentOffersHref?: string;
+  /**
    * Her profile row, or absent to omit it — the same shape as `accountHref`,
    * for the same reason: `(site)`'s shell has one, `(admin)`'s does not. The
    * label is the caller's because it depends on what she has: _Tu perfil_ once
@@ -123,7 +136,13 @@ function initialOf(email: string): string {
   return [...email][0]?.toLocaleUpperCase("es-CO") ?? "";
 }
 
-export function SessionMenu({ email, action, accountHref, profile }: SessionMenuProps) {
+export function SessionMenu({
+  email,
+  action,
+  accountHref,
+  sentOffersHref,
+  profile,
+}: SessionMenuProps) {
   const [result, formAction, pending] = useActionState(action, INITIAL);
 
   /**
@@ -242,6 +261,26 @@ export function SessionMenu({ email, action, accountHref, profile }: SessionMenu
               router's and not a fresh document — the shell above it is already
               painted and has no reason to be fetched again.
             */}
+            {/*
+              **The Offers he has sent.** It sits under her profile row and above
+              `/account`, which is the order of how often each is wanted: the
+              thing he did, then the thing he did before that, then the settings.
+
+              The icon is decorative and `aria-hidden`, like the two beside it —
+              a leading icon is what makes a list of rows scannable, which is what
+              this menu became once it held more than one.
+            */}
+            {sentOffersHref ? (
+              <DropdownMenuItem
+                render={
+                  <Link href={sentOffersHref}>
+                    <SendIcon aria-hidden="true" />
+                    {SENT_OFFERS}
+                  </Link>
+                }
+              />
+            ) : null}
+
             {accountHref ? (
               <>
                 <DropdownMenuItem
