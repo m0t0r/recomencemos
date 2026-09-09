@@ -34,6 +34,17 @@
 import { useEffect, useRef } from "react";
 
 /**
+ * What an element this hook may focus wears, so that it shows it has focus.
+ *
+ * A programmatic focus target with no visible ring is a keyboard user's position
+ * lost, which is the whole thing the handoff exists to protect. It lives beside
+ * the hook rather than in either row because it is a property of *being
+ * focusable by this mechanism* rather than of either surface.
+ */
+export const QUEUE_FOCUSABLE_LINE =
+  "focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]";
+
+/**
  * The shape of a `useActionState` result, read for one bit: did anything come
  * back.
  *
@@ -48,12 +59,6 @@ export interface QueueRowResult {
   readonly validationErrors?: unknown;
 }
 
-/** Marks a row's root, so the walk below can find the ones after it. */
-export const QUEUE_ROW_ATTRIBUTE = "data-queue-row";
-
-/** Marks where focus lands inside a row: the line that says whose Offer it is. */
-export const QUEUE_ANCHOR_ATTRIBUTE = "data-queue-anchor";
-
 /**
  * The next row still waiting on a decision, or nothing at the end of the branch.
  *
@@ -66,18 +71,29 @@ export const QUEUE_ANCHOR_ATTRIBUTE = "data-queue-anchor";
  * **Rows already decided are stepped over.** An Admin who works two rows out of
  * order should not be handed back to the one they finished with, and a decided
  * row has nothing left to press.
+ *
+ * **Four attributes are the contract, and it is spelled out because the failure is
+ * silent.** `data-queue-list` on the branch, `data-queue-row` on each row's root,
+ * `data-resolved` once that row is decided, and `data-queue-anchor` on the line
+ * focus lands on. Any one of them missing degrades to the announcement fallback,
+ * which is indistinguishable from "this was the last row" — so the marker on the
+ * list is named rather than inferred from a `ul`, which a section could stop being
+ * without anybody noticing. `_components/queue.tsx` carries the first and
+ * `offer-row.tsx` and `skill-request-row.tsx` carry the rest; the case in
+ * `offer-row.test.tsx` renders the real branch around the real row, so a drift in
+ * any of the four is red rather than quiet.
  */
 function nextUndecidedAnchor(row: HTMLElement): HTMLElement | null {
-  const list = row.closest("ul");
+  const list = row.closest("[data-queue-list]");
   if (!list) return null;
 
-  const rows = [...list.querySelectorAll<HTMLElement>(`[${QUEUE_ROW_ATTRIBUTE}]`)];
+  const rows = [...list.querySelectorAll<HTMLElement>("[data-queue-row]")];
   const position = rows.indexOf(row);
   if (position < 0) return null;
 
   const next = rows.slice(position + 1).find((each) => each.dataset.resolved !== "true");
 
-  return next?.querySelector<HTMLElement>(`[${QUEUE_ANCHOR_ATTRIBUTE}]`) ?? null;
+  return next?.querySelector<HTMLElement>("[data-queue-anchor]") ?? null;
 }
 
 /**

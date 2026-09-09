@@ -361,11 +361,15 @@ export const offerDelivered = (workerFirstName: string) => `Se la entregamos a $
 /**
  * The other outcome, and it states the consequence rather than the state.
  *
- * *"No le llegó a nadie"* is what an Admin needs to be able to say later, and it
- * is the same sentence the Hirer reads on his own list — one fact, told to both
- * people in the same words. The name of nobody appears in it: an Offer stopped
- * here reached no Worker, so naming one would describe something that did not
- * happen.
+ * *"No le llegó a nadie"* is what an Admin needs to be able to say later. The
+ * Hirer's own list says the same thing today, in the same words, and that is a
+ * coincidence rather than a contract — **it is deliberately not the same
+ * constant**: these are two audiences, and sharing the string would mean a
+ * rewording for the person whose Offer was stopped silently rewording the
+ * operator's confirmation.
+ *
+ * The name of nobody appears in it: an Offer stopped here reached no Worker, so
+ * naming one would describe something that did not happen.
  */
 export const OFFER_REJECTED = "No la dejamos pasar. No le llegó a nadie.";
 

@@ -28,7 +28,7 @@
  */
 
 import { Button } from "@repo/design-system/components/button";
-import { useActionState, useMemo } from "react";
+import { useActionState, useState } from "react";
 import {
   DELIVER_OFFER_SUBMIT,
   DELIVER_OFFER_SUBMITTING,
@@ -40,7 +40,7 @@ import {
   REJECT_OFFER_SUBMITTING,
 } from "../_lib/messages";
 import type { QueueItem } from "../_lib/queue-sources";
-import { useQueueRow } from "../_lib/use-queue-row";
+import { QUEUE_FOCUSABLE_LINE, useQueueRow } from "../_lib/use-queue-row";
 import { deliverOffer, rejectOffer } from "../actions";
 
 type Delivery = Awaited<ReturnType<typeof deliverOffer>>;
@@ -70,22 +70,26 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
   );
 
   /**
-   * The row's outcome, whichever decision produced it.
+   * **Which decision this row is currently answering for.**
    *
-   * A fresh object per dispatch — which is what the focus effect reads for — and
-   * it is a memo rather than a bare expression so that identity changes when one
-   * of the two results does, and not on every render.
+   * Two `useActionState`s means two results that both persist, and merging them
+   * by taking whichever is non-empty reads the wrong one the moment a row has
+   * met two outcomes: a refused *Entregar* leaves its `serverError` behind, so a
+   * later refused *No entregar* would be announced in the first one's words.
+   * Today both refusals resolve to the same two sentences and it would be
+   * invisible; the day they do not, the row would be lying about what just
+   * happened. So the row remembers which button was pressed and reads that side.
+   *
+   * Set on submit rather than derived from `pending`, because it has to be true
+   * for the whole life of the outcome and `pending` is false again by the time
+   * anybody reads it.
    */
-  const outcome = useMemo(
-    () => ({
-      data: delivery.data ?? refusal.data,
-      serverError: delivery.serverError ?? refusal.serverError,
-      validationErrors: delivery.validationErrors ?? refusal.validationErrors,
-    }),
-    [delivery, refusal],
-  );
+  const [answering, setAnswering] = useState<"deliver" | "reject" | null>(null);
 
-  const { rowRef, announcementRef } = useQueueRow(outcome);
+  const active =
+    answering === "deliver" ? delivery : answering === "reject" ? refusal : NOTHING_YET;
+
+  const { rowRef, announcementRef } = useQueueRow(active);
 
   const decided = Boolean(delivery.data ?? refusal.data);
   const working = delivering || rejecting;
@@ -94,7 +98,7 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
     ? offerDelivered(delivery.data.workerFirstName)
     : refusal.data
       ? OFFER_REJECTED
-      : outcome.serverError?.message;
+      : active.serverError?.message;
 
   return (
     <div
@@ -109,11 +113,7 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
         does is read, and a keyboard put straight onto *Entregar* would be a
         keyboard one press away from delivering something unread.
       */}
-      <p
-        tabIndex={-1}
-        data-queue-anchor=""
-        className="focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]"
-      >
+      <p tabIndex={-1} data-queue-anchor="" className={QUEUE_FOCUSABLE_LINE}>
         {item.summary}
       </p>
 
@@ -140,7 +140,7 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
         // content, and the rule's suggestion is right in general and wrong here.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="status"
-        className="focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]"
+        className={QUEUE_FOCUSABLE_LINE}
       >
         {announcement}
       </p>
@@ -161,13 +161,13 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
         <p className="text-muted-foreground text-sm leading-5">{OFFER_ROW_RESOLVED}</p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <form action={deliverAction}>
+          <form action={deliverAction} onSubmit={() => setAnswering("deliver")}>
             <Button type="submit" disabled={working} aria-busy={delivering}>
               {delivering ? DELIVER_OFFER_SUBMITTING : DELIVER_OFFER_SUBMIT}
             </Button>
           </form>
 
-          <form action={rejectAction}>
+          <form action={rejectAction} onSubmit={() => setAnswering("reject")}>
             <Button type="submit" variant="outline" disabled={working} aria-busy={rejecting}>
               {rejecting ? REJECT_OFFER_SUBMITTING : REJECT_OFFER_SUBMIT}
             </Button>

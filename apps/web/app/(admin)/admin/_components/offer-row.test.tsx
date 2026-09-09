@@ -243,3 +243,28 @@ it("stays on a row whose decision was refused", async () => {
   expect(refusal).toHaveFocus();
   expect(within(rowFor(FIRST)).getAllByRole("button")).toHaveLength(2);
 });
+
+/**
+ * **A row that has met two refusals says what the second one was.**
+ *
+ * Two `useActionState`s means two results that both persist, so a row that merged
+ * them by taking whichever is non-empty would go on announcing the first refusal
+ * after the second — telling an Admin the wrong thing about what they just
+ * pressed. Both refusals happen to resolve to the same two sentences today, which
+ * is exactly why this is a test rather than a comment.
+ */
+it("announces the decision that was just refused, not the one before it", async () => {
+  const user = userEvent.setup();
+  deliverOffer.mockResolvedValue({ serverError: { message: "La entrega se negó." } });
+  rejectOffer.mockResolvedValue({ serverError: { message: "El rechazo se negó." } });
+  aBranch();
+
+  const row = within(rowFor(FIRST));
+  await user.click(row.getByRole("button", { name: DELIVER_OFFER_SUBMIT }));
+  expect(await screen.findByText("La entrega se negó.")).toBeInTheDocument();
+
+  await user.click(row.getByRole("button", { name: REJECT_OFFER_SUBMIT }));
+
+  expect(await screen.findByText("El rechazo se negó.")).toHaveFocus();
+  expect(screen.queryByText("La entrega se negó.")).toBeNull();
+});

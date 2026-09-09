@@ -50,7 +50,7 @@ import {
   skillPromoted,
 } from "../_lib/messages";
 import type { QueueItem } from "../_lib/queue-sources";
-import { useQueueRow } from "../_lib/use-queue-row";
+import { QUEUE_FOCUSABLE_LINE, useQueueRow } from "../_lib/use-queue-row";
 
 type Result = Awaited<ReturnType<typeof promoteSkill>>;
 
@@ -100,11 +100,7 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
         It is also where focus lands when the request above it is resolved — the
         next thing an Admin does with a request is read it.
       */}
-      <p
-        tabIndex={-1}
-        data-queue-anchor=""
-        className="focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]"
-      >
+      <p tabIndex={-1} data-queue-anchor="" className={QUEUE_FOCUSABLE_LINE}>
         {item.summary}
       </p>
       <p className="text-muted-foreground text-xs">{requestedOn(item.arrivedAt)}</p>
@@ -116,7 +112,7 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
         // content, and the rule's suggestion is right in general and wrong here.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="status"
-        className="focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]"
+        className={QUEUE_FOCUSABLE_LINE}
       >
         {announcement}
       </p>
