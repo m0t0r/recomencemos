@@ -5,6 +5,7 @@ import path from "node:path";
 import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 import { gatedRouteHeaders } from "./lib/gated-routes";
+import { securityHeaderRules } from "./lib/response-headers";
 
 const nextConfig: NextConfig = {
   /**
@@ -102,17 +103,24 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
 
   /**
-   * NFR8's header half, for every gated route at once.
+   * Two sets, and they are two because they answer to different lists.
    *
-   * The list is data in `lib/gated-routes.ts` and `gated-routes.test.ts` drives
-   * a table over it, which is the shape NFR8 asks for in as many words: asserted
-   * "by a table-driven test over the route list rather than a per-page
+   * **The security set applies to every route** — `lib/response-headers.ts`,
+   * seven headers including the enforced CSP the spec's C6 settled. It reads
+   * `process.env` here and nowhere else, and this is the only place that is
+   * true: `headers()` is baked into `routes-manifest.json`, so every value it
+   * derives is a **build-time** one.
+   *
+   * **NFR8's header half applies to six prefixes**, which is the list NFR8
+   * names. The list is data in `lib/gated-routes.ts` and `gated-routes.test.ts`
+   * drives a table over it, which is the shape NFR8 asks for in as many words:
+   * asserted "by a table-driven test over the route list rather than a per-page
    * attribute". Each page still sets `metadata.robots` for the `<meta>` half —
    * NFR8 wants both, because a crawler that never parses the body still reads
    * the header, and a saved copy of a page keeps only the meta.
    */
   async headers() {
-    return gatedRouteHeaders();
+    return [...securityHeaderRules(process.env), ...gatedRouteHeaders()];
   },
 
   logging: {

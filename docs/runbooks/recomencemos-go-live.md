@@ -165,12 +165,49 @@ dig @1.1.1.1 +short TXT _dmarc.recomencemos.online   # ticks this box when it an
 ## 5. Application configuration
 
 - [ ] **Machine memory ≥ 1 GB** in `fly.toml` (C34)
-- [ ] **CSP shipped and enforced**, not report-only (C6):
-      `default-src 'self'; frame-ancestors 'none'; img-src 'self' <image-host> data:; connect-src 'self' <sentry-ingest>; base-uri 'self'; form-action 'self'`
+- [ ] **The response-header set is shipped, and the CSP is enforced rather than report-only** (C6).
+      The app sends all seven from `apps/web/lib/response-headers.ts`; there is nothing to configure
+      at a proxy or a CDN, and adding one there would be a second place the set is described.
+      Confirm it on the deployed origin rather than trusting the build:
+
+```sh
+curl -sSI https://<production-origin>/ | grep -iE 'content-security-policy|strict-transport|x-frame|x-content-type|referrer-policy|permissions-policy'
+```
+
+      The CSP must match `csp-policy` in [`../policy/security.md`](../policy/security.md) verbatim,
+      with the three placeholders resolved to the configured origins:
+
+```
+default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://accounts.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: <PHOTO_PUBLIC_BASE origin> <PHOTO_S3_ENDPOINT origin>; connect-src 'self' <sentry ingest origin> <PHOTO_S3_ENDPOINT origin>; font-src 'self'; upgrade-insecure-requests
+```
+
       `frame-ancestors 'none'` is the load-bearing directive — without it `acceptOffer` is
       clickjackable, and that is one click releasing a displaced person's name, phone and email.
-      Next's inline bootstrap needs a nonce or `'strict-dynamic'`; this is the directive most likely
-      to break the first deploy.
+
+- [ ] **`PHOTO_S3_ENDPOINT` and `PHOTO_PUBLIC_BASE` are set at _build_ time**, not only at runtime.
+      Next bakes `headers()` into the build, so a deploy that has them only as runtime secrets ships
+      a CSP that names neither — and the first symptom is a photo upload that fails in the browser
+      with the server logging nothing. The chain is already wired — `build.env` in `turbo.json`, an
+      `ARG` in the `Dockerfile`, a `--build-arg` in `scripts/deploy.sh` — so what is left is the
+      value itself: set **`PHOTO_S3_ENDPOINT`** and **`PHOTO_PUBLIC_BASE`** as GitHub repository
+      **variables** (Settings → Secrets and variables → Actions → Variables), which is what
+      `deploy.yml` reads. They are non-secret origins, so unlike the credentials in §1 they belong
+      in `vars` rather than `secrets` and may appear in a build log. `pnpm exec turbo build --dry`
+      prints the resolved task definition, and the deploy script warns on stderr when either is
+      unset.
+
+- [ ] **HSTS `preload` — decided, not defaulted.** The app sends
+      `max-age=63072000; includeSubDomains` and deliberately **no** `preload`. Submitting the domain
+      to the browsers' compiled-in preload list is close to irreversible: removal takes months and
+      reaches a user only when their browser updates. Tick this box by recording the decision either
+      way; adding `preload` means editing `hsts` in [`../policy/security.md`](../policy/security.md)
+      first, and then submitting at <https://hstspreload.org>.
+
+- [ ] **`'unsafe-inline'` in `script-src` is known, recorded and open.** It is what keeps this app's
+      prerendered shells, because a nonce is incompatible with Partial Prerendering. Scan the
+      deployed origin at <https://securityheaders.com>, post the grade to the issue tracking the
+      nonce trade, and do not treat the reading as a blocker on the announcement — it is the input
+      that decides whether the trade is taken at all.
 - [ ] **Uptime monitor**: probe `GET /api/health` every **60 s**, alert after **2 consecutive
       failures** (C33). With `on-call-rotation` at nobody, detection latency is the entire mitigation.
 - [ ] **Daily digest at 08:00 America/Bogotá** wired through the notification seam, carrying NFR7's

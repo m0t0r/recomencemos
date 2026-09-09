@@ -67,6 +67,13 @@ jobs:
       # `SENTRY_AUTH_TOKEN` may be unset — `next.config.ts` gates source-map
       # upload on the full triple, so an absent token is a quiet build rather
       # than a failing one, and the deploy still ships.
+      #
+      # The two photo origins are `vars` rather than `secrets` because they are
+      # non-secret origins, and they are here at all because the CSP is baked
+      # into the build: Next writes `headers()` into `routes-manifest.json`, so
+      # an origin the build cannot see is an origin the deployed
+      # `Content-Security-Policy` does not name, and the browser then blocks the
+      # presigned upload while the server logs a clean request.
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -74,6 +81,8 @@ jobs:
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          PHOTO_S3_ENDPOINT: ${{ vars.PHOTO_S3_ENDPOINT }}
+          PHOTO_PUBLIC_BASE: ${{ vars.PHOTO_PUBLIC_BASE }}
         run: ./scripts/deploy.sh
 
       # Proves the deploy from the outside rather than trusting `fly deploy`'s

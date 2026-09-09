@@ -2363,6 +2363,16 @@ answered and a concern asking "what should this be?" gets deferred.
       **The Next inline bootstrap needs a nonce or `'strict-dynamic'`**; that is the implementing
       ticket's detail, not this spec's, and it is the one thing likely to break the first deploy.
       **Sets:** `docs/policy/security.md` → `csp-policy`.
+      **The value above is the proposal as answered, and it is no longer the value that ships.** The
+      implementing ticket ([#232](https://github.com/m0t0r/recomencemos/issues/232)) resolved the
+      `<image-host>` placeholder into the two photo hosts, added `script-src`, `style-src`,
+      `object-src`, `font-src` and `blob:`, and widened `form-action` by one origin — each change
+      recorded under "The response-header set" in the policy file. This concern says the CSP is not
+      this spec's to pick, so **the key is the authority and this paragraph is a snapshot**; read it
+      for the reasoning, never for the string. The nonce sentence above was answered too, and the
+      answer was no: it is incompatible with this app's Partial Prerendering, so the ticket ships
+      `'unsafe-inline'` deliberately and
+      [#253](https://github.com/m0t0r/recomencemos/issues/253) is where that trade is weighed.
 - [x] **C7** — **What blocks a release: a CVE threshold, a licence allowlist, or neither.** Proposal:
       CI fails on `high` or above in a direct dependency.
       **Risk if wrong:** an advisory against the authentication library ships to production with
