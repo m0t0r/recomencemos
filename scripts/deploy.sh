@@ -88,13 +88,11 @@ for var in NEXT_PUBLIC_SENTRY_DSN SENTRY_ORG SENTRY_PROJECT PHOTO_S3_ENDPOINT PH
   [ -n "$value" ] && BUILD_ARGS+=(--build-arg "${var}=${value}")
 done
 
-# **The two photo origins are build-time because the Content-Security-Policy is**
-# — Next writes `headers()` into the build, so an origin absent here is an origin
-# the deployed CSP does not name. That failure is silent on the server and fatal
-# in the browser: the presigned PUT is blocked by `connect-src` and the Admin's
-# review image by `img-src`, while the machine logs a clean request. Warned
-# rather than refused, because a deploy with no photo path is still a deploy and
-# this script has never been the thing that decides what is configured.
+# An origin absent here is an origin the deployed CSP does not name, and that
+# failure is silent on the server and fatal in the browser —
+# `apps/web/lib/response-headers.ts` is where that is argued. Warned rather than
+# refused, because a deploy with no photo path is still a deploy and this script
+# has never been the thing that decides what is configured.
 for var in PHOTO_S3_ENDPOINT PHOTO_PUBLIC_BASE; do
   if [ -z "${!var:-}" ]; then
     printf '  note: %s is unset, so the built CSP will not name it and photos will be blocked.\n' \

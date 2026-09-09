@@ -2,19 +2,13 @@
  * The response-header set as a table, which is what makes a later edit that
  * drops one of them red rather than unnoticed (#232).
  *
- * **This belongs in `web:test` and not at seam 3**, for the reason
- * `gated-routes.test.ts` gives beside it: the question here is whether the
- * *configuration* is right for environments a running server cannot be in at
- * once. A dev server can show the development set and nothing else — the two
- * headers that differ, and the two that are actively harmful in the wrong
- * place, are exactly the ones it can never demonstrate. What a real request
- * carries is checked running, and that leg is the PR's seam-3 evidence.
+ * **It is here and not at seam 3 because a running server is one environment at
+ * a time**, and the values worth pinning are the ones that differ between
+ * three. What a real request carries is checked running, and that is the PR's
+ * seam-3 evidence.
  *
- * **Node environment, and the import on the last line is why** — the same
- * `withSentryConfig` path-resolution trap `gated-routes.test.ts` records: under
- * happy-dom `document` exists while `document.currentScript` is `null`, the
- * bundler plugin resolves its loader against `document.baseURI`, and the whole
- * suite fails to collect with "The URL must be of scheme file".
+ * Node environment for the `next.config` import, for the `withSentryConfig`
+ * reason `gated-routes.test.ts` records in full.
  */
 
 // @vitest-environment node
@@ -29,7 +23,7 @@ import {
   securityHeaders,
   type HeaderEnvironment,
 } from "./lib/response-headers";
-import nextConfig from "./next.config";
+import { configuredHeaders } from "./testing/configured-headers";
 
 /**
  * A production build's environment, in the shape the deploy provides it: two
@@ -65,13 +59,6 @@ function directivesOf(environment: HeaderEnvironment): Record<string, string[]> 
     if (directive) parsed[directive] = sources;
   }
   return parsed;
-}
-
-/** What `next.config.ts` actually hands Next, resolved once. */
-async function configuredHeaders() {
-  const headers = await nextConfig.headers?.();
-  expect(headers, "next.config.ts declares no headers()").toBeDefined();
-  return headers ?? [];
 }
 
 function keysOf(environment: HeaderEnvironment): string[] {
@@ -120,6 +107,9 @@ describe("the header set the security policy names", () => {
   it("denies every capability this product does not use", () => {
     expect(PERMISSIONS_POLICY.split(", ").toSorted()).toEqual([
       "accelerometer=()",
+      // The live interest-inference API, standing where the brief named FLoC's
+      // withdrawn `interest-cohort`. The module says why.
+      "browsing-topics=()",
       "camera=()",
       "geolocation=()",
       "gyroscope=()",
@@ -148,20 +138,12 @@ describe("HTTPS enforcement is production-only", () => {
     expect(STRICT_TRANSPORT_SECURITY).not.toContain("preload");
   });
 
-  /**
-   * The development origin is HTTPS by design, so this header sent there pins
-   * HSTS against `*.localhost` in the developer's own browser — which reaches
-   * every other project on the machine and is unpleasant to undo.
-   */
+  /** Sent in development it would pin HSTS against `*.localhost`; see the module. */
   it("sends no HSTS in development", () => {
     expect(keysOf(DEVELOPMENT)).not.toContain("Strict-Transport-Security");
   });
 
-  /**
-   * An unset `NODE_ENV` reads as development. Missing HSTS in production is a
-   * header the go-live scan finds; HSTS in development is a browser somebody
-   * has to repair, so the ambiguous case fails towards the recoverable one.
-   */
+  /** The ambiguous case has to fail towards the recoverable one — `isProduction`. */
   it("treats an unset NODE_ENV as development rather than production", () => {
     expect(keysOf({})).not.toContain("Strict-Transport-Security");
     expect(directivesOf({})).not.toHaveProperty("upgrade-insecure-requests");
@@ -172,13 +154,7 @@ describe("HTTPS enforcement is production-only", () => {
     expect(contentSecurityPolicy(DEVELOPMENT)).not.toContain("upgrade-insecure-requests");
   });
 
-  /**
-   * The case that made the directive conditional on more than `NODE_ENV`, found
-   * by reading a local `pnpm build` back out of `routes-manifest.json`: a
-   * production build on a developer's machine reads the same `.env.local` a dev
-   * server does, so its policy admits `http://127.0.0.1:9000` — and upgrading
-   * would rewrite every presigned PUT to a scheme MinIO does not serve.
-   */
+  /** The case that made the directive conditional on more than `NODE_ENV`. */
   it("does not upgrade requests to an origin the same policy admits in plaintext", () => {
     const localProductionBuild = { ...DEVELOPMENT, NODE_ENV: "production" };
 
@@ -202,11 +178,7 @@ describe("the CSP names every directive the security policy sets", () => {
     expect(directivesOf(PRODUCTION)[directive]).toEqual(expected);
   });
 
-  /**
-   * The load-bearing one. Without it the second-factor form at `/continue` and
-   * the acceptance of an Offer are both clickjackable, and the second is one
-   * click releasing a displaced person's name, phone and email.
-   */
+  /** The load-bearing pair: without them `/continue` and Offer acceptance are clickjackable. */
   it("refuses every framer, in every environment", () => {
     for (const environment of [PRODUCTION, DEVELOPMENT, CI_BUILD, {}]) {
       expect(directivesOf(environment)["frame-ancestors"]).toEqual(["'none'"]);
@@ -214,36 +186,18 @@ describe("the CSP names every directive the security policy sets", () => {
     }
   });
 
-  /**
-   * The temporary value, asserted so that dropping it is a decision somebody
-   * takes on purpose rather than a change that quietly passes. #253 is where
-   * the nonce that replaces it is weighed against the prerendered shells it
-   * costs; until then this is what keeps them.
-   */
+  /** Pinned so that changing the temporary value is deliberate rather than quiet (#253). */
   it("admits inline script, which is the deliberate gap", () => {
     expect(directivesOf(PRODUCTION)["script-src"]).toEqual(["'self'", "'unsafe-inline'"]);
   });
 
-  /**
-   * React reconstructs server-side error stacks in the browser with `eval` in
-   * development and does not in production.
-   */
+  /** React reconstructs server-side error stacks with `eval`, in development only. */
   it("admits eval in development and not in production", () => {
     expect(directivesOf(DEVELOPMENT)["script-src"]).toContain("'unsafe-eval'");
     expect(directivesOf(PRODUCTION)["script-src"]).not.toContain("'unsafe-eval'");
   });
 
-  /**
-   * **The one origin `form-action` admits besides this app**, and the case that
-   * put it there rather than a prediction that it would be needed.
-   *
-   * `form-action` governs the redirect a form submission *follows*. With
-   * JavaScript unavailable the Google door is a native form POST answered by a
-   * `303` to Google, so `'self'` alone kills that door silently — driven
-   * against a running dev server, the POST was made and the redirect was never
-   * followed. Widened rather than deleted: the directive still holds every
-   * other form on this site to this origin.
-   */
+  /** One origin and not a wildcard; the module carries why it is admitted at all. */
   it("admits Google's authorization origin and nothing wider", () => {
     expect(directivesOf(PRODUCTION)["form-action"]).toEqual([
       "'self'",
@@ -273,11 +227,7 @@ describe("the photo path's two origins", () => {
     ]);
   });
 
-  /**
-   * The origin and never the path. `PHOTO_PUBLIC_BASE` carries a bucket path,
-   * and a source expression with a path stops matching the moment a key is
-   * stored one level deeper.
-   */
+  /** The origin and never the path — `PHOTO_PUBLIC_BASE` carries a bucket path. */
   it("takes the origin of the public base and drops its bucket path", () => {
     expect(directivesOf(PRODUCTION)["img-src"]).not.toContain(
       "https://photos.recomencemos.online/recomencemos-photos",
@@ -294,11 +244,7 @@ describe("the photo path's two origins", () => {
     ]);
   });
 
-  /**
-   * `blob:` is the picker's preview — `publish/_lib/downscale.ts` hands the
-   * chosen file to `URL.createObjectURL` before anything is uploaded, so
-   * without it a Worker sees a broken image at the moment she chooses one.
-   */
+  /** `blob:` is the picker's preview, built before anything is uploaded. */
   it("admits the object URL the picker previews from", () => {
     expect(directivesOf(PRODUCTION)["img-src"]).toContain("blob:");
   });
@@ -313,6 +259,9 @@ describe("the photo path's two origins", () => {
 describe("an absent origin is absent rather than interpolated", () => {
   it.each(["img-src", "connect-src"])("leaves %s with no undefined source", (directive) => {
     expect(directivesOf(CI_BUILD)[directive]).not.toContain("undefined");
+  });
+
+  it("puts the string nowhere in the header at all", () => {
     expect(contentSecurityPolicy(CI_BUILD)).not.toContain("undefined");
   });
 

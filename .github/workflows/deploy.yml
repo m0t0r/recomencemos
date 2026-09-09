@@ -70,10 +70,8 @@ jobs:
       #
       # The two photo origins are `vars` rather than `secrets` because they are
       # non-secret origins, and they are here at all because the CSP is baked
-      # into the build: Next writes `headers()` into `routes-manifest.json`, so
-      # an origin the build cannot see is an origin the deployed
-      # `Content-Security-Policy` does not name, and the browser then blocks the
-      # presigned upload while the server logs a clean request.
+      # into the build — `apps/web/lib/response-headers.ts` is where that is
+      # argued.
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

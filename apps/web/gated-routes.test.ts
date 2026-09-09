@@ -27,15 +27,8 @@
 
 // @vitest-environment node
 
-import nextConfig from "./next.config";
 import { GATED_ROUTE_PREFIXES, NOINDEX_HEADER, gatedRouteSources } from "./lib/gated-routes";
-
-/** What `next.config.ts` actually hands Next, resolved once. */
-async function configuredHeaders() {
-  const headers = await nextConfig.headers?.();
-  expect(headers, "next.config.ts declares no headers()").toBeDefined();
-  return headers ?? [];
-}
+import { configuredHeaders } from "./testing/configured-headers";
 
 describe("every gated route carries X-Robots-Tag", () => {
   for (const source of gatedRouteSources()) {
