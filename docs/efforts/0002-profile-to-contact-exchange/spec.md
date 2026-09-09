@@ -242,19 +242,28 @@ concerns.
   served at a width appropriate to its slot and in a format the browser negotiated — **0** Wall cards
   request an image more than **2×** their rendered CSS width, and resizing happens at the edge rather
   than on the Fly machine (DD6).
-  **Prefetch traffic is a second instrument, added 2026-09-08 with #228, and the byte budget above is
-  unchanged.** The two measure different things and neither can see the other: the budget is script
+  **Amended 2026-09-08 with #228: prefetch traffic is a second instrument, and the byte budget above
+  is unchanged.** The two measure different things and neither can see the other: the budget is script
   bytes a prerendered document requests, read by `pnpm page-weight`; this is router traffic that
   script then generates, which `page-weight` never observes. It matters here because every row of both
   lists is a link to one repeated route, so it grows with the list rather than with the page.
   **The number to hold is the marginal cost of a row, and it is 795 bytes.** With
   `partialPrefetching` on, a prefetched row costs its route tree and nothing else, because the page
   payload is fetched once for the route and shared. Measured 2026-09-08 on Next 16.3.4: **795 B** per
-  row, against **5,529 B** (796 tree + 4,733 page) with the flag off. Whole-journey figures from the
-  same runs, gzip on the wire, 390 × 844: reading the Wall end to end **67.8 → 59.8 KB** (−12%),
-  reading `/profiles` end to end **67.7 → 56.3 KB** (−17%), and four city-filter changes on
-  `/profiles` **154.2 → 170.6 KB** (**+11%**) — the one journey the flag makes dearer, by about
-  4.3 KB per in-route navigation, plus about 5 KB on every document.
+  row, against **5,529 B** (796 tree + 4,733 page) with the flag off. Over a whole list the request
+  count barely moves and the bytes do: scrolling `/profiles` to the end of 91 rows went from
+  **14 requests / 37,871 B** to **11 / 21,687 B**, and the Wall from **14 / 36,200 B** to
+  **12 / 22,688 B**.
+  **Whole-journey figures from the same runs**, gzip on the wire, 390 × 844. Each is a sum, and its
+  parts are named so a re-take reconstructs the total rather than having to trust it. Reading the Wall
+  to the end — document plus prefetch — is **67,769 → 59,818 B** (−12%). Reading `/profiles` to the
+  end — document plus prefetch plus 6,271 B of infinite-scroll Server Action responses, identical on
+  both sides — is **67,658 → 56,268 B** (−17%). Four city-filter changes on `/profiles` — document
+  plus prefetch plus the four navigations — is **154,221 → 170,614 B** (**+11%**), the one journey the
+  flag makes dearer. That +16,393 B decomposes as **+4,794** on the document, **−5,776** on prefetch
+  and **+17,375** across the four navigations (+4,343 each, +15.9% on the navigations alone). One trap
+  worth naming: the flag-**off** filter journey summed with the _scroll_ run's prefetch figure comes to
+  170,643 B, within 29 bytes of the flag-**on** total above and a different quantity entirely.
   **A single reading of a document or a navigation is not a measurement.** Both stream, so gzip's
   flush boundaries move between runs and one document came back at 28,308 bytes and at 29,692. The
   figures above are medians of fifteen for documents and means of four for navigations. Prefetch
@@ -263,7 +272,8 @@ concerns.
   **How to re-take it**, because a figure quoted from memory is what amended this requirement once
   already. It is a seam-3 procedure rather than a command, since it needs a running server and a
   browser: build for production and run `next start` — never `next dev`, which does not prefetch —
-  with enough published profiles for four pages; put a counting reverse proxy in front of it that logs
+  seeded with **90 published profiles** and scrolled to the end of the list, which is what the figures
+  above are and is four pages rather than three; put a counting reverse proxy in front of it that logs
   each response's header and body bytes; drive the route at 390 × 844 with a fixed scroll script; and
   classify each request by the header the router sets rather than by its path, since a prefetch
   (`Next-Router-Prefetch`), a navigation (`RSC` alone) and the infinite-scroll action (a `POST`) all

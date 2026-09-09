@@ -46,12 +46,20 @@ const nextConfig: NextConfig = {
    *
    * Every row on `/` and `/profiles` is a `<Link>` to `/profile/[slug]`, and
    * with this off each row the router reaches costs a route tree **plus its own
-   * copy of the page payload** — 796 + 4,733 = **5,529 bytes**, per row, for a
-   * payload byte-identical across slugs. With it on the payload is fetched once
-   * for the route and each further row costs its tree alone: **795 bytes**, an
-   * 86% cut in the marginal cost of a row. Measured on a production build
-   * behind a counting proxy, not recalled; the spec's NFR3 carries the figures
-   * and the procedure.
+   * copy of the page payload** — 796 + 4,733 = **5,529 bytes**, per row. With it
+   * on the payload is fetched once for the route and each further row costs its
+   * tree alone: **795 bytes**, an 86% cut in the marginal cost of a row.
+   * Measured on a production build behind a counting proxy, not recalled; the
+   * spec's NFR3 carries the figures and the procedure.
+   *
+   * **That 4,733-byte payload is the static shell, and it was identical for
+   * every slug** — which is what makes the repetition pure waste and is worth
+   * stating, because the doc-comment above `chargeReadCeilings` in
+   * `app/(site)/profile/[slug]/page.tsx` rests on it. That comment's finding
+   * (a prefetch fetches the shell, so scrolling the list charges nothing
+   * against the read ceilings) is unaffected here: both before and after, a
+   * prefetch reaches no dynamic boundary. What changes is only how many times
+   * the same shell is sent.
    *
    * **It is not free, and the two costs are on the same page as the saving.**
    * Every document grows about 5 KB (`/` 31.6 → 37.1 KB, `/profiles`
@@ -82,8 +90,10 @@ const nextConfig: NextConfig = {
    * saying out loud once rather than discovering later: the segment-level
    * `prefetch` default becomes `'partial'` app-wide. A per-segment `prefetch`
    * export still wins, and `export const instant = false` is untouched — the
-   * three deliberately blocking routes (`/admin`, `/admin/enrol/[token]`,
-   * `/continue`) neither benefit nor are disturbed. It requires
+   * three that set it neither benefit nor are disturbed, checked on both builds
+   * rather than assumed. One of the three is `(admin)/admin/layout.tsx`, so it
+   * covers **every** route in that group rather than one page; the other two are
+   * `(token)/admin/enrol/[token]` and `(token)/continue`. It requires
    * `cacheComponents`, which is on above.
    *
    * `'unstable_eager'` is the other accepted value and is not a candidate: Next
