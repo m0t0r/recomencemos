@@ -176,8 +176,10 @@ and the page re-renders with every value and every error.
   `<script>` the prerendered document requests and excluding the `noModule` polyfill bundle, and
   written in the PR. Amended 2026-09-03 with #157, which measured the framework floor the old
   ≤ 120 KB had been set without. If Zod on the client is what breaks the new number, the client half
-  of the schema goes, not the budget (ADR-0014's own consequence) — but it is not what breaks it
-  today: the form layer is 81 KB of `/publish`'s 392 KB, and the Sentry browser SDK is 148 KB.
+  of the schema goes, not the budget (ADR-0014's own consequence) — but it was not what broke it on
+  2026-09-03, when #157 measured the form layer at 81 KB of `/publish`'s 392 KB and the Sentry
+  browser SDK at 148 KB. Those are that day's figures; `README.md`'s "Still to replace" row carries
+  the current one, and what zod has cost since.
 - WCAG 2.2 AA; `es-CO`; `noindex` is **not** required here (NFR8 does not list `/publish`) but
   the page has nothing a crawler wants, so it carries `robots: noindex` anyway `[assumed]`.
 
