@@ -177,6 +177,18 @@ rather than a position in the list above.
     anybody. The address people already hold for my profile keeps working, and correcting it does not
     move me to the top of the Wall.
 
+**Also `Must`, added by amendment (2026-09-10, #141).** A Worker had two ways off the site and
+controlled one of them: an Admin's takedown is not hers, and deleting her Account cannot be undone.
+Nothing sat between the two, so a Worker who found work, fell ill, or had more Offers than she could
+answer had only the irreversible exit. #139 named that gap and left it out of its own change;
+**Further Notes** carries the decisions. Story numbers are stable across this document, so this one
+takes the next free number.
+
+25. As a Worker, I want to pause my published profile and end the pause whenever I choose, so that I
+    can step away — because I found work, or I need to rest — without deleting what I wrote. While it
+    is paused nobody can find it and nobody can send me a new Offer; Offers already sent still reach
+    me, and ending the pause puts me back where I was rather than at the top of the Wall.
+
 **Should**
 
 1.  As a Worker and as a Hirer, I want a check-in seven days after a Contact Exchange asking whether
@@ -282,17 +294,19 @@ concerns.
   bytes for the same navigation on two runs. Buffered prefetch responses it reports correctly, which
   is what makes the error easy to miss.
   **Binds:** 2, 4, 11.
-- **NFR4 — Publishing and editing without JavaScript.** With JavaScript unavailable or still loading,
+- **NFR4 — Publishing, editing and pausing without JavaScript.** With JavaScript unavailable or still loading,
   a Worker completes **every** field except the photo and submitting produces a published profile —
   **and the same holds for a change to one already published.** The photo is the single documented
   exception and the form says so where it appears. _Amended 2026-09-02 with #139: this named publishing
   alone. She corrects a wrong number on the same phone and the same connection she typed it on, over
   the same fields, so the exemption had no argument behind it — and the photo stays the exception on
-  both paths._ **Binds:** 2, 4, 24.
+  both paths._ **Pausing and resuming are one submit each, and hold to the same rule.** _Amended
+  2026-09-10 with #141: a switch that needed JavaScript would leave her able to publish on a broken
+  connection and unable to step away on the same one._ **Binds:** 2, 4, 24, 25.
 - **NFR5 — Browser floor.** Every platform feature on a Worker-critical path is **Baseline Widely
   Available** — 30 months past the date all four core browsers shipped it, verified against web.dev's
   definition rather than recalled. Concretely Chrome on Android 10+, Safari on iOS 16+, current
-  evergreen desktop. Settles `browser-support`. **Binds:** 2, 4, 5, 8, 24.
+  evergreen desktop. Settles `browser-support`. **Binds:** 2, 4, 5, 8, 24, 25.
 - **NFR6 — Nothing unreviewed is reachable.** **0** unmoderated photo **objects** are retrievable by
   an unauthenticated request, and **0** appear on any public or indexable surface. A profile whose
   photo is `pending` or `rejected` renders its initial everywhere except the Worker's own view.
@@ -311,7 +325,9 @@ concerns.
 - **NFR9 — The slug carries no identity.** A profile's public slug is server-generated, opaque,
   derived from **no** part of her name, city or Skills, and stable across edits. _Amended 2026-09-02
   with #139: "stable across edits" was vacuous until story 24 gave the document an edit — an address a
-  Hirer already holds keeps resolving after she corrects her wording._ **Binds:** 4, 5, 24.
+  Hirer already holds keeps resolving after she corrects her wording._ _Amended 2026-09-10 with #141:
+  and after a pause ends — neither act touches the slug, so resuming restores the address people
+  already held rather than minting a new one._ **Binds:** 4, 5, 24, 25.
 - **NFR10 — The three projections, counted.** For a profile whose full name, phone, email,
   self-description and work history each carry a distinct sentinel: the **public** projection contains
   **0** sentinels; the **gated** contains the self-description and work-history sentinels and **0** of
@@ -380,7 +396,10 @@ concerns.
   **subject-access export**: everything held about one person, built from the same whitelist mechanism
   as the three projections, so a new `personal` column omitted from the export fails the same class of
   sentinel test as NFR10. That is the whole of this requirement, and it is the whole of what
-  `/to-tickets` copies onto a ticket. **Binds:** 13, 14.
+  `/to-tickets` copies onto a ticket. _Amended 2026-09-10 with #141: story 25 adds `pausedAt`, a
+  `personal` column about her, so the export carries it beside the `capability_profile` columns it
+  already holds — and the sentinel test is what makes its omission red rather than a review comment._
+  **Binds:** 13, 14, 25.
   **The clocks are a runbook, and they are deliberately not part of this NFR** (C53). A _consulta_ is
   answered within **10 business days**, extensible once by **≤ 5**; a _reclamo_ within **15 business
   days**, extensible once by **≤ 8**; an incomplete _reclamo_ returned for correction within **5
@@ -421,7 +440,7 @@ concerns.
   a processor carry a query string. **Binds:** 17.
 - **NFR20 — Accessibility.** **WCAG 2.2 AA** (`docs/policy/ux.md` → `wcag-level`) on every surface, in
   the single light theme, in `es-CO`, including every error state and the full six-state set named per
-  surface in **UX design**. **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19, 20, 21, 24.
+  surface in **UX design**. **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19, 20, 21, 24, 25.
 - **NFR21 — Search quality in Spanish.** A query returns the same results with or without accents and
   in any case, over **≥ 95%** of the seeded vocabulary, measured against a fixture of
   accented/unaccented pairs. **Binds:** 19.
@@ -433,7 +452,11 @@ concerns.
   newest-first and the mechanism is therefore bypassed by most traffic. The draft's `⌈3 × M/N⌉` bound
   is **withdrawn**: at the expected launch ratio — Hirers are
   the scarce side, so M < N/3 — it evaluates to 1, so the first Worker to have a good week violates
-  it. **Binds:** 4, 19, 20.
+  it. _Amended 2026-09-10 with #141: a paused profile is in neither list and cannot be sent an Offer,
+  so the reading **excludes profiles paused at the moment of measurement**, and the Admin's screen
+  says so. It is a snapshot rather than a history, and the imprecision is named rather than fixed: a
+  profile paused and resumed inside the seven days counts as present for all of them. **Further
+  Notes** says why no history is kept to close it._ **Binds:** 4, 19, 20, 25.
 - **NFR23 — Node floor.** Every dependency this effort adds declares an `engines.node` admitting every
   `24.x`, or none. Verified at Design against the versions this spec pins: `better-auth@1.7.1` and
   `drizzle-orm@0.45.2` declare none; `resend@6.22.1` declares `>=20`; `pg@8.23.0` declares
@@ -473,11 +496,16 @@ concerns.
   hour, ≤ 300 per day**, with a higher per-IP bound above it. Per Account and per IP:
   `publishProfile` **≤ 3/day**, `updateProfile` **≤ 10/day**, `sendOffer` **≤ 10/day**, `reportOffer`
   **≤ 10/day**, `requestSkill` **≤ 5/day**, `createPhotoUpload` **≤ 10/day**, `changeEmail`
-  **≤ 3/day**, `requestMagicLink` **≤ 5/hour per address and ≤ 20/hour per IP**.
+  **≤ 3/day**, `requestMagicLink` **≤ 5/hour per address and ≤ 20/hour per IP**. Per Account:
+  `pauseProfile` and `resumeProfile` **together ≤ 10/day**, one counter for both.
   _Amended 2026-09-02 with #139: `updateProfile` added. Deliberately **not** `publishProfile`'s 3/day —
   publishing happens once and editing is a repeated act, so a Worker fixing her own wording three times
   would be locked out of her profile for a day by a number chosen to bound a one-off. 10/day is the
-  shape `sendOffer` and `reportOffer` already use._ One Account holds at most one CapabilityProfile, by
+  shape `sendOffer` and `reportOffer` already use._ _Amended 2026-09-10 with #141: the pause's ceiling
+  added. One counter across both actions because they are one switch, and what a ceiling bounds here
+  is flipping it — every flip takes her out of every list or puts her back in. 10/day is
+  `updateProfile`'s number for `updateProfile`'s reason: a repeated act of her own, not a one-off.
+  Counted in `RateCounter` like every ceiling above._ One Account holds at most one CapabilityProfile, by
   unique constraint rather than by the form. The counter lives in Postgres, not process memory,
   because deploys are continuous and an in-memory limiter resets several times a day. It **fails
   closed**.
@@ -502,11 +530,13 @@ concerns.
   **Third half, which the second was missing (C39): a refusal is legible to the person who hit it.**
   Every ceiling returns an `AppError` carrying `code: "rate_limited"`, a **`retryAfter`**, and a
   `userMessage` in her terms, and every surface with a ceiling carries a rate-limited state in the UX
-  state table — **all nine ceilings, checked as a list against that table rather than by eye** (C57).
+  state table — **all ten ceilings, checked as a list against that table rather than by eye** (C57).
   _Amended 2026-09-02 with #139: eight became nine. The count is written out because C57 made this a
   list somebody ticks, and a ceiling added without its seventh state is the exact defect C57 closed._
+  _Amended 2026-09-10 with #141: nine became ten. The pause's ceiling is one ceiling over two actions,
+  so it is one row in that table, not two._
   A Worker who trips `publishProfile ≤ 3/day` after two failed attempts must not be stopped by
-  silence. **Binds:** 16, 2, 6, 10, 24.
+  silence. **Binds:** 16, 2, 6, 10, 24, 25.
 - **NFR27 — Sign-in actually completes.** **≥ 70%** of `requestMagicLink` calls are followed by a
   completed sign-in within 30 minutes, rolling 7 days; a **drop of > 20 points** against the trailing
   30-day value is the actionable signal. This replaces a bounce-rate-only indicator, which goes green
@@ -546,7 +576,7 @@ concerns.
   string a person reads stays `es-CO` (`docs/policy/ux.md` → `locales`), and a surface that became
   less Spanish to satisfy this requirement has failed it, not met it. See
   [ADR-0012](../../adr/0012-spanish-is-the-interface-english-is-the-code.md).
-  **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21, 24.
+  **Binds:** 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 21, 24, 25.
 
 - **NFR30 — Migration integrity, enforced rather than agreed.** Four counts, all machine-checked
   (DD13): **0** entries in `drizzle/meta/_journal.json` are removed, reordered, or mutated once
@@ -559,7 +589,9 @@ concerns.
   **Second half:** a destructive change must stay **possible**. The marker is an opt-in, not a
   prohibition, and every refusal names the statement and the file it objected to — a guardrail that
   cannot be satisfied becomes a reason to edit production by hand, which is strictly worse than the
-  drift it was built to stop. **Binds:** 2, 3, 6, 8, 9, 10, 13, 14, 15, 16.
+  drift it was built to stop. _Amended 2026-09-10 with #141: story 25's migration adds one nullable
+  column, which is additive and carries no `contract` marker — binding the story here is what puts the
+  gate on its ticket anyway._ **Binds:** 2, 3, 6, 8, 9, 10, 13, 14, 15, 16, 25.
 
 - **NFR31 — The only impact evidence that exists is measured, or it is an anecdote.** Every Contact
   Exchange schedules a check-in to **both** sides at seven days: **100%** scheduled, **send success
@@ -586,7 +618,10 @@ concerns.
   and **0** sentinels from NFR10's set, because an audit table that accumulates personal data is a
   second copy of the thing NFR11 counts. It is retained **24 months**, matching a Report rather than a
   log line, since logs live 30 days and the incident it reconstructs may not surface for a year.
-  **Binds:** 23.
+  _Amended 2026-09-10 with #141: story 25 is deliberately **not** bound here. A pause is the Worker's
+  own act on her own row, not an Admin's, so it writes no `AdminAction` — and an audit row for it
+  would be a 24-month, Admin-readable record of each time she chose to step away, kept to answer a
+  question nobody is asking._ **Binds:** 23.
 - **NFR34 — The repository describes the product, not the template it came from.** **0** rows remain
   unresolved in `README.md`'s "Placeholders to change" table; `PRODUCT.md` names Recomencemos and the
   three municipalities; **0** statements in `CLAUDE.md` instruct a reader to judge a change by whether
@@ -616,10 +651,14 @@ by unique constraint, not by the form — that constraint is half of NFR26's Syb
 
 **CapabilityProfile** — 1:1 with an Account. `slug` (opaque, NFR9), `fullName`, `firstName`, `lastInitial`,
 `city`, `headline`, `about`, `phone` (E.164), `photoState`, `photoKey`, `state`
-(`published` | `taken_down`), `publishedAt`, `updatedAt`, `deliveredOfferCount`, `rotationKey`,
-`searchText`. _Amended 2026-09-02 with #139: `updatedAt` was missing from this list while the column
-existed, which is what let story 24's write have no field to stamp. `publishedAt` and `updatedAt` are
-two columns for one reason — only the first is indexed, and only the first orders the Wall._
+(`published` | `taken_down`), `pausedAt`, `publishedAt`, `updatedAt`, `deliveredOfferCount`,
+`rotationKey`, `searchText`. _Amended 2026-09-02 with #139: `updatedAt` was missing from this list
+while the column existed, which is what let story 24's write have no field to stamp. `publishedAt` and
+`updatedAt` are two columns for one reason — only the first is indexed, and only the first orders the
+Wall._ _Amended 2026-09-10 with #141: `pausedAt` is her **Pause** — nullable, `personal`, set and
+cleared by the owner and by nobody else. `state` keeps its two values, and a profile is visible to
+anyone but her exactly when `state = 'published'` **and** `pausedAt IS NULL`. Why that is a second
+column rather than a third `state` value is DD8's argument._
 `firstName`, `lastInitial`, `city`, `headline` and an **approved** photo are `public`; `fullName`,
 `about`, `phone` and the Account's `email` are `personal`. **`fullName` is collected at publish and
 released only at Contact Exchange** (C1) — prefilled and editable from a Google profile, typed by a
@@ -730,21 +769,22 @@ endpoint and a page-level check does not extend to it. Every one also **rate-lim
 
 ### Worker — Account required, `noindex`
 
-| Surface                                                 | Shape                                                                                                                                                                                                          | Who may call                                                                                                                                                                                                               |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /publish`                                          | —                                                                                                                                                                                                              | Signed-in Account with no CapabilityProfile                                                                                                                                                                                |
-| action `publishProfile`                                 | `{ fullName, firstName, lastInitial, city, headline, about, phone, skillSlugs[], workHistory[], consentVersion }` → `{ ok } \| { fieldErrors }`. `fullName` is gated at rest and crosses only at exchange (C1) | Itself only                                                                                                                                                                                                                |
-| action `updateProfile`                                  | `publishProfile`'s field set **minus `consentVersion`** → `{ ok } \| { fieldErrors }`. Rewrites `searchText` and `updatedAt`; `slug` and `publishedAt` untouched. Added 2026-09-02 with #139 — see below       | The owner. Rate-limited (NFR26)                                                                                                                                                                                            |
-| action `createPhotoUpload`                              | `{ contentType, byteLength }` → `{ uploadUrl, photoKey }`, a presigned PUT into a quarantine prefix                                                                                                            | The owner. **Not** a multipart Server Action — the body limit defaults to 1 MB and a phone photo is 2–5 MB (DD6)                                                                                                           |
-| action `attachPhoto`                                    | `{ photoKey }` → `{ photoState: "pending" }`                                                                                                                                                                   | The owner                                                                                                                                                                                                                  |
-| action `requestSkill`                                   | `{ text }` → `{ ok }`                                                                                                                                                                                          | The owner                                                                                                                                                                                                                  |
-| `GET /my-profile`                                       | `OwnProfile` — the gated shape plus her own photo whatever its state                                                                                                                                           | The owner                                                                                                                                                                                                                  |
-| `GET /offers`, `GET /offers/[id]`                       | `ReceivedOffer[]`, `ReceivedOffer`                                                                                                                                                                             | The owner, scoped by profile ownership                                                                                                                                                                                     |
-| action `acceptOffer`                                    | `{ offerId, confirmed: true }` → `{ exchange }`                                                                                                                                                                | The addressee. Two-step: the confirmation names which details cross and that it is irreversible                                                                                                                            |
-| actions `declineOffer`, `reportOffer`, `blockFromOffer` | `{ offerId, reason? }` → `{ ok }`                                                                                                                                                                              | Same. `blockFromOffer` takes the **Offer** id, so Hirer account ids never cross to a browser                                                                                                                               |
-| action `signOutEverywhere`                              | `{}` → `{ ok }`                                                                                                                                                                                                | Itself                                                                                                                                                                                                                     |
-| action `changeEmail`                                    | `{ email }` → `{ ok: "verification_sent" }`                                                                                                                                                                    | Itself. **Two-phase**: the new address is verified before the switch, the old address is notified, and all other sessions end on completion. A one-shot switch is an account-takeover primitive from any abandoned session |
-| action `deleteAccount`                                  | `{ confirmationPhrase }` → `{ ok }`                                                                                                                                                                            | Itself, and only from a **fresh** sign-in                                                                                                                                                                                  |
+| Surface                                                 | Shape                                                                                                                                                                                                                                          | Who may call                                                                                                                                                                                                               |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /publish`                                          | —                                                                                                                                                                                                                                              | Signed-in Account with no CapabilityProfile                                                                                                                                                                                |
+| action `publishProfile`                                 | `{ fullName, firstName, lastInitial, city, headline, about, phone, skillSlugs[], workHistory[], consentVersion }` → `{ ok } \| { fieldErrors }`. `fullName` is gated at rest and crosses only at exchange (C1)                                 | Itself only                                                                                                                                                                                                                |
+| action `updateProfile`                                  | `publishProfile`'s field set **minus `consentVersion`** → `{ ok } \| { fieldErrors }`. Rewrites `searchText` and `updatedAt`; `slug` and `publishedAt` untouched. Added 2026-09-02 with #139 — see below                                       | The owner. Rate-limited (NFR26)                                                                                                                                                                                            |
+| actions `pauseProfile`, `resumeProfile`                 | `{}` → `{ ok }`. `pauseProfile` stamps `pausedAt`; `resumeProfile` clears it. **Both idempotent**: pausing a paused profile and resuming a visible one are no-ops, not errors. `publishedAt` untouched. Added 2026-09-10 with #141 — see below | The owner. Rate-limited (NFR26), **one ceiling shared by both**. While the profile is taken down, neither changes anything and the surface offers neither                                                                  |
+| action `createPhotoUpload`                              | `{ contentType, byteLength }` → `{ uploadUrl, photoKey }`, a presigned PUT into a quarantine prefix                                                                                                                                            | The owner. **Not** a multipart Server Action — the body limit defaults to 1 MB and a phone photo is 2–5 MB (DD6)                                                                                                           |
+| action `attachPhoto`                                    | `{ photoKey }` → `{ photoState: "pending" }`                                                                                                                                                                                                   | The owner                                                                                                                                                                                                                  |
+| action `requestSkill`                                   | `{ text }` → `{ ok }`                                                                                                                                                                                                                          | The owner                                                                                                                                                                                                                  |
+| `GET /my-profile`                                       | `OwnProfile` — the gated shape plus her own photo whatever its state                                                                                                                                                                           | The owner                                                                                                                                                                                                                  |
+| `GET /offers`, `GET /offers/[id]`                       | `ReceivedOffer[]`, `ReceivedOffer`                                                                                                                                                                                                             | The owner, scoped by profile ownership                                                                                                                                                                                     |
+| action `acceptOffer`                                    | `{ offerId, confirmed: true }` → `{ exchange }`                                                                                                                                                                                                | The addressee. Two-step: the confirmation names which details cross and that it is irreversible                                                                                                                            |
+| actions `declineOffer`, `reportOffer`, `blockFromOffer` | `{ offerId, reason? }` → `{ ok }`                                                                                                                                                                                                              | Same. `blockFromOffer` takes the **Offer** id, so Hirer account ids never cross to a browser                                                                                                                               |
+| action `signOutEverywhere`                              | `{}` → `{ ok }`                                                                                                                                                                                                                                | Itself                                                                                                                                                                                                                     |
+| action `changeEmail`                                    | `{ email }` → `{ ok: "verification_sent" }`                                                                                                                                                                                                    | Itself. **Two-phase**: the new address is verified before the switch, the old address is notified, and all other sessions end on completion. A one-shot switch is an account-takeover primitive from any abandoned session |
+| action `deleteAccount`                                  | `{ confirmationPhrase }` → `{ ok }`                                                                                                                                                                                                            | Itself, and only from a **fresh** sign-in                                                                                                                                                                                  |
 
 _Added 2026-09-02 with #139, on `updateProfile`._ Three things about that row are load-bearing and do
 not fit in a table cell. **The DD3 rejector runs again**, on every edited free-text field, exactly as
@@ -753,6 +793,20 @@ consent step. **`searchText` is rewritten** because DD4 already says it is writt
 edit", and this is the edit. **`publishedAt` is not stamped**, because it orders the Wall and an edit
 that stamped it would be a free bump to the top of the site's most-linked surface — the argument, and
 what it costs story 20's fairness measurement to get wrong, is in **Further Notes**.
+
+_Added 2026-09-10 with #141, on `pauseProfile` and `resumeProfile`._ **What a pause reaches.** For
+everyone but her, a paused profile answers exactly as a profile that does not exist: absent from `/`
+and `/profiles`, the gated read at `/profile/[slug]` answers not-found, and `sendOffer` answers
+`profile_not_found` — the answer C22 already gives for a profile that is not published, so a pause
+opens no new oracle. **What it does not reach.** Offers in `pending_review` or `on_hold` are reviewed
+and delivered as normal; Offers already `delivered` stay in her inbox, can be accepted or declined,
+and expire on the same clock. There is no new Offer state, and `on_hold` is **not** reused — it means
+the sender is frozen, and clearing a Report releases it. **Resuming leaves `publishedAt` untouched**,
+for the reason the paragraph above gives for an edit: a pause-then-resume that stamped it would be the
+same free bump to the top of the Wall by a second route, and story 20 would go on reporting a fairness
+the site no longer has. **A pause lasts until she ends it** — no expiry, no job, no reminder. **Neither
+action changes anything while the profile is taken down**, so a reversed takedown restores her exactly
+as she left it; DD8 carries that rule.
 
 ### Hirer — Account required, `noindex`
 
@@ -828,6 +882,11 @@ reaches none of them until someone writes it into one.**
   `photoUrl | null`, `publishedAt`.
 - **`GatedProfile`** — every `PublicProfile` key, plus `about`, `workHistory[]`. **Not `fullName`**,
   which is collected at publish and withheld until exchange (C1).
+- **`OwnProfile`** — the gated shape plus her own photo whatever its state (`GET /my-profile`), and
+  **`pausedAt | null`**, so the page can say _en pausa_ and since when. _Added 2026-09-10 with #141._
+  An Admin's reads of a profile carry `pausedAt` too, so wherever an Admin sees one it reads _en pausa
+  desde <fecha>_. **`PublicProfile` and `GatedProfile` gain nothing**: a paused profile is never
+  projected to either, so there is nothing for them to say about it.
 - **`ExchangedContact`** — `fullName`, `phone`, `email`, and the counterpart's same three. Reachable
   only from a ContactExchange row. The Hirer's three are **self-asserted** and are rendered as such
   (C4).
@@ -1053,6 +1112,14 @@ The indexes, derived from the reads rather than guessed:
 | **The five queue branches** | five **partial** indexes, one per pending predicate                                                       |
 | Duplicate-phone signal      | `capability_profile (phone)`, **non-unique** — a moderation signal, never a constraint (C30)              |
 | `signOutEverywhere`         | `session (account_id)` — Better Auth may not create it                                                    |
+
+_Amended 2026-09-10 with #141._ Four of the indexes above are partial on `state = 'published'` — the
+Wall, Browse, Browse + city, and DD4's trigram index — and story 25 makes "visible" two conditions
+rather than one. **Whether each gains `AND paused_at IS NULL` is the build ticket's decision**, taken
+against the read it serves rather than by symmetry: the planner uses a partial index only when the
+query implies its predicate, and narrowing an index by a condition that holds for nearly every row
+may buy nothing measurable. What is not optional is that every one of those reads carries both halves
+of the visibility predicate.
 
 **The phone index is a signal and not a gate** (C30). Families and shared households genuinely share
 one handset, and [ADR-0008](../../adr/0008-open-enrolment-with-published-non-verification.md) declined
@@ -1541,6 +1608,26 @@ is right for this population. It also means a **Block does not survive the Hirer
 re-registers with the same address and the edge is gone. Stated rather than discovered, and a second
 reason concern C3 matters.
 
+**A Pause is a third way off the site, and it extends the rule rather than breaking it** (_added
+2026-09-10 with #141_). The subject's choice and a moderation decision do not share a **column**, not
+only a process: `paused_at` is hers and only she writes it; `state` is moderation's and only an Admin
+writes `taken_down` to it. A third `state` value — `paused` beside `published` and `taken_down` — was
+the obvious shape, and it is refused for the bug it carries. One column holding two people's decisions
+makes her resume a write to the column the takedown lives in, so a Worker could resume herself out of
+a takedown, and an Admin reading the row could not tell her pause from a moderation decision. With two
+columns the rules are short: **a takedown never touches `paused_at`**; the switch is not shown while
+the profile is taken down, and neither action changes anything then; and **a reversed takedown
+restores the profile exactly as she left it** — paused or not. A pause writes no `AdminAction`,
+because it is not an Admin's act (NFR33).
+
+**One limit is shared by the two, and it is named rather than fixed** (_added 2026-09-10 with
+#141_). An approved photo is re-encoded into the public prefix (DD6) and served at a stable URL.
+Neither a takedown nor a pause moves or deletes that object, so anyone who saved the address can
+still load the photo while the profile is taken down or paused — though nothing on the site links to
+it any more. That was already true of a takedown, and nothing here had said so. **If it is ever
+closed, it is closed for both in one place**: moving the object on a pause alone would leave the
+takedown, the more serious of the two, as the open case.
+
 **Retention is a graph, not a table.** The draft's per-table numbers left three dangling references —
 most sharply, a Report outliving its Offer by twelve months, so at month 13 an Admin opens a Report and
 the Offer it is about is unreadable, which removes the entire reason for the 24-month number. NFR17's
@@ -2025,12 +2112,12 @@ own schedule.
 | **Full profile**     | `app/profile/[slug]/page.tsx`      | n/a                                                                                                                                                                            | Skeleton at the profile's height                                                             | Identity rendered, work history streaming                                                                                                                                      | Profile failed to load                                                                                                                                                                                                                                                | **Signed out** → the Account gate and why it exists. **Frozen** (a Report is open against him) → indistinguishable from "not found" (C22). **Blocked** → served normally: a Block reaches the send only, and the send is where he is refused (C3) | n/a                                                                                                                                                                                                                                                                                                                          |
 | **Sign in**          | `app/sign-in/page.tsx`             | n/a                                                                                                                                                                            | Per-door: the Google button and the email button busy independently; the form stays readable | n/a                                                                                                                                                                            | Send failed, retry available, address still in the field. **Google failed** → the email door is still offered, never a dead end                                                                                                                                       | **Already signed in** → redirected to its `returnPath` when safe, else `/`. No message: there is nothing to tell somebody about a problem they do not have                                                                                        | Email → "Check your email", said **whether or not the address exists**, because the honest reply and the enumeration-safe reply are the same one; a consumed link offers an immediate resend. **Google** → the surface names the account it is about to use, because on a borrowed Android it may be the phone owner's (DD5) |
 | **Publish**          | `app/publish/page.tsx`             | Skill picker before a query                                                                                                                                                    | Per-field, never a whole-form spinner                                                        | Fields accepted, photo still uploading — the profile is already live                                                                                                           | Per-field errors **and** a focused form-level summary; the contact-detail rejection names the fragment and keeps everything typed (NFR12); a photo rejected at the size ceiling says so in her terms rather than failing opaquely (DD6)                               | Already has a profile → route to `/my-profile`                                                                                                                                                                                                    | Published, with the live profile linked and the pending photo explained without a badge                                                                                                                                                                                                                                      |
-| **Own profile**      | `app/my-profile/page.tsx`          | n/a                                                                                                                                                                            | Skeleton                                                                                     | Photo pending → **her own photo shown**, dignified, described as under review, not flagged                                                                                     | Load failed                                                                                                                                                                                                                                                           | Not the owner → 404                                                                                                                                                                                                                               | Edit saved — story 24's `updateProfile`, added 2026-09-02 with #139; see below                                                                                                                                                                                                                                               |
+| **Own profile**      | `app/my-profile/page.tsx`          | n/a                                                                                                                                                                            | Skeleton                                                                                     | Photo pending → **her own photo shown**, dignified, described as under review, not flagged                                                                                     | Load failed                                                                                                                                                                                                                                                           | Not the owner → 404                                                                                                                                                                                                                               | Edit saved — story 24's `updateProfile`, added 2026-09-02 with #139; see below. **Paused** — story 25, added 2026-09-10 with #141: the page says _en pausa_ and since when, and the same switch ends it; see below                                                                                                           |
 | **Received Offers**  | `app/offers/page.tsx`              | No Offers yet: say what makes one arrive, and that a person reads each first                                                                                                   | Row skeletons                                                                                | Some rows, terms streaming                                                                                                                                                     | Load failed                                                                                                                                                                                                                                                           | Not the owner → 404                                                                                                                                                                                                                               | n/a                                                                                                                                                                                                                                                                                                                          |
 | **One Offer**        | `app/offers/[id]/page.tsx`         | n/a                                                                                                                                                                            | Skeleton at the terms' height                                                                | Terms rendered, Hirer identity streaming                                                                                                                                       | Load failed                                                                                                                                                                                                                                                           | Not the addressee → 404                                                                                                                                                                                                                           | Accepted → the Contact Exchange below. Declined → confirmed, and it stays confirmed rather than vanishing                                                                                                                                                                                                                    |
 | **Contact Exchange** | same route, post-accept            | n/a                                                                                                                                                                            | n/a                                                                                          | Details on screen, the email still sending — and the screen says the email is a copy, not the original                                                                         | Email failed to send: the details are **still on screen**, which is why they are on screen                                                                                                                                                                            | Not a party to it → 404                                                                                                                                                                                                                           | Both sides' details, once, plus the standing safety guidance and the no-money notice                                                                                                                                                                                                                                         |
 | **Sent Offers**      | `app/sent-offers/page.tsx`         | None sent: route into `/profiles`                                                                                                                                              | Row skeletons                                                                                | Rows, states streaming. `pending_review` states the normal window up front; past 24 h the derived `reviewDelayed` says plainly that this one is taking longer than usual (C41) | Load failed                                                                                                                                                                                                                                                           | Not the sender → 404                                                                                                                                                                                                                              | n/a                                                                                                                                                                                                                                                                                                                          |
-| **Account**          | `app/account/page.tsx`             | n/a                                                                                                                                                                            | Per-action                                                                                   | n/a                                                                                                                                                                            | Action failed                                                                                                                                                                                                                                                         | Signed out → `/sign-in`                                                                                                                                                                                                                           | Signed out everywhere / email change **pending verification** (DD5) / **deletion**, whose confirmation carries NFR11's second number: it reaches nothing a Hirer already read                                                                                                                                                |
+| **Account**          | `app/account/page.tsx`             | n/a                                                                                                                                                                            | Per-action                                                                                   | n/a                                                                                                                                                                            | Action failed                                                                                                                                                                                                                                                         | Signed out → `/sign-in`                                                                                                                                                                                                                           | Signed out everywhere / email change **pending verification** (DD5) / **deletion**, whose confirmation carries NFR11's second number: it reaches nothing a Hirer already read. Before the confirmation is taken, one sentence points to pausing as the way off the site that can be undone (added 2026-09-10 with #141)      |
 | **Admin queue**      | `app/admin/[section]/`             | Queue empty — a real and good state, and it says the oldest-item age is zero. Never an illustration and never "nothing here yet": zero unreviewed Offers is the system working | Skeleton rows per section, at the row's height                                               | Some rows rendered, others streaming; **the age of the oldest item renders first** (story 7), because it is the number that decides whether this person keeps working          | A source failed: say **which**, because a silently missing source is an unreviewed Offer. The other sections stay usable                                                                                                                                              | Not an Admin session → 403, not a redirect (NFR14), enforced once at the shell                                                                                                                                                                    | Per-action: the item leaves its section, the sidebar count decrements, and focus returns to the **next** row rather than to the top of the page                                                                                                                                                                              |
 | **Admin door**       | `app/admin/continue/page.tsx`      | n/a                                                                                                                                                                            | The code field is busy; nothing else on the screen moves                                     | n/a                                                                                                                                                                            | A wrong code says only that it was wrong — never whether the challenge, the Account or the code was the part that failed. At the attempt ceiling it says when the Account may try again, which is the honest reply and tells an attacker nothing he could not measure | No token, or a spent, expired or unknown one → **404**. Already an Admin session → `/admin`                                                                                                                                                       | Session created, `/admin`                                                                                                                                                                                                                                                                                                    |
 | **Admin enrolment**  | `app/admin/enrol/[token]/page.tsx` | n/a                                                                                                                                                                            | n/a — the QR and the codes are rendered in one pass or not at all                            | n/a                                                                                                                                                                            | Enrolment failed: say so plainly and say the command may be run again, because nothing has been granted yet                                                                                                                                                           | Same 404 rule as the door                                                                                                                                                                                                                         | **Shown once**, and the screen says so before the codes rather than after them. It carries runbook §6's condition where it applies — keep them out of reach of the same unlock as the mailbox, which is the other factor — because a person who closes this screen has lost them                                             |
@@ -2043,21 +2130,31 @@ on several is the ticket's `shape` question**, deliberately not one this table a
 cell is the Publish row's: per-field errors, a focused form-level summary, and a contact-detail
 rejection that names the fragment and keeps everything she typed.
 
+_Amended 2026-09-10 with #141, on the **Own profile** row._ Story 25's switch lives on `/my-profile`:
+**one tap, no confirmation step**, because it is reversible and a confirmation in front of a
+reversible act charges the person it protects for nothing. One sentence beside it names the two
+limits she needs before she relies on it — **Offers already sent still reach her**, and **a pause
+cannot take back what someone has already read**. While paused, the page says _en pausa_ and since
+when, and the same switch ends it. It is a form in this repository's server-first idiom, so it works
+without JavaScript (NFR4). **The switch is not shown while the profile is taken down**; what
+`/my-profile` says in that state is story 20's copy, not this row's.
+
 **A seventh state, on every surface that has a ceiling: `rate limited`** (C39). NFR26's refusal returns
 rather than throws, which protects the Sentry quota and says nothing to the person who hit it. Each
 one renders the `userMessage` and the `retryAfter` in her terms:
 
-| Surface          | Ceiling                                      | What she is told                                                                                                                                                                                                                                        |
-| ---------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sign in**      | `requestMagicLink` ≤ 5/hour per address      | Too many links requested; when she may ask again; the Google door is still there                                                                                                                                                                        |
-| **Admin door**   | `verifyAdminCode`, per **Account** (DD5)     | That the Account is locked for now and when it reopens. Per-Account rather than per-IP is the whole point — a per-IP bound on six digits is no bound at all — so the copy names a wait rather than pretending the attempt was malformed                 |
-| **Publish**      | `publishProfile` ≤ 3/day                     | How many attempts today, when the window resets, and that nothing she typed was lost                                                                                                                                                                    |
-| **Publish**      | `createPhotoUpload` ≤ 10/day                 | Same, and that the profile is already live without the photo                                                                                                                                                                                            |
-| **Publish**      | `requestSkill` ≤ 5/day (C57)                 | That the requests already sent are queued and not lost, when she may ask again, and that she can publish now with the closest Skill on the list and edit later — she is **mid-publish** when she meets this, which is the moment silence costs the most |
-| **Full profile** | reads ≤ 60/hour, ≤ 300/day                   | Reading paused, when it resumes — the honest reply, since a harvester learns nothing he did not already know from being stopped                                                                                                                         |
-| **One Offer**    | `sendOffer` ≤ 10/day, `reportOffer` ≤ 10/day | When he may send again; a Report is never silently dropped                                                                                                                                                                                              |
-| **Account**      | `changeEmail` ≤ 3/day                        | When she may try again, and that the address on file is unchanged                                                                                                                                                                                       |
-| **Own profile**  | `updateProfile` ≤ 10/day (#139)              | When she may save again, that nothing she typed was lost, and that the profile people can already see is the last version she saved — not a half-applied one                                                                                            |
+| Surface          | Ceiling                                                   | What she is told                                                                                                                                                                                                                                        |
+| ---------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sign in**      | `requestMagicLink` ≤ 5/hour per address                   | Too many links requested; when she may ask again; the Google door is still there                                                                                                                                                                        |
+| **Admin door**   | `verifyAdminCode`, per **Account** (DD5)                  | That the Account is locked for now and when it reopens. Per-Account rather than per-IP is the whole point — a per-IP bound on six digits is no bound at all — so the copy names a wait rather than pretending the attempt was malformed                 |
+| **Publish**      | `publishProfile` ≤ 3/day                                  | How many attempts today, when the window resets, and that nothing she typed was lost                                                                                                                                                                    |
+| **Publish**      | `createPhotoUpload` ≤ 10/day                              | Same, and that the profile is already live without the photo                                                                                                                                                                                            |
+| **Publish**      | `requestSkill` ≤ 5/day (C57)                              | That the requests already sent are queued and not lost, when she may ask again, and that she can publish now with the closest Skill on the list and edit later — she is **mid-publish** when she meets this, which is the moment silence costs the most |
+| **Full profile** | reads ≤ 60/hour, ≤ 300/day                                | Reading paused, when it resumes — the honest reply, since a harvester learns nothing he did not already know from being stopped                                                                                                                         |
+| **One Offer**    | `sendOffer` ≤ 10/day, `reportOffer` ≤ 10/day              | When he may send again; a Report is never silently dropped                                                                                                                                                                                              |
+| **Account**      | `changeEmail` ≤ 3/day                                     | When she may try again, and that the address on file is unchanged                                                                                                                                                                                       |
+| **Own profile**  | `updateProfile` ≤ 10/day (#139)                           | When she may save again, that nothing she typed was lost, and that the profile people can already see is the last version she saved — not a half-applied one                                                                                            |
+| **Own profile**  | `pauseProfile` + `resumeProfile` ≤ 10/day together (#141) | When she may use the switch again, and which state the profile is in now — paused or visible — so she is never left guessing whether the last tap took                                                                                                  |
 
 The case that motivated this is concrete: a Worker who trips `publishProfile` after two failed
 attempts currently meets silence, from a requirement that passes green.
@@ -3656,3 +3753,76 @@ with the photo ticket (#18) — the two are independent and carry no blocking ed
 Worker taking her own profile down**, because `taken_down` is Admin-only moderation and the subject's
 own deletion is story 13's Account-level hard delete. DD8's "two deletions, never one mechanism" is
 what keeps a third from being invented here.
+
+### Appended with pausing a CapabilityProfile (2026-09-10, #141)
+
+A Worker had two ways off the site and controlled one of them. `taken_down` is an Admin's moderation
+state, and her own deletion is story 13's Account-level hard delete, which cannot be undone. The
+section above named the gap between them and deliberately left it out of #139's change; this
+amendment fills it. Story 25, the `pausedAt` column, the `pauseProfile` and `resumeProfile` rows and
+their shared ceiling are the amendment, `CONTEXT.md` gains **Pause** in the same change, and the build
+ticket is #265.
+
+**The decisions, each settled with the maintainer during triage and written down here rather than
+reopened.**
+
+- **The term.** Pause, _Pausar mi perfil_, and the state reads _en pausa_. _Ocultar_ is on the voice
+  policy's never-say list and _retirar_ reads as a takedown, so neither is used.
+- **Storage.** A nullable `paused_at` on `capability_profile`, written by the owner only. `state` keeps
+  its two values; a profile is visible exactly when `state = 'published'` and `paused_at IS NULL`. DD8
+  carries the argument for a second column.
+- **What it reaches.** For everyone but her, a paused profile answers as one that does not exist — off
+  the Wall and `/profiles`, not-found at the gated read, `profile_not_found` from `sendOffer`. That is
+  the answer C22 already gives, so no new oracle.
+- **What it does not reach.** Offers `pending_review` or `on_hold` are reviewed and delivered as
+  normal; `delivered` ones stay in her inbox, acceptable and declinable, on the same expiry clock. No
+  new Offer state.
+- **Duration.** Until she ends it.
+- **`publishedAt`.** Untouched on resume, for #139's reason, and stated beside #139's rule under the
+  Worker table.
+- **The switch.** On `/my-profile`, one tap, no confirmation, one sentence naming its two limits, no
+  JavaScript required, hidden while the profile is taken down.
+- **The ceiling.** Pause and resume together **≤ 10/day per Account**, in `RateCounter`, with the
+  count-and-wait refusal every other ceiling uses.
+- **The Admin.** Wherever an Admin sees a profile it reads _en pausa desde <fecha>_. The queue is
+  unchanged: a paused profile's pending photo and pending Offers are still reviewed, because both
+  were submitted before the pause and a pause is not a reason to leave work unread.
+- **The two stories it touches.** Story 20's attention spread excludes profiles paused at the moment
+  of measurement, and the Admin's screen says so (NFR22, #28). Story 13's deletion surface points to
+  pausing, in one sentence, before the confirmation is taken (#29) — the reversible exit is named at
+  the moment someone reaches for the irreversible one.
+
+**The measurement is a snapshot, and the imprecision is the price of refusing a history.** A profile
+paused and resumed inside the seven-day window counts as present for all of it; one paused an hour
+before the reading is absent though it was listed for six days. Closing that needs a record of every
+pause, which is the fourth alternative below. The Admin reads a signal, not a verdict, and the screen
+saying what it excludes is what keeps the signal honest.
+
+**NFR33 does not bind story 25, and the absence is deliberate.** NFR33 counts Admin actions, and a
+pause is the subject's own act on her own row. Writing an `AdminAction` for it would put a record of
+each time she stepped away in a table kept for 24 months, for a reconstruction nobody needs.
+
+**Alternatives refused.**
+
+1. **A third `state` value.** One column holding her decision and an Admin's lets her resume herself
+   out of a takedown, and hides from an Admin which of the two a row is in. DD8.
+2. **Holding in-flight Offers.** Freezing Offers a Hirer had already committed to and a reviewer had
+   already read would decide for her something she can decide herself, one Offer at a time. And the
+   state to hold them in would have been `on_hold`, which means the _sender_ is frozen — clearing an
+   unrelated Report would then release Offers she had paused against.
+3. **Auto-expiry.** A pause that ends on its own republishes her while she is not looking, which is
+   the platform choosing when she is back. It also costs a scheduled job and a reminder email she did
+   not ask for.
+4. **A pause-history table.** Its one reader would be story 20's measurement, for precision that
+   measurement does not need, and it would keep a log of each time a displaced person stepped away.
+   One nullable timestamp holds everything the product reads.
+5. **Moving the photo object on pause.** It closes the stable-URL limit for the pause alone and
+   leaves it open for the takedown, which is the more serious case. A moved object is also a new URL,
+   and every new URL is a fresh unique transformation against DD6's 5,000-a-month allowance, spent
+   every time she flips the switch. DD8 names the limit for both, and closing it is a separate
+   finding.
+
+**What stays out.** Building it is the build ticket's. What `/my-profile` says while the profile is
+taken down is story 20's copy (#28). A Hirer has no public card, so nothing here has a Hirer-side
+equivalent. And there is no new ADR: DD8 already carries the principle, and a second statement of the
+same rule would be a second place for it to drift.
