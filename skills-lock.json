@@ -5,7 +5,7 @@
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/best-practices/SKILL.md",
-      "computedHash": "61ba0ef64ed2e7c424401cc848ca33dd6d790a720c44727717dc0c5cba5fc122"
+      "computedHash": "0c30be0e118c2b7a0c4c57bd9e63bf110c7e420a79ec6ce7997153f3b1e066ee"
     },
     "better-auth-security-best-practices": {
       "source": "better-auth/skills",
@@ -47,7 +47,7 @@
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/emailAndPassword/SKILL.md",
-      "computedHash": "747d7f73bd9e2ec5317b8ef88dc70f97df716d00e3d02de4051feebaa48b062d"
+      "computedHash": "863886759f729081e265941f4f72c503835d55a1f34f6d63cebe6571159fff4a"
     },
     "email-best-practices": {
       "source": "resend/resend-skills",
@@ -89,19 +89,19 @@
       "source": "vercel/next.js",
       "sourceType": "github",
       "skillPath": "skills/next-dev-loop/SKILL.md",
-      "computedHash": "d2a697a0a0429cad0bb7264644115457f588d4ed1007eeb0bb7f965b1185fa6e"
+      "computedHash": "d604c9440a736b08836fe782e8c0bf6a596d00c4e20e3e245e4a4394efbf74f4"
     },
     "next-partial-prefetching-adoption": {
       "source": "vercel/next.js",
       "sourceType": "github",
       "skillPath": "skills/next-partial-prefetching-adoption/SKILL.md",
-      "computedHash": "65793d7a4cf56b8599dc3735dba2ef334ac54b7c29e831d0c9f4d9d25c71f206"
+      "computedHash": "b6373f5d9e18c4fcb9e1ce8b63dd76de62e7e3b6bad53961e5d6de4753a08c0c"
     },
     "postgres": {
       "source": "planetscale/database-skills",
       "sourceType": "github",
       "skillPath": "skills/postgres/SKILL.md",
-      "computedHash": "2acf9fae4fcdb6c392923708b67234828f8a9f10b10dfa5d228eaab6e9108245"
+      "computedHash": "3d4b3c578b7fcbc61e89b2731a248175e2aa740dc228a106b1a8b29b05ab000f"
     },
     "prototype": {
       "source": "mattpocock/skills",
@@ -125,7 +125,7 @@
       "source": "resend/resend-skills",
       "sourceType": "github",
       "skillPath": "skills/resend/SKILL.md",
-      "computedHash": "f2d1ba5acbed56bae7975a864fee59db951f7ef7c0e705b9222e872f96ecebd6"
+      "computedHash": "72cf7baf929ec7bf167f9b1c86b0d02588449ba1d766a9680d8793df5cfc81be"
     },
     "resolving-merge-conflicts": {
       "source": "mattpocock/skills",
@@ -137,7 +137,7 @@
       "source": "next-safe-action/skills",
       "sourceType": "github",
       "skillPath": "skills/safe-action-advanced/SKILL.md",
-      "computedHash": "1f06e451524dcb8f3e239ba6921ce57fcee03949620a07d28d74751ddaabfa88"
+      "computedHash": "88c58ff2f817ec02d717f621bfbcac7ff3d637da993eb8db496d3d87f308377e"
     },
     "safe-action-better-auth": {
       "source": "next-safe-action/skills",
@@ -149,19 +149,19 @@
       "source": "next-safe-action/skills",
       "sourceType": "github",
       "skillPath": "skills/safe-action-client/SKILL.md",
-      "computedHash": "261de908cb23dfd8c81bee7d5e1fcbf3acbc1cf47ddec7b63f0c352051abd510"
+      "computedHash": "ab738268f853a8e050d8fd995ad86c4fb6c4e7efd5308a6bcfebbf47d91aeeb6"
     },
     "safe-action-forms": {
       "source": "next-safe-action/skills",
       "sourceType": "github",
       "skillPath": "skills/safe-action-forms/SKILL.md",
-      "computedHash": "5fc284fff83c74ecef99dd33c7cb5e8c242e093205f95f27c734e2555654f97d"
+      "computedHash": "8d4436e7b02954fa7d407f9032c1d08232f909abbf81316c9b2ba79771fde194"
     },
     "safe-action-hooks": {
       "source": "next-safe-action/skills",
       "sourceType": "github",
       "skillPath": "skills/safe-action-hooks/SKILL.md",
-      "computedHash": "eeb4f746b4ba32429e90639d57717f6b8f483a9bbcfcecf78533ef6fd0a2ee9a"
+      "computedHash": "1875ac6f612307c716ba3f55ef71932288c06aa8566f14f35ebad1d19ee9f124"
     },
     "safe-action-middleware": {
       "source": "next-safe-action/skills",
@@ -185,7 +185,7 @@
       "source": "cloudflare/security-audit-skill",
       "sourceType": "github",
       "skillPath": "skills/security-audit/SKILL.md",
-      "computedHash": "02a15f2226610f8c9d23732b9f11fe64865f35b1c26cd0560db370f441e9a199"
+      "computedHash": "a9e78b86beae8fcb24212824239a4f8a84f5f29748fea90119cb7b52a9244586"
     },
     "setup-matt-pocock-skills": {
       "source": "mattpocock/skills",
@@ -197,7 +197,7 @@
       "source": "shadcn/ui",
       "sourceType": "github",
       "skillPath": "skills/shadcn/SKILL.md",
-      "computedHash": "c1a68ee06a668aced9ab2b5fbdea5f989864123794eb2e056b339a072dbb7f10"
+      "computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
     },
     "show-me": {
       "source": "humanlayer/skills",
@@ -227,13 +227,13 @@
       "source": "vercel/turborepo",
       "sourceType": "github",
       "skillPath": "skills/turborepo/SKILL.md",
-      "computedHash": "9609c0ff3797454e2304f45ce9901f26b680f4e8eca891fe10c59aab48b2b158"
+      "computedHash": "3242b13be3801d1149d9de32cf99852d9673de5678a23acc89a3b6a6e444dda8"
     },
     "two-factor-authentication-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/twoFactor/SKILL.md",
-      "computedHash": "a6f720042e5a090909e0d519a6a50a7eb8179553cd5315f0bbad852a6d20dac8"
+      "computedHash": "5bc3051aef5060db013f0b3cbe812c40dbae5c22d6ba3ddde4b941158362a197"
     },
     "wayfinder": {
       "source": "mattpocock/skills",
