@@ -27,10 +27,9 @@ import { OfferForm } from "./offer-form";
 
 /**
  * **The bound action is the one the form dispatches**, so it is the one a
- * "not dispatched" assertion has to watch. `bind` used to return a fresh
- * `vi.fn()` on every call, which left `sendOffer` itself uncalled whatever the
- * form did — an assertion on it passed with the action dispatched, and could not
- * have gone red for the bug it exists to catch (#250).
+ * "not dispatched" assertion has to watch — and `bind` returns one shared mock
+ * so that it can. A fresh `vi.fn()` per call leaves `sendOffer` itself uncalled
+ * whatever the form does, and an assertion on it cannot fail.
  *
  * It answers with an empty result, which is what a completed action hands
  * `useActionState` — the form reads its verdict off whatever comes back.
@@ -262,10 +261,10 @@ describe("a submit the browser refuses", () => {
 
 describe("the autorización on a first Offer", () => {
   /**
-   * **Every other field filled, and the box left unticked** — the ordinary path
-   * #250 found open. Once hydrated the form sets `noValidate`, so the browser's
-   * own `required` check is gone and this parse is the only guard before the
-   * request is made. It had no consent member, so the Offer went out.
+   * **Every other field filled, and the box left unticked** — the ordinary path,
+   * no attacker required (#250). Once hydrated the form sets `noValidate`, so
+   * the browser's own `required` check is gone and this parse is the only guard
+   * before the request is made.
    */
   it("refuses an unticked box before the Offer leaves the browser", async () => {
     const user = userEvent.setup();
@@ -296,15 +295,18 @@ describe("the autorización on a first Offer", () => {
   });
 
   /** A summary item pointing at nothing is worse than no summary. */
-  it("links the summary's consent item to something on the page", async () => {
+  it("links the summary's consent item to the checkbox", async () => {
     const user = userEvent.setup();
-    const { container } = renderForm(false);
+    renderForm(false);
 
     await fillFirstOffer(user);
     await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
 
     const link = await screen.findByRole("link", { name: OFFER_FIELD_LABELS.consent });
-    expect(container.querySelector(link.getAttribute("href") ?? "")).not.toBeNull();
+    // The anchor lands on what the checkbox's label labels — found through that
+    // association, the way assistive technology finds it.
+    const labelled = screen.getAllByLabelText(CONSENT_LABELS.AUTHORIZATION_CHECKBOX);
+    expect(labelled.map((element) => `#${element.id}`)).toContain(link.getAttribute("href"));
   });
 
   it("sends once the box is ticked", async () => {
