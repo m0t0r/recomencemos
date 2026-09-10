@@ -105,6 +105,18 @@ describe("what an Offer carries to the person it is for", () => {
     expect(count(received, SENTINELS.workerSlug)).toBe(0);
   });
 
+  /**
+   * **Membership, which is the contract's own definition of a projection:**
+   * exactly these keys on the wire, so a field added to the record reaches her
+   * only once somebody writes it in here. The sentinel counts above catch the
+   * fields that exist today; this catches the one somebody adds tomorrow.
+   */
+  it("carries exactly the contract's keys and nothing that crosses only at exchange", () => {
+    expect(Object.keys(received).toSorted()).toEqual(
+      ["hirerName", "id", "payTerms", "sentAt", "state", "whenText", "workDescription"].toSorted(),
+    );
+  });
+
   it("passes an absent name through as absent rather than as an empty string", () => {
     expect(toReceivedOffer({ ...record, hirerName: null }).hirerName).toBeNull();
   });

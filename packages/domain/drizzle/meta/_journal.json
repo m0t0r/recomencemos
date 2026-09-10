@@ -127,6 +127,13 @@
       "when": 1788999525620,
       "tag": "0017_illegal_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789046932360,
+      "tag": "0018_bumpy_wild_child",
+      "breakpoints": true
     }
   ]
 }

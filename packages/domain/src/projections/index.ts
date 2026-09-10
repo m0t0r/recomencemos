@@ -274,11 +274,27 @@ export function toSentOffer(record: OfferRecord, now: Date): SentOffer {
 }
 
 /**
- * The addressee's view. Note what is absent: `hirerPhone`, and her own
- * `PublicProfile` — she knows who she is, and an Offer she received says nothing
- * about her that she did not already write.
+ * What the addressee's read hands over. **Neither her own `PublicProfile` nor
+ * his phone is on it**, so the projection below cannot reach either — the
+ * sender's record carries his number because the sender's view is built from the
+ * same row, and this one has no reason to select it.
  */
-export function toReceivedOffer(record: OfferRecord): ReceivedOffer {
+export type ReceivedOfferRecord = Omit<OfferRecord, "worker" | "hirerPhone">;
+
+/**
+ * The terms half of {@link ReceivedOffer}: everything but who claims to be
+ * asking.
+ *
+ * **It exists because `/offers/[id]` paints the terms first and streams his
+ * identity in a boundary of its own** — the spec's `partial` cell for that
+ * surface. Two reads need two shapes, and building the full projection from this
+ * one keeps a single whitelist rather than two that have to agree.
+ */
+export type ReceivedOfferTerms = Omit<ReceivedOffer, "hirerName">;
+
+export function toReceivedOfferTerms(
+  record: Omit<ReceivedOfferRecord, "hirerName">,
+): ReceivedOfferTerms {
   return {
     id: record.id,
     state: offerStateOf(record),
@@ -286,6 +302,17 @@ export function toReceivedOffer(record: OfferRecord): ReceivedOffer {
     payTerms: record.payTerms,
     whenText: record.whenText,
     sentAt: record.sentAt,
+  };
+}
+
+/**
+ * The addressee's view. Note what is absent: `hirerPhone`, and her own
+ * `PublicProfile` — she knows who she is, and an Offer she received says nothing
+ * about her that she did not already write.
+ */
+export function toReceivedOffer(record: ReceivedOfferRecord): ReceivedOffer {
+  return {
+    ...toReceivedOfferTerms(record),
     hirerName: record.hirerName,
   };
 }
@@ -299,7 +326,7 @@ export function toReceivedOffer(record: OfferRecord): ReceivedOffer {
  * `pending_review` because its real state was unreadable would tell a person
  * something false about a decision that is hers.
  */
-function offerStateOf(record: OfferRecord): OfferState {
+function offerStateOf(record: Pick<OfferRecord, "state">): OfferState {
   const state = asOfferState(record.state);
 
   if (!state) {
