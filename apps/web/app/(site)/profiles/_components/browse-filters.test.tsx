@@ -17,7 +17,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing";
+import { formOf, submittedFrom } from "@/testing/form-data";
 import { BrowseFiltersForm } from "./browse-filters";
+
+const searchButton = () => screen.getByRole<HTMLButtonElement>("button", { name: "Buscar" });
 
 const SKILLS = (
   <>
@@ -142,10 +145,7 @@ describe("the form the browser submits on its own", () => {
     mount(searchParams);
     // A `<form>` with no accessible name has no role, so it is reached from its
     // submit button: `button.form` is the form a native submit posts.
-    const form = screen.getByRole<HTMLButtonElement>("button", { name: "Buscar" }).form;
-    if (form === null) throw new Error("The search button sits inside a form.");
-
-    return Object.fromEntries(new FormData(form));
+    return Object.fromEntries(submittedFrom(searchButton()));
   }
 
   it("sends every term the URL is carrying", () => {
@@ -169,7 +169,7 @@ describe("the form the browser submits on its own", () => {
 
   it("is a GET form pointed at the route that reads it", () => {
     mount("");
-    const form = screen.getByRole<HTMLButtonElement>("button", { name: "Buscar" }).form;
+    const form = formOf(searchButton());
 
     expect(form).toHaveAttribute("method", "get");
     expect(form).toHaveAttribute("action", "/profiles");

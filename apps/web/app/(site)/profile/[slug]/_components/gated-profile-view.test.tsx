@@ -17,6 +17,7 @@ import type { GatedIdentity } from "@repo/domain/profiles";
 import { act, render, screen, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { prerender } from "react-dom/static";
+import { urlAttributesIn } from "@/testing/markup";
 import { ABOUT_HEADING, NOTHING_MORE, TO_BROWSE, WORK_HISTORY_HEADING } from "../_lib/messages";
 import { GatedProfileView } from "./gated-profile-view";
 
@@ -94,7 +95,7 @@ describe("what crosses to the browser", () => {
 
     // …and never inside a URL-valued attribute, wherever it renders. Counted, so
     // the loop cannot pass by finding no attribute at all.
-    const urls = [...html.matchAll(/\b(?:href|src|action)="([^"]*)"/g)].map(([, url]) => url);
+    const urls = urlAttributesIn(html);
     expect(urls.length).toBeGreaterThan(0);
     for (const url of urls) expect(url).not.toContain(PAYLOAD);
   });

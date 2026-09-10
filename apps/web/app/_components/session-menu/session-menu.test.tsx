@@ -22,6 +22,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
+import { fieldNamesFrom, formOf } from "@/testing/form-data";
 
 /**
  * `vi.hoisted` so the imports below stay static: `vi.mock` is lifted above every
@@ -81,8 +83,8 @@ describe("the signed-in trigger", () => {
     await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
 
     // The address block is `aria-hidden` — the trigger already announced it — so
-    // this is one of the two documented cases for reaching past the
-    // accessibility tree: the question is whether the *pixels* carry it.
+    // no accessible name carries it here. The menu is found by role, and the
+    // question is whether its rendered text, the *pixels*, carries the address.
     expect(screen.getByRole("menu").textContent).toContain(EMAIL);
     expect(screen.getByRole("menu").textContent).toContain(SIGNED_IN_AS);
 
@@ -165,8 +167,12 @@ describe("one form, two triggers", () => {
     // is the form each trigger would post — and "the same form" is one object,
     // which a second `<form>` or a trigger naming another id would both break.
     const fallback = screen.getByRole<HTMLButtonElement>("button", { name: SIGN_OUT });
-    expect(fallback.form).toHaveAttribute("id", SIGN_OUT_FORM_ID);
+    expect(formOf(fallback)).toHaveAttribute("id", SIGN_OUT_FORM_ID);
     expect(fallback).toHaveAttribute("type", "submit");
+
+    // And the component renders exactly one: a count over the markup, which no
+    // role query answers, so it is read off the HTML React sends.
+    expect(renderToStaticMarkup(<SessionMenu {...SITE_PROPS} />).match(/<form\b/g)).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
     const item = screen.getByRole<HTMLButtonElement>("menuitem", { name: SIGN_OUT });
@@ -184,9 +190,9 @@ describe("one form, two triggers", () => {
   it("carries no hidden input of its own", () => {
     render(<SessionMenu {...SITE_PROPS} />);
 
-    const form = screen.getByRole<HTMLButtonElement>("button", { name: SIGN_OUT }).form;
-
-    expect(form === null ? null : [...new FormData(form).keys()]).toEqual([]);
+    expect(
+      fieldNamesFrom(screen.getByRole<HTMLButtonElement>("button", { name: SIGN_OUT })),
+    ).toEqual([]);
   });
 });
 

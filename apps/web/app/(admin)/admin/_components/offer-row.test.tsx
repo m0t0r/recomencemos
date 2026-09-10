@@ -12,6 +12,7 @@
 
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fieldNamesFrom } from "@/testing/form-data";
 import { OfferRow } from "./offer-row";
 import { SourceBranch } from "./queue";
 import {
@@ -176,9 +177,7 @@ it("binds the Offer to each decision instead of mirroring it into a form", () =>
     screen.getAllByRole<HTMLButtonElement>("button", { name }),
   );
   expect(decisions).toHaveLength(4);
-  for (const { form } of decisions) {
-    expect(form === null ? null : [...new FormData(form).keys()]).toEqual([]);
-  }
+  for (const decision of decisions) expect(fieldNamesFrom(decision)).toEqual([]);
 });
 
 /**

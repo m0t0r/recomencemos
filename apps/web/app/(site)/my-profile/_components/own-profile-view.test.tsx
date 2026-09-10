@@ -7,6 +7,7 @@
 import { render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { OwnProfile } from "@repo/domain/profiles";
+import { urlAttributesIn } from "@/testing/markup";
 import { OwnProfileView } from "./own-profile-view";
 import {
   EDIT_LINK,
@@ -47,7 +48,7 @@ describe("the view", () => {
     );
     expect(html).toContain(PAYLOAD);
 
-    const urls = [...html.matchAll(/\b(?:href|src|action)="([^"]*)"/g)].map(([, url]) => url);
+    const urls = urlAttributesIn(html);
     // Counted, so the loop cannot pass by finding no attribute at all.
     expect(urls.length).toBeGreaterThan(0);
     for (const url of urls) expect(url).not.toContain(PAYLOAD);

@@ -1,4 +1,4 @@
-# The one lint rule here that is a gate in its own right: a component test finds
+# The one piece of lint configuration here that is a gate in its own right: a component test finds
 # what it asserts on through the accessibility tree, and raw DOM access is
 # refused (#261). It is oxlint configuration rather than a script, so there is no
 # branching of ours to test -- what these cases pin is that the configuration

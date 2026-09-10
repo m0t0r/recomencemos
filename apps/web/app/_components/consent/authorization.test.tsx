@@ -15,7 +15,7 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import { renderInForm } from "@/testing/form-data";
 import { AuthorizationConsent } from "./authorization";
 import { AUTHORIZATION_ANCHOR, AuthorizationText, PRIVACY_NOTICE_PATH } from "./authorization-text";
 import {
@@ -26,14 +26,6 @@ import {
 
 /** The copy carries a full stop, which is a regex metacharacter. */
 const escapeForRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/** The form the control is posted from; named, so the tree hands it back by role. */
-const TEST_FORM = "formulario de prueba";
-
-function renderInForm(ui: ReactNode) {
-  render(<form aria-label={TEST_FORM}>{ui}</form>);
-  return screen.getByRole<HTMLFormElement>("form", { name: TEST_FORM });
-}
 
 describe("AuthorizationText", () => {
   // One paragraph per thing being authorized, so a screen reader's paragraph
