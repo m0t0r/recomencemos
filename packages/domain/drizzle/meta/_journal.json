@@ -120,6 +120,13 @@
       "when": 1788975806086,
       "tag": "0016_reject_an_offer",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788999525620,
+      "tag": "0017_illegal_genesis",
+      "breakpoints": true
     }
   ]
 }

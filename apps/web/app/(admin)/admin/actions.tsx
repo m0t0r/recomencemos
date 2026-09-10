@@ -41,6 +41,7 @@ import { returnActionError } from "@/lib/safe-action";
 import {
   noPayloadSchema,
   offerIdArg,
+  photoKeyArg,
   photoProfileArg,
   promoteSkillRequestArg,
   promoteSkillSchema,
@@ -301,21 +302,29 @@ export interface PhotoDecided {
  * boundary parse on every submission and said nothing.
  */
 export const approvePhoto = adminActionClient
-  .bindArgsSchemas([photoProfileArg])
+  /**
+   * **Two bound arguments, and the second is the photo.** The profile id names
+   * the row; the quarantine key names the object the card was rendered with, so
+   * the decision applies to what the Admin actually looked at rather than to
+   * whatever the row points at when it commits.
+   */
+  .bindArgsSchemas([photoProfileArg, photoKeyArg])
   .inputSchema(noPayloadSchema)
-  .stateAction<PhotoDecided>(async ({ bindArgsParsedInputs: [profileId], ctx: { actor } }) => {
-    const outcome = await photos.approve(actor, profileId);
+  .stateAction<PhotoDecided>(
+    async ({ bindArgsParsedInputs: [profileId, reviewedKey], ctx: { actor } }) => {
+      const outcome = await photos.approve(actor, profileId, reviewedKey);
 
-    if (!outcome.ok) {
-      // Returned, not thrown. A photo somebody else already decided is an
-      // ordinary answer on a shared queue, and a caller that could raise an
-      // event from it would spend the month's allowance in a day.
-      logRequestError(outcome.error, { level: "warn" });
-      return returnActionError(projectClientError(outcome.error));
-    }
+      if (!outcome.ok) {
+        // Returned, not thrown. A photo somebody else already decided is an
+        // ordinary answer on a shared queue, and a caller that could raise an
+        // event from it would spend the month's allowance in a day.
+        logRequestError(outcome.error, { level: "warn" });
+        return returnActionError(projectClientError(outcome.error));
+      }
 
-    return { photoState: "approved" };
-  });
+      return { photoState: "approved" };
+    },
+  );
 
 /**
  * Refuse one photo, **and delete it**.
@@ -329,15 +338,20 @@ export const approvePhoto = adminActionClient
  * It is irreversible, and the row says so before it is pressed.
  */
 export const rejectPhoto = adminActionClient
-  .bindArgsSchemas([photoProfileArg])
+  // The key is bound here for a sharper reason than above: this act deletes the
+  // object, so a decision that named only the row would delete a photo nobody
+  // had looked at.
+  .bindArgsSchemas([photoProfileArg, photoKeyArg])
   .inputSchema(noPayloadSchema)
-  .stateAction<PhotoDecided>(async ({ bindArgsParsedInputs: [profileId], ctx: { actor } }) => {
-    const outcome = await photos.reject(actor, profileId);
+  .stateAction<PhotoDecided>(
+    async ({ bindArgsParsedInputs: [profileId, reviewedKey], ctx: { actor } }) => {
+      const outcome = await photos.reject(actor, profileId, reviewedKey);
 
-    if (!outcome.ok) {
-      logRequestError(outcome.error, { level: "warn" });
-      return returnActionError(projectClientError(outcome.error));
-    }
+      if (!outcome.ok) {
+        logRequestError(outcome.error, { level: "warn" });
+        return returnActionError(projectClientError(outcome.error));
+      }
 
-    return { photoState: "rejected" };
-  });
+      return { photoState: "rejected" };
+    },
+  );

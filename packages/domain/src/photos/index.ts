@@ -38,6 +38,7 @@ import {
   presignReview,
   presignUpload,
   promoteToPublic,
+  quarantinedEtag,
 } from "@repo/storage/photos";
 import type { AdminActor } from "#admin/actor";
 import { type AdminActionOutcome, runAdminAction } from "#admin/index";
@@ -45,7 +46,12 @@ import { and, asc, count, eq, isNotNull, lt, min } from "drizzle-orm";
 import { db as pooledDatabase } from "#connection";
 import type { DomainDatabase } from "#database";
 import * as schema from "#schema";
-import { ADMIN_PHOTO_ALREADY_REVIEWED, PHOTO_NOT_PENDING, PHOTO_NO_PROFILE } from "#user-messages";
+import {
+  ADMIN_PHOTO_ALREADY_REVIEWED,
+  ADMIN_PHOTO_CHANGED,
+  PHOTO_NOT_PENDING,
+  PHOTO_NO_PROFILE,
+} from "#user-messages";
 
 /** What `createUpload` hands the browser: where to PUT, and what to call it afterwards. */
 export interface PhotoUploadTicket {
@@ -226,15 +232,25 @@ async function sweepStalePhotoUploads(db: DomainDatabase): Promise<void> {
  * authorization, but the value still becomes part of an object-store request,
  * and a traversal must be refused before a lookup rather than after one.
  *
- * **It does not check that the object exists**, and that is deliberate rather
- * than an omission: a HEAD against the store on the publish path costs a round
- * trip to save an Admin from one empty review card, and the review card is where
- * a missing object is cheapest to notice.
+ * **`objectEtag` is the store's name for the bytes that are under the key now**,
+ * and recording it is what makes the Admin's later decision a decision about an
+ * object rather than about a key. It arrives as a value rather than being read
+ * here, so this function stays a function about rows and seam 2 keeps running
+ * against PGlite with no object store at all; {@link photos.attach} is where the
+ * two stores meet and is what performs the `HeadObject`.
+ *
+ * **The round trip is bought by the binding and by nothing else.** Checking that
+ * the object *exists* would not be worth it — an empty review card is the
+ * cheapest place to notice a missing one, and that is where it was left. What
+ * cannot be bought any other way is a server-observed identity to hold the
+ * approval to, and the existence check comes along with it rather than being the
+ * reason for it.
  */
 export async function attachPhoto(
   db: DomainDatabase,
   accountId: string,
   photoKey: string,
+  objectEtag: string,
 ): Promise<
   | { readonly ok: true; readonly photoState: "pending" }
   | { readonly ok: false; readonly error: AppError }
@@ -299,6 +315,7 @@ export async function attachPhoto(
     .set({
       photoState: "pending",
       photoKey,
+      photoEtag: objectEtag,
       photoAttachedAt: new Date(),
       updatedAt: new Date(),
     })
@@ -327,22 +344,130 @@ export async function attachPhoto(
 /**
  * DD6 step 4, both halves, in the order the table at the head of this file
  * fixes: **the object first, then the row and its audit together.**
+ *
+ * **`reviewedKey` is the key that was on the card the Admin was looking at**,
+ * and it travels with the decision so that the decision names an object rather
+ * than a row. It is checked here, before any object work, and again inside the
+ * transaction under the lock — where it is what actually settles a race.
  */
 export async function approvePhoto(
   db: DomainDatabase,
   actor: AdminActor,
   profileId: string,
+  reviewedKey: string,
 ): Promise<AdminActionOutcome<"approvePhoto">> {
-  const waiting = await readPendingKey(db, profileId);
+  const waiting = await readPendingKey(db, profileId, reviewedKey);
   if (!waiting.ok) return { ok: false, error: waiting.error };
 
-  // Outside the transaction on purpose — see the class comment. The handler
-  // re-reads the row under `FOR UPDATE` and refuses if another Admin has moved
-  // it since, so this object may be written for a decision that then loses the
-  // race; the loser's bytes are an orphan nothing references.
-  const { publicKey } = await promoteToPublic(waiting.photoKey);
+  /**
+   * **A row with no recorded identity cannot be published**, and this is the
+   * one refusal that is about our own history rather than about a caller: a
+   * photo attached before the identity was recorded has bytes nobody can show
+   * to be the reviewed ones. Rejecting it still works, so the branch is
+   * clearable and the Worker can be asked for another photo.
+   */
+  if (!waiting.photoEtag) return { ok: false, error: photoUnverifiable(profileId) };
 
-  return runAdminAction(db, actor, "approvePhoto", { profileId, publicKey });
+  try {
+    // Outside the transaction on purpose — see the class comment. The handler
+    // re-reads the row under `FOR UPDATE` and refuses if another Admin has moved
+    // it since, so this object may be written for a decision that then loses the
+    // race; the loser's bytes are an orphan nothing references.
+    const { publicKey } = await promoteToPublic(waiting.photoKey, waiting.photoEtag);
+
+    return runAdminAction(db, actor, "approvePhoto", { profileId, publicKey, reviewedKey });
+  } catch (cause) {
+    /**
+     * **Narrow on purpose: only the identity mismatch is turned into a value.**
+     * Everything else the store can raise — a missing object, an endpoint that
+     * is not answering, a credential that has expired — is a fault, and a fault
+     * escapes so that it is reported. The mismatch is not a fault: a person
+     * decided on bytes and the bytes are different, which is an answer.
+     *
+     * It costs one `warn` line carrying `photo_object_changed` and no Sentry
+     * event, which is the same trade every other refusal on this queue makes.
+     * Nobody but an Admin can provoke it, so the quota argument does not apply
+     * — what does apply is that the Admin needs a sentence they can act on, and
+     * a thrown error would give them the generic one.
+     */
+    if (cause instanceof AppError && cause.code === "photo_object_changed") {
+      return { ok: false, error: photoChanged(profileId, cause) };
+    }
+
+    throw cause;
+  }
+}
+
+/**
+ * The Admin-facing half of the storage refusal, which is a different audience
+ * from the one `@repo/storage` writes for.
+ *
+ * That package's `userMessage` is written for a Worker — _"elige otra desde tu
+ * teléfono"_ — because every other refusal it raises is read by one. This one is
+ * read by the person working the queue, so the sentence is rebuilt here rather
+ * than passed through, and the operator-facing half stays on the `cause` where a
+ * drain can still see it.
+ */
+function photoChanged(profileId: string, cause: AppError): AppError {
+  return new AppError({
+    code: "photo_object_changed",
+    status: 409,
+    message:
+      "The object under this profile's quarantine key is not the object recorded when the " +
+      "photo was attached, so nothing was published. The Admin is told the photo changed and " +
+      "to reload; what they were shown and what would have been published are different bytes.",
+    userMessage: ADMIN_PHOTO_CHANGED,
+    // An id, which is what an operator needs to find the row. No key, no ETag:
+    // neither says anything the profile id does not, and both are values a
+    // caller probing this would be varying (NFR18).
+    context: { profile_id: profileId },
+    cause,
+  });
+}
+
+/**
+ * The row names a different object from the one the card was rendered with.
+ *
+ * **Unreachable today and in scope anyway**, because the day it is reachable it
+ * arrives with no code change: `attachPhoto` has one caller, publishing, and
+ * that path refuses an Account that already holds a profile — so there is no way
+ * yet to replace a photo that is already waiting. The queue's own copy already
+ * promises one (_"Ella puede subir otra"_), and a decision bound to a row and a
+ * state rather than to a key would then approve or delete a photo nobody looked
+ * at.
+ *
+ * **Only the approval has this second copy, and `rejectPhoto` needs none.** What
+ * it buys is that no object is read, decoded and written for a decision that the
+ * transaction is going to refuse anyway; rejecting does no object work before
+ * the transaction, so it goes straight to the check under the lock — which is
+ * the one that settles the race in both cases.
+ */
+function photoReplaced(profileId: string): AppError {
+  return new AppError({
+    code: "admin_photo_replaced",
+    status: 409,
+    message:
+      "approvePhoto was given a photo key that is not the one this profile's row names, so the " +
+      "card it was pressed on is showing a photo that has since been replaced. Nothing was " +
+      "read from the object store and no AdminAction was written. This is the check before the " +
+      "object work; the handler repeats it under a lock, which is what settles a race.",
+    userMessage: ADMIN_PHOTO_CHANGED,
+    context: { profile_id: profileId },
+  });
+}
+
+/** A photo attached before its identity was recorded: reviewable, not publishable. */
+function photoUnverifiable(profileId: string): AppError {
+  return new AppError({
+    code: "photo_identity_not_recorded",
+    status: 409,
+    message:
+      "This profile's photo carries no recorded object identity, so there is nothing to hold " +
+      "the bytes to and nothing was published. It was attached before the identity was " +
+      "recorded; rejecting it still works, and she can be asked for another photo.",
+    userMessage: ADMIN_PHOTO_CHANGED,
+    context: { profile_id: profileId },
+  });
 }
 
 /**
@@ -363,8 +488,9 @@ export async function rejectPhoto(
   db: DomainDatabase,
   actor: AdminActor,
   profileId: string,
+  reviewedKey: string,
 ): Promise<AdminActionOutcome<"rejectPhoto">> {
-  const outcome = await runAdminAction(db, actor, "rejectPhoto", { profileId });
+  const outcome = await runAdminAction(db, actor, "rejectPhoto", { profileId, reviewedKey });
 
   if (!outcome.ok) return outcome;
 
@@ -385,17 +511,26 @@ export async function rejectPhoto(
   return outcome;
 }
 
+/**
+ * The row's key and the identity recorded with it, or a refusal.
+ *
+ * **It grows a column rather than gaining a second query**, which is the shape
+ * the rest of this module already has: the read that decides whether there is
+ * work to do is the read that carries what the work needs.
+ */
 async function readPendingKey(
   db: DomainDatabase,
   profileId: string,
+  reviewedKey: string,
 ): Promise<
-  | { readonly ok: true; readonly photoKey: string }
+  | { readonly ok: true; readonly photoKey: string; readonly photoEtag: string | null }
   | { readonly ok: false; readonly error: AppError }
 > {
   const [row] = await db
     .select({
       photoState: schema.capabilityProfile.photoState,
       photoKey: schema.capabilityProfile.photoKey,
+      photoEtag: schema.capabilityProfile.photoEtag,
     })
     .from(schema.capabilityProfile)
     .where(eq(schema.capabilityProfile.id, BigInt(profileId)))
@@ -418,7 +553,22 @@ async function readPendingKey(
     };
   }
 
-  return { ok: true, photoKey: row.photoKey };
+  /**
+   * **After the state check and not before it.** A photo already decided has a
+   * `photo_key` too — the *public* one — so a reviewed quarantine key never
+   * matches it, and checking the key first answers the ordinary two-Admin race
+   * with "esa foto cambió" instead of "otra persona ya revisó esa foto".
+   * `lockPendingPhoto` orders the pair the same way for the same reason.
+   *
+   * It is here at all so that no object work happens for a decision about a
+   * photo the row has since replaced; the handler checks it again under the
+   * lock, which is where a race is actually settled.
+   */
+  if (row.photoKey !== reviewedKey) {
+    return { ok: false, error: photoReplaced(profileId) };
+  }
+
+  return { ok: true, photoKey: row.photoKey, photoEtag: row.photoEtag };
 }
 
 /**
@@ -435,16 +585,34 @@ export const photos = {
     return createPhotoUpload(pooledDatabase(), accountId, input);
   },
 
+  /**
+   * **Where the two stores meet**, which is why the `HeadObject` is here rather
+   * than inside `attachPhoto`: that function is about rows and stays runnable
+   * against PGlite with no bucket in sight.
+   *
+   * **A store that cannot answer refuses the attach rather than escaping.** The
+   * one caller — the publish action — already swallows a failed attach on
+   * purpose, because publishing does not wait for a photo; a thrown error here
+   * would instead reach `handleServerError` and fail a publish that succeeded.
+   */
   async attach(accountId: string, photoKey: string) {
-    return attachPhoto(pooledDatabase(), accountId, photoKey);
+    try {
+      const etag = await quarantinedEtag(photoKey);
+
+      return await attachPhoto(pooledDatabase(), accountId, photoKey, etag);
+    } catch (cause) {
+      if (cause instanceof AppError) return { ok: false as const, error: cause };
+
+      throw cause;
+    }
   },
 
-  async approve(actor: AdminActor, profileId: string) {
-    return approvePhoto(pooledDatabase(), actor, profileId);
+  async approve(actor: AdminActor, profileId: string, reviewedKey: string) {
+    return approvePhoto(pooledDatabase(), actor, profileId, reviewedKey);
   },
 
-  async reject(actor: AdminActor, profileId: string) {
-    return rejectPhoto(pooledDatabase(), actor, profileId);
+  async reject(actor: AdminActor, profileId: string, reviewedKey: string) {
+    return rejectPhoto(pooledDatabase(), actor, profileId, reviewedKey);
   },
 
   async pending(displayCap: number): Promise<PendingPhotoBranch> {

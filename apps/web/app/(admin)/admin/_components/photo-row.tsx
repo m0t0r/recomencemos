@@ -51,6 +51,15 @@ const INITIAL_REJECT: RejectResult = {};
 
 export function PhotoRow({ item }: { readonly item: QueueItem }) {
   /**
+   * Optional on `QueueItem` because four of the five sections have no image at
+   * all. The photo source always sets it, and an item that somehow arrived
+   * without one binds the empty string, which the action's own bound-argument
+   * schema refuses — a branch here would be a second, quieter answer to the
+   * same question.
+   */
+  const reviewedKey = item.photoKey ?? "";
+
+  /**
    * **Two `useActionState`s rather than one form with two submit buttons**, and
    * the reason is NFR4 rather than preference: a `formAction` on a button is how
    * one form carries two verbs, and it is also the shape whose unhydrated
@@ -58,16 +67,19 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
    * identically with and without JavaScript — and this surface is behind a login
    * an Admin reaches with JavaScript, so the cost of the simpler shape is zero.
    *
-   * **The profile id is bound, not mirrored into a hidden input** (ADR-0015):
-   * React encodes it into the action reference and the action validates it on
-   * arrival, so the row's markup carries no copy of it.
+   * **Both values are bound, not mirrored into hidden inputs** (ADR-0015): React
+   * encodes them into the action reference and the action validates them on
+   * arrival, so the row's markup carries no copy of either. The profile id names
+   * the row; the key names the object on screen, so the decision applies to the
+   * photo the Admin looked at rather than to whatever the row points at when it
+   * commits.
    */
   const [approved, approveAction, approving] = useActionState(
-    approvePhoto.bind(null, item.id),
+    approvePhoto.bind(null, item.id, reviewedKey),
     INITIAL_APPROVE,
   );
   const [rejected, rejectAction, rejecting] = useActionState(
-    rejectPhoto.bind(null, item.id),
+    rejectPhoto.bind(null, item.id, reviewedKey),
     INITIAL_REJECT,
   );
   const announcementRef = useRef<HTMLParagraphElement>(null);

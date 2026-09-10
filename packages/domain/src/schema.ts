@@ -644,6 +644,34 @@ export const capabilityProfile = pgTable(
     photoKey: text("photo_key"),
 
     /**
+     * The object store's own name for the bytes that were under
+     * {@link capabilityProfile.photoKey} when the photo was attached — an ETag,
+     * read by us with a `HeadObject` and never reported by a browser.
+     *
+     * **It is what binds the bytes an Admin looked at to the bytes that get
+     * published.** Without it, the queue's render and the promotion were two
+     * reads of a *key* rather than two reads of an object, and a holder of the
+     * upload URL who overwrote between them published bytes no person had seen.
+     * `promoteToPublic` holds the object to this value and refuses if it has
+     * moved.
+     *
+     * **Nullable, and a `NULL` refuses rather than waves through.** It is null
+     * for every state but `pending` — approve and reject both clear it with the
+     * other two photo columns — and it is null on a row attached before this
+     * column existed, which is a photo whose bytes nobody can show to be the
+     * reviewed ones. That photo can still be rejected; it cannot be published.
+     *
+     * **Not a timestamp comparison, which was the other candidate.** Comparing
+     * `LastModified` against {@link capabilityProfile.photoAttachedAt} needs no
+     * column and no round trip, and it compares two clocks: the legitimate gap
+     * between the browser's PUT and her submit is routinely under a second, so
+     * any tolerance wide enough for drift between the app and the store is wide
+     * enough to admit the swap it exists to refuse. An identity has no tolerance
+     * to argue about.
+     */
+    photoEtag: text("photo_etag"),
+
+    /**
      * When the photo now waiting became this Admin queue's problem — set by
      * `attachPhoto`, cleared when the photo leaves `pending`.
      *

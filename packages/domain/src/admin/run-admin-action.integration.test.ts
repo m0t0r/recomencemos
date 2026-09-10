@@ -90,8 +90,8 @@ const INPUTS = {
   },
   deliverOffer: { offerId: OFFER_ID },
   rejectOffer: { offerId: OFFER_ID },
-  approvePhoto: { profileId: PROFILE_ID, publicKey: PUBLIC_KEY },
-  rejectPhoto: { profileId: PROFILE_ID },
+  approvePhoto: { profileId: PROFILE_ID, publicKey: PUBLIC_KEY, reviewedKey: QUARANTINE_KEY },
+  rejectPhoto: { profileId: PROFILE_ID, reviewedKey: QUARANTINE_KEY },
 } satisfies { [K in AdminActionName]: AdminActionInput<K> };
 
 /** An Account with two live sessions, so `revokeSessions` has something to revoke. */

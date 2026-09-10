@@ -111,6 +111,21 @@ export interface QueueItem {
    * the Admin gate. Never logged, never persisted.
    */
   readonly imageUrl?: string;
+  /**
+   * The key {@link QueueItem.imageUrl} was signed for — set by the same source,
+   * on the same items, and never independently of it.
+   *
+   * **It is what a decision on this item is bound to.** The profile id names the
+   * row and the row's key can move; this names the object that was rendered, so
+   * approving or rejecting applies to the picture the Admin was looking at
+   * rather than to whatever is under the row by the time the action commits.
+   *
+   * **It puts nothing new on the page.** The signed URL beside it is built from
+   * this key and carries it in its path, so the browser already holds it — and
+   * holding it is not a capability: reading the object needs the signature, and
+   * attaching it to a row needs an intent row minted for that Account.
+   */
+  readonly photoKey?: string;
 }
 
 export interface QueueBranch {
@@ -239,6 +254,7 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
           summary: photoWaitingSince(photo.attachedAt),
           arrivedAt: photo.attachedAt,
           imageUrl: await photos.reviewUrl(photo.photoKey),
+          photoKey: photo.photoKey,
         })),
       );
 

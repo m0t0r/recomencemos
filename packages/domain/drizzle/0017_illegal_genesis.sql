@@ -1,0 +1,1 @@
+ALTER TABLE "capability_profile" ADD COLUMN "photo_etag" text;
