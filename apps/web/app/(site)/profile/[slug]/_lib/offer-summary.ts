@@ -5,7 +5,8 @@
  *
  * Pure, so it is tested on its own. The ordering is the form's reading order,
  * because the summary is read top to bottom by someone who will then tab into
- * the form top to bottom.
+ * the form top to bottom — **with one exception, the *autorización***, which
+ * leads although its checkbox sits last. `ORDER` below says why.
  *
  * **It is this surface's rather than the publishing form's**, and the reason is
  * the field set: `summary.ts` under `_lib/profile-form/` is typed over

@@ -8,6 +8,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublishForm } from "./publish-form";
+import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
 import {
   CONSENT_REQUIRED,
   FEEDBACK_REGION_LABEL,
@@ -92,20 +93,21 @@ describe("the form", () => {
   });
 
   /**
-   * **The consent item used to link to nothing.** The summary built
-   * `#<base>-consent` while the checkbox minted its own id inside the shared
-   * component, so no element carried the anchor — found while #250 matched the
-   * Offer form to this one. A summary pointing at nothing is worse than no
-   * summary.
+   * **A summary item has to point at an element**, and a summary pointing at
+   * nothing is worse than no summary. The checkbox takes the form's consent id
+   * rather than minting its own, which is what lets this link land (#250).
    */
-  it("links the summary's consent item to something on the page", async () => {
+  it("links the summary's consent item to the checkbox", async () => {
     const user = userEvent.setup();
-    const { container } = renderForm();
+    renderForm();
 
     await user.click(screen.getByRole("button", { name: PUBLISH_BUTTON }));
 
     const link = await screen.findByRole("link", { name: FIELD_LABELS.consent });
-    expect(container.querySelector(link.getAttribute("href") ?? "")).not.toBeNull();
+    // The anchor lands on what the checkbox's label labels — found through that
+    // association, the way assistive technology finds it.
+    const labelled = screen.getAllByLabelText(CONSENT_LABELS.AUTHORIZATION_CHECKBOX);
+    expect(labelled.map((element) => `#${element.id}`)).toContain(link.getAttribute("href"));
   });
 });
 

@@ -9,10 +9,11 @@
  * an empty column.
  *
  * {@link AuthorizationConsent} is that text plus the control that takes the
- * consent, and it is what `/publish` (story 2) and the Offer form (story 6) render
- * **above their first field**. Before collection is the requirement rather than a
- * layout preference: deployment is continuous, so a form that collected a phone
- * number and asked afterwards would have collected it.
+ * consent, and it is what `/publish` (story 2) renders above its first field and
+ * the Offer form (story 6) renders above its submit — **before collection** in
+ * both, which is the requirement rather than a layout preference: deployment is
+ * continuous, so a form that collected a phone number and asked afterwards would
+ * have collected it.
  *
  * **There is no hidden input here, and that is ADR-0015's third rule.** The two
  * versions are what the form *displayed*, not what she typed, so they travel as
@@ -56,10 +57,8 @@ export interface AuthorizationConsentProps {
    * The checkbox's id, when the form links to it from its summary.
    *
    * **The form owns it because the form owns the link.** A summary item has to
-   * point at an element, and while this component minted the id alone the
-   * summary's `#…-consent` named something that did not exist — on both forms
-   * that render this, found by #250. Falls back to a minted one where nothing
-   * links in.
+   * point at an element, and an id minted in here is one no summary outside can
+   * name (#250). Falls back to a minted one where nothing links in.
    */
   readonly id?: string;
 }

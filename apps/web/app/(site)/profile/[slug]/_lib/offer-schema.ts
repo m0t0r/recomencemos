@@ -94,10 +94,11 @@ export const hirerPhoneField = trimmed
  * The *autorización*'s checkbox. `true` or refused; there is no third state.
  *
  * **This is the whole guarantee, and it sits here rather than in the domain**
- * (#250, fix option A). `offers.send` records a Consent row on a first Offer
- * unconditionally and takes no consent field at all, so the strict parse below
- * is the only thing between an unticked box and a row asserting he authorized
- * the transmission — the same place the publishing form keeps its own. The
+ * (#250, fix option A). `offers.send` takes no consent field at all and records
+ * a Consent row for any first Offer that carries an identity, so the strict parse
+ * below is the only thing between an unticked box and a row asserting he
+ * authorized the transmission — the same place the publishing form keeps its
+ * own. The
  * `required` attribute is a courtesy that `noValidate` removes once the form
  * hydrates; this is what refuses after that, in the browser and in the action.
  */
@@ -172,8 +173,8 @@ function stringOf(raw: FormData, name: string): string {
  * assignable where the action's own input type is asked for.
  *
  * **The checkbox is read against the value it submits**, as the publishing
- * form's mapper reads it. An unticked box posts no entry at all, and read through
- * `stringOf` it became `""` — a value no `true`-literal rule could ever match.
+ * form's mapper reads it. An unticked box posts no entry at all, and through
+ * `stringOf` that is `""` — a value no `true`-literal rule can ever match.
  */
 function fromOfferFormData(raw: unknown): unknown {
   return raw instanceof FormData
