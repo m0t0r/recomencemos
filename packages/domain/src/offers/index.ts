@@ -63,16 +63,31 @@
  */
 
 import { and, count, eq, inArray, min, sql } from "drizzle-orm";
+import { validate as isUuid } from "uuid";
 import { db as pooledDatabase } from "#connection";
 import { hasConsented, recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
 import type { DomainDatabase, DomainTransaction } from "#database";
 import { asOfferSendingState, MOST_RESTRICTIVE_OFFER_SENDING_STATE } from "#policy/account-states";
 import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-details";
-import { INITIAL_OFFER_STATE, PENDING_OFFER_STATES } from "#policy/offer-states";
+import {
+  asOfferState,
+  INITIAL_OFFER_STATE,
+  mayTransitionOffer,
+  type OfferState,
+  PENDING_OFFER_STATES,
+  RECEIVED_OFFER_STATES,
+} from "#policy/offer-states";
 import { normalizeColombianPhone } from "#policy/phone";
 import { PUBLIC_COLUMNS, toPublic } from "#profiles/public-columns";
-import { type SentOffer, toSentOffer } from "#projections";
+import {
+  type ReceivedOffer,
+  type ReceivedOfferTerms,
+  type SentOffer,
+  toReceivedOffer,
+  toReceivedOfferTerms,
+  toSentOffer,
+} from "#projections";
 import * as schema from "#schema";
 
 /** The three fields he writes. Free text, all `personal`, all through the rejector. */
@@ -434,6 +449,229 @@ export async function listSentOffers(
   );
 }
 
+/**
+ * **The Worker's half: what she has received, and her two answers to it.**
+ *
+ * Every function below is scoped by **profile ownership** — the caller's Account
+ * id against `capability_profile.account_id`, in the `where` clause of the one
+ * statement that reads the Offer — because an Offer has two owners and her
+ * reads scope by hers (Core entities, "Ownership edges"). The Hirer who wrote an
+ * Offer holds its id, and he is the likeliest person to ask for it here; he is
+ * answered exactly as an id no row carries is.
+ *
+ * **Only what reached her.** {@link RECEIVED_OFFER_STATES} is the whitelist:
+ * nothing a person has not let through, and nothing she Reported. An Offer in
+ * any other state is *not there* to every function here, including the two that
+ * write, so no answer distinguishes "not yours" from "not delivered yet" from
+ * "no such Offer".
+ */
+function receivedBy(accountId: string) {
+  return and(
+    eq(schema.capabilityProfile.accountId, accountId),
+    inArray(schema.offer.state, RECEIVED_OFFER_STATES),
+  );
+}
+
+/** The terms columns every received read selects, under the projection's names. */
+const RECEIVED_TERMS_COLUMNS = {
+  id: schema.offer.id,
+  state: schema.offer.state,
+  workDescription: schema.offer.workDescription,
+  payTerms: schema.offer.payTerms,
+  whenText: schema.offer.whenText,
+  sentAt: schema.offer.createdAt,
+  deliveredAt: schema.offer.deliveredAt,
+};
+
+/**
+ * Every Offer she has received, newest first, with the name he gave.
+ *
+ * One statement on `offer_capability_profile_id_created_at_idx` (DD2), joined to
+ * his Account for `hirerName` and to nothing that holds a contact detail of
+ * either side. **No clock parameter**: nothing a Worker reads here is derived
+ * from the time.
+ */
+export async function listReceivedOffers(
+  db: DomainDatabase,
+  accountId: string,
+): Promise<readonly ReceivedOffer[]> {
+  const rows = await db
+    .select({ ...RECEIVED_TERMS_COLUMNS, hirerName: schema.user.hirerName })
+    .from(schema.offer)
+    .innerJoin(
+      schema.capabilityProfile,
+      eq(schema.capabilityProfile.id, schema.offer.capabilityProfileId),
+    )
+    .innerJoin(schema.user, eq(schema.user.id, schema.offer.hirerAccountId))
+    .where(receivedBy(accountId))
+    .orderBy(sql`${schema.offer.createdAt} desc`);
+
+  return rows.map((row) => toReceivedOffer(row));
+}
+
+/**
+ * One received Offer's terms — what `/offers/[id]` paints first. `undefined`
+ * for every Offer that is not hers to read, whatever the reason.
+ *
+ * **A malformed id is answered before any query.** The column is a `uuid`, so
+ * Postgres raises a cast error on `"42"` — a thrown error, a Sentry event, and
+ * `/offers/1..N` is the cheapest request there is to generate (C51).
+ */
+export async function findReceivedOfferTerms(
+  db: DomainDatabase,
+  accountId: string,
+  offerId: string,
+): Promise<ReceivedOfferTerms | undefined> {
+  if (!isUuid(offerId)) return undefined;
+
+  const [row] = await db
+    .select(RECEIVED_TERMS_COLUMNS)
+    .from(schema.offer)
+    .innerJoin(
+      schema.capabilityProfile,
+      eq(schema.capabilityProfile.id, schema.offer.capabilityProfileId),
+    )
+    .where(and(eq(schema.offer.id, offerId), receivedBy(accountId)))
+    .limit(1);
+
+  return row ? toReceivedOfferTerms(row) : undefined;
+}
+
+/** Who claims to be asking — the one thing about him that crosses before exchange (C4). */
+export interface ReceivedOfferSender {
+  /** Badged as declared rather than verified wherever it renders. `null` is a real state. */
+  readonly hirerName: string | null;
+}
+
+/**
+ * The Hirer's identity on one received Offer, read on its own so the page can
+ * stream it in a boundary of its own once the terms have painted. Scoped exactly
+ * as {@link findReceivedOfferTerms} is, so the two can never disagree about
+ * whether she may read this Offer.
+ */
+export async function findReceivedOfferSender(
+  db: DomainDatabase,
+  accountId: string,
+  offerId: string,
+): Promise<ReceivedOfferSender | undefined> {
+  if (!isUuid(offerId)) return undefined;
+
+  const [row] = await db
+    .select({ hirerName: schema.user.hirerName })
+    .from(schema.offer)
+    .innerJoin(
+      schema.capabilityProfile,
+      eq(schema.capabilityProfile.id, schema.offer.capabilityProfileId),
+    )
+    .innerJoin(schema.user, eq(schema.user.id, schema.offer.hirerAccountId))
+    .where(and(eq(schema.offer.id, offerId), receivedBy(accountId)))
+    .limit(1);
+
+  return row ? { hirerName: row.hirerName } : undefined;
+}
+
+/**
+ * What accepting or declining can answer.
+ *
+ * **`not_found` is one answer for four cases** — an id no row carries, an Offer
+ * addressed to someone else, one nobody has let through yet, and one she
+ * Reported — for the reason every read above gives. **`already_answered` names
+ * the state** because it is hers: the Offer is on her own list, and the surface
+ * tells her what it already says.
+ */
+export type AnswerOfferOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "not_found" }
+  | { readonly ok: false; readonly reason: "already_answered"; readonly state: OfferState };
+
+const NOT_FOUND = { ok: false, reason: "not_found" } as const;
+
+/**
+ * Her answer, in one transaction whose **first statement is the row lock**.
+ *
+ * `SELECT … FOR UPDATE OF offer`, scoped by her ownership, carrying the state —
+ * so the state is read *beneath* the lock rather than before it (DD9's third
+ * race, accept against a Report). The state is **not** in the predicate: a row
+ * filtered out by its state would take no lock, and the refusal would be decided
+ * on a value nothing is protecting. It is narrowed afterwards, against the same
+ * whitelist the reads use, and the move is checked against the transition table
+ * rather than spelled out here.
+ *
+ * `OF offer` rather than a bare `FOR UPDATE`, because the join would otherwise
+ * lock her profile row too — which `deliverOffer` writes, so every accept would
+ * serialise against every delivery to her for no reason.
+ */
+async function answerReceivedOffer(
+  db: DomainDatabase,
+  accountId: string,
+  offerId: string,
+  to: "accepted" | "declined",
+): Promise<AnswerOfferOutcome> {
+  if (!isUuid(offerId)) return NOT_FOUND;
+
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ id: schema.offer.id, state: schema.offer.state })
+      .from(schema.offer)
+      .innerJoin(
+        schema.capabilityProfile,
+        eq(schema.capabilityProfile.id, schema.offer.capabilityProfileId),
+      )
+      .where(and(eq(schema.offer.id, offerId), eq(schema.capabilityProfile.accountId, accountId)))
+      .limit(1)
+      .for("update", { of: schema.offer });
+
+    const state = row ? asOfferState(row.state) : undefined;
+
+    if (!row || !state || !(RECEIVED_OFFER_STATES as readonly OfferState[]).includes(state)) {
+      return NOT_FOUND;
+    }
+
+    if (!mayTransitionOffer(state, to)) {
+      return { ok: false as const, reason: "already_answered" as const, state };
+    }
+
+    await tx.update(schema.offer).set({ state: to }).where(eq(schema.offer.id, row.id));
+
+    /**
+     * **The exchange, under `UNIQUE (offer_id)`.** The lock above is what refuses
+     * a second accept; this constraint is what would refuse it if the lock were
+     * ever wrong. What the row snapshots, and what crosses on screen and by email,
+     * is story 9's.
+     */
+    if (to === "accepted") {
+      await tx.insert(schema.contactExchange).values({ offerId: row.id });
+    }
+
+    return { ok: true as const };
+  });
+}
+
+/**
+ * She accepts. **No ceiling sits on this** (DD7): refusing a Worker the
+ * acceptance she has waited for, to slow a harvester who would have to be sent
+ * the Offer first, protects the wrong person.
+ */
+export async function acceptOffer(
+  db: DomainDatabase,
+  accountId: string,
+  offerId: string,
+): Promise<AnswerOfferOutcome> {
+  return answerReceivedOffer(db, accountId, offerId, "accepted");
+}
+
+/**
+ * She declines. The Offer **stays on her list, as declined** — the spec's
+ * success cell, "confirmed, and it stays confirmed rather than vanishing".
+ */
+export async function declineOffer(
+  db: DomainDatabase,
+  accountId: string,
+  offerId: string,
+): Promise<AnswerOfferOutcome> {
+  return answerReceivedOffer(db, accountId, offerId, "declined");
+}
+
 /** One Offer waiting for a person to read it, as the Admin queue needs it. */
 export interface PendingOffer {
   readonly id: string;
@@ -538,7 +776,28 @@ export const offers = {
   async pending(displayCap: number) {
     return pendingOffers(pooledDatabase(), displayCap);
   },
+
+  async listReceived(accountId: string): Promise<readonly ReceivedOffer[]> {
+    return listReceivedOffers(pooledDatabase(), accountId);
+  },
+
+  async receivedTerms(accountId: string, offerId: string) {
+    return findReceivedOfferTerms(pooledDatabase(), accountId, offerId);
+  },
+
+  async receivedSender(accountId: string, offerId: string) {
+    return findReceivedOfferSender(pooledDatabase(), accountId, offerId);
+  },
+
+  async accept(accountId: string, offerId: string): Promise<AnswerOfferOutcome> {
+    return acceptOffer(pooledDatabase(), accountId, offerId);
+  },
+
+  async decline(accountId: string, offerId: string): Promise<AnswerOfferOutcome> {
+    return declineOffer(pooledDatabase(), accountId, offerId);
+  },
 };
 
-export { PENDING_OFFER_STATES };
-export type { SentOffer } from "#projections";
+export { PENDING_OFFER_STATES, RECEIVED_OFFER_STATES };
+export type { OfferState } from "#policy/offer-states";
+export type { ReceivedOffer, ReceivedOfferTerms, SentOffer } from "#projections";

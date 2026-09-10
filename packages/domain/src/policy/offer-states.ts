@@ -70,6 +70,28 @@ export const PENDING_OFFER_STATES = [
 ] as const satisfies readonly OfferState[];
 
 /**
+ * The states in which an Offer is one she has **received** — what `/offers`
+ * lists and what `/offers/[id]` will open.
+ *
+ * **A whitelist, for the transition table's reason.** The three states before
+ * delivery never reached her: an Offer nobody has let through yet, one held
+ * because its sender is frozen, and one we refused are the Admin's to know about
+ * and not hers. `reported` is absent because a Report hides the Offer from her
+ * (story 10) — she said she did not want to see it. A state added later is
+ * absent from her list until somebody writes it here.
+ *
+ * Every member is a state an Offer only reaches *through* `delivered`, which is
+ * what keeps this and `deliveredAt IS NOT NULL` from disagreeing about anything
+ * but `reported`.
+ */
+export const RECEIVED_OFFER_STATES = [
+  "delivered",
+  "accepted",
+  "declined",
+  "expired",
+] as const satisfies readonly OfferState[];
+
+/**
  * NFR7's band, in hours: the age of the oldest undelivered Offer stays under it.
  *
  * It is here rather than only in the Admin queue's registry because two surfaces
