@@ -44,11 +44,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/design-system/components/dropdown-menu";
-import { IdCardIcon, LogOutIcon, SendIcon, UserRoundIcon } from "lucide-react";
+import { IdCardIcon, InboxIcon, LogOutIcon, SendIcon, UserRoundIcon } from "lucide-react";
 import Link from "next/link";
 import { useActionState } from "react";
 import type { signOut } from "./actions";
-import { ACCOUNT, SENT_OFFERS, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
+import {
+  ACCOUNT,
+  RECEIVED_OFFERS,
+  SENT_OFFERS,
+  SIGN_OUT,
+  SIGNED_IN_AS,
+  sessionMenuLabel,
+} from "./messages";
 import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT, SIGN_OUT_FORM_ID } from "./slots";
 
 /**
@@ -116,6 +123,14 @@ export interface SessionMenuProps {
    */
   readonly sentOffersHref?: string;
   /**
+   * Where "Propuestas que recibiste" goes, or absent to omit the row — the same
+   * shape and the same reason as `sentOffersHref`. Offered whether or not she
+   * holds a profile: the page's empty state says what makes an Offer arrive and
+   * routes to publishing one, which is a better answer than a row that appears
+   * later.
+   */
+  readonly receivedOffersHref?: string;
+  /**
    * Her profile row, or absent to omit it — the same shape as `accountHref`,
    * for the same reason: `(site)`'s shell has one, `(admin)`'s does not. The
    * label is the caller's because it depends on what she has: _Tu perfil_ once
@@ -141,6 +156,7 @@ export function SessionMenu({
   action,
   accountHref,
   sentOffersHref,
+  receivedOffersHref,
   profile,
 }: SessionMenuProps) {
   const [result, formAction, pending] = useActionState(action, INITIAL);
@@ -270,6 +286,22 @@ export function SessionMenu({
               a leading icon is what makes a list of rows scannable, which is what
               this menu became once it held more than one.
             */}
+            {/*
+              **The Offers that have reached her**, directly under her profile:
+              an Offer is addressed to that profile, so the two rows are one
+              thought — what she published, and what it brought.
+            */}
+            {receivedOffersHref ? (
+              <DropdownMenuItem
+                render={
+                  <Link href={receivedOffersHref}>
+                    <InboxIcon aria-hidden="true" />
+                    {RECEIVED_OFFERS}
+                  </Link>
+                }
+              />
+            ) : null}
+
             {sentOffersHref ? (
               <DropdownMenuItem
                 render={

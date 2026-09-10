@@ -38,6 +38,15 @@ export const SIGN_OUT = "Salir";
 export const ACCOUNT = "Tu cuenta";
 
 /**
+ * The way to `/offers` — the Offers that have reached her.
+ *
+ * The page's own title, for `SENT_OFFERS`' reason below: a person who presses
+ * this lands on a page calling itself what the link called it. The two rows
+ * differ by one verb, which is exactly the difference between them.
+ */
+export const RECEIVED_OFFERS = "Propuestas que recibiste";
+
+/**
  * The way to `/sent-offers`.
  *
  * The same words the page titles itself with, because link text names its

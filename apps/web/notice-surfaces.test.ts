@@ -107,6 +107,10 @@ describe("the standing notices reach every surface that owes them", () => {
     expect(required.map((surface) => surface.route).toSorted()).toEqual([
       "/",
       "/my-profile",
+      // Added by story 8. She is reading what strangers wrote to her about paid
+      // work — the moment "we verify nobody" and "we never handle the money"
+      // have to be on screen.
+      "/offers",
       "/profile/[slug]",
       "/profiles",
       // Added by story 6. The no-money notice is doing real work here: he is
