@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+  "jsPlugins": ["eslint-plugin-testing-library"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
@@ -24,6 +25,15 @@
       }
     ]
   },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "testing-library/no-container": "error",
+        "testing-library/no-node-access": "error"
+      }
+    }
+  ],
   "ignorePatterns": [
     ".agents/**",
     ".claude/**",

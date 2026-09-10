@@ -71,6 +71,12 @@ function renderForm(props: Partial<Parameters<typeof SignInForm>[0]> = {}) {
   return render(<SignInForm googleAvailable returnPath="/" {...props} />);
 }
 
+/** The field names a native submit from this door would post, or `null` if it has no form. */
+function postedBy(door: string) {
+  const form = screen.getByRole<HTMLButtonElement>("button", { name: door }).form;
+  return form === null ? null : [...new FormData(form).keys()];
+}
+
 describe("the two doors", () => {
   it("offers both when Google is configured", () => {
     renderForm();
@@ -319,32 +325,35 @@ describe("the form before hydration", () => {
    * second source for a value that already travels.
    */
   it("keeps a native action and a named email field", () => {
-    // **The one place a raw DOM query is the right tool, and the rule is in
-    // `CLAUDE.md`.** "Are there two `<form>` elements, each with an `action`?"
-    // is a question about the HTML that survives with no JavaScript, not about
-    // the accessibility tree — a `<form>` has no implicit role until it carries
-    // an accessible name, and giving it one purely so a test could ask for it
-    // would be markup written for the test. Everything a role query *can*
-    // answer is asked that way instead.
-    const { container } = renderForm();
-    const forms = container.querySelectorAll("form");
+    // A `<form>` has no role until it carries an accessible name, and naming one
+    // purely so a test could ask for it would be markup written for the test. So
+    // each form is reached from its door instead: `button.form` is the form a
+    // native submit from that button posts. Two doors, two forms, both with an
+    // action.
+    renderForm();
+    const email = screen.getByRole<HTMLButtonElement>("button", { name: SEND_LINK_BUTTON }).form;
+    const google = screen.getByRole<HTMLButtonElement>("button", { name: GOOGLE_BUTTON }).form;
 
-    // Two doors, two forms, both with an action.
-    expect(forms.length).toBe(2);
-    for (const form of forms) expect(form.getAttribute("action")).toBeTruthy();
+    expect(email).toHaveAttribute("action");
+    expect(google).toHaveAttribute("action");
+    expect(email).not.toBe(google);
 
     expect(screen.getByRole("textbox")).toHaveAttribute("name", "email");
   });
 
-  it("carries no hidden inputs at all", () => {
-    // The same escape hatch, and the clearest case for it: a hidden input has no
-    // accessible role *by definition*, so its absence is unassertable through
-    // any query built on the accessibility tree.
-    const { container } = renderForm();
+  it("carries no hidden inputs at all", async () => {
+    // What each door would post, from the browser's own serialiser. The email
+    // door sends the address and nothing else, and the Google door sends
+    // nothing. A `sharedDevice` or `returnPath` field mirrored into either form
+    // would show up here as a key. The shared-device box is ticked first: it
+    // sits outside both forms today, and a checkbox moved inside one would post
+    // only once ticked.
+    const user = userEvent.setup();
+    renderForm();
+    await user.click(screen.getByRole("checkbox", { name: SHARED_DEVICE_LABEL }));
 
-    expect(container.querySelectorAll('input[type="hidden"]').length).toBe(0);
-    expect(container.querySelector('input[name="sharedDevice"]')).toBeNull();
-    expect(container.querySelector('input[name="returnPath"]')).toBeNull();
+    expect(postedBy(SEND_LINK_BUTTON)).toEqual(["email"]);
+    expect(postedBy(GOOGLE_BUTTON)).toEqual([]);
   });
 
   /**
@@ -354,9 +363,9 @@ describe("the form before hydration", () => {
    */
   it("makes the Google door a submit rather than a click handler", () => {
     renderForm();
-    const google = screen.getByRole("button", { name: GOOGLE_BUTTON });
+    const google = screen.getByRole<HTMLButtonElement>("button", { name: GOOGLE_BUTTON });
 
-    expect(google.getAttribute("type")).toBe("submit");
-    expect(google.closest("form")).toBeTruthy();
+    expect(google).toHaveAttribute("type", "submit");
+    expect(google.form).toHaveAttribute("action");
   });
 });

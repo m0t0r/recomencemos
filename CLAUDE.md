@@ -278,14 +278,47 @@ All three package suites follow the same three rules. Tests sit **beside their s
 
 **A mocked module is imported statically, and `vi.hoisted` is what makes that possible.** `vi.mock` is lifted above _every_ statement in the file, so a factory closing over a plain `const handler = vi.fn()` reads that binding in its temporal dead zone the moment a static import evaluates the mocked module — `ReferenceError: Cannot access 'handler' before initialization`. The tempting fix is `const { Thing } = await import("./thing")` after the consts, which works only because a dynamic import runs after the module body; this repo shipped that shape once and it spread by copying. Define the doubles inside `vi.hoisted(() => ({ … }))` instead and keep the imports static — that is what the helper exists for, and it leaves the file's imports looking like every other file's.
 
-**Query a component by role, and reach for `container.querySelector` only where the accessibility tree cannot answer.** A test that finds an element by CSS selector asserts that the markup has a shape; a test that finds it by role asserts that a _user_ can reach it, which is the thing NFR20 is about. The two come apart exactly where a bug lives — a `<div aria-live="polite">` with no `role` is reachable by `querySelector` and by nothing a screen-reader user has, and the selector in the test is the tell that nobody noticed. `@testing-library/jest-dom` is registered in `apps/web/vitest.setup.ts`, so an accessibility question is written as the question: `toHaveAccessibleDescription` resolves `aria-describedby` to the text that is actually announced, rather than the `container.querySelector('#' + id)` this repo hand-rolled once.
+**Query a component through the accessibility tree — role, label, text — and never through raw DOM access; `pnpm lint` refuses it** (#261). A test that finds an element by CSS selector asserts that the markup has a shape; a test that finds it by role asserts that a _user_ can reach it, which is the thing NFR20 is about. The two come apart exactly where a bug lives — a `<div aria-live="polite">` with no `role` is reachable by `querySelector` and by nothing a screen-reader user has, and the selector in the test is the tell that nobody noticed. `@testing-library/jest-dom` is registered in `apps/web/vitest.setup.ts`, so an accessibility question is written as the question: `toHaveAccessibleDescription` resolves `aria-describedby` to the text that is actually announced, rather than the `container.querySelector('#' + id)` this repo hand-rolled once.
 
-The escape hatch is real but narrow, and it is for **things the accessibility tree does not contain**:
+**The gate is `eslint-plugin-testing-library`'s `no-container` and `no-node-access`, loaded through
+oxlint's `jsPlugins`.** The root `.oxlintrc.json` declares the plugin and turns both rules to `error`
+in an `overrides` entry scoped to `*.test.ts(x)`, so both workspace configs inherit it through
+`extends` and ordinary source is untouched. It refuses `container.querySelector`, `querySelector` on
+a query result, `.closest`, `document.activeElement` and the rest of the traversal API. It replaced
+a documented escape hatch — a hidden input's absence, and the HTML that survives without JavaScript
+— and 83 violations in 13 files were migrated onto the two answers below rather than exempted.
 
-- a **hidden input** — it has no accessible role by definition, so its _absence_ is unassertable any other way, and asserting that absence is how `sign-in-form.test.tsx` pins that bound arguments have not been re-introduced as hidden fields
-- the **HTML that survives without JavaScript** — "two `<form>` elements, each with an `action`" is a question about NFR4, not about the accessibility tree, and a `<form>` gains a role only once it has an accessible name
+**What the tree does not contain still has an answer, and neither answer is DOM access:**
 
-What is **not** a reason: the element is awkward to query. If a role query cannot find it, the first thing to check is whether the component should have told the accessibility tree it exists. Both remaining `querySelector` calls in `apps/web` carry a comment saying which of the two cases they are.
+- **What a form posts is the browser's question, so ask the browser.** Reach the form from a control
+  the tree found — `getByRole<HTMLButtonElement>("button", { name }).form` — then `new FormData(form)`
+  for what a native submit would send and `form.checkValidity()` for what it would refuse. A hidden
+  input is a key nobody typed; "one form" is two controls whose `.form` is the same object. A
+  component with no form of its own renders inside a test `<form aria-label>` found by
+  `getByRole("form")`. This is stronger than the selector it replaced: it asserts the submission
+  rather than the shape of the markup. A radio or checkbox posts only once chosen, so choose it
+  before asking what it sends.
+- **Markup the tree does not report is read as the string React sends** — `renderToStaticMarkup`
+  from `react-dom/server`, or `prerender` from `react-dom/static` where a Suspense boundary has to
+  resolve first. That covers an `aria-live` with no role, an `svg` (which takes no role under
+  happy-dom, hidden or not), a native `<details>`, and a URL-valued attribute. Count what a loop over
+  the string iterates, so it cannot pass by finding nothing.
+
+**Scanning `document.body.innerHTML` is not a third route.** Neither rule flags reading a string,
+so it would pass the gate while being the same DOM access by another name. `container.textContent`
+survives in a few reading-order assertions, which ask what a reader meets in sequence rather than
+what shape the markup has.
+
+A `data-testid` is the last resort, and none exists in this repository: one needs a comment naming
+the assertion no accessible query could express. What is **not** a reason for one is that the
+element is awkward to query — if a role query cannot find it, first check whether the component
+should have told the accessibility tree it exists.
+
+**`oxlint` is pinned exactly because of this gate.** Its own schema calls JS plugins alpha and
+outside semver, so a minor release could stop loading the plugin and leave `pnpm lint` green on a
+tree full of selectors — the gate failing open on an upgrade nobody connected to it.
+`.claude/hooks/tests/lint.sh` lints fixtures through each real config and goes red if the refusal
+goes quiet; raise the pin in a change that runs it.
 
 **The DOM environment is happy-dom, not the jsdom Next's docs prescribe.** That is a deliberate deviation from the framework's documented path, so it was measured rather than preferred. Three axes, all favouring happy-dom:
 

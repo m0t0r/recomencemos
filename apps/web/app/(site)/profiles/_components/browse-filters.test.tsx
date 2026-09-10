@@ -139,12 +139,11 @@ describe("the form the browser submits on its own", () => {
    * hidden native radio that has no accessible role for a query to find.
    */
   function submitted(searchParams: string): Record<string, FormDataEntryValue> {
-    const { container } = mount(searchParams);
-    // The one query by selector, and the case the rule carves out: a `<form>`
-    // with no accessible name has no role, so the accessibility tree has nothing
-    // to hand back. Everything asserted below comes from the browser, not the DOM.
-    const form = container.querySelector("form");
-    if (form === null) throw new Error("The panel renders a form.");
+    mount(searchParams);
+    // A `<form>` with no accessible name has no role, so it is reached from its
+    // submit button: `button.form` is the form a native submit posts.
+    const form = screen.getByRole<HTMLButtonElement>("button", { name: "Buscar" }).form;
+    if (form === null) throw new Error("The search button sits inside a form.");
 
     return Object.fromEntries(new FormData(form));
   }
@@ -169,8 +168,8 @@ describe("the form the browser submits on its own", () => {
   });
 
   it("is a GET form pointed at the route that reads it", () => {
-    const { container } = mount("");
-    const form = container.querySelector("form");
+    mount("");
+    const form = screen.getByRole<HTMLButtonElement>("button", { name: "Buscar" }).form;
 
     expect(form).toHaveAttribute("method", "get");
     expect(form).toHaveAttribute("action", "/profiles");

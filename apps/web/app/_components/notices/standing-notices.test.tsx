@@ -11,9 +11,16 @@
  * It is a Server Component with no data access, so Vitest can render it: nothing
  * here is `async` and nothing reads a session. What still belongs at seam 3 is
  * what it *looks* like and whether `<details>` opens with JavaScript unavailable.
+ *
+ * **Three questions here are about markup the tree does not contain** — an
+ * `aria-live` with no role, an `svg` (which takes no role at all in this
+ * environment, hidden or not), and whether the disclosure is a native
+ * `<details>`. Those read the HTML React sends, as a string, rather than reaching
+ * into the rendered DOM.
  */
 
 import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { NOTICES_HEADING, STANDING_NOTICES } from "@/app/_lib/notices/messages";
 import { StandingNotices } from "./standing-notices";
 
@@ -44,13 +51,15 @@ describe.each(["disclosure", "expanded"] as const)("the %s treatment", (treatmen
    * `app/(admin)/admin/_components/shell-notices.tsx` before it.
    */
   it("announces nothing", () => {
-    const { container } = render(<StandingNotices treatment={treatment} />);
+    render(<StandingNotices treatment={treatment} />);
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     // The accessibility tree has no way to report an `aria-live` that no role
-    // exposes, which is the one case a role query cannot reach.
-    expect(container.querySelector("[aria-live]")).toBeNull();
+    // exposes, so that half is read off the markup.
+    expect(renderToStaticMarkup(<StandingNotices treatment={treatment} />)).not.toContain(
+      "aria-live",
+    );
   });
 
   /**
@@ -59,14 +68,12 @@ describe.each(["disclosure", "expanded"] as const)("the %s treatment", (treatmen
    * the redundancy — not the icon — that answers "not conveyed by colour alone".
    */
   it("hides its marks from the accessibility tree", () => {
-    const { container } = render(<StandingNotices treatment={treatment} />);
+    // Counted, so the loop below cannot pass by finding no marks at all.
+    const marks =
+      renderToStaticMarkup(<StandingNotices treatment={treatment} />).match(/<svg\b[^>]*>/g) ?? [];
 
-    // Escape hatch, and it is the "the tree does not contain it" case: an `svg`
-    // that is correctly `aria-hidden` is by definition absent from the tree, so
-    // its absence is the thing being asserted and no role query can reach it.
-    for (const svg of container.querySelectorAll("svg")) {
-      expect(svg).toHaveAttribute("aria-hidden", "true");
-    }
+    expect(marks.length).toBeGreaterThan(0);
+    for (const mark of marks) expect(mark).toContain('aria-hidden="true"');
   });
 
   it("carries every sentence of all three statements", () => {
@@ -168,17 +175,17 @@ describe("the disclosure treatment", () => {
    * with JavaScript unavailable — NFR4 is about the publishing flow, but a notice
    * a reader cannot open on a slow connection is a notice that is not there.
    *
-   * **Escape hatch, and it is the "HTML that survives without JavaScript" case.**
    * The accessibility tree reports a group with a disclosure triangle whether
    * that group is a native `<details>` or a `div` with `aria-expanded` and a
    * click handler — and the difference between those two is the whole of NFR4
-   * here. A role query cannot tell them apart, so this asks the markup.
+   * here. A role query cannot tell them apart, so this reads the HTML a browser
+   * with no JavaScript would receive.
    */
   it("uses native details, so it opens with no JavaScript", () => {
-    const { container } = render(<StandingNotices treatment="disclosure" />);
+    const markup = renderToStaticMarkup(<StandingNotices treatment="disclosure" />);
 
-    expect(container.querySelectorAll("details")).toHaveLength(STANDING_NOTICES.length);
-    expect(container.querySelectorAll("summary")).toHaveLength(STANDING_NOTICES.length);
+    expect(markup.match(/<details\b/g)).toHaveLength(STANDING_NOTICES.length);
+    expect(markup.match(/<summary\b/g)).toHaveLength(STANDING_NOTICES.length);
   });
 
   /**

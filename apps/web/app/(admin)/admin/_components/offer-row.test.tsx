@@ -85,8 +85,18 @@ const branch: QueueBranch = {
 
 const aBranch = () => render(<SourceBranch branch={branch} Item={OfferRow} />);
 
-/** The row an Offer's summary line sits in. */
-const rowFor = (item: QueueItem) => screen.getByText(item.summary).closest("li") as HTMLElement;
+/**
+ * The row an Offer's summary line sits in: the innermost list item carrying it.
+ * Document order puts an ancestor before its descendants, so the last match is
+ * the innermost one.
+ */
+const rowFor = (item: QueueItem) => {
+  const row = screen
+    .getAllByRole("listitem")
+    .findLast((listitem) => within(listitem).queryByText(item.summary) !== null);
+  if (row === undefined) throw new Error(`No row carries "${item.summary}".`);
+  return row;
+};
 
 beforeEach(() => {
   deliverOffer.mockReset();
@@ -152,17 +162,23 @@ it("offers no control that decides more than one Offer", () => {
  * it travels with the submit, nobody types it, and React encodes it into the
  * action reference.
  *
- * The hidden-input half is asserted with a raw selector on purpose — the same
- * escape hatch `sign-in-form.test.tsx` uses, and for the identical reason: a
- * hidden input has no accessible role, so its **absence** is unassertable through
- * the accessibility tree.
+ * The hidden-input half is asked of the browser's own serialiser: each decision
+ * button's `form` is what a native submit from it posts, and a mirrored id would
+ * be a key there.
  */
 it("binds the Offer to each decision instead of mirroring it into a form", () => {
-  const { container } = aBranch();
+  aBranch();
 
   expect(boundToDeliver.mock.calls.flat()).toEqual([FIRST.id, SECOND.id]);
   expect(boundToReject.mock.calls.flat()).toEqual([FIRST.id, SECOND.id]);
-  expect(container.querySelector('input[type="hidden"]')).toBeNull();
+
+  const decisions = [DELIVER_OFFER_SUBMIT, REJECT_OFFER_SUBMIT].flatMap((name) =>
+    screen.getAllByRole<HTMLButtonElement>("button", { name }),
+  );
+  expect(decisions).toHaveLength(4);
+  for (const { form } of decisions) {
+    expect(form === null ? null : [...new FormData(form).keys()]).toEqual([]);
+  }
 });
 
 /**

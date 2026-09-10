@@ -20,7 +20,7 @@
  * import evaluates the mocked module.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const { verifyCode } = vi.hoisted(() => ({ verifyCode: vi.fn() }));
@@ -89,7 +89,7 @@ describe("the field", () => {
   it("is focused on arrival", () => {
     render(<CodeForm />);
 
-    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: CODE_LABEL }));
+    expect(screen.getByRole("textbox", { name: CODE_LABEL })).toHaveFocus();
   });
 });
 
@@ -221,15 +221,11 @@ describe("what each outcome says", () => {
 
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain(LOCKED.message));
     expect(screen.getByRole("status").textContent).toContain("respaldo");
-    /*
-      One of the two cases the `querySelector` hatch is for: **the element is not
-      in the accessibility tree at all.** A `<time>` carrying only a `dateTime`
-      has no role and no accessible name by definition — that is the whole reason
-      it is here, as a machine-readable duplicate of a fact the sentence already
-      states — so there is no role query that could find it, and its absence is
-      unassertable any other way.
-    */
-    expect(screen.getByRole("status").querySelector("time")?.getAttribute("datetime")).toBe(
+    // The machine-readable duplicate of the wait the sentence already states. A
+    // `<time>` maps to the `time` role, so it is reached through the tree, inside
+    // the region that announces it.
+    expect(within(screen.getByRole("status")).getByRole("time")).toHaveAttribute(
+      "datetime",
       "PT900S",
     );
     // The field stays enabled, because a printed code is still a thing to type.
@@ -248,7 +244,7 @@ describe("what each outcome says", () => {
 
     await user.type(screen.getByRole("textbox", { name: CODE_LABEL }), "123456");
 
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("status")));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveFocus());
   });
 
   it("says nothing at all before anything has been submitted", () => {

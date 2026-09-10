@@ -7,13 +7,15 @@
  * transmission sentence is actually announced with the checkbox rather than
  * merely printed near it.
  *
- * The `querySelector` in the hidden-input case is one of the two escape hatches
- * `CLAUDE.md` allows: a hidden input has no accessible role by definition, so its
- * **absence** is unassertable any other way. `sign-in-form.test.tsx` pins the same
- * property for the same reason.
+ * The two cases about what a form posts are asked of the browser's own
+ * serialiser rather than of the markup: the control has no form of its own, so it
+ * is rendered inside a named test form, and `FormData` over that form is exactly
+ * what a native submit would send. A hidden input would show up there as a key.
  */
 
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { AuthorizationConsent } from "./authorization";
 import { AUTHORIZATION_ANCHOR, AuthorizationText, PRIVACY_NOTICE_PATH } from "./authorization-text";
 import {
@@ -24,6 +26,14 @@ import {
 
 /** The copy carries a full stop, which is a regex metacharacter. */
 const escapeForRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The form the control is posted from; named, so the tree hands it back by role. */
+const TEST_FORM = "formulario de prueba";
+
+function renderInForm(ui: ReactNode) {
+  render(<form aria-label={TEST_FORM}>{ui}</form>);
+  return screen.getByRole<HTMLFormElement>("form", { name: TEST_FORM });
+}
 
 describe("AuthorizationText", () => {
   // One paragraph per thing being authorized, so a screen reader's paragraph
@@ -91,12 +101,13 @@ describe("AuthorizationConsent", () => {
    * with JavaScript unavailable. A hidden `<input>` mirroring server state is the
    * shape that rule replaces, and this is what stops one coming back.
    *
-   * A hidden input has no accessible role, so its absence has no role query.
+   * Unticked, the checkbox posts nothing — so any entry at all is a field nobody
+   * typed.
    */
   it("carries no hidden input", () => {
-    const { container } = render(<AuthorizationConsent id="consent" />);
+    const form = renderInForm(<AuthorizationConsent id="consent" />);
 
-    expect(container.querySelectorAll('input[type="hidden"]')).toHaveLength(0);
+    expect([...new FormData(form).keys()]).toEqual([]);
   });
 
   // Link text names its destination, and it points at the exact section rather
@@ -115,20 +126,19 @@ describe("AuthorizationConsent", () => {
    *
    * Base UI's control is a `role="checkbox"` element beside a visually-hidden
    * real `<input>`; the input is the half a `<form>` submits, and it is where
-   * `name`, `value` and `required` live. That is a question about the HTML that
-   * survives with JavaScript unavailable (NFR4) rather than about the
-   * accessibility tree — the second of the two escape hatches `CLAUDE.md` allows
-   * a selector for, and the reason the role query above cannot answer it: the
-   * input carries `aria-hidden`.
+   * `name`, `value` and `required` live. That matters with JavaScript unavailable
+   * (NFR4), and the browser answers both halves itself: `checkValidity()` is the
+   * refusal a native submit would make, and `FormData` is what it would send.
    */
-  it("posts a named checkbox the browser refuses to submit unticked", () => {
-    const { container } = render(<AuthorizationConsent id="consent" />);
+  it("posts a named checkbox the browser refuses to submit unticked", async () => {
+    const user = userEvent.setup();
+    const form = renderInForm(<AuthorizationConsent id="consent" />);
 
-    const posted = container.querySelector<HTMLInputElement>('input[name="consent"]');
+    expect(form.checkValidity()).toBe(false);
 
-    expect(posted).not.toBeNull();
-    expect(posted?.type).toBe("checkbox");
-    expect(posted?.value).toBe("true");
-    expect(posted?.required).toBe(true);
+    await user.click(screen.getByRole("checkbox", { name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX }));
+
+    expect(form.checkValidity()).toBe(true);
+    expect([...new FormData(form).entries()]).toEqual([["consent", "true"]]);
   });
 });
