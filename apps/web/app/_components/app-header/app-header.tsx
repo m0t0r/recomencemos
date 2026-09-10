@@ -112,6 +112,8 @@ export interface AppHeaderProps {
   readonly accountHref?: string;
   /** Where the Offers row goes, or absent to omit it. Forwarded to the menu. */
   readonly sentOffersHref?: string;
+  /** Where the received-Offers row goes, or absent to omit it. Forwarded to the menu. */
+  readonly receivedOffersHref?: string;
   /**
    * The profile row for a signed-in session, resolved by the shell that has
    * one: `(site)` reads whether she holds a profile and names the row
@@ -159,6 +161,7 @@ export async function AppHeader({
   action,
   accountHref,
   sentOffersHref,
+  receivedOffersHref,
   profileRow,
   signedOut,
 }: AppHeaderProps) {
@@ -195,6 +198,7 @@ export async function AppHeader({
             action={action}
             accountHref={accountHref}
             sentOffersHref={sentOffersHref}
+            receivedOffersHref={receivedOffersHref}
             profile={profile}
           />
         ) : (

@@ -10,9 +10,9 @@
  * Shaped at `.impeccable/briefs/site-header.md`; ticket
  * [#80](https://github.com/m0t0r/recomencemos/issues/80).
  *
- * **What it links today is less than #80 lists, on purpose.** `/my-profile` and
- * her received Offers are unbuilt (stories 2 and 8), and the ticket says _link
- * only what exists_. `/account` is built (#13), so the menu carries it.
+ * **It links what exists, as #80 asked.** Her profile (story 2), the Offers
+ * that reached her (story 8), the Offers she sent (story 6) and `/account`
+ * (story 12) each joined the menu with the story that built the page.
  */
 
 import { AppHeader } from "@/app/_components/app-header/app-header";
@@ -38,6 +38,11 @@ export function SiteHeader() {
         is a better answer than a row that appears once he has used the product.
       */
       sentOffersHref="/sent-offers"
+      /*
+        The Offers that have reached her. Offered whether or not she holds a
+        profile, for the same reason: the empty state says what makes one arrive.
+      */
+      receivedOffersHref="/offers"
       /*
         The row she came for. One read per page for a signed-in session; a
         profile she holds points at it, and until then the row is the way to

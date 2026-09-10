@@ -63,7 +63,6 @@
  */
 
 import { and, count, eq, inArray, min, sql } from "drizzle-orm";
-import { validate as isUuid } from "uuid";
 import { db as pooledDatabase } from "#connection";
 import { hasConsented, recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
@@ -465,6 +464,21 @@ export async function listSentOffers(
  * write, so no answer distinguishes "not yours" from "not delivered yet" from
  * "no such Offer".
  */
+/**
+ * **The shape of an Offer id**, and the one check both ends make with it: this
+ * package before any query, and `/offers/[id]` before it builds a return path
+ * from the segment. A `uuid` column raises a cast error on anything else, and a
+ * thrown error per `/offers/42` is the Sentry allowance spent by a crawler (C51).
+ *
+ * The canonical text form, any version — narrower than Postgres accepts, which
+ * is the direction that matters: everything this admits casts.
+ */
+export const OFFER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isOfferId(value: string): boolean {
+  return OFFER_ID_PATTERN.test(value);
+}
+
 function receivedBy(accountId: string) {
   return and(
     eq(schema.capabilityProfile.accountId, accountId),
@@ -522,7 +536,7 @@ export async function findReceivedOfferTerms(
   accountId: string,
   offerId: string,
 ): Promise<ReceivedOfferTerms | undefined> {
-  if (!isUuid(offerId)) return undefined;
+  if (!isOfferId(offerId)) return undefined;
 
   const [row] = await db
     .select(RECEIVED_TERMS_COLUMNS)
@@ -554,7 +568,7 @@ export async function findReceivedOfferSender(
   accountId: string,
   offerId: string,
 ): Promise<ReceivedOfferSender | undefined> {
-  if (!isUuid(offerId)) return undefined;
+  if (!isOfferId(offerId)) return undefined;
 
   const [row] = await db
     .select({ hirerName: schema.user.hirerName })
@@ -607,7 +621,7 @@ async function answerReceivedOffer(
   offerId: string,
   to: "accepted" | "declined",
 ): Promise<AnswerOfferOutcome> {
-  if (!isUuid(offerId)) return NOT_FOUND;
+  if (!isOfferId(offerId)) return NOT_FOUND;
 
   return db.transaction(async (tx) => {
     const [row] = await tx
