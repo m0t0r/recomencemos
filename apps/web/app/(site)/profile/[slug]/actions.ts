@@ -114,7 +114,12 @@ function parseOffer(
   const parsed = firstOfferFields.safeParse(values);
   if (!parsed.success) return { ok: false, issues: parsed.error.issues };
 
-  const { hirerName, hirerPhone, ...terms } = parsed.data;
+  // **`consent` is taken out by name, and the spread is why.** Excess-property
+  // checking does not reach through a spread, so left in `terms` it would ride
+  // into `offers.send` as a key no type check catches. Having parsed as `true`
+  // is the whole of what it had to do (#250); the row it licenses is the
+  // domain's to write.
+  const { hirerName, hirerPhone, consent: _consent, ...terms } = parsed.data;
 
   return { ok: true, terms, identity: { hirerName, hirerPhone } };
 }

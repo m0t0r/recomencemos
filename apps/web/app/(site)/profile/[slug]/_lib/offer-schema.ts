@@ -2,11 +2,11 @@
  * What the Offer form accepts, declared once and parsed twice (ADR-0014).
  *
  * **This is the shape half.** Presence and lengths, and — on his first Offer —
- * a name and a number. The *substance* half is `@repo/domain/offers`': the
- * contact-detail rejector, the phone normaliser, whether he is Blocked, whether
- * his Account may send at all. Those are the rules, and a rule enforced in a
- * browser is not enforced. What this module buys him is the round trip he does
- * not have to make for a typo he can already see.
+ * a name, a number and the *autorización* ticked. The *substance* half is
+ * `@repo/domain/offers`': the contact-detail rejector, the phone normaliser,
+ * whether he is Blocked, whether his Account may send at all. Those are the
+ * rules, and a rule enforced in a browser is not enforced. What this module buys
+ * him is the round trip he does not have to make for a typo he can already see.
  *
  * **This module imports nothing from `@repo/domain`, and that is load-bearing.**
  * It is reached from a Client Component, and even the pure subpaths sit in a
@@ -30,6 +30,7 @@ import {
   HIRER_NAME_REQUIRED,
   HIRER_NAME_TOO_LONG,
   HIRER_PHONE_LOOKS_WRONG,
+  OFFER_CONSENT_REQUIRED,
   OFFER_PAGE_STALE,
   PAY_REQUIRED,
   PAY_TOO_LONG,
@@ -90,6 +91,19 @@ export const hirerPhoneField = trimmed
   .regex(/^\+?[\d\s().-]+$/u, HIRER_PHONE_LOOKS_WRONG);
 
 /**
+ * The *autorización*'s checkbox. `true` or refused; there is no third state.
+ *
+ * **This is the whole guarantee, and it sits here rather than in the domain**
+ * (#250, fix option A). `offers.send` records a Consent row on a first Offer
+ * unconditionally and takes no consent field at all, so the strict parse below
+ * is the only thing between an unticked box and a row asserting he authorized
+ * the transmission — the same place the publishing form keeps its own. The
+ * `required` attribute is a courtesy that `noValidate` removes once the form
+ * hydrates; this is what refuses after that, in the browser and in the action.
+ */
+export const offerConsentField = z.literal(true, { message: OFFER_CONSENT_REQUIRED });
+
+/**
  * **The lenient shape the action's `inputSchema` takes.**
  *
  * `FormData` arrives as strings and a missing field arrives as nothing at all,
@@ -104,8 +118,15 @@ const offerValues = z.object({
   whenText: z.string().default(""),
   hirerName: z.string().optional(),
   hirerPhone: z.string().optional(),
-  /** Ticked only on his first Offer, where the *autorización* is shown. */
-  consent: z.string().optional(),
+  /**
+   * Whether the *autorización* was ticked — shown only on his first Offer.
+   *
+   * **A boolean, defaulted rather than required.** A later Offer has no box, and
+   * a required boolean here would refuse it at `.inputSchema` with a sentence
+   * Zod wrote. `false` is what an unticked box and an absent one both mean, and
+   * only the first-Offer parse has a rule about it.
+   */
+  consent: z.boolean().default(false),
 });
 
 export type OfferValues = z.output<typeof offerValues>;
@@ -118,7 +139,8 @@ export const offerFields = z.object({
 });
 
 /**
- * The strict parse for a first Offer: the three terms plus who is writing.
+ * The strict parse for a first Offer: the three terms, who is writing, and the
+ * *autorización* he gives before any of it is collected.
  *
  * Written out rather than `offerFields.extend(...)`, because the two are the
  * arguments of one `safeParse` branch each and the compiler has to keep their
@@ -132,6 +154,7 @@ export const firstOfferFields = z.object({
   whenText: whenTextField,
   hirerName: hirerNameField,
   hirerPhone: hirerPhoneField,
+  consent: offerConsentField,
 });
 
 function stringOf(raw: FormData, name: string): string {
@@ -147,6 +170,10 @@ function stringOf(raw: FormData, name: string): string {
  * object passes straight through, so a direct call and a test need not build
  * one — and wrapping every schema in this is also what makes `FormData`
  * assignable where the action's own input type is asked for.
+ *
+ * **The checkbox is read against the value it submits**, as the publishing
+ * form's mapper reads it. An unticked box posts no entry at all, and read through
+ * `stringOf` it became `""` — a value no `true`-literal rule could ever match.
  */
 function fromOfferFormData(raw: unknown): unknown {
   return raw instanceof FormData
@@ -156,7 +183,7 @@ function fromOfferFormData(raw: unknown): unknown {
         whenText: stringOf(raw, "whenText"),
         hirerName: stringOf(raw, "hirerName"),
         hirerPhone: stringOf(raw, "hirerPhone"),
-        consent: stringOf(raw, "consent"),
+        consent: raw.get("consent") === "true",
       }
     : raw;
 }
@@ -175,6 +202,9 @@ export const firstOfferFieldsSchema = z.preprocess(fromOfferFormData, firstOffer
  * on the wire — and it is the same object the form re-renders from on the
  * unhydrated path, which is what makes *nada de lo que escribiste se perdió*
  * true rather than merely written.
+ *
+ * Nothing re-ticks the box from this: consent is an act he takes, not a value
+ * the form displays back to him.
  */
 export const refusedOfferValues = offerValues;
 

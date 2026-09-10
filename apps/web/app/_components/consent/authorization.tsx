@@ -52,6 +52,16 @@ export interface AuthorizationConsentProps {
   readonly name?: string;
   /** Whatever the boundary parse said when she submitted without ticking it. */
   readonly error?: string;
+  /**
+   * The checkbox's id, when the form links to it from its summary.
+   *
+   * **The form owns it because the form owns the link.** A summary item has to
+   * point at an element, and while this component minted the id alone the
+   * summary's `#…-consent` named something that did not exist — on both forms
+   * that render this, found by #250. Falls back to a minted one where nothing
+   * links in.
+   */
+  readonly id?: string;
 }
 
 /**
@@ -64,8 +74,9 @@ export interface AuthorizationConsentProps {
  * Both exist for the reason NFR4 and every authorization rule already give: the
  * client is where a person is helped and the server is where a rule is enforced.
  */
-export function AuthorizationConsent({ name = "consent", error }: AuthorizationConsentProps) {
-  const checkboxId = useId();
+export function AuthorizationConsent({ name = "consent", error, id }: AuthorizationConsentProps) {
+  const mintedId = useId();
+  const checkboxId = id ?? mintedId;
   const helpId = useId();
   const errorId = useId();
 

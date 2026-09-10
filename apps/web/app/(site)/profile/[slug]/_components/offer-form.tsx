@@ -118,6 +118,7 @@ export function OfferForm({ profileSlug, consentVersions, alreadyIdentified }: O
   const whenId = useId();
   const nameId = useId();
   const phoneId = useId();
+  const consentId = useId();
 
   const machine = useActionForm<OfferSummary, RefusedOfferValues>({
     action: sendOffer.bind(null, profileSlug, consentVersions),
@@ -138,6 +139,7 @@ export function OfferForm({ profileSlug, consentVersions, alreadyIdentified }: O
     whenText: whenId,
     hirerName: nameId,
     hirerPhone: phoneId,
+    consent: consentId,
   } as const;
 
   const errorFor = (field: keyof typeof idFor) => offerFieldError(machine.summary, field);
@@ -288,7 +290,9 @@ export function OfferForm({ profileSlug, consentVersions, alreadyIdentified }: O
           platform his name and his number, and the draft had him consenting to
           nothing (C4, story 14).
         */}
-          {alreadyIdentified ? null : <AuthorizationConsent />}
+          {alreadyIdentified ? null : (
+            <AuthorizationConsent id={idFor.consent} error={errorFor("consent")} />
+          )}
 
           {/*
           **The immutability again, at the control rather than only at the top.**
