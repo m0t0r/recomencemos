@@ -16,6 +16,7 @@
 import type { GatedIdentity } from "@repo/domain/profiles";
 import { act, render, screen, within } from "@testing-library/react";
 import { Suspense } from "react";
+import { prerender } from "react-dom/static";
 import { ABOUT_HEADING, NOTHING_MORE, TO_BROWSE, WORK_HISTORY_HEADING } from "../_lib/messages";
 import { GatedProfileView } from "./gated-profile-view";
 
@@ -66,22 +67,36 @@ async function renderView(workHistory: readonly string[] = [`Panadería La Espig
   return result;
 }
 
+/**
+ * **The HTML a browser receives, as a string.** What this block asks is about
+ * markup — attribute values, and strings that must never be sent at all — which
+ * the accessibility tree does not report. `prerender` waits for every Suspense
+ * boundary before it resolves, so the work history is in it and the fallback is
+ * not: the same document a crawler or an unhydrated page gets.
+ */
+async function markupOf(workHistory: readonly string[] = [`Panadería La Espiga ${PAYLOAD}`]) {
+  const { prelude } = await prerender(
+    <Suspense fallback={<p>cargando</p>}>
+      <GatedProfileView profile={profile} workHistory={Promise.resolve(workHistory)} />
+    </Suspense>,
+  );
+
+  return new Response(prelude).text();
+}
+
 describe("what crosses to the browser", () => {
   it("renders every free-text field as text and never as a URL", async () => {
-    const { container } = await renderView();
-    await screen.findByRole("heading", { name: WORK_HISTORY_HEADING });
+    const html = await markupOf();
 
-    // Over the HTML rather than the tree: the question is whether the payload
-    // ever becomes an attribute, wherever it renders.
-    expect(container.innerHTML).toContain(PAYLOAD);
+    // Resolved, and carrying the payload as content…
+    expect(html).not.toContain("cargando");
+    expect(html).toContain(PAYLOAD);
 
-    // The escape hatch case: a URL-valued attribute is not in the accessibility
-    // tree, so its absence is asserted over the markup.
-    for (const element of container.querySelectorAll("[href], [src], [action]")) {
-      for (const attribute of ["href", "src", "action"]) {
-        expect(element.getAttribute(attribute) ?? "").not.toContain(PAYLOAD);
-      }
-    }
+    // …and never inside a URL-valued attribute, wherever it renders. Counted, so
+    // the loop cannot pass by finding no attribute at all.
+    const urls = [...html.matchAll(/\b(?:href|src|action)="([^"]*)"/g)].map(([, url]) => url);
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) expect(url).not.toContain(PAYLOAD);
   });
 
   /**
@@ -91,18 +106,12 @@ describe("what crosses to the browser", () => {
    * and the one that would go red if `GatedIdentity` were widened.
    */
   it.each(Object.entries(HELD))("never renders her %s", async (_field, value) => {
-    const { container } = await renderView();
-    await screen.findByRole("heading", { name: WORK_HISTORY_HEADING });
-
-    expect(container.innerHTML).not.toContain(value);
+    expect(await markupOf()).not.toContain(value);
   });
 
   /** The spelling a person would read, as well as the one the column holds. */
   it("never renders her phone in its readable form either", async () => {
-    const { container } = await renderView();
-    await screen.findByRole("heading", { name: WORK_HISTORY_HEADING });
-
-    expect(container.innerHTML).not.toContain("300 123 4567");
+    expect(await markupOf()).not.toContain("300 123 4567");
   });
 });
 

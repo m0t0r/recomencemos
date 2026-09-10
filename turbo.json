@@ -63,7 +63,14 @@
       "persistent": true
     },
     "//#test:gates": {
-      "inputs": [".claude/hooks/**", "scripts/**"],
+      "inputs": [
+        ".claude/hooks/**",
+        "scripts/**",
+        ".oxlintrc.json",
+        "**/.oxlintrc.json",
+        "package.json",
+        "pnpm-lock.yaml"
+      ],
       "outputs": []
     },
     "//#spec-identifiers": {

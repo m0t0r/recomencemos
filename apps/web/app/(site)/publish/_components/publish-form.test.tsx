@@ -8,7 +8,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublishForm } from "./publish-form";
-import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
 import {
   CONSENT_REQUIRED,
   FEEDBACK_REGION_LABEL,
@@ -23,6 +22,7 @@ import {
   SKILLS_AT_MAXIMUM,
   summaryHeading,
 } from "@/app/_lib/profile-form/messages";
+import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
 
 const { publishProfile, requestSkill } = vi.hoisted(() => ({
   publishProfile: Object.assign(vi.fn(), { bind: () => vi.fn() }),
@@ -51,31 +51,57 @@ function renderForm() {
   );
 }
 
+/**
+ * The form a native submit posts, reached from its submit button — a `<form>`
+ * with no accessible name has no role of its own — and what the browser's own
+ * serialiser would send from it. That is the whole of the no-JavaScript
+ * question, asked of the browser rather than of the markup.
+ */
+function posted() {
+  const form = screen.getByRole<HTMLButtonElement>("button", { name: PUBLISH_BUTTON }).form;
+  if (form === null) throw new Error("The publish button sits inside a form.");
+  return new FormData(form);
+}
+
 describe("the form", () => {
-  it("keeps a native action and a named control for every field", () => {
-    // The one place a raw DOM query is the right tool: "is there a `<form>`
-    // with an `action`" is a question about the HTML that survives with no
-    // JavaScript, not about the accessibility tree.
-    const { container } = renderForm();
-    const form = container.querySelector("form");
+  it("keeps a native action and a named control for every field", async () => {
+    const user = userEvent.setup();
+    renderForm();
 
-    expect(form?.getAttribute("action")).toBeTruthy();
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: PUBLISH_BUTTON }).form,
+    ).toHaveAttribute("action");
 
+    // A radio or a checkbox posts only once chosen, so one of each is chosen
+    // first — which also proves the value each one carries.
+    await user.click(screen.getByRole("radio", { name: "Pereira" }));
+    await user.click(screen.getByRole("checkbox", { name: vocabulary[0]!.labelEs }));
+    await user.click(screen.getByRole("checkbox", { name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX }));
+
+    const form = posted();
     for (const name of ["fullName", "firstName", "lastInitial", "headline", "phone", "about"]) {
-      expect(container.querySelector(`[name="${name}"]`)).not.toBeNull();
+      expect(form.has(name), name).toBe(true);
     }
-    expect(container.querySelectorAll('input[name="city"]').length).toBe(3);
-    expect(container.querySelectorAll('input[name="skillSlugs"]').length).toBe(vocabulary.length);
-    expect(container.querySelector('input[name="consent"]')).not.toBeNull();
-    expect(container.querySelectorAll('input[name="workHistory"]').length).toBeGreaterThan(0);
+    expect(form.getAll("workHistory").length).toBeGreaterThan(0);
+    expect(form.get("city")).toBe("pereira");
+    expect(form.getAll("skillSlugs")).toEqual([vocabulary[0]!.slug]);
+    expect(form.get("consent")).toBe("true");
   });
 
   it("carries no hidden inputs at all", () => {
-    // A hidden input has no accessible role by definition, so its absence is
-    // unassertable through any query built on the accessibility tree.
-    const { container } = renderForm();
+    renderForm();
 
-    expect(container.querySelectorAll('input[type="hidden"]').length).toBe(0);
+    // Untouched, every choice is unchosen and posts nothing, so what is left is
+    // exactly the fields she types. A hidden input would be one more key.
+    expect([...new Set(posted().keys())].toSorted()).toEqual([
+      "about",
+      "firstName",
+      "fullName",
+      "headline",
+      "lastInitial",
+      "phone",
+      "workHistory",
+    ]);
   });
 
   it("moves focus to the summary, with the count first, when the browser refuses a submit", async () => {
@@ -159,7 +185,7 @@ describe("the Skill picker", () => {
   // disabled now, so the ceiling has to be said rather than shown.
   it("refuses a seventh out loud, and leaves every entry reachable", async () => {
     const user = userEvent.setup();
-    const { container } = renderForm();
+    renderForm();
 
     for (const entry of vocabulary.slice(0, 6)) {
       // Sequential on purpose: each pick changes what the next one costs.
@@ -169,15 +195,13 @@ describe("the Skill picker", () => {
 
     const seventh = screen.getByRole("checkbox", { name: vocabulary[6]!.labelEs });
     expect(seventh).toBeEnabled();
-    // The half that decides what is posted is the hidden native input beside
-    // the styled control — a hidden input has no role, so it is queried by
-    // name and value.
-    expect(container.querySelector('input[name="skillSlugs"][value="welding"]')).toBeEnabled();
 
     await user.click(seventh);
 
     expect(seventh).toHaveAttribute("aria-checked", "false");
     expect(screen.getByRole("alert", { name: "" })).toHaveTextContent(SKILLS_AT_MAXIMUM);
+    // Refused in what is posted too, not only in what is shown.
+    expect(posted().getAll("skillSlugs")).not.toContain("welding");
   });
 
   it("takes the seventh once she gives one back", async () => {
@@ -195,6 +219,9 @@ describe("the Skill picker", () => {
 
     expect(seventh).toHaveAttribute("aria-checked", "true");
     expect(screen.queryByText(SKILLS_AT_MAXIMUM)).toBeNull();
+    // The native input behind the styled control is what a submit reads, and it
+    // was never disabled: once taken, the seventh is posted.
+    expect(posted().getAll("skillSlugs")).toContain("welding");
   });
 
   it("narrows the list from the filter box, folding accents", async () => {
@@ -229,7 +256,7 @@ describe("the Skill picker", () => {
  */
 async function openTheRequest(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("checkbox", { name: /está en la lista/i }));
-  return screen.getByRole("textbox", { name: SKILL_REQUEST_LABEL });
+  return screen.getByRole<HTMLInputElement>("textbox", { name: SKILL_REQUEST_LABEL });
 }
 
 describe("asking for a Skill that is not on the list", () => {
@@ -386,15 +413,17 @@ describe("asking for a Skill that is not on the list", () => {
    */
   it("adds no second form and no submit button", async () => {
     const user = userEvent.setup();
-    const { container } = renderForm();
+    renderForm();
 
-    await openTheRequest(user);
+    const field = await openTheRequest(user);
+    const publish = screen.getByRole<HTMLButtonElement>("button", { name: PUBLISH_BUTTON });
+    const request = screen.getByRole<HTMLButtonElement>("button", { name: SKILL_REQUEST_BUTTON });
 
-    expect(container.querySelectorAll("form")).toHaveLength(1);
-    expect(container.querySelector("[formaction]")).toBeNull();
-    expect(screen.getByRole("button", { name: SKILL_REQUEST_BUTTON })).toHaveAttribute(
-      "type",
-      "button",
-    );
+    // A control's `form` is its nearest form, so a second `<form>` around the
+    // request would make these a different object from the publishing form.
+    expect(field.form).toBe(publish.form);
+    expect(request.form).toBe(publish.form);
+    expect(request).not.toHaveAttribute("formaction");
+    expect(request).toHaveAttribute("type", "button");
   });
 });

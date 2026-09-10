@@ -129,15 +129,20 @@ describe("PhotoField", () => {
 
   /**
    * ADR-0015: values that travel with a submit and are not typed into it are
-   * **bound arguments**, never hidden inputs. A hidden input has no accessible
-   * role by definition, so its absence is unassertable through the
-   * accessibility tree — which is one of the two cases `CLAUDE.md` sanctions a
-   * `querySelector` for.
+   * **bound arguments**, never hidden inputs. The field has no form of its own,
+   * so it is posted from a named test form, and the browser's serialiser says
+   * what a native submit would carry. The file input has no `name`, so any entry
+   * at all is a field she never chose.
    */
   it("mirrors no key into a hidden input", () => {
-    const { container } = renderField();
+    render(
+      <form aria-label="formulario de prueba">
+        <PhotoField onPhotoKeyChange={() => {}} hydrated />
+      </form>,
+    );
+    const form = screen.getByRole<HTMLFormElement>("form", { name: "formulario de prueba" });
 
-    expect(container.querySelector('input[type="hidden"]')).toBeNull();
+    expect([...new FormData(form).keys()]).toEqual([]);
   });
 
   /**

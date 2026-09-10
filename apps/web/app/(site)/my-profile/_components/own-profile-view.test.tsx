@@ -5,6 +5,7 @@
  */
 
 import { render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { OwnProfile } from "@repo/domain/profiles";
 import { OwnProfileView } from "./own-profile-view";
 import {
@@ -38,22 +39,18 @@ const profile: OwnProfile = {
 
 describe("the view", () => {
   it("renders every free-text field as text and never as a URL", () => {
-    const { container } = render(
+    // Over the HTML React sends rather than the tree: the question is whether the
+    // payload ever becomes an attribute, wherever it renders, and a URL-valued
+    // attribute is not something the accessibility tree reports.
+    const html = renderToStaticMarkup(
       <OwnProfileView profile={profile} justPublished={false} justSaved={false} />,
     );
+    expect(html).toContain(PAYLOAD);
 
-    // Over the HTML rather than the tree: the question is whether the payload
-    // ever becomes an attribute, wherever it renders.
-    const html = container.innerHTML;
-    expect(html).toContain("javascript:alert(1)");
-
-    // The escape hatch case: a URL-valued attribute is not in the
-    // accessibility tree, so its absence is asserted over the markup.
-    for (const element of container.querySelectorAll("[href], [src], [action]")) {
-      for (const attribute of ["href", "src", "action"]) {
-        expect(element.getAttribute(attribute) ?? "").not.toContain(PAYLOAD);
-      }
-    }
+    const urls = [...html.matchAll(/\b(?:href|src|action)="([^"]*)"/g)].map(([, url]) => url);
+    // Counted, so the loop cannot pass by finding no attribute at all.
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) expect(url).not.toContain(PAYLOAD);
   });
 
   it("shows the phone as a number to read, not as a link", () => {

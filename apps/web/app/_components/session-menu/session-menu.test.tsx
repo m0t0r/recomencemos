@@ -159,38 +159,34 @@ describe("one form, two triggers", () => {
    */
   it("submits the same form from the menu and from the fallback", async () => {
     const user = userEvent.setup();
-    const { container } = render(<SessionMenu {...SITE_PROPS} />);
+    render(<SessionMenu {...SITE_PROPS} />);
 
-    // A `<form>` has no role until it has an accessible name, so counting them
-    // is a markup question by definition — the second documented escape hatch.
-    const forms = container.querySelectorAll("form");
-    expect(forms).toHaveLength(1);
-    expect(forms[0]?.id).toBe(SIGN_OUT_FORM_ID);
-
-    const fallback = screen.getByRole("button", { name: SIGN_OUT });
-    expect(fallback).toHaveAttribute("form", SIGN_OUT_FORM_ID);
+    // `button.form` resolves a `form` attribute exactly as a submit does, so it
+    // is the form each trigger would post — and "the same form" is one object,
+    // which a second `<form>` or a trigger naming another id would both break.
+    const fallback = screen.getByRole<HTMLButtonElement>("button", { name: SIGN_OUT });
+    expect(fallback.form).toHaveAttribute("id", SIGN_OUT_FORM_ID);
     expect(fallback).toHaveAttribute("type", "submit");
 
     await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
-    expect(screen.getByRole("menuitem", { name: SIGN_OUT })).toHaveAttribute(
-      "form",
-      SIGN_OUT_FORM_ID,
-    );
+    const item = screen.getByRole<HTMLButtonElement>("menuitem", { name: SIGN_OUT });
+    expect(item).toHaveAttribute("form", SIGN_OUT_FORM_ID);
+    expect(item.form).toBe(fallback.form);
   });
 
   /**
    * Bound arguments, not hidden inputs (ADR-0015). `signOut` takes none at all,
-   * so the assertion is that the form carries no field of this app's own — React
-   * adds its own `$ACTION_*` fields, and those are the framework's.
+   * so the form posts nothing: the browser's serialiser over the form the
+   * fallback submits is the whole question. React writes its own `$ACTION_*`
+   * fields only into server-rendered HTML, so a client render carries none, and
+   * any key here is a field of this app's own.
    */
   it("carries no hidden input of its own", () => {
-    const { container } = render(<SessionMenu {...SITE_PROPS} />);
+    render(<SessionMenu {...SITE_PROPS} />);
 
-    const ours = [...container.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].filter(
-      (input) => !input.name.startsWith("$ACTION"),
-    );
+    const form = screen.getByRole<HTMLButtonElement>("button", { name: SIGN_OUT }).form;
 
-    expect(ours).toHaveLength(0);
+    expect(form === null ? null : [...new FormData(form).keys()]).toEqual([]);
   });
 });
 

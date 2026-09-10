@@ -7,6 +7,7 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
 import {
   HIRER_NAME_LABEL,
@@ -43,14 +44,30 @@ vi.mock("../actions", () => ({ sendOffer }));
 
 const consentVersions = { notice: "2026-08-30", authorization: "2026-08-30" };
 
-function renderForm(alreadyIdentified = false) {
-  return render(
+const SLUG = "k7m2qx6vb4tn5rzc";
+
+function offerForm(alreadyIdentified = false) {
+  return (
     <OfferForm
-      profileSlug="k7m2qx6vb4tn5rzc"
+      profileSlug={SLUG}
       consentVersions={consentVersions}
       alreadyIdentified={alreadyIdentified}
-    />,
+    />
   );
+}
+
+function renderForm(alreadyIdentified = false) {
+  return render(offerForm(alreadyIdentified));
+}
+
+/**
+ * What a native submit would send: the form the send button posts, read by the
+ * browser's own serialiser. Sorted, because the question is which fields and
+ * not the order they sit in.
+ */
+function postedFields() {
+  const form = screen.getByRole<HTMLButtonElement>("button", { name: SEND_OFFER_BUTTON }).form;
+  return form === null ? null : [...new FormData(form).keys()].toSorted();
 }
 
 /** Every field a first Offer asks for, filled — so the box is the only thing left. */
@@ -71,17 +88,20 @@ async function fillTerms(user: ReturnType<typeof userEvent.setup>) {
 
 describe("the form", () => {
   it("keeps a native action and a named control for every field", () => {
-    // The one place a raw DOM query is the right tool: "is there a `<form>` with
-    // an `action`" is a question about the HTML that survives with no
-    // JavaScript, not about the accessibility tree.
-    const { container } = renderForm();
-    const form = container.querySelector("form");
+    renderForm();
 
-    expect(form?.getAttribute("action")).toBeTruthy();
-
-    for (const name of ["workDescription", "payTerms", "whenText", "hirerName", "hirerPhone"]) {
-      expect(container.querySelector(`[name="${name}"]`)).not.toBeNull();
-    }
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: SEND_OFFER_BUTTON }).form,
+    ).toHaveAttribute("action");
+    expect(postedFields()).toEqual(
+      expect.arrayContaining([
+        "workDescription",
+        "payTerms",
+        "whenText",
+        "hirerName",
+        "hirerPhone",
+      ]),
+    );
   });
 
   /**
@@ -90,19 +110,21 @@ describe("the form", () => {
    * slug would be the field an attacker edits to address the Offer to somebody
    * else, and this is what stops one coming back.
    *
-   * A hidden input has no accessible role by definition, so its absence is
-   * unassertable through any query built on the accessibility tree.
+   * Exactly the fields he types, and nothing else: a hidden input would be one
+   * more key. The unticked consent posts nothing, so it is absent from both.
    */
-  it("carries no hidden inputs at all", () => {
-    const { container } = renderForm();
+  it.each([
+    [false, ["hirerName", "hirerPhone", "payTerms", "whenText", "workDescription"]],
+    [true, ["payTerms", "whenText", "workDescription"]],
+  ])("carries no hidden inputs at all (already identified: %s)", (alreadyIdentified, typed) => {
+    renderForm(alreadyIdentified);
 
-    expect(container.querySelectorAll('input[type="hidden"]').length).toBe(0);
+    expect(postedFields()).toEqual(typed);
   });
 
-  it("puts the slug in no control a browser posts", () => {
-    const { container } = renderForm();
-
-    expect(container.innerHTML).not.toContain("k7m2qx6vb4tn5rzc");
+  /** Over the HTML React sends, so an attribute nobody posts cannot carry it either. */
+  it("puts the slug nowhere in the markup", () => {
+    expect(renderToStaticMarkup(offerForm())).not.toContain(SLUG);
   });
 });
 
@@ -189,12 +211,14 @@ describe("who is writing", () => {
    * on a later Offer: consent is given once, not per send.
    */
   it("takes the autorización on a first Offer and not on a later one", () => {
-    const { container, unmount } = renderForm(false);
-    expect(container.querySelector('[name="consent"]')).not.toBeNull();
+    const consent = { name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX };
+
+    const { unmount } = renderForm(false);
+    expect(screen.getByRole("checkbox", consent)).toBeInTheDocument();
     unmount();
 
-    const later = renderForm(true);
-    expect(later.container.querySelector('[name="consent"]')).toBeNull();
+    renderForm(true);
+    expect(screen.queryByRole("checkbox", consent)).toBeNull();
   });
 });
 
@@ -219,23 +243,24 @@ describe("a submit the browser refuses", () => {
 
   it("names each field that is wrong, and links to it", async () => {
     const user = userEvent.setup();
-    const { container } = renderForm(true);
+    renderForm(true);
 
     await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
 
     // The summary renders in one pass, so the three links are all present by the
     // time the first resolves — awaited together rather than one at a time.
+    const labels = [WORK_LABEL, PAY_LABEL, WHEN_LABEL];
     const links = await Promise.all(
-      [WORK_LABEL, PAY_LABEL, WHEN_LABEL].map((label) =>
-        screen.findByRole("link", { name: label }),
-      ),
+      labels.map((label) => screen.findByRole("link", { name: label })),
     );
 
-    for (const link of links) {
-      expect(link.getAttribute("href")).toMatch(/^#/);
-      // The target exists, which is what makes the link a link rather than a
-      // string: a summary pointing at nothing is worse than no summary.
-      expect(container.querySelector(link.getAttribute("href") ?? "")).not.toBeNull();
+    // Each link points at the field it names, which is what makes it a link
+    // rather than a string: a summary pointing at nothing is worse than no
+    // summary. The field is found by its label, and its id is the target.
+    for (const [index, link] of links.entries()) {
+      const field = screen.getByRole("textbox", { name: labels[index] });
+      expect(field.id).not.toBe("");
+      expect(link).toHaveAttribute("href", `#${field.id}`);
     }
   });
 

@@ -68,17 +68,21 @@ it("renders the request as she wrote it", () => {
  * hidden input mirroring a value nobody typed is the shape that rule replaces,
  * and this row is the one the four remaining queue sections will copy.
  *
- * The hidden-input half is asserted with a raw selector on purpose — the same
- * escape hatch `sign-in-form.test.tsx` uses, and for the identical reason: a
- * hidden input has no accessible role, so its **absence** is unassertable through
- * the accessibility tree.
+ * The hidden-input half is asked of the browser's own serialiser: the form the
+ * promote button submits posts the three fields an Admin types, and a mirrored
+ * request id would be a fourth key.
  */
 it("binds the request it is about to promote instead of mirroring it into the form", async () => {
   const user = userEvent.setup();
-  const { container } = render(<SkillRequestRow item={item} />);
+  render(<SkillRequestRow item={item} />);
 
   expect(bound).toHaveBeenCalledWith("7");
-  expect(container.querySelector('input[type="hidden"]')).toBeNull();
+  const form = screen.getByRole<HTMLButtonElement>("button", { name: PROMOTE_SUBMIT }).form;
+  expect(form === null ? null : [...new FormData(form).keys()].toSorted()).toEqual([
+    "cuocCode",
+    "labelEs",
+    "slug",
+  ]);
 
   await user.type(screen.getByRole("textbox", { name: PROMOTE_SLUG_LABEL }), "sewing-repair");
   await user.type(
