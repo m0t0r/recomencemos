@@ -43,17 +43,17 @@ const FIRST_ENTRIES = [
 ] as const;
 
 describe("a first Offer", () => {
-  it("accepts one with the autorización ticked", () => {
+  it("accepts one with the consent box ticked", () => {
     expect(FIRST).toMatchSchema(firstOfferFields);
   });
 
-  it("refuses one with the autorización absent", () => {
+  it("refuses one with consent absent", () => {
     const { consent: _consent, ...unticked } = FIRST;
 
     expect(unticked).not.toMatchSchema(firstOfferFields);
   });
 
-  it("refuses one with the autorización false", () => {
+  it("refuses one with consent false", () => {
     expect({ ...FIRST, consent: false }).not.toMatchSchema(firstOfferFields);
   });
 
@@ -70,7 +70,7 @@ describe("a first Offer", () => {
 
 describe("a later Offer", () => {
   /** Consent is given once, not per send, so the repeat parse has no member for it. */
-  it("sends with no autorización, and carries none onward", () => {
+  it("parses with no consent member, and carries none onward", () => {
     const parsed = offerFields.parse({ ...TERMS, consent: false });
 
     expect(parsed).not.toHaveProperty("consent");

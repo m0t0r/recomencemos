@@ -259,7 +259,7 @@ describe("a submit the browser refuses", () => {
   });
 });
 
-describe("the autorización on a first Offer", () => {
+describe("consent on a first Offer", () => {
   /**
    * **Every other field filled, and the box left unticked** — the ordinary path,
    * no attacker required (#250). Once hydrated the form sets `noValidate`, so
@@ -290,7 +290,7 @@ describe("the autorización on a first Offer", () => {
     const box = await screen.findByRole("checkbox", {
       name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX,
     });
-    expect(box).toHaveAttribute("aria-invalid", "true");
+    expect(box).toBeInvalid();
     expect(box).toHaveAccessibleDescription(expect.stringContaining(OFFER_CONSENT_REQUIRED));
   });
 

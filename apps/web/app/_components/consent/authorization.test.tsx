@@ -36,7 +36,7 @@ describe("AuthorizationText", () => {
 
 describe("AuthorizationConsent", () => {
   it("exposes the consent as a checkbox a person can reach by role", () => {
-    render(<AuthorizationConsent />);
+    render(<AuthorizationConsent id="consent" />);
 
     expect(
       screen.getByRole("checkbox", { name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX }),
@@ -50,7 +50,7 @@ describe("AuthorizationConsent", () => {
    * which is the NFR4 half of the same rule.
    */
   it("marks the consent required, so a browser refuses the submit without it", () => {
-    render(<AuthorizationConsent />);
+    render(<AuthorizationConsent id="consent" />);
 
     expect(screen.getByRole("checkbox")).toBeRequired();
   });
@@ -62,7 +62,7 @@ describe("AuthorizationConsent", () => {
    * a four-word label and a four-word consent.
    */
   it("announces the international transmission with the checkbox", () => {
-    render(<AuthorizationConsent />);
+    render(<AuthorizationConsent id="consent" />);
 
     // `toHaveAccessibleDescription` takes a RegExp, which is what a partial match
     // is here — the error case below adds a second `aria-describedby` id, so an
@@ -73,7 +73,7 @@ describe("AuthorizationConsent", () => {
   });
 
   it("adds the field error to what the checkbox announces", () => {
-    render(<AuthorizationConsent error="Marca la casilla para seguir." />);
+    render(<AuthorizationConsent id="consent" error="Marca la casilla para seguir." />);
 
     const checkbox = screen.getByRole("checkbox");
     expect(checkbox).toHaveAccessibleDescription(/Marca la casilla para seguir\./);
@@ -94,7 +94,7 @@ describe("AuthorizationConsent", () => {
    * A hidden input has no accessible role, so its absence has no role query.
    */
   it("carries no hidden input", () => {
-    const { container } = render(<AuthorizationConsent />);
+    const { container } = render(<AuthorizationConsent id="consent" />);
 
     expect(container.querySelectorAll('input[type="hidden"]')).toHaveLength(0);
   });
@@ -102,7 +102,7 @@ describe("AuthorizationConsent", () => {
   // Link text names its destination, and it points at the exact section rather
   // than at the top of a long page she would then have to scan.
   it("links to the authorization section of the notice, by name", () => {
-    render(<AuthorizationConsent />);
+    render(<AuthorizationConsent id="consent" />);
 
     expect(screen.getByRole("link", { name: CONSENT_LABELS.NOTICE_LINK })).toHaveAttribute(
       "href",
@@ -122,7 +122,7 @@ describe("AuthorizationConsent", () => {
    * input carries `aria-hidden`.
    */
   it("posts a named checkbox the browser refuses to submit unticked", () => {
-    const { container } = render(<AuthorizationConsent />);
+    const { container } = render(<AuthorizationConsent id="consent" />);
 
     const posted = container.querySelector<HTMLInputElement>('input[name="consent"]');
 
