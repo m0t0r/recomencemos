@@ -42,6 +42,18 @@ const KEY = "quarantine/aaaaaaaaaaaaaaaaaaaaa";
 const OTHER_KEY = "quarantine/bbbbbbbbbbbbbbbbbbbbb";
 const PUBLIC_KEY = "photos/aaaaaaaaaaaaaaaaaaaaa.webp";
 
+/**
+ * An object identity, shaped as the store returns one — quoted, because S3
+ * quotes it and this column stores what it was given rather than a tidied
+ * version of it.
+ *
+ * **It is an opaque string to everything at this seam.** What produced it is
+ * `@repo/storage`'s business and is exercised against a real bucket by
+ * `pnpm test:store`; what these cases are about is that the value written at
+ * attach is the value the decision carries.
+ */
+const ETAG = '"6b1a8b0d0e0f4a2c9d3e5f7a1b2c3d4e"';
+
 const PUBLISHED = {
   fullName: "Ana María Restrepo Gómez",
   firstName: "Ana María",
@@ -88,7 +100,7 @@ async function published(database: TestDatabase, email = "ana@recomencemos.test"
   return { accountId, profileId: String((row as { id: bigint }).id) };
 }
 
-/** The three photo columns, read straight out of the row. */
+/** The three photo columns the state machine moves, read straight out of the row. */
 async function photoRow(database: TestDatabase, profileId: string) {
   const [row] = await database.db
     .select({
@@ -104,6 +116,22 @@ async function photoRow(database: TestDatabase, profileId: string) {
     photoKey: string | null;
     photoAttachedAt: Date | null;
   };
+}
+
+/**
+ * The recorded object identity, on its own.
+ *
+ * Read separately from {@link photoRow} so that the dozen `toEqual` assertions
+ * over the three state columns keep saying what they said — a fourth key in
+ * every one of them would bury the cases that are actually about it.
+ */
+async function photoEtag(database: TestDatabase, profileId: string): Promise<string | null> {
+  const [row] = await database.db
+    .select({ photoEtag: schema.capabilityProfile.photoEtag })
+    .from(schema.capabilityProfile)
+    .where(eq(schema.capabilityProfile.id, BigInt(profileId)));
+
+  return (row as { photoEtag: string | null }).photoEtag;
 }
 
 const auditRows = (database: TestDatabase) =>
@@ -149,7 +177,7 @@ async function intentFor(database: TestDatabase, accountId: string, photoKey: st
  */
 async function attach(database: TestDatabase, accountId: string, key: string) {
   await intentFor(database, accountId, key);
-  return attachPhoto(database.db, accountId, key);
+  return attachPhoto(database.db, accountId, key, ETAG);
 }
 
 describe("attachPhoto", () => {
@@ -157,7 +185,7 @@ describe("attachPhoto", () => {
     const { accountId, profileId } = await published(database);
     await intentFor(database, accountId, KEY);
 
-    const outcome = await attachPhoto(database.db, accountId, KEY);
+    const outcome = await attachPhoto(database.db, accountId, KEY, ETAG);
 
     expect(outcome).toEqual({ ok: true, photoState: "pending" });
 
@@ -186,7 +214,7 @@ describe("attachPhoto", () => {
   ] as const)("refuses %s, and leaves the row absent", async ([, key], { database }) => {
     const { accountId, profileId } = await published(database);
 
-    const outcome = await attachPhoto(database.db, accountId, key);
+    const outcome = await attachPhoto(database.db, accountId, key, ETAG);
 
     expect(outcome.ok).toBe(false);
     expect((await photoRow(database, profileId)).photoState).toBe("absent");
@@ -209,7 +237,7 @@ describe("attachPhoto", () => {
     const accountId = (account as { id: string }).id;
     await intentFor(database, accountId, KEY);
 
-    const outcome = await attachPhoto(database.db, accountId, KEY);
+    const outcome = await attachPhoto(database.db, accountId, KEY, ETAG);
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("unreachable");
@@ -233,7 +261,7 @@ describe("attachPhoto", () => {
     const attacker = await published(database, "attacker@recomencemos.test");
     await intentFor(database, victim.accountId, KEY);
 
-    const outcome = await attachPhoto(database.db, attacker.accountId, KEY);
+    const outcome = await attachPhoto(database.db, attacker.accountId, KEY, ETAG);
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("unreachable");
@@ -247,9 +275,9 @@ describe("attachPhoto", () => {
     const attacker = await published(database, "attacker@recomencemos.test");
     await intentFor(database, victim.accountId, KEY);
 
-    await attachPhoto(database.db, attacker.accountId, KEY);
+    await attachPhoto(database.db, attacker.accountId, KEY, ETAG);
 
-    expect(await attachPhoto(database.db, victim.accountId, KEY)).toEqual({
+    expect(await attachPhoto(database.db, victim.accountId, KEY, ETAG)).toEqual({
       ok: true,
       photoState: "pending",
     });
@@ -264,9 +292,9 @@ describe("attachPhoto", () => {
     const { accountId } = await published(database);
     await intentFor(database, accountId, KEY);
 
-    expect((await attachPhoto(database.db, accountId, KEY)).ok).toBe(true);
+    expect((await attachPhoto(database.db, accountId, KEY, ETAG)).ok).toBe(true);
 
-    const replay = await attachPhoto(database.db, accountId, KEY);
+    const replay = await attachPhoto(database.db, accountId, KEY, ETAG);
 
     expect(replay.ok).toBe(false);
     if (replay.ok) throw new Error("unreachable");
@@ -281,7 +309,7 @@ describe("attachPhoto", () => {
   test("refuses a shape-valid key nobody was ever given", async ({ database }) => {
     const { accountId, profileId } = await published(database);
 
-    const outcome = await attachPhoto(database.db, accountId, KEY);
+    const outcome = await attachPhoto(database.db, accountId, KEY, ETAG);
 
     expect(outcome.ok).toBe(false);
     expect((await photoRow(database, profileId)).photoState).toBe("absent");
@@ -315,7 +343,7 @@ describe("attachPhoto", () => {
     await anAdmin(database);
 
     await attach(database, accountId, KEY);
-    await runAdminAction(database.db, actor, "rejectPhoto", { profileId });
+    await runAdminAction(database.db, actor, "rejectPhoto", { profileId, reviewedKey: KEY });
 
     expect((await photoRow(database, profileId)).photoState).toBe("rejected");
 
@@ -334,6 +362,7 @@ describe("approvePhoto", () => {
     const outcome = await runAdminAction(database.db, actor, "approvePhoto", {
       profileId,
       publicKey: PUBLIC_KEY,
+      reviewedKey: KEY,
     });
 
     expect(outcome).toEqual({ ok: true, result: { photoState: "approved" } });
@@ -353,7 +382,11 @@ describe("approvePhoto", () => {
     await anAdmin(database);
     await attach(database, accountId, KEY);
 
-    await runAdminAction(database.db, actor, "approvePhoto", { profileId, publicKey: PUBLIC_KEY });
+    await runAdminAction(database.db, actor, "approvePhoto", {
+      profileId,
+      publicKey: PUBLIC_KEY,
+      reviewedKey: KEY,
+    });
 
     expect(await auditRows(database)).toEqual([{ action: "approvePhoto", targetId: profileId }]);
   });
@@ -371,7 +404,10 @@ describe("rejectPhoto", () => {
     await anAdmin(database);
     await attach(database, accountId, KEY);
 
-    const outcome = await runAdminAction(database.db, actor, "rejectPhoto", { profileId });
+    const outcome = await runAdminAction(database.db, actor, "rejectPhoto", {
+      profileId,
+      reviewedKey: KEY,
+    });
 
     expect(outcome).toEqual({
       ok: true,
@@ -389,10 +425,92 @@ describe("rejectPhoto", () => {
     await anAdmin(database);
     await attach(database, accountId, KEY);
 
-    await runAdminAction(database.db, actor, "rejectPhoto", { profileId });
+    await runAdminAction(database.db, actor, "rejectPhoto", { profileId, reviewedKey: KEY });
 
     expect(await auditRows(database)).toEqual([{ action: "rejectPhoto", targetId: profileId }]);
   });
+});
+
+/**
+ * **The row half of #231: a decision names an object, not a row.**
+ *
+ * The bytes half — that what gets published is what an Admin looked at — is
+ * `@repo/storage`'s and runs against a real bucket. What is here is the two
+ * things a database settles: that the identity written at attach is the
+ * identity a decision carries, and that a decision arriving with a key the row
+ * no longer names is refused *inside the transaction*, so no `AdminAction` row
+ * is written and nothing moves.
+ */
+describe("the key a decision was made on", () => {
+  test("is recorded with the photo, so a later read has something to compare", async ({
+    database,
+  }) => {
+    const { accountId, profileId } = await published(database);
+
+    await attach(database, accountId, KEY);
+
+    expect(await photoEtag(database, profileId)).toBe(ETAG);
+  });
+
+  /**
+   * **Cleared on the way out, both ways.** It is the identity of a *quarantined*
+   * object and neither state names one any more; a value left behind would be a
+   * recorded expectation about bytes nothing compares.
+   */
+  test.for(["approvePhoto", "rejectPhoto"] as const)(
+    "is cleared when %s decides the photo",
+    async (action, { database }) => {
+      const { accountId, profileId } = await published(database);
+      await anAdmin(database);
+      await attach(database, accountId, KEY);
+
+      await (action === "approvePhoto"
+        ? runAdminAction(database.db, actor, action, {
+            profileId,
+            publicKey: PUBLIC_KEY,
+            reviewedKey: KEY,
+          })
+        : runAdminAction(database.db, actor, action, { profileId, reviewedKey: KEY }));
+
+      expect(await photoEtag(database, profileId)).toBeNull();
+    },
+  );
+
+  /**
+   * **The stale card, for both decisions, and the reject half is the sharper
+   * one**: it deletes an object, so acting on a key nobody reviewed destroys a
+   * photo rather than merely publishing the wrong one.
+   *
+   * Unreachable through the product today — publishing is `attachPhoto`'s only
+   * caller and it refuses an Account that already holds a profile — and in scope
+   * because the queue's own copy promises the re-attach that makes it reachable,
+   * and it would arrive with no code change here.
+   */
+  test.for(["approvePhoto", "rejectPhoto"] as const)(
+    "refuses %s when the row names a different photo",
+    async (action, { database }) => {
+      const { accountId, profileId } = await published(database);
+      await anAdmin(database);
+      await attach(database, accountId, KEY);
+
+      const outcome = await (action === "approvePhoto"
+        ? runAdminAction(database.db, actor, action, {
+            profileId,
+            publicKey: PUBLIC_KEY,
+            reviewedKey: OTHER_KEY,
+          })
+        : runAdminAction(database.db, actor, action, { profileId, reviewedKey: OTHER_KEY }));
+
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) throw new Error("unreachable");
+      expect(outcome.error.status).toBe(409);
+
+      // The transaction rolled back: the photo is still waiting, and the audit
+      // has no record of an act that did not happen (NFR33's second half).
+      expect((await photoRow(database, profileId)).photoState).toBe("pending");
+      expect(await auditRows(database)).toEqual([]);
+    },
+  );
 });
 
 describe("the transitions the state machine refuses", () => {
@@ -412,12 +530,17 @@ describe("the transitions the state machine refuses", () => {
       await runAdminAction(database.db, actor, "approvePhoto", {
         profileId,
         publicKey: PUBLIC_KEY,
+        reviewedKey: KEY,
       });
 
       const second =
         action === "approvePhoto"
-          ? await runAdminAction(database.db, actor, action, { profileId, publicKey: PUBLIC_KEY })
-          : await runAdminAction(database.db, actor, action, { profileId });
+          ? await runAdminAction(database.db, actor, action, {
+              profileId,
+              publicKey: PUBLIC_KEY,
+              reviewedKey: KEY,
+            })
+          : await runAdminAction(database.db, actor, action, { profileId, reviewedKey: KEY });
 
       expect(second.ok).toBe(false);
       if (second.ok) throw new Error("unreachable");
@@ -434,9 +557,13 @@ describe("the transitions the state machine refuses", () => {
     const { accountId, profileId } = await published(database);
     await anAdmin(database);
     await attach(database, accountId, KEY);
-    await runAdminAction(database.db, actor, "rejectPhoto", { profileId });
+    await runAdminAction(database.db, actor, "rejectPhoto", { profileId, reviewedKey: KEY });
 
-    await runAdminAction(database.db, actor, "approvePhoto", { profileId, publicKey: PUBLIC_KEY });
+    await runAdminAction(database.db, actor, "approvePhoto", {
+      profileId,
+      publicKey: PUBLIC_KEY,
+      reviewedKey: KEY,
+    });
 
     expect(await auditRows(database)).toEqual([{ action: "rejectPhoto", targetId: profileId }]);
   });
@@ -449,8 +576,12 @@ describe("the transitions the state machine refuses", () => {
 
       const outcome =
         action === "approvePhoto"
-          ? await runAdminAction(database.db, actor, action, { profileId, publicKey: PUBLIC_KEY })
-          : await runAdminAction(database.db, actor, action, { profileId });
+          ? await runAdminAction(database.db, actor, action, {
+              profileId,
+              publicKey: PUBLIC_KEY,
+              reviewedKey: KEY,
+            })
+          : await runAdminAction(database.db, actor, action, { profileId, reviewedKey: KEY });
 
       expect(outcome.ok).toBe(false);
       expect(await auditRows(database)).toEqual([]);
@@ -460,7 +591,10 @@ describe("the transitions the state machine refuses", () => {
   test("refuses a decision on a profile id no row carries", async ({ database }) => {
     await anAdmin(database);
 
-    const outcome = await runAdminAction(database.db, actor, "rejectPhoto", { profileId: "999" });
+    const outcome = await runAdminAction(database.db, actor, "rejectPhoto", {
+      profileId: "999",
+      reviewedKey: KEY,
+    });
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) throw new Error("unreachable");
@@ -528,7 +662,11 @@ describe("pendingPhotos", () => {
 
     expect((await pendingPhotos(database.db, 20)).total).toBe(1);
 
-    await runAdminAction(database.db, actor, "approvePhoto", { profileId, publicKey: PUBLIC_KEY });
+    await runAdminAction(database.db, actor, "approvePhoto", {
+      profileId,
+      publicKey: PUBLIC_KEY,
+      reviewedKey: KEY,
+    });
 
     expect((await pendingPhotos(database.db, 20)).total).toBe(0);
   });

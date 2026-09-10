@@ -219,6 +219,22 @@ export const ADMIN_PHOTO_ALREADY_REVIEWED =
   "Otra persona ya revisó esa foto. Vuelve a cargar la página.";
 
 /**
+ * The photo on the card is not the photo the decision would act on — different
+ * bytes under the same key, or a key the row has since replaced.
+ *
+ * **It says what happened and what to do, and nothing about how we know.** An
+ * ETag, a key and a timestamp are all things the queue knows and the person
+ * reading this does not; naming any of them would also tell whoever provoked
+ * this which comparison caught them. Reloading is the whole remedy: the card
+ * comes back with the photo that is really there, and the decision can be made
+ * on it.
+ *
+ * Admin register (`voice.md`): density over warmth, no apology, one line.
+ */
+export const ADMIN_PHOTO_CHANGED =
+  "Esa foto cambió. Vuelve a cargar la página y revísala de nuevo.";
+
+/**
  * An Admin action that broke on our side.
  *
  * **The second sentence is the one that matters**, and it is true by

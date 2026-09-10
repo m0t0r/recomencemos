@@ -166,6 +166,28 @@ function field(raw: FormData, name: string): string {
 export const photoProfileArg = z.string().regex(/^\d+$/).max(20);
 
 /**
+ * The quarantine key the card was rendered with, as a **second bound argument**
+ * on both photo decisions.
+ *
+ * **It binds the decision to the photo, where the profile id binds it only to
+ * the row.** The queue renders one object and the approval reads it again, so a
+ * decision naming a row applies to whatever that row points at by the time it
+ * commits. It is not new information on the page: the signed review URL in the
+ * same render is built from this key.
+ *
+ * **The shape is spelled here rather than imported from `@repo/storage`.** That
+ * package's predicate is the authority and the domain calls it on arrival; this
+ * is the boundary parse, and what it is for is refusing a string that cannot be
+ * a key of ours before it becomes an argument — the same division `offerIdArg`
+ * draws. Twenty-one characters is `nanoid`'s default length, and the prefix is
+ * the one the quarantine bucket uses.
+ *
+ * No message, because no person can provoke this — the key comes from the row,
+ * and a forged one meets the refusals the domain already answers.
+ */
+export const photoKeyArg = z.string().regex(/^quarantine\/[A-Za-z0-9_-]{21}$/);
+
+/**
  * **The payload of an action that has none.**
  *
  * All four queue decisions — both photo ones and both Offer ones — carry their

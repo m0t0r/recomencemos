@@ -35,6 +35,7 @@ import {
   ADMIN_OFFER_GONE,
   ADMIN_OFFER_RESOLVED,
   ADMIN_PHOTO_ALREADY_REVIEWED,
+  ADMIN_PHOTO_CHANGED,
   ADMIN_PHOTO_GONE,
   ADMIN_SKILL_REQUEST_GONE,
   ADMIN_SKILL_REQUEST_RESOLVED,
@@ -173,6 +174,16 @@ export interface AdminActionShapes {
       readonly profileId: string;
       /** Where the re-encoded object was written. Server-derived, never from a form. */
       readonly publicKey: string;
+      /**
+       * The quarantine key the card was rendered with.
+       *
+       * **It makes the decision name an object rather than a row.** Bound to the
+       * profile alone, an approval applies to whatever the row happens to point
+       * at when it commits — which is the time-of-check defect one layer up from
+       * the bytes, and the day a Worker can replace a waiting photo it publishes
+       * one nobody reviewed.
+       */
+      readonly reviewedKey: string;
     };
     result: { readonly photoState: "approved" };
   };
@@ -193,7 +204,15 @@ export interface AdminActionShapes {
    * public surface without either one being a special case at the reader.
    */
   rejectPhoto: {
-    input: { readonly profileId: string };
+    input: {
+      readonly profileId: string;
+      /**
+       * The same binding as `approvePhoto`'s, and it earns it more loudly: this
+       * act **deletes** an object, so acting on a key nobody reviewed is the
+       * same mistake in the direction that cannot be undone.
+       */
+      readonly reviewedKey: string;
+    };
     result: {
       readonly photoState: "rejected";
       /** The object the caller must now delete. Never rendered. */
@@ -349,14 +368,18 @@ export const ADMIN_ACTION_HANDLERS = {
     return { targetId: account.id, result: { revoked: revoked.length } };
   },
 
-  async approvePhoto(tx, { profileId, publicKey }) {
-    const photo = await lockPendingPhoto(tx, profileId, "approvePhoto");
+  async approvePhoto(tx, { profileId, publicKey, reviewedKey }) {
+    const photo = await lockPendingPhoto(tx, profileId, "approvePhoto", reviewedKey);
 
     await tx
       .update(schema.capabilityProfile)
       .set({
         photoState: "approved",
         photoKey: publicKey,
+        // Cleared with the other two: it is the identity of a *quarantined*
+        // object, and this row has stopped naming one. Left behind it would be a
+        // recorded expectation about bytes nothing compares any more.
+        photoEtag: null,
         // Cleared, because it answers "how long has this been waiting" and
         // nothing is waiting any more. A stale value here would age a branch
         // this row has left.
@@ -368,8 +391,8 @@ export const ADMIN_ACTION_HANDLERS = {
     return { targetId: profileId, result: { photoState: "approved" } };
   },
 
-  async rejectPhoto(tx, { profileId }) {
-    const photo = await lockPendingPhoto(tx, profileId, "rejectPhoto");
+  async rejectPhoto(tx, { profileId, reviewedKey }) {
+    const photo = await lockPendingPhoto(tx, profileId, "rejectPhoto", reviewedKey);
 
     await tx
       .update(schema.capabilityProfile)
@@ -379,6 +402,7 @@ export const ADMIN_ACTION_HANDLERS = {
         // bytes after this commits; the key travels back in the result for
         // exactly that and is never rendered.
         photoKey: null,
+        photoEtag: null,
         photoAttachedAt: null,
         updatedAt: new Date(),
       })
@@ -583,16 +607,27 @@ export const ADMIN_ACTION_HANDLERS = {
  * an act that had already happened — or worse, publishes a photo the first
  * Admin had just rejected and deleted.
  *
- * **The two refusals are different sentences because they are different
+ * **The three refusals are different sentences because they are different
  * facts.** A profile with nothing waiting is a stale queue row an Admin should
  * reload past; a photo already `approved` or `rejected` is somebody else's
- * finished work. Neither is a fault, and both throw rather than return so the
- * transaction — and its audit row — rolls back with them.
+ * finished work; a photo whose key has moved is a card showing a picture that is
+ * no longer the one a decision would land on. None is a fault, and all three
+ * throw rather than return so the transaction — and its audit row — rolls back
+ * with them.
+ *
+ * **`reviewedKey` is compared here rather than added to the `WHERE`**, for the
+ * reason the state check one line further down is: a predicate that filtered the
+ * row out would leave this function unable to tell "no such profile" from "not
+ * the photo you were looking at", and it would answer an Admin with the wrong
+ * sentence. The lock is taken on the row either way, and the comparison happens
+ * inside the transaction, which is what makes it settle a race rather than
+ * observe one.
  */
 async function lockPendingPhoto(
   tx: DomainDatabase,
   profileId: string,
   action: "approvePhoto" | "rejectPhoto",
+  reviewedKey: string,
 ): Promise<{ readonly id: bigint; readonly photoKey: string }> {
   const [row] = await tx
     .select({
@@ -627,6 +662,23 @@ async function lockPendingPhoto(
         "photo can be approved or rejected; the transaction rolls back with no AdminAction row.",
       userMessage: ADMIN_PHOTO_ALREADY_REVIEWED,
       context: { profile_id: profileId, photo_state: row.photoState },
+    });
+  }
+
+  if (row.photoKey !== reviewedKey) {
+    throw new AppError({
+      code: "admin_photo_replaced",
+      status: 409,
+      message:
+        `${action} was given a photo key that is not the one this row names, so the card it ` +
+        "was pressed on is showing a photo the row has since replaced. Nothing changed and no " +
+        "AdminAction was written — a decision bound to a row and a state rather than to a key " +
+        "would have published or deleted a photo nobody looked at.",
+      userMessage: ADMIN_PHOTO_CHANGED,
+      // The id and nothing else. Neither key says anything an operator needs
+      // that this does not, and both are values a caller probing this would be
+      // varying (NFR18).
+      context: { profile_id: profileId },
     });
   }
 

@@ -262,6 +262,141 @@ export async function presignReview(
   );
 }
 
+/**
+ * The store's own name for the bytes that are under a key **now**.
+ *
+ * **What it is for is a comparison later, not a check now.** An object in
+ * quarantine is written by a browser holding a presigned URL and read again, by
+ * us, at approval — two moments with a person's decision between them. Recording
+ * the identity at the first moment is what lets the second one refuse bytes
+ * nobody looked at; there is nothing this answer is useful for on its own.
+ *
+ * **The value is opaque and is never parsed.** S3 returns the ETag quoted, and
+ * that quoted form is what is stored and what is compared — an unwrapped one
+ * would have to be re-wrapped before it could be sent back as `If-Match`, and a
+ * value that is normalised in one place and not the other is how a comparison
+ * silently starts answering `false`. What produces it is the store's business:
+ * a single `PutObject` makes it a content digest and a multipart upload does
+ * not, and neither this function nor its caller has an opinion about which.
+ *
+ * **An ETag the *client* reported would be worthless here**, which is why this
+ * is a request of our own rather than a value carried up from the PUT the
+ * browser performed. A holder who means to swap the object reports the second
+ * object's identity from the start, and the comparison then passes on exactly
+ * the bytes it exists to refuse.
+ */
+export async function quarantinedEtag(
+  quarantineKey: string,
+  env: StorageEnv = process.env,
+): Promise<string> {
+  if (!isQuarantineKey(quarantineKey)) {
+    throw new AppError({
+      code: "photo_key_not_quarantined",
+      status: 422,
+      message:
+        "quarantinedEtag was given a key that is not a quarantine key. Nothing was read. The " +
+        "key round-trips through a browser before it reaches here, so a traversal has to be " +
+        "refused before it becomes part of a request rather than after.",
+      userMessage: PHOTO_UNAVAILABLE,
+      context: {},
+    });
+  }
+
+  const [{ HeadObjectCommand }, { client, quarantineBucket }] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    photoStore(env),
+  ]);
+
+  const head = await client
+    .send(new HeadObjectCommand({ Bucket: quarantineBucket, Key: quarantineKey }))
+    .catch((cause: unknown) => {
+      throw objectMissing("quarantinedEtag", cause);
+    });
+
+  if (!head.ETag) {
+    throw new AppError({
+      code: "photo_object_unidentified",
+      status: 502,
+      message:
+        "The object store answered a HEAD without an ETag, so there is nothing to record as " +
+        "the identity of these bytes and nothing to compare at approval. Nothing was written. " +
+        "Every store this runs against returns one; an answer without it is a store this code " +
+        "has not met, and guessing an identity would be worse than refusing to have one.",
+      userMessage: PHOTO_UNAVAILABLE,
+      context: {},
+    });
+  }
+
+  return head.ETag;
+}
+
+/**
+ * The one refusal both object reads share, so a caller cannot tell a missing
+ * object from an unreadable one — and neither can a log line pretend to.
+ */
+function objectMissing(caller: string, cause?: unknown): AppError {
+  return new AppError({
+    code: "photo_object_missing",
+    status: 404,
+    message:
+      `${caller} could not read the quarantined object this row names. Nothing was promoted. ` +
+      "Either it was collected by a lifecycle rule before anyone reviewed it, or the database " +
+      "and the object store have diverged — which is what restoring one of them without the " +
+      "other does.",
+    userMessage: PHOTO_UNAVAILABLE,
+    context: {},
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
+/**
+ * Whether the store refused a conditional read because the condition did not
+ * hold, rather than for any other reason.
+ *
+ * **Read off the HTTP status and not off the name.** `PreconditionFailed` is
+ * what the AWS SDK models and what MinIO answers with, but the error a caller
+ * gets back is shaped by whichever store is behind the endpoint — and a
+ * mismatch that fell through to the missing-object refusal would be reported to
+ * an operator as divergence between the two stores, which is the wrong incident
+ * entirely.
+ */
+function isPreconditionFailed(cause: unknown): boolean {
+  const status = (cause as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata
+    ?.httpStatusCode;
+
+  return status === 412 || (cause as { name?: string } | null)?.name === "PreconditionFailed";
+}
+
+/**
+ * The object under this key is not the object whose identity was recorded.
+ *
+ * **It is a refusal rather than a fault**, and the caller returns it rather than
+ * letting it escape: a person decided on bytes, the bytes are different, and
+ * nothing about that is broken. The `code` is what an operator alerts on — this
+ * is reachable only by overwriting a quarantined object between an attach and an
+ * Admin's decision, which is either an attempt at the swap or a Worker replacing
+ * her photo, and the second one does not exist yet.
+ */
+function objectChanged(cause?: unknown): AppError {
+  return new AppError({
+    code: "photo_object_changed",
+    status: 409,
+    message:
+      "The quarantined object is not the one that was recorded when this photo was attached, " +
+      "so the bytes an Admin looked at are not the bytes this would publish. Nothing was " +
+      "decoded and nothing was written under the public prefix. A presigned PUT authorises one " +
+      "write, so reaching this means either that condition was not honoured or the object was " +
+      "written by something else holding the store's credential.",
+    userMessage: PHOTO_UNAVAILABLE,
+    // No ETag and no key. Both are identifiers rather than anything of hers, but
+    // what an operator needs is that this happened and to which profile — and
+    // the profile is named by the caller, which is the layer that knows there is
+    // one.
+    context: {},
+    ...(cause === undefined ? {} : { cause }),
+  });
+}
+
 export interface PromotedPhoto {
   readonly publicKey: string;
   readonly width: number;
@@ -288,9 +423,31 @@ export interface PromotedPhoto {
  * nothing, and that is the right way round: an object nothing references is
  * collected, while a row referencing a missing object is a broken image on
  * somebody's profile.
+ *
+ * **`expectedEtag` is what binds the bytes an Admin decided on to the bytes this
+ * publishes**, and without it this function had nothing to compare: it read a
+ * mutable object at approval time, having never recorded what it was at attach
+ * time, so the queue's render and this read were two reads of a key rather than
+ * two reads of an object. A holder of the upload URL who overwrote between them
+ * put bytes no person had ever seen into the anonymously-readable bucket, which
+ * is the one thing the review gate exists to prevent.
+ *
+ * **Two mechanisms, and the second is the one that is load-bearing.** `If-Match`
+ * on the read makes the refusal the store's, so mismatched bytes never cross the
+ * wire; the comparison below is what holds when the store does not honour a
+ * conditional read. That is not a hypothetical distrust — the single-write
+ * property of the presigned PUT rests on a conditional `PutObject` that has been
+ * measured against the local store and is an open question against the
+ * production one, so a control that assumes the same class of behaviour would
+ * fail in the same weather.
+ *
+ * **Either way it refuses before `reencodeForPublic` is reached**, so nothing is
+ * decoded, nothing is written under the public prefix, and the caller's
+ * transaction never opens.
  */
 export async function promoteToPublic(
   quarantineKey: string,
+  expectedEtag: string,
   env: StorageEnv = process.env,
 ): Promise<PromotedPhoto> {
   if (!isQuarantineKey(quarantineKey)) {
@@ -301,6 +458,20 @@ export async function promoteToPublic(
         "promoteToPublic was given a key that is not a quarantine key. Nothing was read and " +
         "nothing was written. The validation used to be implicit in deriving the public key " +
         "from this one; the two are now independent, so it is stated.",
+      userMessage: PHOTO_UNAVAILABLE,
+      context: {},
+    });
+  }
+
+  if (!expectedEtag) {
+    throw new AppError({
+      code: "photo_object_unidentified",
+      status: 422,
+      message:
+        "promoteToPublic was given no identity to hold the object to. Nothing was read and " +
+        "nothing was written. Publishing on an empty expectation would be publishing whatever " +
+        "is under the key at this instant, which is the state this parameter exists to have " +
+        "removed — so the absence refuses rather than defaulting to the old behaviour.",
       userMessage: PHOTO_UNAVAILABLE,
       context: {},
     });
@@ -317,22 +488,31 @@ export async function promoteToPublic(
   // between these two lines: bytes leave the bucket nobody can read, are decoded
   // and re-encoded here, and what is written to the readable one is a different
   // object in a format this repository produced.
-  const object = await client.send(
-    new GetObjectCommand({ Bucket: quarantineBucket, Key: quarantineKey }),
-  );
+  const object = await client
+    .send(
+      new GetObjectCommand({
+        Bucket: quarantineBucket,
+        Key: quarantineKey,
+        IfMatch: expectedEtag,
+      }),
+    )
+    .catch((cause: unknown) => {
+      if (isPreconditionFailed(cause)) throw objectChanged(cause);
+
+      throw objectMissing("promoteToPublic", cause);
+    });
+
+  /**
+   * **The same refusal a second time, and the repetition is the point.** The
+   * condition above is enforced by the store; this is enforced here. A store
+   * that quietly ignored `If-Match` — the failure mode the conditional PUT is
+   * an open question about — would answer 200 with the swapped bytes, and this
+   * is the line that still refuses them.
+   */
+  if (object.ETag !== expectedEtag) throw objectChanged();
 
   if (!object.Body) {
-    throw new AppError({
-      code: "photo_object_missing",
-      status: 404,
-      message:
-        "The quarantined object named by this row is not in the bucket. Nothing was promoted. " +
-        "Either it was collected by a lifecycle rule before anyone reviewed it, or the database " +
-        "and the object store have diverged — which is what restoring one of them without the " +
-        "other does.",
-      userMessage: PHOTO_UNAVAILABLE,
-      context: {},
-    });
+    throw objectMissing("promoteToPublic");
   }
 
   const { bytes, width, height } = await reencodeForPublic(

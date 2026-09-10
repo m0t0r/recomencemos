@@ -62,12 +62,22 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
    * React encodes it into the action reference and the action validates it on
    * arrival, so the row's markup carries no copy of it.
    */
+  /**
+   * **The key the image was signed for is bound alongside the profile id**, so
+   * the decision names the object on screen rather than the row. It is optional
+   * on `QueueItem` because four of the five sections have no image at all; the
+   * photo source always sets it, and an item that somehow arrived without one
+   * binds the empty string — which the action's own bound-argument schema
+   * refuses. A branch here would be a second, quieter answer to the same
+   * question.
+   */
+  const reviewedKey = item.photoKey ?? "";
   const [approved, approveAction, approving] = useActionState(
-    approvePhoto.bind(null, item.id),
+    approvePhoto.bind(null, item.id, reviewedKey),
     INITIAL_APPROVE,
   );
   const [rejected, rejectAction, rejecting] = useActionState(
-    rejectPhoto.bind(null, item.id),
+    rejectPhoto.bind(null, item.id, reviewedKey),
     INITIAL_REJECT,
   );
   const announcementRef = useRef<HTMLParagraphElement>(null);

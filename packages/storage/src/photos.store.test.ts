@@ -33,7 +33,14 @@
 
 import sharp from "sharp";
 import { PUBLIC_PREFIX, QUARANTINE_PREFIX } from "#key-shapes";
-import { discard, presignReview, presignUpload, promoteToPublic, publicPhotoUrl } from "#photos";
+import {
+  discard,
+  presignReview,
+  presignUpload,
+  promoteToPublic,
+  publicPhotoUrl,
+  quarantinedEtag,
+} from "#photos";
 
 const ENV = {
   PHOTO_S3_ENDPOINT: "http://127.0.0.1:9000",
@@ -63,6 +70,34 @@ async function photoBytes(width = 900, height = 700): Promise<Buffer> {
     .toBuffer();
 }
 
+/**
+ * A **different** picture of exactly the same length — the swap, arranged the
+ * way somebody attempting it would arrange it.
+ *
+ * **Same length, because length is the one thing the signature pins** and it is
+ * the holder's own declared value: they declare the length of the picture they
+ * mean to publish and pad the picture they show to match. Bytes after a JPEG's
+ * end-of-image marker are ignored by every decoder, so what is padded is still
+ * a picture — which `sharp` reading it back is what proves.
+ *
+ * **Different, and asserted to be.** A "swapped" image that happened to be
+ * byte-identical would make every case below pass while checking nothing, which
+ * is precisely how the first draft of this helper failed: the neighbouring
+ * replay case had been passing `photoBytes(900, 700)` against a default of
+ * `photoBytes(900, 700)`.
+ */
+async function differentPhotoOfLength(byteLength: number): Promise<Buffer> {
+  const swapped = await sharp({
+    create: { width: 900, height: 700, channels: 3, background: { r: 190, g: 40, b: 40 } },
+  })
+    .jpeg({ quality: 40 })
+    .toBuffer();
+
+  expect(swapped.byteLength).toBeLessThanOrEqual(byteLength);
+
+  return Buffer.concat([swapped, Buffer.alloc(byteLength - swapped.byteLength)]);
+}
+
 /** Presign, PUT, and hand back the key — the browser's half of DD6 steps 1 and 2. */
 async function uploadToQuarantine(bytes: Buffer): Promise<string> {
   const { uploadUrl, photoKey } = await presignUpload(
@@ -85,6 +120,66 @@ async function uploadToQuarantine(bytes: Buffer): Promise<string> {
   expect(response.status).toBe(200);
 
   return photoKey;
+}
+
+/** The store's own client, for the two things the product deliberately cannot do. */
+async function storeClient() {
+  const { S3Client } = await import("@aws-sdk/client-s3");
+
+  return new S3Client({
+    region: "auto",
+    endpoint: ENV.PHOTO_S3_ENDPOINT,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: ENV.PHOTO_S3_ACCESS_KEY_ID,
+      secretAccessKey: ENV.PHOTO_S3_SECRET_ACCESS_KEY,
+    },
+  });
+}
+
+/**
+ * Overwrite a quarantined object, unconditionally.
+ *
+ * **The product cannot do this and that is the point.** `presignUpload` signs
+ * `If-None-Match: *`, so the swap is unreachable through the URL a browser
+ * holds; the control under test is the one that has to work when the store does
+ * not honour that condition, so the state it refuses is built by a caller that
+ * does not go through it.
+ */
+async function overwrite(key: string, bytes: Buffer): Promise<void> {
+  const [{ PutObjectCommand }, client] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    storeClient(),
+  ]);
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: ENV.PHOTO_S3_QUARANTINE_BUCKET,
+      Key: key,
+      Body: new Uint8Array(bytes),
+      ContentType: "image/jpeg",
+    }),
+  );
+}
+
+/**
+ * How many objects the public bucket holds.
+ *
+ * A refusal has no key to look up — the public key is minted inside
+ * `promoteToPublic` and never leaves it on the failing path — so "nothing was
+ * published" is asked as a count rather than as a 404 on a name.
+ */
+async function publicObjectCount(): Promise<number> {
+  const [{ ListObjectsV2Command }, client] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    storeClient(),
+  ]);
+
+  const listed = await client.send(
+    new ListObjectsV2Command({ Bucket: ENV.PHOTO_S3_BUCKET, Prefix: PUBLIC_PREFIX }),
+  );
+
+  return listed.KeyCount ?? 0;
 }
 
 describe("the quarantine bucket", () => {
@@ -130,7 +225,7 @@ describe("the quarantine bucket", () => {
   it("holds no object the public origin can name", async () => {
     const key = await uploadToQuarantine(await photoBytes());
 
-    const { publicKey } = await promoteToPublic(key, ENV);
+    const { publicKey } = await promoteToPublic(key, await quarantinedEtag(key, ENV), ENV);
 
     // The origin is open — this is the object it is open for.
     expect((await fetch(`${ENV.PHOTO_PUBLIC_BASE}/${publicKey}`)).status).toBe(200);
@@ -323,10 +418,7 @@ describe("the presigned PUT", () => {
 
     // A different picture, padded to the length the signature covers — which is
     // exactly the move the condition exists to refuse.
-    const swapped = await photoBytes(900, 700);
-    const padded = Buffer.concat([swapped, Buffer.alloc(bytes.byteLength - swapped.byteLength)]);
-
-    expect((await put(padded)).status).toBe(412);
+    expect((await put(await differentPhotoOfLength(bytes.byteLength))).status).toBe(412);
   });
 
   /**
@@ -386,7 +478,7 @@ describe("promoteToPublic", () => {
   it("puts a re-encoded object where the public bucket can be read anonymously", async () => {
     const key = await uploadToQuarantine(await photoBytes());
 
-    const { publicKey } = await promoteToPublic(key, ENV);
+    const { publicKey } = await promoteToPublic(key, await quarantinedEtag(key, ENV), ENV);
 
     const url = publicPhotoUrl(publicKey, undefined, ENV);
     expect(url).toBe(`${ENV.PHOTO_PUBLIC_BASE}/${publicKey}`);
@@ -409,7 +501,7 @@ describe("promoteToPublic", () => {
   it("leaves the quarantined object alone, so a bad re-encode is recoverable", async () => {
     const key = await uploadToQuarantine(await photoBytes());
 
-    const { publicKey } = await promoteToPublic(key, ENV);
+    const { publicKey } = await promoteToPublic(key, await quarantinedEtag(key, ENV), ENV);
 
     expect((await fetch(await presignReview(key, ENV))).status).toBe(200);
 
@@ -419,8 +511,123 @@ describe("promoteToPublic", () => {
 
   it("refuses an object that is not in the bucket rather than writing an empty one", async () => {
     await expect(
-      promoteToPublic(`${QUARANTINE_PREFIX}/aaaaaaaaaaaaaaaaaaaaa`, ENV),
-    ).rejects.toThrow();
+      promoteToPublic(`${QUARANTINE_PREFIX}/aaaaaaaaaaaaaaaaaaaaa`, '"whatever"', ENV),
+    ).rejects.toMatchObject({ code: "photo_object_missing" });
+  });
+
+  /**
+   * **The case the whole binding exists for**, and it is constructed straight
+   * against the store rather than through the product's own path — the
+   * presigned PUT carries `If-None-Match: *`, so a holder of that URL cannot
+   * reach this state any more. That is exactly why it is written this way: the
+   * single-write property is a property of the *store honouring a condition*,
+   * measured here and an open question against the production one, and this
+   * control is what has to hold when it does not.
+   *
+   * The two objects are the same length, which is the move a signature covering
+   * `Content-Length` does not stop.
+   */
+  it("refuses bytes that are not the bytes whose identity was recorded", async () => {
+    const key = await uploadToQuarantine(await photoBytes());
+    const attached = await quarantinedEtag(key, ENV);
+
+    await overwrite(key, await differentPhotoOfLength((await photoBytes()).byteLength));
+
+    expect(await quarantinedEtag(key, ENV)).not.toBe(attached);
+
+    await expect(promoteToPublic(key, attached, ENV)).rejects.toMatchObject({
+      code: "photo_object_changed",
+    });
+
+    await discard(key, ENV);
+  });
+
+  /**
+   * The refusal above has to happen **before** anything is written, not after —
+   * a public object nobody can reach is still an unreviewed photo in the bucket
+   * that is open to the world. Nothing names the key that would have been
+   * minted, so this asks the question the other way round: the public bucket
+   * gained no object at all.
+   */
+  it("writes nothing under the public prefix when it refuses", async () => {
+    const key = await uploadToQuarantine(await photoBytes());
+    const attached = await quarantinedEtag(key, ENV);
+
+    await overwrite(key, await differentPhotoOfLength((await photoBytes()).byteLength));
+
+    const before = await publicObjectCount();
+    await expect(promoteToPublic(key, attached, ENV)).rejects.toThrow();
+
+    expect(await publicObjectCount()).toBe(before);
+
+    await discard(key, ENV);
+  });
+
+  /**
+   * **An empty expectation refuses rather than falling back.** This is the row
+   * attached before the identity was recorded, and the failure to guard against
+   * is the friendly one: treating "nothing to compare" as "nothing to check"
+   * restores exactly the behaviour this parameter removed, on precisely the
+   * rows that have no binding.
+   */
+  it("refuses to publish on an empty expectation", async () => {
+    const key = await uploadToQuarantine(await photoBytes());
+
+    await expect(promoteToPublic(key, "", ENV)).rejects.toMatchObject({
+      code: "photo_object_unidentified",
+    });
+
+    await discard(key, ENV);
+  });
+
+  /**
+   * **Which of the two mechanisms fired, asked directly.**
+   *
+   * `promoteToPublic` sends `If-Match` *and* compares the ETag it gets back, and
+   * the cases above pass whichever of them refuses — which is the property that
+   * makes the pair worth having and also the reason neither is observable from
+   * outside. This asks the store the question on its own: with a stale
+   * condition it answers 412, so the bytes never cross the wire, and the
+   * comparison in our own code is the second line rather than the only one.
+   */
+  it("is refused by the store itself, before any bytes cross", async () => {
+    const [{ GetObjectCommand }, client] = await Promise.all([
+      import("@aws-sdk/client-s3"),
+      storeClient(),
+    ]);
+
+    const key = await uploadToQuarantine(await photoBytes());
+    const attached = await quarantinedEtag(key, ENV);
+
+    await overwrite(key, await differentPhotoOfLength((await photoBytes()).byteLength));
+
+    const refused = await client
+      .send(
+        new GetObjectCommand({
+          Bucket: ENV.PHOTO_S3_QUARANTINE_BUCKET,
+          Key: key,
+          IfMatch: attached,
+        }),
+      )
+      .then(
+        () => 200,
+        (cause: { $metadata?: { httpStatusCode?: number } }) => cause.$metadata?.httpStatusCode,
+      );
+
+    expect(refused).toBe(412);
+
+    await discard(key, ENV);
+  });
+
+  it("publishes bytes that have not moved, which is the case it must not break", async () => {
+    const key = await uploadToQuarantine(await photoBytes());
+
+    const { publicKey } = await promoteToPublic(key, await quarantinedEtag(key, ENV), ENV);
+
+    expect((await fetch(`${ENV.PHOTO_PUBLIC_BASE}/${publicKey}`)).status).toBe(200);
+
+    await discard(key, ENV);
+    await discard(publicKey, ENV);
   });
 });
 

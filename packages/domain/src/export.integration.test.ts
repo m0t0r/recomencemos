@@ -308,6 +308,12 @@ const EXCLUDED: Record<string, string> = {
   // A locator into a bucket says nothing to her; the photo ticket owns
   // exporting the object it points at.
   "capability_profile.photoKey": "an internal storage locator, not the photo",
+  // The store's name for the bytes under that locator, kept so that what an
+  // Admin approved is what gets published. It is about our own review gate
+  // rather than about her, it exists only while a photo is waiting, and it
+  // tells her nothing the photo itself does not — the photo ticket owns
+  // exporting the object.
+  "capability_profile.photoEtag": "an integrity check on the object, not a fact about her",
   // NFR22's daily-rewritten ordering input: how the browse list is shuffled,
   // not a fact about her.
   "capability_profile.rotationKey": "internal — a browse-ordering input, not who she is",
