@@ -1128,6 +1128,54 @@ export const block = pgTable(
 );
 
 /**
+ * **`ContactExchange`** — 1:1 with an accepted Offer, and the row whose
+ * existence *is* the crossing.
+ *
+ * **`UNIQUE (offer_id)` is the whole reason this table arrives with story 8
+ * rather than story 9.** Two concurrent accepts would otherwise write two
+ * exchanges and cross two sets of contact details (DD9's second race). The lock
+ * `acceptOffer` takes on the Offer row is what refuses the second accept in
+ * practice; this is the backstop that turns a lock bug into a constraint
+ * violation rather than a second disclosure — the same discipline NFR15 applies
+ * to a Report's freeze.
+ *
+ * **The snapshot columns are story 9's, deliberately.** The spec has this row
+ * snapshot both sides' name, phone and email at the moment of crossing, and
+ * *exactly which details cross* is the question that ticket owns — its
+ * confirmation names them and its projection is the one NFR10 counts. They
+ * arrive as an additive expand on this table, which is empty on every
+ * environment anyone outside this repository can reach.
+ *
+ * **A `BIGINT IDENTITY`, not a UUIDv7.** The exception DD2 makes for `Offer.id`
+ * is argued from a URL, and this id reaches none: the exchange is shown on the
+ * Offer's own route.
+ */
+export const contactExchange = pgTable(
+  "contact_exchange",
+  {
+    id: bigint("id", { mode: "bigint" }).generatedAlwaysAsIdentity().primaryKey(),
+
+    /**
+     * The accepted Offer. Cascade: an Offer goes with the Account on either side
+     * of it, and an exchange about an Offer that no longer exists is about
+     * nothing.
+     */
+    offerId: uuid("offer_id")
+      .notNull()
+      .references(() => offer.id, { onDelete: "cascade" }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    /**
+     * DD9's constraint, and also the index on the foreign key column that DD2
+     * asks every table for — a unique constraint is one.
+     */
+    unique("contact_exchange_offer_id_key").on(table.offerId),
+  ],
+);
+
+/**
  * **`PhotoUpload`** — which Account a quarantine key was minted for, and the
  * only thing that makes attaching a photo an authorized act.
  *

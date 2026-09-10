@@ -19,6 +19,7 @@ import {
   OFFER_STATES,
   type OfferState,
   PENDING_OFFER_STATES,
+  RECEIVED_OFFER_STATES,
 } from "#policy/offer-states";
 
 /** Every ordered pair, so the table below is a partition rather than a sample. */
@@ -67,6 +68,19 @@ describe("the Offer state set", () => {
 
   it("counts both undelivered states as waiting on a person", () => {
     expect([...PENDING_OFFER_STATES]).toEqual(["pending_review", "on_hold"]);
+  });
+
+  /**
+   * **What reaches her is a question about the whole set, so it is asked of the
+   * whole set.** An Offer a person has not let through, one held because its
+   * sender is frozen, and one we refused never reached her; one she Reported is
+   * hidden from her. A state added later is absent from her list until somebody
+   * says it belongs there — the same direction the transition whitelist fails in.
+   */
+  it.each(OFFER_STATES)("says whether an Offer in %s is one she has received", (state) => {
+    const reachedHer = ["delivered", "accepted", "declined", "expired"].includes(state);
+
+    expect((RECEIVED_OFFER_STATES as readonly OfferState[]).includes(state)).toBe(reachedHer);
   });
 
   it("narrows a string the database holds, and refuses one it does not", () => {

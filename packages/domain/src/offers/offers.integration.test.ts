@@ -571,7 +571,18 @@ describe("immutability", () => {
     const module = (await import("#offers")) as Record<string, unknown>;
     const exported = Object.keys(module).filter((key) => typeof module[key] === "function");
 
-    expect(exported.toSorted()).toEqual(["listSentOffers", "pendingOffers", "sendOffer"]);
+    // `acceptOffer` and `declineOffer` write `state` and nothing else; the
+    // received-Offer suite asserts what each one changes.
+    expect(exported.toSorted()).toEqual([
+      "acceptOffer",
+      "declineOffer",
+      "findReceivedOfferSender",
+      "findReceivedOfferTerms",
+      "listReceivedOffers",
+      "listSentOffers",
+      "pendingOffers",
+      "sendOffer",
+    ]);
   });
 
   test("leaves the terms untouched by anything the queue does to it", async ({ database }) => {
