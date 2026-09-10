@@ -73,7 +73,8 @@ from and the whole value is the camera roll that `<input type="file" accept="ima
 first tap. And the page-weight argument, **which has since inverted and is left here corrected
 rather than quietly restated**: this brief was written expecting roughly 17 KB of gzip headroom
 against NFR3's 250 KB ceiling. Re-taken with `pnpm page-weight /publish` once the photo step landed,
-the route is **293 KB gzip — 43 KB over**. So a drag-and-drop library is not "affordable but
+the route was **293 KB gzip — 43 KB over** (the current figure is `README.md`'s, not this one). So a
+drag-and-drop library is not "affordable but
 unnecessary"; nothing new is affordable, and something has to come off this route whichever control
 wins. That is filed rather than decided here, because the ceiling is a spec number and not a brief's
 to move.

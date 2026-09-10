@@ -76,9 +76,10 @@ async function SignInPanel({ searchParams }: { searchParams: SearchParams }) {
    * that are worth more than the second: the route stops being prerendered, so
    * **`pnpm page-weight` can no longer measure it at all** — it exits `2`, and
    * this route's first-load figure is one `README.md` carries and NFR3's leading
-   * indicator is checked with — **308 KB gzip**, re-taken with
-   * `pnpm page-weight /sign-in` at #182, which is the only way that number may
-   * be quoted — and every signed-out visitor, who is nearly all of them and is
+   * indicator is checked with. The number lives there and nowhere else, because
+   * the copy that used to sit here was stale within a day of being written
+   * (#203) — and every
+   * signed-out visitor, who is nearly all of them and is
    * the Worker on a slow phone, waits a session query before anything paints.
    * What the second costs is a wordless skeleton on a rare arrival. Reversing
    * that judgement is one `export const instant = false` and moving these lines

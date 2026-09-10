@@ -12,7 +12,8 @@
  * **The SDK is imported dynamically, and that is the whole point of the file's
  * shape** (#157). A static `import * as Sentry from "@sentry/nextjs"` here puts
  * the SDK in the entry graph of *every* route, so the prerendered document asks
- * for it before the page is interactive. Worth **85 KB gzip of `/`'s 292 KB**,
+ * for it before the page is interactive. Worth **85 KB gzip of the 292 KB `/`
+ * shipped on #157's build**,
  * which a Worker on a metered phone downloaded before reading a word of the
  * Wall. The SDK is not misconfigured — no Replay, no Feedback, no profiling,
  * `excludeDebugStatements` already on — so configuration had nothing left to
@@ -22,9 +23,10 @@
  * from.** 148 KB is the size of the SDK's own chunk, and most of what shares
  * that chunk is code the page needs whether or not the SDK is there — so
  * deferring re-chunks rather than deletes. Taken the honest way, by measuring a
- * build with the SDK removed outright: `/` is 292 KB with it, 207 KB without,
- * and 208 KB with it deferred. `pnpm page-weight` is how that is re-taken; the
- * first number in this paragraph is the one it will reproduce.
+ * build with the SDK removed outright: on #157's build `/` was 292 KB gzip with
+ * it, 207 KB without, and 208 KB with it deferred. Those are that tree's figures and
+ * not this one's — `pnpm page-weight` re-takes them, and `README.md` carries the
+ * current one.
  *
  * Nothing about what is reported changes. Every option below is the one that was
  * here before, all three redaction hooks included; the module that carries them
