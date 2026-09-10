@@ -7,9 +7,12 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
 import {
   HIRER_NAME_LABEL,
   HIRER_PHONE_LABEL,
+  OFFER_CONSENT_REQUIRED,
+  OFFER_FIELD_LABELS,
   OFFER_IMMUTABLE_NOTICE,
   OFFER_REVIEW_NOTICE,
   OFFER_REVIEW_WINDOW,
@@ -22,9 +25,20 @@ import {
 } from "../_lib/offer-messages";
 import { OfferForm } from "./offer-form";
 
-const { sendOffer } = vi.hoisted(() => ({
-  sendOffer: Object.assign(vi.fn(), { bind: () => vi.fn() }),
-}));
+/**
+ * **The bound action is the one the form dispatches**, so it is the one a
+ * "not dispatched" assertion has to watch. `bind` used to return a fresh
+ * `vi.fn()` on every call, which left `sendOffer` itself uncalled whatever the
+ * form did — an assertion on it passed with the action dispatched, and could not
+ * have gone red for the bug it exists to catch (#250).
+ *
+ * It answers with an empty result, which is what a completed action hands
+ * `useActionState` — the form reads its verdict off whatever comes back.
+ */
+const { boundSendOffer, sendOffer } = vi.hoisted(() => {
+  const bound = vi.fn(async () => ({}));
+  return { boundSendOffer: bound, sendOffer: Object.assign(vi.fn(), { bind: () => bound }) };
+});
 
 vi.mock("../actions", () => ({ sendOffer }));
 
@@ -38,6 +52,22 @@ function renderForm(alreadyIdentified = false) {
       alreadyIdentified={alreadyIdentified}
     />,
   );
+}
+
+/** Every field a first Offer asks for, filled — so the box is the only thing left. */
+async function fillFirstOffer(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByRole("textbox", { name: HIRER_NAME_LABEL }), "Carlos Mejía");
+  await user.type(screen.getByRole("textbox", { name: HIRER_PHONE_LABEL }), "300 123 4567");
+  await fillTerms(user);
+}
+
+async function fillTerms(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(
+    screen.getByRole("textbox", { name: WORK_LABEL }),
+    "Pintar la sala y el comedor de un apartamento",
+  );
+  await user.type(screen.getByRole("textbox", { name: PAY_LABEL }), "$250.000 al terminar");
+  await user.type(screen.getByRole("textbox", { name: WHEN_LABEL }), "El sábado desde las ocho");
 }
 
 describe("the form", () => {
@@ -226,6 +256,76 @@ describe("a submit the browser refuses", () => {
 
     await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
 
-    expect(sendOffer).not.toHaveBeenCalled();
+    expect(boundSendOffer).not.toHaveBeenCalled();
+  });
+});
+
+describe("the autorización on a first Offer", () => {
+  /**
+   * **Every other field filled, and the box left unticked** — the ordinary path
+   * #250 found open. Once hydrated the form sets `noValidate`, so the browser's
+   * own `required` check is gone and this parse is the only guard before the
+   * request is made. It had no consent member, so the Offer went out.
+   */
+  it("refuses an unticked box before the Offer leaves the browser", async () => {
+    const user = userEvent.setup();
+    renderForm(false);
+
+    await fillFirstOffer(user);
+    await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
+
+    const summary = await screen.findByRole("alert", { name: OFFER_SUMMARY_LABEL });
+    expect(summary).toHaveFocus();
+    expect(summary).toHaveTextContent(offerSummaryHeading(1));
+    expect(summary).toHaveTextContent(OFFER_CONSENT_REQUIRED);
+    expect(boundSendOffer).not.toHaveBeenCalled();
+  });
+
+  it("says why beside the checkbox itself", async () => {
+    const user = userEvent.setup();
+    renderForm(false);
+
+    await fillFirstOffer(user);
+    await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
+
+    const box = await screen.findByRole("checkbox", {
+      name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX,
+    });
+    expect(box).toHaveAttribute("aria-invalid", "true");
+    expect(box).toHaveAccessibleDescription(expect.stringContaining(OFFER_CONSENT_REQUIRED));
+  });
+
+  /** A summary item pointing at nothing is worse than no summary. */
+  it("links the summary's consent item to something on the page", async () => {
+    const user = userEvent.setup();
+    const { container } = renderForm(false);
+
+    await fillFirstOffer(user);
+    await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
+
+    const link = await screen.findByRole("link", { name: OFFER_FIELD_LABELS.consent });
+    expect(container.querySelector(link.getAttribute("href") ?? "")).not.toBeNull();
+  });
+
+  it("sends once the box is ticked", async () => {
+    const user = userEvent.setup();
+    renderForm(false);
+
+    await fillFirstOffer(user);
+    await user.click(screen.getByRole("checkbox", { name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX }));
+    await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
+
+    await vi.waitFor(() => expect(boundSendOffer).toHaveBeenCalledOnce());
+  });
+
+  /** Consent is given once, not per send: a later Offer asks for no box and sends without one. */
+  it("is not asked for on a later Offer, which sends without it", async () => {
+    const user = userEvent.setup();
+    renderForm(true);
+
+    await fillTerms(user);
+    await user.click(screen.getByRole("button", { name: SEND_OFFER_BUTTON }));
+
+    await vi.waitFor(() => expect(boundSendOffer).toHaveBeenCalledOnce());
   });
 });

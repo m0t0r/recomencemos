@@ -61,7 +61,7 @@ export function PublishLayout({
 }: PublishLayoutProps) {
   return (
     <FieldGroup>
-      <AuthorizationConsent error={serverErrorFor("consent")} />
+      <AuthorizationConsent id={idFor("consent")} error={serverErrorFor("consent")} />
 
       <ProfileFieldGroups
         form={form}

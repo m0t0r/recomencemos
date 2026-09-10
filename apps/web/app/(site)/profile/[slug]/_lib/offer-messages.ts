@@ -79,8 +79,19 @@ export function offerSummaryHeading(count: number): string {
 export const OFFER_SUMMARY_KEPT = "Todo lo que escribiste sigue en el formulario.";
 export const OFFER_SUMMARY_LABEL = "Qué falta por corregir";
 
+/**
+ * The *autorización* left unticked on his first Offer.
+ *
+ * **This surface's own sentence rather than the publishing form's**, because the
+ * verb is the act he took: she publishes, he sends. It keeps a refusal's Warmth
+ * 5 by saying what to do and nothing about him — the rule is ours, and leaving
+ * a box unticked is not a mistake.
+ */
+export const OFFER_CONSENT_REQUIRED = "Para enviar tu propuesta, marca la autorización.";
+
 /** The field names the summary links to, as a person reads them. */
 export const OFFER_FIELD_LABELS = {
+  consent: "La autorización",
   workDescription: WORK_LABEL,
   payTerms: PAY_LABEL,
   whenText: WHEN_LABEL,

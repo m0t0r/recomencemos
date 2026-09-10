@@ -11,6 +11,7 @@ import { PublishForm } from "./publish-form";
 import {
   CONSENT_REQUIRED,
   FEEDBACK_REGION_LABEL,
+  FIELD_LABELS,
   PUBLISH_BUTTON,
   SKILL_NOT_LISTED_HELP,
   SKILL_REQUEST_BUTTON,
@@ -88,6 +89,23 @@ describe("the form", () => {
     expect(summary).toHaveTextContent(SKILL_REQUIRED);
     expect(summary).toHaveTextContent(CONSENT_REQUIRED);
     expect(publishProfile).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **The consent item used to link to nothing.** The summary built
+   * `#<base>-consent` while the checkbox minted its own id inside the shared
+   * component, so no element carried the anchor — found while #250 matched the
+   * Offer form to this one. A summary pointing at nothing is worse than no
+   * summary.
+   */
+  it("links the summary's consent item to something on the page", async () => {
+    const user = userEvent.setup();
+    const { container } = renderForm();
+
+    await user.click(screen.getByRole("button", { name: PUBLISH_BUTTON }));
+
+    const link = await screen.findByRole("link", { name: FIELD_LABELS.consent });
+    expect(container.querySelector(link.getAttribute("href") ?? "")).not.toBeNull();
   });
 });
 

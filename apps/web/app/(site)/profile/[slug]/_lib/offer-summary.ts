@@ -27,8 +27,16 @@ export interface OfferSummary {
   readonly items: readonly OfferSummaryItem[];
 }
 
-/** The reading order of the fields, which is also the order of the summary. */
+/**
+ * The order the summary reads in.
+ *
+ * **The *autorización* leads**, as it does in the publishing form's summary,
+ * although the checkbox sits below the fields. That is the decision that surface
+ * made and this one matches: until it is ticked nothing else he typed may be
+ * collected, so it is the first thing he is told about rather than the last.
+ */
 const ORDER: readonly OfferFieldName[] = [
+  "consent",
   "hirerName",
   "hirerPhone",
   "workDescription",
