@@ -92,6 +92,14 @@ export const NOTICE_EXEMPT_ROUTES: readonly NoticeExemption[] = [
   { route: "/privacy", reason: "the same facts at length, in the register the statute requires" },
   { route: "/publish", reason: "a form, and it already says the applicable half where it applies" },
   { route: "/sign-in", reason: "a door; nothing has been decided or disclosed yet" },
+  // PROTOTYPE — the UX lab under `/prototype`. Mock data, nobody real meets
+  // anybody; the whole folder and these six rows leave with the branch.
+  { route: "/prototype", reason: "prototype: the lab's index, throwaway" },
+  { route: "/prototype/browse", reason: "prototype: mock people, throwaway" },
+  { route: "/prototype/check-in", reason: "prototype: mock check-in, throwaway" },
+  { route: "/prototype/offer-writer", reason: "prototype: mock Offer form, throwaway" },
+  { route: "/prototype/offers", reason: "prototype: mock Offers, throwaway" },
+  { route: "/prototype/publish", reason: "prototype: mock publish form, throwaway" },
 ];
 
 /**
