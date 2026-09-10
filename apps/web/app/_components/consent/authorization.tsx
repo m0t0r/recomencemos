@@ -10,10 +10,11 @@
  *
  * {@link AuthorizationConsent} is that text plus the control that takes the
  * consent, and it is what `/publish` (story 2) renders above its first field and
- * the Offer form (story 6) renders above its submit — **before collection** in
- * both, which is the requirement rather than a layout preference: deployment is
- * continuous, so a form that collected a phone number and asked afterwards would
- * have collected it.
+ * the Offer form (story 6) renders above its submit. **Both are before
+ * collection**, because nothing a person types is collected until the form is
+ * submitted — which is the requirement rather than a layout preference:
+ * deployment is continuous, so a form that collected a phone number and asked
+ * afterwards would have collected it.
  *
  * **There is no hidden input here, and that is ADR-0015's third rule.** The two
  * versions are what the form *displayed*, not what she typed, so they travel as
@@ -54,13 +55,14 @@ export interface AuthorizationConsentProps {
   /** Whatever the boundary parse said when she submitted without ticking it. */
   readonly error?: string;
   /**
-   * The checkbox's id, when the form links to it from its summary.
+   * The checkbox's id, which the form's summary links to.
    *
-   * **The form owns it because the form owns the link.** A summary item has to
-   * point at an element, and an id minted in here is one no summary outside can
-   * name (#250). Falls back to a minted one where nothing links in.
+   * **Required, and the form owns it because the form owns the link.** A summary
+   * item has to point at an element, and an id minted in here is one no summary
+   * outside can name (#250) — so a form that renders this cannot forget the
+   * anchor.
    */
-  readonly id?: string;
+  readonly id: string;
 }
 
 /**
@@ -73,9 +75,11 @@ export interface AuthorizationConsentProps {
  * Both exist for the reason NFR4 and every authorization rule already give: the
  * client is where a person is helped and the server is where a rule is enforced.
  */
-export function AuthorizationConsent({ name = "consent", error, id }: AuthorizationConsentProps) {
-  const mintedId = useId();
-  const checkboxId = id ?? mintedId;
+export function AuthorizationConsent({
+  name = "consent",
+  error,
+  id: checkboxId,
+}: AuthorizationConsentProps) {
   const helpId = useId();
   const errorId = useId();
 

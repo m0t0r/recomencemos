@@ -31,10 +31,11 @@ export interface OfferSummary {
 /**
  * The order the summary reads in.
  *
- * **The *autorización* leads**, as it does in the publishing form's summary,
- * although the checkbox sits below the fields. That is the decision that surface
- * made and this one matches: until it is ticked nothing else he typed may be
- * collected, so it is the first thing he is told about rather than the last.
+ * **The *autorización* leads although its checkbox sits last**, and that is this
+ * surface's one exception to reading order. Until it is ticked nothing else he
+ * typed may be collected, so it is the first thing he is told about rather than
+ * the last. The publishing form lists it first too, but there it is also first on
+ * the page, so it needs no exception.
  */
 const ORDER: readonly OfferFieldName[] = [
   "consent",

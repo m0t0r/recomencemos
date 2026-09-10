@@ -17,7 +17,7 @@ import {
   type OfferFieldName,
 } from "./offer-messages";
 
-/** next-safe-action's formatted tree, for the five flat fields this form has. */
+/** next-safe-action's formatted tree, for this form's fields — all flat, the consent box among them. */
 // `_errors` is the library's own key for a node's messages, not ours.
 // oxlint-disable-next-line no-underscore-dangle
 export type OfferErrorTree = Partial<Record<OfferFieldName, { _errors: string[] }>>;
