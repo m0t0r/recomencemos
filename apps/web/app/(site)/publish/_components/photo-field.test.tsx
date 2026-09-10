@@ -16,11 +16,12 @@
  *   component points here, so this is the assertion that has to be real.
  * - **NFR4's exception is stated where the field is**, and the sentence stands
  *   *in place of* the control rather than beside it.
- * - **No hidden input mirrors the key** (ADR-0015). That absence is unassertable
- *   any other way, which is the escape hatch `CLAUDE.md` names by name.
+ * - **No hidden input mirrors the key** (ADR-0015), asserted through what the
+ *   browser would post rather than through the markup.
  */
 
 import { render, screen } from "@testing-library/react";
+import { renderInForm } from "@/testing/form-data";
 import { PHOTO_INPUT_ACCEPT } from "@repo/storage/limits";
 import { PHOTO_CHOOSE, PHOTO_HELP, PHOTO_NOTE } from "@/app/_lib/profile-form/messages";
 import { PhotoField } from "./photo-field";
@@ -135,12 +136,7 @@ describe("PhotoField", () => {
    * at all is a field she never chose.
    */
   it("mirrors no key into a hidden input", () => {
-    render(
-      <form aria-label="formulario de prueba">
-        <PhotoField onPhotoKeyChange={() => {}} hydrated />
-      </form>,
-    );
-    const form = screen.getByRole<HTMLFormElement>("form", { name: "formulario de prueba" });
+    const form = renderInForm(<PhotoField onPhotoKeyChange={() => {}} hydrated />);
 
     expect([...new FormData(form).keys()]).toEqual([]);
   });

@@ -8,6 +8,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublishForm } from "./publish-form";
+import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
+import { CITY_IDS } from "@/app/_lib/profile-form/schema";
+import { formOf, submittedFrom } from "@/testing/form-data";
 import {
   CONSENT_REQUIRED,
   FEEDBACK_REGION_LABEL,
@@ -22,7 +25,6 @@ import {
   SKILLS_AT_MAXIMUM,
   summaryHeading,
 } from "@/app/_lib/profile-form/messages";
-import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
 
 const { publishProfile, requestSkill } = vi.hoisted(() => ({
   publishProfile: Object.assign(vi.fn(), { bind: () => vi.fn() }),
@@ -57,25 +59,34 @@ function renderForm() {
  * serialiser would send from it. That is the whole of the no-JavaScript
  * question, asked of the browser rather than of the markup.
  */
-function posted() {
-  const form = screen.getByRole<HTMLButtonElement>("button", { name: PUBLISH_BUTTON }).form;
-  if (form === null) throw new Error("The publish button sits inside a form.");
-  return new FormData(form);
-}
+const publishButton = () => screen.getByRole<HTMLButtonElement>("button", { name: PUBLISH_BUTTON });
+const posted = () => submittedFrom(publishButton());
 
 describe("the form", () => {
   it("keeps a native action and a named control for every field", async () => {
     const user = userEvent.setup();
     renderForm();
 
-    expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: PUBLISH_BUTTON }).form,
-    ).toHaveAttribute("action");
+    expect(formOf(publishButton())).toHaveAttribute("action");
 
-    // A radio or a checkbox posts only once chosen, so one of each is chosen
-    // first — which also proves the value each one carries.
-    await user.click(screen.getByRole("radio", { name: "Pereira" }));
-    await user.click(screen.getByRole("checkbox", { name: vocabulary[0]!.labelEs }));
+    // A radio or a checkbox posts only once chosen, so each is chosen before
+    // asking what it sends — which also proves the value each one carries.
+    // Every city in turn, since a radio group posts the one that is chosen.
+    const cities: (FormDataEntryValue | null)[] = [];
+    for (const city of screen.getAllByRole("radio")) {
+      // Sequential on purpose: each pick replaces the last.
+      // oxlint-disable-next-line no-await-in-loop
+      await user.click(city);
+      cities.push(posted().get("city"));
+    }
+    expect(cities.toSorted()).toEqual([...CITY_IDS].toSorted());
+
+    // Six Skills, the most she can hold; the seventh is posted by its own case
+    // below, so between them every entry is shown to post its own slug.
+    for (const entry of vocabulary.slice(0, 6)) {
+      // oxlint-disable-next-line no-await-in-loop
+      await user.click(screen.getByRole("checkbox", { name: entry.labelEs }));
+    }
     await user.click(screen.getByRole("checkbox", { name: CONSENT_LABELS.AUTHORIZATION_CHECKBOX }));
 
     const form = posted();
@@ -83,8 +94,12 @@ describe("the form", () => {
       expect(form.has(name), name).toBe(true);
     }
     expect(form.getAll("workHistory").length).toBeGreaterThan(0);
-    expect(form.get("city")).toBe("pereira");
-    expect(form.getAll("skillSlugs")).toEqual([vocabulary[0]!.slug]);
+    expect(form.getAll("skillSlugs").toSorted()).toEqual(
+      vocabulary
+        .slice(0, 6)
+        .map((entry) => entry.slug)
+        .toSorted(),
+    );
     expect(form.get("consent")).toBe("true");
   });
 
@@ -195,6 +210,14 @@ describe("the Skill picker", () => {
 
     const seventh = screen.getByRole("checkbox", { name: vocabulary[6]!.labelEs });
     expect(seventh).toBeEnabled();
+    // The half a submit reads is the native input behind the styled control.
+    // It is `aria-hidden`, so it is reached with `hidden: true` — still the
+    // accessibility tree's own query — and told apart by the value it posts.
+    // Enabled at the ceiling, or giving one back could not free it.
+    const native = screen
+      .getAllByRole<HTMLInputElement>("checkbox", { hidden: true })
+      .find((input) => input.value === vocabulary[6]!.slug);
+    expect(native).toBeEnabled();
 
     await user.click(seventh);
 

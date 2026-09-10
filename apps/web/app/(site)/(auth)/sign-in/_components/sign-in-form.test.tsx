@@ -23,6 +23,8 @@
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
+import { fieldNamesFrom, formOf } from "@/testing/form-data";
 
 /**
  * Both actions, replaced. `vi.mock` is hoisted above the imports, so the
@@ -71,11 +73,8 @@ function renderForm(props: Partial<Parameters<typeof SignInForm>[0]> = {}) {
   return render(<SignInForm googleAvailable returnPath="/" {...props} />);
 }
 
-/** The field names a native submit from this door would post, or `null` if it has no form. */
-function postedBy(door: string) {
-  const form = screen.getByRole<HTMLButtonElement>("button", { name: door }).form;
-  return form === null ? null : [...new FormData(form).keys()];
-}
+/** A door, as the accessibility tree hands it back. */
+const door = (name: string) => screen.getByRole<HTMLButtonElement>("button", { name });
 
 describe("the two doors", () => {
   it("offers both when Google is configured", () => {
@@ -331,14 +330,20 @@ describe("the form before hydration", () => {
     // native submit from that button posts. Two doors, two forms, both with an
     // action.
     renderForm();
-    const email = screen.getByRole<HTMLButtonElement>("button", { name: SEND_LINK_BUTTON }).form;
-    const google = screen.getByRole<HTMLButtonElement>("button", { name: GOOGLE_BUTTON }).form;
+    const email = formOf(door(SEND_LINK_BUTTON));
+    const google = formOf(door(GOOGLE_BUTTON));
 
     expect(email).toHaveAttribute("action");
     expect(google).toHaveAttribute("action");
     expect(email).not.toBe(google);
 
     expect(screen.getByRole("textbox")).toHaveAttribute("name", "email");
+
+    // And no third: how many forms there are is a count over the markup, which
+    // no role query answers, so it is read off the HTML React sends.
+    expect(
+      renderToStaticMarkup(<SignInForm googleAvailable returnPath="/" />).match(/<form\b/g),
+    ).toHaveLength(2);
   });
 
   it("carries no hidden inputs at all", async () => {
@@ -352,8 +357,8 @@ describe("the form before hydration", () => {
     renderForm();
     await user.click(screen.getByRole("checkbox", { name: SHARED_DEVICE_LABEL }));
 
-    expect(postedBy(SEND_LINK_BUTTON)).toEqual(["email"]);
-    expect(postedBy(GOOGLE_BUTTON)).toEqual([]);
+    expect(fieldNamesFrom(door(SEND_LINK_BUTTON))).toEqual(["email"]);
+    expect(fieldNamesFrom(door(GOOGLE_BUTTON))).toEqual([]);
   });
 
   /**

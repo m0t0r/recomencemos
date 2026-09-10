@@ -200,8 +200,8 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
   - `globalSetup` builds the post-migration snapshot **once per run** and dumps it to `node_modules/.cache/pglite/`; each test file restores from that in milliseconds, so no test truncates and no test sees another's rows.
 - `@repo/notifications:test` — `vitest run`, Node environment, `@repo/errors`' config plus `.tsx` in the include glob and **no React plugin**: that plugin exists for Fast Refresh and a DOM, and a template here is rendered to a _string_ in Node by `@react-email/render`. Vite's esbuild transform reads `jsx: "react-jsx"` out of the tsconfig, which is all a `.tsx` file needs. A template test that reached for happy-dom would be asserting against a DOM no email client has.
 - `web:test` — `vitest run`, **happy-dom**, the design system's config plus `vitest.setup.ts` and one setting of its own: **`pool: "vmThreads"`, which no other suite here has**. A DOM environment is built per test file, and on `forks` the reporter attributes ~37% of this suite's time to `environment`; the vm pool keeps per-file isolation and builds one per _worker_ instead, which drops that share to ~27%. Four runs of each on one machine: 1.8-1.9s against 2.6-3.6s. The ratio is the finding and the seconds are illustrative — both moved ~20% between a quiet machine and a busy one. **The saving is per-file, so it needs files to amortise over, and that is the thing to measure before copying the line into a seventh suite**: `@repo/design-system` spends the same ~50% on its environment but across three files, and came out marginally _slower_; `@repo/domain` reuses a module graph but is 90%+ its own test time, so the gain vanished into noise on a second measurement. The other three are Node-environment suites with no environment to amortise. All five stay on the default `forks`. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`. Its setup file registers **`toMatchSchema`** from `apps/web/testing/matchers.ts` — a custom matcher taking a **Standard Schema** rather than a Zod schema, so nothing in a test has an opinion about the validation library. Reach for a matcher over a helper when the assertion's failure message is the thing worth owning: `expect(x).toBe(true)` on a `safeParse` result reports `false is not true` and names neither the rule nor the value.
-- `//#test:gates` — `gate-test.sh`, the cases that drive the repo's own gates. About a quarter are the stage hooks; the rest drive the gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**` and every script it drives, which is the part to keep in step: a script added here and not there is one whose change a cache hit replays a pass for.
-  - **`gate-test.sh` is the runner and holds no case.** The cases live one file per thing under test in `.claude/hooks/tests/` — `hooks.sh` for rules A–J, `worktree.sh` for rule K, and one file named for each script under `scripts/` — and `tests/lib.sh` holds the two assertions they are written with: `expect_decision` for a hook payload and `expect_run` for a command's exit code and output. A gate-specific runner is a one-line adapter over one of those, never its own bookkeeping; twelve copies of the same ten lines is what that rule replaced. Each file runs in its own subshell with its own fixture root. `pnpm test:gates migrations` runs one file, `-v` enumerates every case, and a name that is not a file is refused rather than skipped.
+- `//#test:gates` — `gate-test.sh`, the cases that drive the repo's own gates. About a quarter are the stage hooks; the rest drive the gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**`, every script it drives, and the lint configuration `lint.sh` exercises (every `.oxlintrc.json`, `package.json` for the pinned versions, `pnpm-lock.yaml`), which is the part to keep in step: a script added here and not there is one whose change a cache hit replays a pass for.
+  - **`gate-test.sh` is the runner and holds no case.** The cases live one file per thing under test in `.claude/hooks/tests/` — `hooks.sh` for rules A–J, `worktree.sh` for rule K, one file named for each script under `scripts/`, and `lint.sh` for the one piece of lint configuration that is a gate — and `tests/lib.sh` holds the two assertions they are written with: `expect_decision` for a hook payload and `expect_run` for a command's exit code and output. A gate-specific runner is a one-line adapter over one of those, never its own bookkeeping; twelve copies of the same ten lines is what that rule replaced. Each file runs in its own subshell with its own fixture root. `pnpm test:gates migrations` runs one file, `-v` enumerates every case, and a name that is not a file is refused rather than skipped.
   - **Four of the scripts it drives are not gates**, and the reason is worth knowing before adding more: `scripts/ui-proof.mjs` publishes recorded proof, `scripts/first-load-bytes.mjs` measures, `scripts/dev-origin.mjs` answers where this tree's dev server is, and `scripts/coverage-merge.mjs` folds six workspaces' coverage reports into the one a pull request comment is built from — none of them decides whether work may proceed. They are driven here anyway because they are repo logic living in `scripts/`, and the alternative was a second test runner for one file. Taking `ui-proof.mjs` as the worked example, fifty-five cases: most of them run `--dry-run`, which is offline by construction — no pull request, no markdown renderer, no credential — so what is under test there is the part that decides _what would be published_: the naming rule, the grouping into comparisons, and the two prefixes that carry the two lifetimes. The call that writes to the object store lives in `scripts/ui-proof-store.mjs` and is a dynamic import, so a dry run never loads it.
 
     **Twenty-four of the fifty-five drive the real publish, and still offline** (#165): a fake `gh` earlier on `PATH` answering the four calls the publisher makes, and a stub HTTP server as the endpoint, which records every request and can be told to answer 500. That is the only place the object-store call, the subprocesses and the body edit are exercised, and it is worth its weight because **both defects this path has shipped were invisible to every dry-run case** — a bucket asked for as a hostname, and a subprocess handed its input through an option that does not exist. What no stub can check is that the signature is _valid_; that stays §5 of `docs/runbooks/ui-proof-artifacts.md`, checked once by a human, because a container in this suite is what the Docker paragraph above refuses on the same grounds.
@@ -286,7 +286,7 @@ in an `overrides` entry scoped to `*.test.ts(x)`, so both workspace configs inhe
 `extends` and ordinary source is untouched. It refuses `container.querySelector`, `querySelector` on
 a query result, `.closest`, `document.activeElement` and the rest of the traversal API. It replaced
 a documented escape hatch — a hidden input's absence, and the HTML that survives without JavaScript
-— and 83 violations in 13 files were migrated onto the two answers below rather than exempted.
+— and every call the hatch covered was migrated onto the two answers below rather than exempted.
 
 **What the tree does not contain still has an answer, and neither answer is DOM access:**
 
@@ -294,29 +294,33 @@ a documented escape hatch — a hidden input's absence, and the HTML that surviv
   the tree found — `getByRole<HTMLButtonElement>("button", { name }).form` — then `new FormData(form)`
   for what a native submit would send and `form.checkValidity()` for what it would refuse. A hidden
   input is a key nobody typed; "one form" is two controls whose `.form` is the same object. A
-  component with no form of its own renders inside a test `<form aria-label>` found by
-  `getByRole("form")`. This is stronger than the selector it replaced: it asserts the submission
+  component with no form of its own renders inside a named test form. `@/testing/form-data` holds
+  all of it — `formOf`, `submittedFrom`, `fieldNamesFrom` and `renderInForm` — so a control outside
+  any form fails one way everywhere. This is stronger than the selector it replaced: it asserts the submission
   rather than the shape of the markup. A radio or checkbox posts only once chosen, so choose it
   before asking what it sends.
 - **Markup the tree does not report is read as the string React sends** — `renderToStaticMarkup`
   from `react-dom/server`, or `prerender` from `react-dom/static` where a Suspense boundary has to
   resolve first. That covers an `aria-live` with no role, an `svg` (which takes no role under
-  happy-dom, hidden or not), a native `<details>`, and a URL-valued attribute. Count what a loop over
-  the string iterates, so it cannot pass by finding nothing.
+  happy-dom, hidden or not), a native `<details>`, how many `<form>` elements a component renders,
+  and a URL-valued attribute (`urlAttributesIn` in `@/testing/markup`). Count what a loop over the
+  string iterates, so it cannot pass by finding nothing.
 
 **Scanning `document.body.innerHTML` is not a third route.** Neither rule flags reading a string,
 so it would pass the gate while being the same DOM access by another name. `container.textContent`
-survives in a few reading-order assertions, which ask what a reader meets in sequence rather than
-what shape the markup has.
+survives where the question is the rendered text itself — the order in which the Offer form's
+notices are met, and that the session menu's row does not show the address — rather than the shape
+of the markup.
 
 A `data-testid` is the last resort, and none exists in this repository: one needs a comment naming
 the assertion no accessible query could express. What is **not** a reason for one is that the
 element is awkward to query — if a role query cannot find it, first check whether the component
 should have told the accessibility tree it exists.
 
-**`oxlint` is pinned exactly because of this gate.** Its own schema calls JS plugins alpha and
-outside semver, so a minor release could stop loading the plugin and leave `pnpm lint` green on a
-tree full of selectors — the gate failing open on an upgrade nobody connected to it.
+**`oxlint` and the plugin are both pinned exactly because of this gate.** oxlint's own schema calls
+JS plugins alpha and outside semver, so a minor release could stop loading the plugin and leave
+`pnpm lint` green on a tree full of selectors — the gate failing open on an upgrade nobody connected
+to it — and a plugin release can change what the two rules flag.
 `.claude/hooks/tests/lint.sh` lints fixtures through each real config and goes red if the refusal
 goes quiet; raise the pin in a change that runs it.
 

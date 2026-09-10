@@ -9,6 +9,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CONSENT_LABELS } from "@/app/_lib/consent/messages";
+import { fieldNamesFrom, formOf } from "@/testing/form-data";
 import {
   HIRER_NAME_LABEL,
   HIRER_PHONE_LABEL,
@@ -66,9 +67,10 @@ function renderForm(alreadyIdentified = false) {
  * not the order they sit in.
  */
 function postedFields() {
-  const form = screen.getByRole<HTMLButtonElement>("button", { name: SEND_OFFER_BUTTON }).form;
-  return form === null ? null : [...new FormData(form).keys()].toSorted();
+  return fieldNamesFrom(sendButton()).toSorted();
 }
+
+const sendButton = () => screen.getByRole<HTMLButtonElement>("button", { name: SEND_OFFER_BUTTON });
 
 /** Every field a first Offer asks for, filled — so the box is the only thing left. */
 async function fillFirstOffer(user: ReturnType<typeof userEvent.setup>) {
@@ -90,9 +92,7 @@ describe("the form", () => {
   it("keeps a native action and a named control for every field", () => {
     renderForm();
 
-    expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: SEND_OFFER_BUTTON }).form,
-    ).toHaveAttribute("action");
+    expect(formOf(sendButton())).toHaveAttribute("action");
     expect(postedFields()).toEqual(
       expect.arrayContaining([
         "workDescription",

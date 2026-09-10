@@ -10,6 +10,7 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fieldNamesFrom } from "@/testing/form-data";
 import { SkillRequestRow } from "./skill-request-row";
 import {
   PROMOTE_LABEL_LABEL,
@@ -77,12 +78,8 @@ it("binds the request it is about to promote instead of mirroring it into the fo
   render(<SkillRequestRow item={item} />);
 
   expect(bound).toHaveBeenCalledWith("7");
-  const form = screen.getByRole<HTMLButtonElement>("button", { name: PROMOTE_SUBMIT }).form;
-  expect(form === null ? null : [...new FormData(form).keys()].toSorted()).toEqual([
-    "cuocCode",
-    "labelEs",
-    "slug",
-  ]);
+  const promote = screen.getByRole<HTMLButtonElement>("button", { name: PROMOTE_SUBMIT });
+  expect(fieldNamesFrom(promote).toSorted()).toEqual(["cuocCode", "labelEs", "slug"]);
 
   await user.type(screen.getByRole("textbox", { name: PROMOTE_SLUG_LABEL }), "sewing-repair");
   await user.type(
