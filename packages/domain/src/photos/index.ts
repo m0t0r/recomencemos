@@ -239,12 +239,12 @@ async function sweepStalePhotoUploads(db: DomainDatabase): Promise<void> {
  * against PGlite with no object store at all; {@link photos.attach} is where the
  * two stores meet and is what performs the `HeadObject`.
  *
- * **That HEAD is a round trip this docblock used to refuse, and the refusal was
- * right about the thing it was refusing.** What it weighed was existence — _"a
- * round trip to save an Admin from one empty review card"_ — and an empty review
- * card is still the cheapest place to notice a missing object. What the round
- * trip buys now is the binding, which nothing else can buy; the existence check
- * comes along with it and is not the reason.
+ * **The round trip is bought by the binding and by nothing else.** Checking that
+ * the object *exists* would not be worth it — an empty review card is the
+ * cheapest place to notice a missing one, and that is where it was left. What
+ * cannot be bought any other way is a server-observed identity to hold the
+ * approval to, and the existence check comes along with it rather than being the
+ * reason for it.
  */
 export async function attachPhoto(
   db: DomainDatabase,
@@ -435,15 +435,22 @@ function photoChanged(profileId: string, cause: AppError): AppError {
  * promises one (_"Ella puede subir otra"_), and a decision bound to a row and a
  * state rather than to a key would then approve or delete a photo nobody looked
  * at.
+ *
+ * **Only the approval has this second copy, and `rejectPhoto` needs none.** What
+ * it buys is that no object is read, decoded and written for a decision that the
+ * transaction is going to refuse anyway; rejecting does no object work before
+ * the transaction, so it goes straight to the check under the lock — which is
+ * the one that settles the race in both cases.
  */
-function photoReplaced(action: string, profileId: string): AppError {
+function photoReplaced(profileId: string): AppError {
   return new AppError({
     code: "admin_photo_replaced",
     status: 409,
     message:
-      `${action} was given a photo key that is not the one this profile's row names, so the ` +
+      "approvePhoto was given a photo key that is not the one this profile's row names, so the " +
       "card it was pressed on is showing a photo that has since been replaced. Nothing was " +
-      "published, nothing was deleted and no AdminAction was written.",
+      "read from the object store and no AdminAction was written. This is the check before the " +
+      "object work; the handler repeats it under a lock, which is what settles a race.",
     userMessage: ADMIN_PHOTO_CHANGED,
     context: { profile_id: profileId },
   });
@@ -452,7 +459,7 @@ function photoReplaced(action: string, profileId: string): AppError {
 /** A photo attached before its identity was recorded: reviewable, not publishable. */
 function photoUnverifiable(profileId: string): AppError {
   return new AppError({
-    code: "photo_object_unidentified",
+    code: "photo_identity_not_recorded",
     status: 409,
     message:
       "This profile's photo carries no recorded object identity, so there is nothing to hold " +
@@ -529,16 +536,6 @@ async function readPendingKey(
     .where(eq(schema.capabilityProfile.id, BigInt(profileId)))
     .limit(1);
 
-  /**
-   * **The reviewed key is checked here so that no object work happens for a
-   * decision about a photo that is no longer there**, and the handler checks it
-   * again under the lock, which is where a race is actually settled. Same
-   * division as the state check one line down, and for the same reason.
-   */
-  if (row && row.photoKey && row.photoKey !== reviewedKey) {
-    return { ok: false, error: photoReplaced("approvePhoto", profileId) };
-  }
-
   if (!row || row.photoState !== "pending" || !row.photoKey) {
     return {
       ok: false,
@@ -554,6 +551,21 @@ async function readPendingKey(
         context: { profile_id: profileId, photo_state: row?.photoState ?? null },
       }),
     };
+  }
+
+  /**
+   * **After the state check and not before it.** A photo already decided has a
+   * `photo_key` too — the *public* one — so a reviewed quarantine key never
+   * matches it, and checking the key first answers the ordinary two-Admin race
+   * with "esa foto cambió" instead of "otra persona ya revisó esa foto".
+   * `lockPendingPhoto` orders the pair the same way for the same reason.
+   *
+   * It is here at all so that no object work happens for a decision about a
+   * photo the row has since replaced; the handler checks it again under the
+   * lock, which is where a race is actually settled.
+   */
+  if (row.photoKey !== reviewedKey) {
+    return { ok: false, error: photoReplaced(profileId) };
   }
 
   return { ok: true, photoKey: row.photoKey, photoEtag: row.photoEtag };

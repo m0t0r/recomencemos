@@ -175,17 +175,28 @@ export const photoProfileArg = z.string().regex(/^\d+$/).max(20);
  * commits. It is not new information on the page: the signed review URL in the
  * same render is built from this key.
  *
- * **The shape is spelled here rather than imported from `@repo/storage`.** That
- * package's predicate is the authority and the domain calls it on arrival; this
- * is the boundary parse, and what it is for is refusing a string that cannot be
- * a key of ours before it becomes an argument — the same division `offerIdArg`
- * draws. Twenty-one characters is `nanoid`'s default length, and the prefix is
- * the one the quarantine bucket uses.
+ * **What actually bounds this value is downstream and is an equality**, not this
+ * pattern. It never becomes part of a request; both `@repo/domain` checks
+ * compare it against the key the row holds, which is one this repository minted
+ * — so a string that is not a key of ours fails by not matching. This parse is
+ * here to refuse such a string earlier and more cheaply, which is the same
+ * division `offerIdArg` draws, and it spells the shape rather than importing
+ * `@repo/storage`'s predicate because that subpath is server-only and this
+ * module is one ADR-0014 means to be parsed on both sides.
+ *
+ * **Whole-match rather than `.regex()`, and the reason is `key-shapes.ts`'s.**
+ * `$` matches *before* a trailing newline in this dialect, so `.regex()` — which
+ * is a bare `.test()` — accepts `"quarantine/<21>\n"`. There is no `\z` here;
+ * comparing the whole match against the whole input is the equivalent that
+ * exists, and it is why the predicate that owns this shape is not a `.test()`
+ * either.
  *
  * No message, because no person can provoke this — the key comes from the row,
  * and a forged one meets the refusals the domain already answers.
  */
-export const photoKeyArg = z.string().regex(/^quarantine\/[A-Za-z0-9_-]{21}$/);
+const QUARANTINE_KEY_ARG = /^quarantine\/[A-Za-z0-9_-]{21}$/;
+
+export const photoKeyArg = z.string().refine((key) => QUARANTINE_KEY_ARG.exec(key)?.[0] === key);
 
 /**
  * **The payload of an action that has none.**

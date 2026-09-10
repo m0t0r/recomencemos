@@ -12,9 +12,14 @@
  * Admin handlers are the row halves of DD6's steps 3, 4 and 5; the bytes are
  * `@repo/storage`'s and are exercised against a real bucket by
  * `pnpm test:store`. That split is what lets this file run in PGlite with no
- * Docker, which is the same argument seam 2 already rests on — and it is why
- * `approvePhoto` here is called through `runAdminAction` rather than through
- * `#photos`'s `approve`, which re-encodes before it transacts.
+ * Docker, which is the same argument seam 2 already rests on — and it is why a
+ * decision here is driven through `runAdminAction` rather than through
+ * `approvePhoto`, which re-encodes before it transacts.
+ *
+ * **One block is the exception and says so at its head.** `approvePhoto`'s read
+ * before the object work refuses three ways, and every one of them returns
+ * before the store is touched — so those cases drive that function directly, and
+ * a refusal that reached the store would fail them by throwing.
  *
  * **The one thing this seam structurally cannot prove** is the race it is
  * arranged against: PGlite is single-connection, so `FOR UPDATE` is never
@@ -27,10 +32,11 @@ import { eq } from "drizzle-orm";
 import { runAdminAction } from "#admin/index";
 import type { AdminActor } from "#admin/actor";
 import { CURRENT_CONSENT_VERSIONS } from "#consent/registry";
-import { attachPhoto, pendingPhotos } from "#photos";
+import { approvePhoto, attachPhoto, pendingPhotos } from "#photos";
 import { publishProfile } from "#profiles";
 import * as schema from "#schema";
 import { signIn, signInStack } from "#testing/auth-stack";
+import { ADMIN_PHOTO_ALREADY_REVIEWED } from "#user-messages";
 import { test } from "#testing/fixtures";
 import type { TestDatabase } from "#testing/fixtures";
 
@@ -511,6 +517,85 @@ describe("the key a decision was made on", () => {
       expect(await auditRows(database)).toEqual([]);
     },
   );
+});
+
+/**
+ * **The read `approvePhoto` does before it touches the object store.**
+ *
+ * Driven through `approvePhoto` rather than through `runAdminAction`, which is
+ * what the rest of this file uses — and the difference is the point: this is the
+ * one layer that decides whether an object is fetched, decoded and re-encoded at
+ * all, and every one of its refusals returns before any of that. So these cases
+ * need no bucket, and a refusal that reached the store would fail them by
+ * throwing rather than by asserting.
+ */
+describe("the check before the object work", () => {
+  /**
+   * **The order of the two refusals is what this holds.** An already-decided row
+   * still carries a `photo_key` — the *public* one — so a reviewed quarantine
+   * key never matches it; check the key first and the ordinary two-Admin race
+   * answers "esa foto cambió" instead of naming the other person's work.
+   */
+  test("tells an Admin their colleague decided it, not that the photo changed", async ({
+    database,
+  }) => {
+    const { accountId, profileId } = await published(database);
+    await anAdmin(database);
+    await attach(database, accountId, KEY);
+    await runAdminAction(database.db, actor, "approvePhoto", {
+      profileId,
+      publicKey: PUBLIC_KEY,
+      reviewedKey: KEY,
+    });
+
+    const outcome = await approvePhoto(database.db, actor, profileId, KEY);
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("unreachable");
+    expect(outcome.error.code).toBe("admin_photo_already_reviewed");
+    expect(outcome.error.userMessage).toBe(ADMIN_PHOTO_ALREADY_REVIEWED);
+  });
+
+  test("refuses a key the row does not name", async ({ database }) => {
+    const { accountId, profileId } = await published(database);
+    await anAdmin(database);
+    await attach(database, accountId, KEY);
+
+    const outcome = await approvePhoto(database.db, actor, profileId, OTHER_KEY);
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("unreachable");
+    expect(outcome.error.code).toBe("admin_photo_replaced");
+  });
+
+  /**
+   * A row attached before the identity was recorded. It has no binding, so its
+   * bytes cannot be shown to be the ones anybody looked at — and the refusal is
+   * to **publish**, not to review: rejecting it still works, which is what keeps
+   * the branch clearable.
+   */
+  test("refuses to publish a photo whose identity was never recorded", async ({ database }) => {
+    const { accountId, profileId } = await published(database);
+    await anAdmin(database);
+    await attach(database, accountId, KEY);
+    await database.db
+      .update(schema.capabilityProfile)
+      .set({ photoEtag: null })
+      .where(eq(schema.capabilityProfile.id, BigInt(profileId)));
+
+    const outcome = await approvePhoto(database.db, actor, profileId, KEY);
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("unreachable");
+    expect(outcome.error.code).toBe("photo_identity_not_recorded");
+
+    const rejected = await runAdminAction(database.db, actor, "rejectPhoto", {
+      profileId,
+      reviewedKey: KEY,
+    });
+
+    expect(rejected.ok).toBe(true);
+  });
 });
 
 describe("the transitions the state machine refuses", () => {

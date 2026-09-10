@@ -80,11 +80,11 @@ async function photoBytes(width = 900, height = 700): Promise<Buffer> {
  * end-of-image marker are ignored by every decoder, so what is padded is still
  * a picture — which `sharp` reading it back is what proves.
  *
- * **Different, and asserted to be.** A "swapped" image that happened to be
- * byte-identical would make every case below pass while checking nothing, which
- * is precisely how the first draft of this helper failed: the neighbouring
- * replay case had been passing `photoBytes(900, 700)` against a default of
- * `photoBytes(900, 700)`.
+ * **A different *colour*, not different dimensions.** `photoBytes` defaults to
+ * 900×700, so asking it for 900×700 hands back the same buffer — and a "swapped"
+ * image that is byte-identical to its original makes every case here pass while
+ * checking nothing. That is what the length assertion below is guarding, and it
+ * is why this is a function rather than a second call to `photoBytes`.
  */
 async function differentPhotoOfLength(byteLength: number): Promise<Buffer> {
   const swapped = await sharp({
@@ -567,8 +567,8 @@ describe("promoteToPublic", () => {
    * **An empty expectation refuses rather than falling back.** This is the row
    * attached before the identity was recorded, and the failure to guard against
    * is the friendly one: treating "nothing to compare" as "nothing to check"
-   * restores exactly the behaviour this parameter removed, on precisely the
-   * rows that have no binding.
+   * would publish whatever is under the key, on precisely the rows with no
+   * binding to catch it.
    */
   it("refuses to publish on an empty expectation", async () => {
     const key = await uploadToQuarantine(await photoBytes());

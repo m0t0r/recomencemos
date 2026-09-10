@@ -315,7 +315,7 @@ export async function quarantinedEtag(
 
   if (!head.ETag) {
     throw new AppError({
-      code: "photo_object_unidentified",
+      code: "photo_store_returned_no_etag",
       status: 502,
       message:
         "The object store answered a HEAD without an ETag, so there is nothing to record as " +
@@ -339,10 +339,10 @@ function objectMissing(caller: string, cause?: unknown): AppError {
     code: "photo_object_missing",
     status: 404,
     message:
-      `${caller} could not read the quarantined object this row names. Nothing was promoted. ` +
-      "Either it was collected by a lifecycle rule before anyone reviewed it, or the database " +
-      "and the object store have diverged — which is what restoring one of them without the " +
-      "other does.",
+      `${caller} could not read the quarantined object it was given a key for, so it did ` +
+      "nothing. Either the object was collected by a lifecycle rule, or the browser's upload " +
+      "never completed, or the database and the object store have diverged — which is what " +
+      "restoring one of them without the other does.",
     userMessage: PHOTO_UNAVAILABLE,
     context: {},
     ...(cause === undefined ? {} : { cause }),
@@ -425,12 +425,11 @@ export interface PromotedPhoto {
  * somebody's profile.
  *
  * **`expectedEtag` is what binds the bytes an Admin decided on to the bytes this
- * publishes**, and without it this function had nothing to compare: it read a
- * mutable object at approval time, having never recorded what it was at attach
- * time, so the queue's render and this read were two reads of a key rather than
- * two reads of an object. A holder of the upload URL who overwrote between them
- * put bytes no person had ever seen into the anonymously-readable bucket, which
- * is the one thing the review gate exists to prevent.
+ * publishes.** The object under a quarantine key is mutable: the queue renders
+ * it once and this reads it again, so without an identity recorded at attach
+ * time the two are reads of a *key* rather than of an object, and whatever is
+ * under it at this instant reaches the anonymously-readable bucket. That is the
+ * one thing the review gate exists to prevent.
  *
  * **Two mechanisms, and the second is the one that is load-bearing.** `If-Match`
  * on the read makes the refusal the store's, so mismatched bytes never cross the
@@ -469,9 +468,9 @@ export async function promoteToPublic(
       status: 422,
       message:
         "promoteToPublic was given no identity to hold the object to. Nothing was read and " +
-        "nothing was written. Publishing on an empty expectation would be publishing whatever " +
-        "is under the key at this instant, which is the state this parameter exists to have " +
-        "removed — so the absence refuses rather than defaulting to the old behaviour.",
+        "nothing was written. An empty expectation cannot be checked, and treating an " +
+        "unanswerable check as a passed one would publish whatever is under the key at this " +
+        "instant — so it refuses instead.",
       userMessage: PHOTO_UNAVAILABLE,
       context: {},
     });
