@@ -77,7 +77,16 @@ that is the whole of it. Her public card stays public — the Wall is readable b
 not — and he keeps whatever reading access any signed-in Account has. It reaches only the platform:
 after Contact Exchange it cannot undo what he already knows, and it does not survive his deleting his
 Account, because deletion frees his email address. Spanish UI: _Bloquear_.
-_Avoid_: Ban, mute, hide — and avoid describing it as making her invisible, which it never was
+_Avoid_: Ban, mute, hide — and avoid describing it as making her invisible, which it never was;
+that is a Pause, and it reaches every Hirer at once
+
+**Pause**:
+A Worker's own, reversible choice to take her CapabilityProfile off the site without losing it.
+While paused, nobody but her can find or read it and no new Offer can be sent to her; Offers already
+sent still reach her, and she ends it whenever she chooses. It is hers alone and is never an Admin's
+takedown. Spanish UI: _Pausar mi perfil_; the state reads _en pausa_.
+_Avoid_: Hide, deactivate, withdraw, unpublish — and in Spanish _ocultar_, and _retirar_, which
+reads as a takedown
 
 **Admin**:
 A staff Account. Holds the daily queue — photos, Offers, Reports — plus takedown, unfreeze, and
