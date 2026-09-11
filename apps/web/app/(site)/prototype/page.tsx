@@ -78,6 +78,71 @@ const IDEAS: readonly Idea[] = [
     ],
     today: "No existe: es la única medida de éxito que nombra el producto.",
   },
+  {
+    n: 6,
+    title: "Leer un perfil",
+    question:
+      "¿Cómo lee un Contratante el perfil completo en el teléfono, y dónde encuentra cómo escribirle?",
+    path: "/prototype/profile",
+    variants: [
+      { key: "A", name: "La página" },
+      { key: "B", name: "El dossier" },
+      { key: "C", name: "Su voz" },
+    ],
+    today: "Un solo scroll en /profile/[slug] con el formulario en un <details> al pie.",
+  },
+  {
+    n: 7,
+    title: "Mi lado de la plataforma",
+    question:
+      "¿Qué ve una Trabajadora cuando entra: su tarjeta, sus propuestas, o solo lo que hoy necesita de ella?",
+    path: "/prototype/my-notebook",
+    variants: [
+      { key: "A", name: "Una página" },
+      { key: "B", name: "Pestañas" },
+      { key: "C", name: "Hoy" },
+    ],
+    today: "/my-profile muestra la tarjeta y el interruptor de pausa; nada sobre propuestas.",
+  },
+  {
+    n: 8,
+    title: "Las tres cosas claras",
+    question:
+      "¿Dónde viven las tres negativas para que quien decide las lea y quien solo mira no las pague en scroll?",
+    path: "/prototype/notices",
+    variants: [
+      { key: "A", name: "El bloque" },
+      { key: "B", name: "La franja" },
+      { key: "C", name: "En el momento" },
+    ],
+    today: "Tres desplegables sobre la lista del muro y al pie de cada perfil.",
+  },
+  {
+    n: 9,
+    title: "La cola del día",
+    question:
+      "¿Cómo revisa una sola persona todo lo que espera un humano, sin que lo más viejo envejezca?",
+    path: "/prototype/admin-queue",
+    variants: [
+      { key: "A", name: "La tabla" },
+      { key: "B", name: "Una a la vez" },
+      { key: "C", name: "Dos paneles" },
+    ],
+    today: "Cinco secciones separadas en /admin, cada una con la edad de lo más viejo.",
+  },
+  {
+    n: 10,
+    title: "La puerta",
+    question:
+      "¿Cómo entra una Trabajadora desde un teléfono prestado, sin contraseña y quizá sin correo a la mano?",
+    path: "/prototype/sign-in",
+    variants: [
+      { key: "A", name: "El enlace" },
+      { key: "B", name: "El código" },
+      { key: "C", name: "Tu número" },
+    ],
+    today: "Un enlace al correo o Google, en /sign-in.",
+  },
 ];
 
 export default function LabIndexPage() {
@@ -87,9 +152,9 @@ export default function LabIndexPage() {
         <p className="text-muted-foreground font-mono text-xs">prototipo · se borra entero</p>
         <h1 className="page-heading">Laboratorio de experiencia</h1>
         <p className="text-muted-foreground max-w-prose text-pretty">
-          Cinco preguntas sobre cómo se vive la plataforma, cada una con variantes que se cambian
-          con las flechas del teclado o la barra de abajo. Todo es de mentira: nada se guarda y
-          ninguna persona aquí existe.
+          Diez preguntas sobre cómo se vive la plataforma, cada una con variantes que se cambian con
+          las flechas del teclado o la barra de abajo. Todo es de mentira: nada se guarda y ninguna
+          persona aquí existe.
         </p>
       </div>
 

@@ -100,6 +100,11 @@ export const NOTICE_EXEMPT_ROUTES: readonly NoticeExemption[] = [
   { route: "/prototype/offer-writer", reason: "prototype: mock Offer form, throwaway" },
   { route: "/prototype/offers", reason: "prototype: mock Offers, throwaway" },
   { route: "/prototype/publish", reason: "prototype: mock publish form, throwaway" },
+  { route: "/prototype/profile", reason: "prototype: mock gated profile, throwaway" },
+  { route: "/prototype/my-notebook", reason: "prototype: mock own page, throwaway" },
+  { route: "/prototype/notices", reason: "prototype: the notices themselves, throwaway" },
+  { route: "/prototype/admin-queue", reason: "prototype: mock operator queue, throwaway" },
+  { route: "/prototype/sign-in", reason: "prototype: mock door, throwaway" },
 ];
 
 /**

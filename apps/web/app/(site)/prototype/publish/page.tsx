@@ -8,6 +8,7 @@ import { LabPage } from "../_components/lab-page";
 import type { LabVariant, SearchParams } from "../_lib/variant";
 import { Dictation } from "./_components/dictation";
 import { FillTheCard } from "./_components/fill-the-card";
+import { SpeakIt } from "./_components/speak-it";
 import { Steps } from "./_components/steps";
 
 const VARIANTS: readonly LabVariant[] = [
@@ -26,6 +27,11 @@ const VARIANTS: readonly LabVariant[] = [
     name: "Escribe en la tarjeta",
     bet: "la fila del muro es el formulario; lo privado va aparte, debajo",
   },
+  {
+    key: "D",
+    name: "Grábalo",
+    bet: "como un audio de WhatsApp: dice su línea, el navegador la transcribe, ella corrige",
+  },
 ];
 
 export default function PublishLabPage({ searchParams }: { readonly searchParams: SearchParams }) {
@@ -40,6 +46,7 @@ export default function PublishLabPage({ searchParams }: { readonly searchParams
           {current.key === "A" ? <Steps /> : null}
           {current.key === "B" ? <Dictation /> : null}
           {current.key === "C" ? <FillTheCard /> : null}
+          {current.key === "D" ? <SpeakIt /> : null}
         </>
       )}
     />
