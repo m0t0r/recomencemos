@@ -79,6 +79,7 @@ import {
 } from "#policy/offer-states";
 import { normalizeColombianPhone } from "#policy/phone";
 import { PUBLIC_COLUMNS, toPublic } from "#profiles/public-columns";
+import { visibleToOthers } from "#profiles/visibility";
 import {
   type ReceivedOffer,
   type ReceivedOfferTerms,
@@ -144,8 +145,9 @@ export type OfferRefusal =
 /**
  * What a send can answer.
  *
- * **`profile_not_found` covers a slug naming nobody and a profile that is not
- * published**, one answer for both, which is the shape `/profile/[slug]` already
+ * **`profile_not_found` covers a slug naming nobody, a profile that is not
+ * published and one she has paused**, one answer for all three, which is the
+ * shape `/profile/[slug]` already
  * takes: the page refuses a frozen caller with exactly the missing-profile
  * response, so a send that distinguished the two would reopen from the action
  * the oracle the page closed (C22).
@@ -269,9 +271,11 @@ export async function sendOffer(
     }
 
     /**
-     * Her profile, read inside the same transaction. `published` is part of the
-     * predicate rather than a check afterwards, so a profile taken down while he
-     * was writing produces the same answer as a slug naming nobody.
+     * Her profile, read inside the same transaction. Visibility is part of the
+     * predicate rather than a check afterwards, so a profile taken down — or
+     * paused by her — while he was writing produces the same answer as a slug
+     * naming nobody. That is the answer C22 already gives, so her Pause opens
+     * no oracle a Hirer could read her absence from (#141).
      */
     const [profile] = await tx
       .select({
@@ -279,12 +283,7 @@ export async function sendOffer(
         accountId: schema.capabilityProfile.accountId,
       })
       .from(schema.capabilityProfile)
-      .where(
-        and(
-          eq(schema.capabilityProfile.slug, input.profileSlug),
-          eq(schema.capabilityProfile.state, "published"),
-        ),
-      )
+      .where(and(eq(schema.capabilityProfile.slug, input.profileSlug), visibleToOthers))
       .limit(1);
 
     if (!profile) return { ok: false as const, reason: "profile_not_found" as const };
@@ -699,6 +698,14 @@ export interface PendingOffer {
    */
   readonly workerFirstName: string;
   readonly workerLastInitial: string;
+  /**
+   * When she paused her profile, or `null` (story 25). **The queue is unchanged
+   * by a pause** — an Offer sent before it is still read and delivered, because
+   * it was submitted before she stepped away and a pause is not a reason to
+   * leave work unread — but an Admin delivering it should know she is not on
+   * the site, so the row says _en pausa desde <fecha>_.
+   */
+  readonly workerPausedAt: Date | null;
   /** What he called himself, badged as declared rather than verified (C4). */
   readonly hirerName: string | null;
 }
@@ -743,6 +750,7 @@ export async function pendingOffers(
       sentAt: schema.offer.createdAt,
       workerFirstName: schema.capabilityProfile.firstName,
       workerLastInitial: schema.capabilityProfile.lastInitial,
+      workerPausedAt: schema.capabilityProfile.pausedAt,
       hirerName: schema.user.hirerName,
     })
     .from(schema.offer)

@@ -71,6 +71,12 @@ export interface ExportedProfile {
    */
   readonly photoAttachedAt: Date | null;
   readonly state: string;
+  /**
+   * Her Pause: when she took the profile off the site herself, or `null`.
+   * Carried because it is a decision she took about her own visibility, and a
+   * _consulta_ asking what the platform holds about her is owed it (NFR16).
+   */
+  readonly pausedAt: Date | null;
   readonly publishedAt: Date;
   readonly deliveredOfferCount: number;
   readonly skills: readonly string[];
@@ -331,6 +337,7 @@ async function exportedProfile(
       photoState: schema.capabilityProfile.photoState,
       photoAttachedAt: schema.capabilityProfile.photoAttachedAt,
       state: schema.capabilityProfile.state,
+      pausedAt: schema.capabilityProfile.pausedAt,
       publishedAt: schema.capabilityProfile.publishedAt,
       deliveredOfferCount: schema.capabilityProfile.deliveredOfferCount,
     })
@@ -367,6 +374,7 @@ async function exportedProfile(
     photoState: row.photoState,
     photoAttachedAt: row.photoAttachedAt,
     state: row.state,
+    pausedAt: row.pausedAt,
     publishedAt: row.publishedAt,
     deliveredOfferCount: row.deliveredOfferCount,
     skills: skills.map((skill) => skill.labelEs),

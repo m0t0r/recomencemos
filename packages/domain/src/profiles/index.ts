@@ -1,6 +1,6 @@
 /**
  * `@repo/domain/profiles` — the CapabilityProfile aggregate: publishing one,
- * and reading one's own.
+ * pausing it, and reading one's own.
  *
  * **`publishProfile` is one transaction, and the Consent row is inside it.**
  * Profile, Skills, work history and the Worker's _autorización_ commit together
@@ -25,7 +25,7 @@
  */
 
 import { presignReview, publicPhotoUrl } from "@repo/storage/photos";
-import { and, asc, count, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db as pooledDatabase } from "#connection";
 import { recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
@@ -452,6 +452,98 @@ export async function updateProfile(
   });
 }
 
+/**
+ * What either half of the Pause switch can answer. `no_profile` is the edit's
+ * answer to an Account that never published, and for the same reason: an
+ * ordinary answer to an ordinary request, returned rather than thrown.
+ */
+export type PauseOutcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: "no_profile" };
+
+/**
+ * Both halves of the switch answer a row that matched nothing the same way: it
+ * was already where she asked for it, or it is taken down — both `{ ok }` — or
+ * she has no profile at all, which the surface sends to `/publish`. One indexed
+ * read on the unique `account_id` tells the last apart from the first two.
+ */
+async function answerFor(
+  db: DomainDatabase,
+  accountId: string,
+  written: readonly unknown[],
+): Promise<PauseOutcome> {
+  if (written.length > 0 || (await hasProfile(db, accountId))) return { ok: true };
+  return { ok: false, reason: "no_profile" };
+}
+
+/**
+ * **She takes her profile off the site, and loses nothing** (story 25).
+ *
+ * One `UPDATE`, and its `WHERE` clause is the design rather than a guard:
+ *
+ * - **`state = 'published'`**, so a taken-down profile matches nothing and
+ *   nothing is written — whatever later reverses the takedown restores her
+ *   exactly as she left it, which is the one guarantee DD8 makes about the two
+ *   columns.
+ * - **`paused_at IS NULL`**, so a second pause matches nothing either and "since
+ *   when" stays the first tap rather than the last. Idempotent by the predicate,
+ *   not by a read-then-write.
+ * - **`published_at` is not in the `SET`**, for the reason `updateProfile` gives:
+ *   it orders the Wall. Nor is `updated_at` — a pause changes who can see the
+ *   profile, not what it says.
+ *
+ * **No `AdminAction` is written.** The audit counts an Admin's acts, and this is
+ * the subject's own act on her own row; a record of each time she stepped away,
+ * kept for 24 months, is exactly what the spec refuses.
+ *
+ * `now` is a parameter, like every instant in this package, so seam 2 can pin
+ * "since when" and one clock reading governs the surface that renders it.
+ */
+export async function pauseProfile(
+  db: DomainDatabase,
+  accountId: string,
+  now: Date,
+): Promise<PauseOutcome> {
+  const written = await db
+    .update(schema.capabilityProfile)
+    .set({ pausedAt: now })
+    .where(
+      and(
+        eq(schema.capabilityProfile.accountId, accountId),
+        eq(schema.capabilityProfile.state, "published"),
+        isNull(schema.capabilityProfile.pausedAt),
+      ),
+    )
+    .returning({ id: schema.capabilityProfile.id });
+
+  return answerFor(db, accountId, written);
+}
+
+/**
+ * **She ends the Pause, and is back where she was** — not at the top of the
+ * Wall, because `published_at` is untouched, so pause-then-resume is not the
+ * free bump an edit is also held back from.
+ *
+ * `state = 'published'` is in the predicate for the half of DD8 a resume could
+ * break: clearing `paused_at` on a taken-down profile would change, behind her
+ * back, what a reversed takedown restores. So while taken down this writes
+ * nothing, and the surface does not offer it.
+ */
+export async function resumeProfile(db: DomainDatabase, accountId: string): Promise<PauseOutcome> {
+  const written = await db
+    .update(schema.capabilityProfile)
+    .set({ pausedAt: null })
+    .where(
+      and(
+        eq(schema.capabilityProfile.accountId, accountId),
+        eq(schema.capabilityProfile.state, "published"),
+      ),
+    )
+    .returning({ id: schema.capabilityProfile.id });
+
+  return answerFor(db, accountId, written);
+}
+
 /** Whether this Account already holds a profile — what `/publish`'s gate asks. */
 export async function hasProfile(db: DomainDatabase, accountId: string): Promise<boolean> {
   const rows = await db
@@ -542,6 +634,8 @@ export async function findOwnProfile(
       photoState: schema.capabilityProfile.photoState,
       photoKey: schema.capabilityProfile.photoKey,
       publishedAt: schema.capabilityProfile.publishedAt,
+      state: schema.capabilityProfile.state,
+      pausedAt: schema.capabilityProfile.pausedAt,
       email: schema.user.email,
     })
     .from(schema.capabilityProfile)
@@ -584,7 +678,10 @@ export async function findOwnProfile(
     publishedAt: row.publishedAt,
   };
 
-  return toOwnProfile(record);
+  return toOwnProfile(record, {
+    pausedAt: row.pausedAt,
+    takenDown: row.state === "taken_down",
+  });
 }
 
 /**
@@ -650,6 +747,15 @@ export const profiles = {
 
   async findOwn(accountId: string): Promise<OwnProfile | null> {
     return findOwnProfile(pooledDatabase(), accountId);
+  },
+
+  /** Her Pause switch, one binding per direction. The caller supplies the clock. */
+  async pause(accountId: string, now: Date): Promise<PauseOutcome> {
+    return pauseProfile(pooledDatabase(), accountId, now);
+  },
+
+  async resume(accountId: string): Promise<PauseOutcome> {
+    return resumeProfile(pooledDatabase(), accountId);
   },
 
   /**

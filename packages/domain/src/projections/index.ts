@@ -115,11 +115,30 @@ export interface ExchangedProfile extends GatedProfile {
   readonly contact: ExchangedContact;
 }
 
-export interface OwnProfile extends GatedProfile {
+export interface OwnProfile extends GatedProfile, OwnStanding {
   readonly fullName: string;
   readonly phone: string;
   readonly email: string;
   readonly photoState: PhotoState;
+}
+
+/**
+ * **Where her profile stands, which only she reads** (story 25).
+ *
+ * Deliberately **not** on {@link ProfileRecord}. Every projection reads that
+ * record, and `PublicProfile` and `GatedProfile` must gain nothing from a pause
+ * — a paused profile is never served to them at all. Handing the standing to
+ * {@link toOwnProfile} alone is what makes it structurally impossible for a
+ * public projection to carry it, rather than a whitelist somebody has to keep.
+ */
+export interface OwnStanding {
+  /** When she paused it, or `null` while it is on the site. The page says _en pausa_ and since when. */
+  readonly pausedAt: Date | null;
+  /**
+   * Whether an Admin has taken it down. The page hides the Pause switch then,
+   * because neither half would write anything; what it says instead is #28's.
+   */
+  readonly takenDown: boolean;
 }
 
 export function toPublicProfile(record: ProfileRecord): PublicProfile {
@@ -166,7 +185,7 @@ export function toExchangedProfile(record: ProfileRecord): ExchangedProfile {
   };
 }
 
-export function toOwnProfile(record: ProfileRecord): OwnProfile {
+export function toOwnProfile(record: ProfileRecord, standing: OwnStanding): OwnProfile {
   return {
     ...toGatedProfile(record),
     fullName: record.fullName,
@@ -176,6 +195,8 @@ export function toOwnProfile(record: ProfileRecord): OwnProfile {
     // Her own view shows her photo whatever its state, which is the one place
     // `photoUrl` crosses before approval.
     photoUrl: record.photoUrl,
+    pausedAt: standing.pausedAt,
+    takenDown: standing.takenDown,
   };
 }
 

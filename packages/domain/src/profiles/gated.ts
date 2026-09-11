@@ -16,10 +16,11 @@
  * statement; this page reads one row and wants the first half on screen.
  *
  * **Nothing here reads a gated column it does not put in a projection**, and
- * nothing here is cached (DD1). `state = 'published'` is a predicate on both
+ * nothing here is cached (DD1). `#profiles/visibility` is a predicate on both
  * statements rather than a filter the caller remembers: a taken-down profile is
  * as absent as one that never existed, which is what makes moderation actually
- * remove something.
+ * remove something — and so is one she has paused, which is what makes her
+ * Pause actually take her off the site (#141).
  */
 
 import { photoUrl, publicBase, transformationsEnabled } from "@repo/storage/photo-url";
@@ -27,6 +28,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import type { DomainDatabase } from "#database";
 import type { CityId } from "#policy/cities";
 import type { PhotoState } from "#policy/profile-states";
+import { visibleToOthers } from "#profiles/visibility";
 import { type GatedIdentity, toGatedIdentity } from "#projections";
 import * as schema from "#schema";
 import type { VocabularyEntry } from "#skills";
@@ -57,10 +59,10 @@ const skillsOfProfile = sql<VocabularyEntry[]>`(
 /**
  * The first half: everything but the work history.
  *
- * `null` for an unknown slug **and** for a taken-down one, which is the same
- * answer on purpose — the route turns both into the missing-profile response,
- * and so does a freeze on the caller's side. One shape, three causes, and
- * nothing on the page distinguishes them.
+ * `null` for an unknown slug, a taken-down profile **and** a paused one, which
+ * is the same answer on purpose — the route turns all three into the
+ * missing-profile response, and so does a freeze on the caller's side. One
+ * shape, four causes, and nothing on the page distinguishes them.
  */
 export async function findGatedIdentity(
   db: DomainDatabase,
@@ -80,9 +82,7 @@ export async function findGatedIdentity(
       skills: skillsOfProfile.as("skills"),
     })
     .from(schema.capabilityProfile)
-    .where(
-      and(eq(schema.capabilityProfile.slug, slug), eq(schema.capabilityProfile.state, "published")),
-    )
+    .where(and(eq(schema.capabilityProfile.slug, slug), visibleToOthers))
     .limit(1);
 
   if (!row) return null;
@@ -141,7 +141,7 @@ export async function findGatedIdentity(
  * "Ordered" with no ordering column means an edit silently reorders her
  * history, and this is the read that would show it.
  *
- * `[]` for an unknown or taken-down slug, the same value as a profile that
+ * `[]` for an unknown, taken-down or paused slug, the same value as a profile that
  * listed nothing. The caller has already learned whether the profile exists
  * from {@link findGatedIdentity}, so there is no second absence for this
  * function to report — and returning `null` here would give the route a fourth
@@ -158,9 +158,7 @@ export async function findGatedWorkHistory(
       schema.capabilityProfile,
       eq(schema.capabilityProfile.id, schema.workHistoryEntry.capabilityProfileId),
     )
-    .where(
-      and(eq(schema.capabilityProfile.slug, slug), eq(schema.capabilityProfile.state, "published")),
-    )
+    .where(and(eq(schema.capabilityProfile.slug, slug), visibleToOthers))
     .orderBy(asc(schema.workHistoryEntry.position));
 
   return rows.map((row) => row.text);

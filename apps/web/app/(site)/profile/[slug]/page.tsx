@@ -59,7 +59,7 @@ import { type CeilingRefusal, chargeCeilings } from "@/lib/ceilings";
 import { clientIp } from "@/lib/client-ip";
 import { GatedProfileView } from "./_components/gated-profile-view";
 import { OfferForm } from "./_components/offer-form";
-import { ReadPaused } from "./_components/read-paused";
+import { ReadingStopped } from "./_components/reading-stopped";
 import { PROFILE_PAGE_TITLE } from "./_lib/messages";
 
 export const metadata: Metadata = {
@@ -131,8 +131,8 @@ async function ProfilePanel({ params }: { readonly params: Params }) {
    */
   const session = await requireAccountPage(`/profile/${slug}`);
 
-  const paused = await chargeReadCeilings(session.accountId);
-  if (paused) return <ReadPaused explanation={paused.userMessage} />;
+  const stopped = await chargeReadCeilings(session.accountId);
+  if (stopped) return <ReadingStopped explanation={stopped.userMessage} />;
 
   /**
    * **Both reads happen, whatever either says, and the refusal is one call at

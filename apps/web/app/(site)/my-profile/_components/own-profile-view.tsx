@@ -1,24 +1,36 @@
 /**
- * Her own profile, rendered. Sync and prop-driven, so `own-profile-view.test.tsx`
- * can render it under happy-dom — the async page above it cannot be tested
- * there, and the two things worth pinning are here: that every free-text field
- * is rendered as **content and never as a URL** (DD7's third clause, with a
- * `javascript:` sentinel), and that the three tiers say who sees what.
+ * Her own profile — her whole side of the platform on one page — rendered. Sync
+ * and prop-driven, so `own-profile-view.test.tsx` can render it under happy-dom;
+ * the async page above it cannot be tested there. Two things worth pinning live
+ * here: every free-text field is rendered as **content and never as a URL**
+ * (DD7's third clause, with a `javascript:` sentinel), and the page says who
+ * sees what.
  *
- * **"Tres niveles"**, locked after `/prototype` UI: the card a stranger sees,
- * then two sections, each headed by who sees it. The two losing layouts — a
- * single ledger with a visibility badge per row, and one tab per audience —
- * live on `prototype/16-ui-variants`.
+ * **The order is #275's, settled in the UX lab** (idea 7, variant A, _Una
+ * página_): where she stands and the Pause switch; her card as the Wall shows
+ * it, whose photo is the control that changes it; the Offers waiting; what
+ * closed. **#16's three tiers follow**, because they are this page's original
+ * answer — what the platform holds about her and who sees which part — and #275
+ * adds to that answer rather than replacing it.
+ *
+ * **How that sits on a 390 px phone is not decided here.** This is the tracer
+ * bullet the `/prototype` variants are built against, and the owner picks the
+ * composition from them; `.impeccable/briefs/own-profile.md` records which half
+ * is settled and which is open.
  */
 
 import { AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
 import { buttonVariants } from "@repo/design-system/components/button-variants";
+import type { ReceivedOffer } from "@repo/domain/offers";
 import { cityLabel, formatColombianPhone } from "@repo/domain/policy";
 import type { OwnProfile } from "@repo/domain/profiles";
 import { DoorOpenIcon, GlobeIcon, LockKeyholeIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ProfileCard } from "@/app/(site)/_components/profile-card";
+import { initialOf, ProfileCard } from "@/app/(site)/_components/profile-card";
+import { HerOffers } from "./her-offers";
+import { PauseSwitch } from "./pause-switch";
+import { PhotoControl } from "./photo-control";
 import { PublishedConfirmation } from "./published-confirmation";
 import {
   ABOUT_TERM,
@@ -29,7 +41,9 @@ import {
   HELD_EXPLANATION,
   HELD_HEADING,
   NOTHING_MORE,
-  OWN_PHOTO_ALT,
+  PAUSED_CONFIRMATION,
+  PAUSED_EXPLANATION,
+  pausedSince,
   PHONE_TERM,
   PHOTO_ABSENT,
   PHOTO_PENDING,
@@ -38,8 +52,11 @@ import {
   PUBLISHED_CONFIRMATION,
   PUBLISHED_EXPLANATION,
   publishedOn,
+  RESUMED_CONFIRMATION,
+  RESUMED_EXPLANATION,
   SAVED_CONFIRMATION,
   SAVED_EXPLANATION,
+  VISIBLE_LINE,
   WALL_LINK,
   WORK_HISTORY_TERM,
 } from "../_lib/messages";
@@ -62,86 +79,79 @@ function photoSentence(state: OwnProfile["photoState"]): string {
   }
 }
 
+/**
+ * **Which redirect she arrived by**, one at a time: each comes from its own
+ * action, so only one can be true. They share one focused `role="status"`
+ * region, because they are the same thing to a screen reader — the announcement
+ * she is waiting for on arrival — and different facts to read.
+ */
+export type Arrival = "published" | "saved" | "paused" | "resumed" | null;
+
 export interface OwnProfileViewProps {
   readonly profile: OwnProfile;
-  /** Arrived from `/publish`: render the confirmation, focused. */
-  readonly justPublished: boolean;
-  /** Arrived from a saved edit: the same region, a different sentence. */
-  readonly justSaved: boolean;
+  /** Every Offer that reached her, newest first — `offers.listReceived`. */
+  readonly offers: readonly ReceivedOffer[];
+  readonly arrival: Arrival;
 }
 
-/**
- * **One region, two arrivals.** Publishing and saving are different facts and
- * say different sentences, but they are the same thing to a screen reader —
- * the announcement she is waiting for on arrival — so they share the focused
- * `role="status"` region rather than competing for it. Only one can be true:
- * each comes from its own redirect.
- */
-function SavedConfirmation() {
-  return (
-    <PublishedConfirmation>
-      <AlertTitle>{SAVED_CONFIRMATION}</AlertTitle>
-      <AlertDescription>
-        <p>{SAVED_EXPLANATION}</p>
-      </AlertDescription>
-    </PublishedConfirmation>
-  );
-}
+const ARRIVALS = {
+  published: { title: PUBLISHED_CONFIRMATION, body: PUBLISHED_EXPLANATION },
+  saved: { title: SAVED_CONFIRMATION, body: SAVED_EXPLANATION },
+  paused: { title: PAUSED_CONFIRMATION, body: PAUSED_EXPLANATION },
+  resumed: { title: RESUMED_CONFIRMATION, body: RESUMED_EXPLANATION },
+} as const;
 
-function Confirmation() {
+function ArrivalConfirmation({ arrival }: { arrival: Exclude<Arrival, null> }) {
+  const { title, body } = ARRIVALS[arrival];
+
   return (
     <PublishedConfirmation>
-      <AlertTitle>{PUBLISHED_CONFIRMATION}</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription className="flex flex-col gap-3">
-        <p>{PUBLISHED_EXPLANATION}</p>
+        <p>{body}</p>
         {/*
-          `buttonVariants` on a plain `<Link>`, not `<Button render={<Link/>}>`,
-          for the reason `sign-in-link.tsx` sets out at length: this navigates,
-          so it is a link and must announce as one. Handing the registry's
-          `Button` a link made Base UI warn on every render that native button
-          semantics had been stripped — observed in `next dev` stdout, which is
-          where `logging.browserToTerminal` puts it — and the flag it suggests
-          stamps `role="button"` onto the `<a>`, hiding a working link from
-          anyone navigating by links.
+          Only publishing links the Wall. `buttonVariants` on a plain `<Link>`,
+          not `<Button render={<Link/>}>`, for the reason `sign-in-link.tsx`
+          sets out: this navigates, so it must announce as a link.
         */}
-        <Link
-          href="/"
-          className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
-        >
-          {WALL_LINK}
-        </Link>
+        {arrival === "published" ? (
+          <Link
+            href="/"
+            className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+          >
+            {WALL_LINK}
+          </Link>
+        ) : null}
       </AlertDescription>
     </PublishedConfirmation>
   );
 }
 
 /**
- * **Her own card, and the one place a photo here needs a name.**
+ * **Where she stands, and the switch** — the first thing on the page, and the
+ * focal moment the brief names.
  *
- * On a public list a photo sits beside the person's name and reads as
- * decorative — an empty `alt` is right there, and `ProfileCard` defaults to one.
- * On this page it is not: the photo is the *subject* of the sentence directly
- * under it, and with `alt=""` it was removed from the accessibility tree
- * altogether. Found by reading that tree against the running server — the image
- * was on screen and simply not in it.
- *
- * The `alt` says what the image shows and nothing about her circumstances, and
- * `photoDescribedBy` joins it to the sentence carrying the state, so "a person
- * is looking at it" is announced **with** her photo rather than found
- * separately.
+ * **While the profile is taken down this renders nothing.** The switch is not
+ * offered, because neither half would write anything; and neither state line is
+ * true — she is not on the Wall, and the reason is not her pause. What the page
+ * says instead is story 20's copy (#28), and a line here would be a second,
+ * wrong source for it.
  */
-function Card({ profile, sentenceId }: { profile: OwnProfile; sentenceId: string }) {
+function Standing({ profile }: { profile: OwnProfile }) {
+  if (profile.takenDown) return null;
+
+  const paused = profile.pausedAt !== null;
+
   return (
-    <ProfileCard
-      firstName={profile.firstName}
-      lastInitial={profile.lastInitial}
-      cityLabel={cityLabel(profile.city)}
-      headline={profile.headline}
-      skills={profile.skills}
-      photoUrl={profile.photoUrl}
-      photoAlt={OWN_PHOTO_ALT}
-      photoDescribedBy={sentenceId}
-    />
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <p className="text-foreground text-lg leading-7 text-pretty">
+          {profile.pausedAt ? pausedSince(profile.pausedAt) : VISIBLE_LINE}
+        </p>
+        {paused ? <p className="text-muted-foreground text-pretty">{PAUSED_EXPLANATION}</p> : null}
+      </div>
+      <PauseSwitch paused={paused} />
+    </div>
   );
 }
 
@@ -196,57 +206,6 @@ function HeldTerms({ profile }: { profile: OwnProfile }) {
   );
 }
 
-function Tiers({ profile, justPublished, justSaved }: OwnProfileViewProps) {
-  return (
-    <div className="flex flex-col gap-8">
-      {justPublished ? <Confirmation /> : null}
-      {justSaved ? <SavedConfirmation /> : null}
-
-      {/*
-        The way into the edit form. A link rather than a button because it
-        navigates, for the reason `sign-in-link.tsx` sets out — and placed
-        above the tiers rather than beside each one, because what she is
-        changing is the profile, and the tiers are a rule about who sees it
-        rather than four things to edit separately.
-      */}
-      <Link
-        href="/my-profile/edit"
-        className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
-      >
-        {EDIT_LINK}
-      </Link>
-
-      {/*
-        Three sheets, one per shape of the profile (`PRODUCT.md` → three shapes
-        of one profile, differing by exactly the fields that must not leak).
-        The margin line runs beside all three from `sm` up, each opens on a
-        ruling, and the icon in the margin says who reaches it — the world at
-        large, someone who opened her profile, someone she accepted. The icon
-        is a mark beside the heading rather than a state on it, and it is
-        `aria-hidden` because the heading already says the same thing in words.
-      */}
-      <div className="ruled-page">
-        <Tier id="public-heading" heading={PUBLIC_HEADING} icon={GlobeIcon}>
-          <Card profile={profile} sentenceId={PHOTO_SENTENCE_ID} />
-          <p id={PHOTO_SENTENCE_ID} className="text-muted-foreground text-sm">
-            {photoSentence(profile.photoState)}
-          </p>
-          <p className="text-muted-foreground text-sm">{publishedOn(profile.publishedAt)}</p>
-        </Tier>
-
-        <Tier id="gated-heading" heading={GATED_HEADING} icon={DoorOpenIcon}>
-          <GatedTerms profile={profile} />
-        </Tier>
-
-        <Tier id="held-heading" heading={HELD_HEADING} icon={LockKeyholeIcon}>
-          <p className="text-muted-foreground text-sm text-pretty">{HELD_EXPLANATION}</p>
-          <HeldTerms profile={profile} />
-        </Tier>
-      </div>
-    </div>
-  );
-}
-
 function Tier({
   id,
   heading,
@@ -272,6 +231,65 @@ function Tier({
   );
 }
 
-export function OwnProfileView(props: OwnProfileViewProps) {
-  return <Tiers {...props} />;
+export function OwnProfileView({ profile, offers, arrival }: OwnProfileViewProps) {
+  return (
+    <div className="flex flex-col gap-10">
+      {arrival ? <ArrivalConfirmation arrival={arrival} /> : null}
+
+      <Standing profile={profile} />
+
+      {/*
+        Her card, as the Wall shows it — the first of #16's three sheets, so the
+        margin line and the icon still say who reaches it. Its photo is the
+        control that changes it (the owner's answer on #275), and the sentence
+        under it, which carries the photo's state, is joined to that control.
+      */}
+      <div className="ruled-page">
+        <Tier id="public-heading" heading={PUBLIC_HEADING} icon={GlobeIcon}>
+          <ProfileCard
+            firstName={profile.firstName}
+            lastInitial={profile.lastInitial}
+            cityLabel={cityLabel(profile.city)}
+            headline={profile.headline}
+            skills={profile.skills}
+            photoSlot={
+              <PhotoControl
+                currentUrl={profile.photoUrl}
+                initial={initialOf(profile.firstName)}
+                describedBy={PHOTO_SENTENCE_ID}
+                size="sm"
+              />
+            }
+          />
+          <p id={PHOTO_SENTENCE_ID} className="text-muted-foreground text-sm">
+            {photoSentence(profile.photoState)}
+          </p>
+          <p className="text-muted-foreground text-sm">{publishedOn(profile.publishedAt)}</p>
+          {/*
+            A link rather than a button because it navigates, for the reason
+            `sign-in-link.tsx` sets out.
+          */}
+          <Link
+            href="/my-profile/edit"
+            className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+          >
+            {EDIT_LINK}
+          </Link>
+        </Tier>
+      </div>
+
+      <HerOffers offers={offers} />
+
+      <div className="ruled-page">
+        <Tier id="gated-heading" heading={GATED_HEADING} icon={DoorOpenIcon}>
+          <GatedTerms profile={profile} />
+        </Tier>
+
+        <Tier id="held-heading" heading={HELD_HEADING} icon={LockKeyholeIcon}>
+          <p className="text-muted-foreground text-sm text-pretty">{HELD_EXPLANATION}</p>
+          <HeldTerms profile={profile} />
+        </Tier>
+      </div>
+    </div>
+  );
 }

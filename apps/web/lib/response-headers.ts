@@ -229,7 +229,7 @@ export function contentSecurityPolicy(environment: HeaderEnvironment): string {
     // source. So the relaxation is development-only rather than everywhere.
     "script-src": sources("'self'", "'unsafe-inline'", production ? undefined : "'unsafe-eval'"),
     "style-src": ["'self'", "'unsafe-inline'"],
-    // `blob:` is the picker's preview. `publish/_lib/downscale.ts` hands the
+    // `blob:` is the picker's preview. `app/_lib/photo/downscale.ts` hands the
     // chosen photo to `URL.createObjectURL` before anything is uploaded, so
     // without it a Worker sees a broken image at the moment she chooses one.
     // `data:` is the design system's inline SVG chevron, reached as a CSS

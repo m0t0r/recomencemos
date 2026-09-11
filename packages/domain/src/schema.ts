@@ -685,6 +685,25 @@ export const capabilityProfile = pgTable(
 
     state: text("state").notNull().default("published"),
 
+    /**
+     * `personal`. **Her Pause** (story 25): when she took the profile off the
+     * site herself, or `NULL` while it is on it. Written by the owner and by
+     * nobody else, and read by her own page and the Admin's.
+     *
+     * **A second column rather than a third `state`, and the split is the whole
+     * design** (DD8). `state` is moderation's and only an Admin writes
+     * `taken_down` to it; this is hers. One column holding both decisions would
+     * let a resume undo a takedown, and would hide from an Admin which of the
+     * two a row is in. So a profile is visible to anyone but her exactly when
+     * `state = 'published'` **and** this is `NULL` — `#profiles/visibility` is
+     * that predicate, written once.
+     *
+     * **A takedown never writes it, and neither does a pause or a resume while
+     * the profile is taken down**, so whatever later reverses a takedown
+     * restores her exactly as she left it.
+     */
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
+
     publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
 
     /**
@@ -713,17 +732,39 @@ export const capabilityProfile = pgTable(
     /** The lookup for `/profile/[slug]`. */
     unique("capability_profile_slug_key").on(table.slug),
 
-    /** The Wall: newest published first (DD2). */
+    /**
+     * The Wall: newest published first (DD2).
+     *
+     * **Not narrowed to `paused_at IS NULL`, and the reason is this read's**
+     * (#141 left it to the build ticket, against the read rather than by
+     * symmetry). The Wall asks for `#profiles/visibility`, which implies this
+     * index's predicate, so the planner still walks it in order and stops at the
+     * page's `LIMIT`; a paused row is skipped in passing, one heap check each.
+     * Pauses are hers, reversible, and a small share of published rows, so
+     * narrowing would buy a few skipped entries per page at the cost of
+     * rebuilding the index under a write-blocking `CREATE INDEX`.
+     */
     index("capability_profile_wall_idx")
       .on(sql`${table.publishedAt} DESC`, sql`${table.id} DESC`)
       .where(sql`${table.state} = 'published'`),
 
-    /** Browse: fewest delivered Offers first, rotated daily (DD2, NFR22). */
+    /**
+     * Browse: fewest delivered Offers first, rotated daily (DD2, NFR22).
+     *
+     * Not narrowed to `paused_at IS NULL`, for the Wall's reason applied to this
+     * ordering: the keyset walk in attention-spread order is unchanged, and a
+     * paused row is filtered as the walk passes it rather than read and sorted.
+     */
     index("capability_profile_browse_idx")
       .on(table.deliveredOfferCount, table.rotationKey, table.id)
       .where(sql`${table.state} = 'published'`),
 
-    /** Browse + city: the equality column leads (DD2). */
+    /**
+     * Browse + city: the equality column leads (DD2).
+     *
+     * Not narrowed either. Inside one municipality the paused share is the same
+     * small fraction, and the equality on `city` still leads the walk.
+     */
     index("capability_profile_browse_city_idx")
       .on(table.city, table.deliveredOfferCount, table.rotationKey, table.id)
       .where(sql`${table.state} = 'published'`),
@@ -748,6 +789,11 @@ export const capabilityProfile = pgTable(
      *
      * Partial on the same predicate as the two browse indexes above it: every
      * read that reaches this one is already reading published rows only.
+     *
+     * **Not narrowed to `paused_at IS NULL`, and here the reason is the index
+     * type.** A GIN answer is a bitmap whose rows are rechecked against the heap
+     * anyway, so the pause condition is one more comparison on a row already
+     * fetched; narrowing the index would save nothing the recheck does not.
      *
      * `pg_trgm` itself is enabled out of band on all three engines — never in a
      * migration, because a managed provider gates extensions behind its own

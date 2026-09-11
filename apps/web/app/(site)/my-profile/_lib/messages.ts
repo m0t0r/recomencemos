@@ -110,6 +110,79 @@ export function publishedOn(date: Date): string {
   return `Publicado el ${publishedDateFormat.format(date)}.`;
 }
 
+/**
+ * **Her Pause** (story 25). `CONTEXT.md` fixes the words: _Pausar mi perfil_,
+ * and the state reads _en pausa_. Never _ocultar_, which is on the voice guide's
+ * never-say list, and never _retirar_, which reads as a takedown — the one thing
+ * she must not mistake her own choice for.
+ *
+ * **The state line is the first thing on the page**, so it says the fact and
+ * what it means for her in two short sentences rather than a label. There is no
+ * "since" on the visible line: nothing records when a pause ended, and the date
+ * she published is not when she came back.
+ */
+export const PAUSE_SWITCH_LABEL = "Pausar mi perfil";
+export const VISIBLE_LINE = "Tu perfil está en el muro y cualquiera puede encontrarlo.";
+export function pausedSince(date: Date): string {
+  return `Tu perfil está en pausa desde el ${publishedDateFormat.format(date)}.`;
+}
+export const PAUSED_EXPLANATION = "Nadie puede encontrarlo ni enviarte propuestas nuevas.";
+
+/**
+ * **The two limits she needs before relying on it**, beside the switch — the
+ * spec's own sentence for this surface. Offers already sent still reach her,
+ * and a pause cannot take back what someone already read. Both are facts about
+ * the process, not promises about the world.
+ */
+export const PAUSE_LIMITS =
+  "Las propuestas que ya te enviaron te siguen llegando. Pausar no borra lo que alguien ya leyó.";
+
+/** Arrival after the switch — the same focused region publishing and saving use. */
+export const PAUSED_CONFIRMATION = "Pusiste tu perfil en pausa.";
+export const RESUMED_CONFIRMATION = "Tu perfil volvió al muro.";
+/** Not "at the top": resuming leaves her where she was, and saying so is the point. */
+export const RESUMED_EXPLANATION = "Está en el mismo lugar donde estaba antes de la pausa.";
+/** A transport fault. The ceiling's own refusal carries its own sentence. */
+export const PAUSE_FAULT =
+  "No pudimos cambiar la pausa. Tu perfil sigue como dice arriba; inténtalo otra vez.";
+
+/**
+ * **Her photo, changed in place** (#275, the owner's answer: the photo is the
+ * control). The control is named by the verb, and the sentences say what
+ * happened to the picture — never that her *profile* is in review.
+ */
+export const PHOTO_CONTROL_ADD = "Poner una foto";
+export const PHOTO_CONTROL_CHANGE = "Cambiar la foto";
+export const PHOTO_CONTROL_NOTE = "Para cambiar tu foto necesitas JavaScript.";
+export const PHOTO_ATTACHING = "Guardando tu foto…";
+export const PHOTO_ATTACHED = "Recibimos tu foto. Una persona la mira antes de que se vea.";
+export const PHOTO_ATTACH_FAILED = "No pudimos guardar tu foto. Vuelve a elegirla.";
+
+/**
+ * **The Offers that reached her, as a summary** (#275). The count is good news
+ * and is said as a sentence, never a badge. The link names the act it leads to.
+ */
+export const OFFERS_HEADING = "Propuestas";
+export function waitingCount(count: number): string {
+  return count === 1
+    ? "Una propuesta espera tu respuesta."
+    : `${count} propuestas esperan tu respuesta.`;
+}
+export const NONE_WAITING = "Ninguna propuesta espera tu respuesta.";
+export const OFFERS_LINK = "Ver y responder";
+export const CLOSED_HEADING = "Cerradas";
+
+/** The name he gave, as he gave it; `/offers` badges it as unverified beside the terms. */
+export function senderName(hirerName: string | null): string {
+  return hirerName ?? "Alguien que no escribió su nombre";
+}
+export function closedLine(hirerName: string | null, stateLabel: string): string {
+  return `${senderName(hirerName)} · ${stateLabel}`;
+}
+export function offerArrivedOn(date: Date): string {
+  return `Llegó el ${publishedDateFormat.format(date)}`;
+}
+
 export const MY_PROFILE_COPY = {
   MY_PROFILE_TITLE,
   PUBLISHED_CONFIRMATION,
@@ -127,6 +200,18 @@ export const MY_PROFILE_COPY = {
   PHOTO_REJECTED,
   LOAD_FAILED_TITLE,
   LOAD_FAILED_EXPLANATION,
+  VISIBLE_LINE,
+  PAUSED_EXPLANATION,
+  PAUSE_LIMITS,
+  PAUSED_CONFIRMATION,
+  RESUMED_CONFIRMATION,
+  RESUMED_EXPLANATION,
+  PAUSE_FAULT,
+  PHOTO_CONTROL_NOTE,
+  PHOTO_ATTACHING,
+  PHOTO_ATTACHED,
+  PHOTO_ATTACH_FAILED,
+  NONE_WAITING,
 } as const;
 
 export const MY_PROFILE_LABELS = {
@@ -139,4 +224,10 @@ export const MY_PROFILE_LABELS = {
   EMAIL_TERM,
   LOAD_FAILED_RETRY,
   LOAD_FAILED_RETRYING,
+  PAUSE_SWITCH_LABEL,
+  PHOTO_CONTROL_ADD,
+  PHOTO_CONTROL_CHANGE,
+  OFFERS_HEADING,
+  OFFERS_LINK,
+  CLOSED_HEADING,
 } as const;

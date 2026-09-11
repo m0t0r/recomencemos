@@ -26,12 +26,14 @@ import {
   summaryHeading,
 } from "@/app/_lib/profile-form/messages";
 
-const { publishProfile, requestSkill } = vi.hoisted(() => ({
+const { publishProfile, requestSkill, createPhotoUpload } = vi.hoisted(() => ({
   publishProfile: Object.assign(vi.fn(), { bind: () => vi.fn() }),
   requestSkill: vi.fn(),
+  // Read at render now: the photo field hands it to the shared `PhotoPicker`.
+  createPhotoUpload: vi.fn(),
 }));
 
-vi.mock("../actions", () => ({ publishProfile, requestSkill }));
+vi.mock("../actions", () => ({ publishProfile, requestSkill, createPhotoUpload }));
 
 const vocabulary = [
   { slug: "home-cooking", labelEs: "Cocinar almuerzos y comida casera" },

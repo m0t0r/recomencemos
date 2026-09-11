@@ -246,6 +246,23 @@ export const CEILINGS = {
     account: { max: 10, windowSeconds: 24 * 60 * 60 },
     ip: { max: 10, windowSeconds: 24 * 60 * 60 },
   },
+
+  /**
+   * **Her Pause switch, and one ceiling over two actions** (story 25).
+   * `pauseProfile` and `resumeProfile` both charge this row, so ten is the
+   * number of times she may use the switch in a day whichever way she flips
+   * it — the spec's own reading, and the reason the row is named for the
+   * switch rather than for either action.
+   *
+   * **Per Account and not per IP.** The act writes one nullable column on the
+   * row she already owns: it mints nothing, reaches nobody and puts nothing in
+   * front of an Admin, so the only abuse to bound is one person flapping her
+   * own visibility — and a shared connection is exactly where a second Worker
+   * pausing would have spent the first one's allowance.
+   */
+  profilePause: {
+    account: { max: 10, windowSeconds: 24 * 60 * 60 },
+  },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
@@ -638,6 +655,21 @@ export const CEILING_REFUSALS: Record<
       : `Intentaste poner una foto ${ceiling.max} veces hoy, que es el máximo. `) +
     `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
     "La foto es opcional y tu perfil no depende de ella.",
+
+  /**
+   * **The third sentence is the spec's own ask for this ceiling** — that she is
+   * never left guessing whether the last tap took. The refusal cannot know
+   * which way the switch sits, so it says the thing that is true either way:
+   * the tap that was refused changed nothing, and the page it renders on says
+   * in its first line whether she is visible or _en pausa_.
+   *
+   * "Usaste el botón" rather than "pausaste", because the count covers both
+   * directions and a sentence telling her she paused ten times would be false.
+   */
+  profilePause: (ceiling, retryAfter) =>
+    `Usaste el botón de pausa ${ceiling.max} veces hoy, que es el máximo. ` +
+    `Puedes usarlo otra vez ${retryPhrase(retryAfter)}. ` +
+    "Tu perfil se quedó como dice arriba.",
 };
 
 /**
