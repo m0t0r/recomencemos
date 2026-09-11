@@ -1,7 +1,8 @@
 /**
- * PROTOTYPE — `/prototype`: the UX lab's index. Five ideas, each a question
- * about the platform's experience, each answered by two or three variants
- * built against mock data. This page is the table; every row links into the
+ * PROTOTYPE — `/prototype`: the UX lab's index. Ten ideas, each a question
+ * about the platform's experience, each answered by three or four variants
+ * built against mock data, plus one single-file logic prototype served from
+ * `public/prototype/`. This page is the table; every row links into the
  * variant it names. Throwaway, with everything under this folder.
  */
 
@@ -189,6 +190,23 @@ export default function LabIndexPage() {
           </li>
         ))}
       </ol>
+
+      <section className="border-border flex flex-col gap-2 border-t pt-6">
+        <p className="text-muted-foreground font-mono text-xs">
+          prototipo de lógica · un solo archivo
+        </p>
+        <h2 className="font-heading text-2xl leading-8 font-medium">
+          {/* oxlint-disable-next-line nextjs/no-html-link-for-pages -- a static file under public/, not a page */}
+          <a href="/prototype/offer-lifecycle.html" className="hover:text-primary">
+            Qué pasa cuando ella reporta
+          </a>
+        </h2>
+        <p className="text-pretty">
+          El modelo de estados de una propuesta y de una cuenta, con botones: reportar, bloquear,
+          pausar, aceptar, descongelar, irse y volver. Donde el prototipo tuvo que suponer algo, lo
+          dice en naranja.
+        </p>
+      </section>
     </main>
   );
 }

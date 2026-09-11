@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Qué pasa cuando ella reporta</title>
+    <style>
+      :root {
+        --paper: #fcfcfd;
+        --ink: #4b40b2;
+        --wash: #eef0fa;
+        --fg: #2b2a45;
+        --muted: #6b6e86;
+        --rule: #dce1ea;
+        --margin: #e9a3a3;
+        --warn: #8a5a1a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--fg);
+        font:
+          16px/1.5 Inter,
+          ui-sans-serif,
+          system-ui,
+          sans-serif;
+        padding: 32px 20px 80px;
+      }
+      .page {
+        max-width: 900px;
+        margin: 0 auto;
+        display: grid;
+        gap: 28px;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: Alegreya, Georgia, ui-serif, serif;
+        font-weight: 500;
+        margin: 0;
+        line-height: 1.15;
+      }
+      h1 {
+        font-size: 36px;
+      }
+      h2 {
+        font-size: 22px;
+      }
+      h3 {
+        font-size: 17px;
+      }
+      p {
+        margin: 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .mono {
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 12px;
+      }
+      .grid {
+        display: grid;
+        gap: 20px;
+        grid-template-columns: 1fr 1fr;
+      }
+      @media (max-width: 720px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        border-left: 2px solid var(--margin);
+        padding-left: 16px;
+        display: grid;
+        gap: 10px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 9rem 1fr;
+        gap: 8px;
+        border-bottom: 1px solid var(--rule);
+        padding: 6px 0;
+        font-size: 15px;
+      }
+      .row b {
+        font-weight: 500;
+      }
+      .changed {
+        background: var(--wash);
+      }
+      .offers {
+        display: grid;
+        gap: 6px;
+      }
+      .offer {
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 14px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .state {
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: 12px;
+        color: var(--ink);
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button {
+        font: inherit;
+        font-size: 14px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--ink);
+        background: var(--paper);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--ink);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      button:focus-visible {
+        outline: 3px solid rgba(75, 64, 178, 0.4);
+        outline-offset: 2px;
+      }
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .tabs button {
+        border-color: var(--rule);
+        color: var(--fg);
+      }
+      .tabs button[aria-selected="true"] {
+        border-color: var(--ink);
+        background: var(--wash);
+      }
+      .scenario {
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+      }
+      ol.steps {
+        margin: 0;
+        padding-left: 20px;
+        display: grid;
+        gap: 6px;
+      }
+      ol.steps li.done {
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+      .log {
+        font-size: 14px;
+        display: grid;
+        gap: 4px;
+        max-height: 220px;
+        overflow: auto;
+      }
+      .log .warn {
+        color: var(--warn);
+      }
+      .answer {
+        background: var(--wash);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header style="display: grid; gap: 10px">
+        <p class="mono muted">prototipo · lógica · se abre con doble clic · nada se guarda</p>
+        <h1>Qué pasa cuando ella reporta</h1>
+        <p class="muted">
+          La pregunta: cuando una Trabajadora reporta una propuesta, bloquea a alguien, pausa su
+          perfil o acepta, ¿qué le pasa a todo lo demás en los dos lados, y se comporta como una
+          persona esperaría? Aprieta botones y mira el estado. Las reglas son las del vocabulario y
+          la tabla de transiciones del dominio; donde el prototipo tuvo que suponer algo, lo dice.
+        </p>
+      </header>
+
+      <section class="grid">
+        <div class="panel" id="hirer-panel">
+          <h2>Miguel (Contratante)</h2>
+          <div class="row"><b>Cuenta</b><span id="h-state"></span></div>
+          <div class="row"><b>¿Puede leer perfiles completos?</b><span id="h-read"></span></div>
+          <div class="row"><b>¿Puede escribirle a Ana?</b><span id="h-send"></span></div>
+          <div class="row"><b>Correo</b><span id="h-email"></span></div>
+          <h3>Sus propuestas a Ana</h3>
+          <div class="offers" id="offers"></div>
+        </div>
+        <div class="panel">
+          <h2>Ana (Trabajadora)</h2>
+          <div class="row"><b>Perfil</b><span id="w-profile"></span></div>
+          <div class="row"><b>Bloqueados</b><span id="w-blocked"></span></div>
+          <div class="row"><b>Lo que ve en su buzón</b><span id="w-inbox"></span></div>
+          <div class="row"><b>Intercambio de contacto</b><span id="w-exchange"></span></div>
+          <h3>Cola del Admin</h3>
+          <div class="offers" id="queue"></div>
+        </div>
+      </section>
+
+      <section style="display: grid; gap: 12px">
+        <h2>Juego libre</h2>
+        <p class="muted">
+          Cada botón es una acción real del producto. Un botón apagado es una acción que el modelo
+          no permite ahora.
+        </p>
+        <h3>Miguel</h3>
+        <div class="actions" id="a-hirer"></div>
+        <h3>Ana</h3>
+        <div class="actions" id="a-worker"></div>
+        <h3>Admin</h3>
+        <div class="actions" id="a-admin"></div>
+        <h3>El tiempo</h3>
+        <div class="actions" id="a-time"></div>
+        <div class="actions"><button id="reset">Volver al inicio</button></div>
+      </section>
+
+      <section style="display: grid; gap: 12px">
+        <h2>Recorridos guiados</h2>
+        <div class="tabs" role="tablist" id="tabs"></div>
+        <div id="scenario"></div>
+      </section>
+
+      <section style="display: grid; gap: 8px">
+        <h2>Lo que acaba de pasar</h2>
+        <div class="log" id="log"></div>
+      </section>
+    </div>
+
+    <script>
+      /* ---------- The logic: pure, liftable. No DOM below this line until the shell. ---------- */
+
+      const OFFER_TRANSITIONS = {
+        pending_review: ["delivered", "on_hold", "rejected_by_admin"],
+        on_hold: ["pending_review", "rejected_by_admin"],
+        delivered: ["accepted", "declined", "expired", "reported"],
+        accepted: [],
+        declined: [],
+        expired: [],
+        rejected_by_admin: [],
+        reported: [],
+      };
+
+      function initial() {
+        return {
+          hirer: { state: "active", email: "miguel@example.es", exists: true },
+          worker: { profile: "published", blocked: [], exchanged: [] },
+          offers: [],
+          nextId: 1,
+          day: 0,
+          notes: [],
+        };
+      }
+
+      function can(state, action) {
+        const { hirer, worker, offers } = state;
+        const delivered = offers.filter((o) => o.state === "delivered");
+        switch (action) {
+          case "send":
+            return (
+              hirer.exists &&
+              hirer.state === "active" &&
+              worker.profile === "published" &&
+              !worker.blocked.includes(hirer.email)
+            );
+          case "deleteAccount":
+            return hirer.exists;
+          case "returnAccount":
+            return !hirer.exists;
+          case "deliver":
+            return offers.some((o) => o.state === "pending_review");
+          case "rejectByAdmin":
+            return offers.some((o) => o.state === "pending_review" || o.state === "on_hold");
+          case "unfreeze":
+            return hirer.state === "frozen";
+          case "ban":
+            return hirer.exists && hirer.state !== "banned";
+          case "accept":
+          case "decline":
+          case "report":
+            return delivered.length > 0;
+          case "block":
+            return hirer.exists && !worker.blocked.includes(hirer.email);
+          case "pause":
+            return worker.profile === "published";
+          case "resume":
+            return worker.profile === "paused";
+          case "week":
+            return true;
+          default:
+            return false;
+        }
+      }
+
+      function move(offer, to, notes) {
+        if (!OFFER_TRANSITIONS[offer.state].includes(to)) {
+          notes.push({
+            warn: true,
+            text: `La propuesta ${offer.id} no puede pasar de ${offer.state} a ${to}; se queda como está.`,
+          });
+          return offer;
+        }
+        return { ...offer, state: to };
+      }
+
+      function reduce(state, action) {
+        if (!can(state, action)) return state;
+        const notes = [];
+        let { hirer, worker, offers, nextId, day } = state;
+        const first = (s) => offers.find((o) => o.state === s);
+
+        switch (action) {
+          case "send": {
+            offers = [...offers, { id: nextId, state: "pending_review", sentDay: day }];
+            notes.push({
+              text: `Miguel envió la propuesta ${nextId}. Una persona la lee antes de que llegue.`,
+            });
+            nextId += 1;
+            break;
+          }
+          case "deliver": {
+            const o = first("pending_review");
+            offers = offers.map((x) => (x === o ? move(x, "delivered", notes) : x));
+            notes.push({ text: `El Admin entregó la propuesta ${o.id}. Ana ya la ve.` });
+            if (worker.profile === "paused")
+              notes.push({ text: "Aunque el perfil está en pausa: lo ya enviado sigue llegando." });
+            break;
+          }
+          case "rejectByAdmin": {
+            const o = first("pending_review") ?? first("on_hold");
+            offers = offers.map((x) => (x === o ? move(x, "rejected_by_admin", notes) : x));
+            notes.push({
+              text: `El Admin rechazó la propuesta ${o.id}. Ana nunca la ve; Miguel lo sabe.`,
+            });
+            break;
+          }
+          case "accept": {
+            const o = first("delivered");
+            offers = offers.map((x) => (x === o ? move(x, "accepted", notes) : x));
+            worker = { ...worker, exchanged: [...worker.exchanged, o.id] };
+            notes.push({
+              text: `Ana aceptó la ${o.id}. Intercambio de contacto: los dos reciben nombre, teléfono y correo. No se deshace.`,
+            });
+            break;
+          }
+          case "decline": {
+            const o = first("delivered");
+            offers = offers.map((x) => (x === o ? move(x, "declined", notes) : x));
+            notes.push({ text: `Ana rechazó la ${o.id}.` });
+            break;
+          }
+          case "report": {
+            const o = first("delivered");
+            offers = offers.map((x) => (x === o ? move(x, "reported", notes) : x));
+            hirer = { ...hirer, state: "frozen" };
+            const held = offers.filter((x) => x.state === "pending_review").length;
+            offers = offers.map((x) =>
+              x.state === "pending_review" ? move(x, "on_hold", notes) : x,
+            );
+            notes.push({
+              text: `Ana reportó la ${o.id}. Se le oculta. Miguel queda congelado: no puede enviar nada, no puede leer perfiles completos, y sus ${held} propuestas sin revisar quedan en espera (no rechazadas).`,
+            });
+            notes.push({
+              warn: true,
+              text: "Supuesto del prototipo: las propuestas ya entregadas a Ana siguen en su buzón; solo la reportada se oculta.",
+            });
+            break;
+          }
+          case "block": {
+            worker = { ...worker, blocked: [...worker.blocked, hirer.email] };
+            notes.push({
+              text: "Ana bloqueó a Miguel: no puede enviarle nada más. Su tarjeta sigue en el muro y él sigue leyendo perfiles.",
+            });
+            if (worker.exchanged.length > 0)
+              notes.push({
+                warn: true,
+                text: "Ya hubo intercambio: el bloqueo no le quita a Miguel el teléfono que ya tiene.",
+              });
+            const pending = offers.filter(
+              (x) => x.state === "pending_review" || x.state === "on_hold",
+            ).length;
+            if (pending > 0)
+              notes.push({
+                warn: true,
+                text: `Supuesto del prototipo: ${pending} propuestas suyas aún sin entregar NO se cancelan con el bloqueo. ¿Debería?`,
+              });
+            break;
+          }
+          case "unfreeze": {
+            hirer = { ...hirer, state: "active" };
+            offers = offers.map((x) =>
+              x.state === "on_hold" ? move(x, "pending_review", notes) : x,
+            );
+            notes.push({
+              text: "El Admin descongeló a Miguel. Lo que estaba en espera vuelve a la cola de revisión.",
+            });
+            break;
+          }
+          case "ban": {
+            hirer = { ...hirer, state: "banned" };
+            offers = offers.map((x) =>
+              x.state === "on_hold" || x.state === "pending_review"
+                ? move(x, "rejected_by_admin", notes)
+                : x,
+            );
+            notes.push({
+              text: "El Admin vetó a Miguel. Todo lo suyo sin entregar queda rechazado.",
+            });
+            break;
+          }
+          case "pause": {
+            worker = { ...worker, profile: "paused" };
+            notes.push({
+              text: "Ana pausó su perfil: nadie la encuentra ni le escribe. Lo ya enviado sigue llegando; lo ya leído, ya se leyó.",
+            });
+            break;
+          }
+          case "resume": {
+            worker = { ...worker, profile: "published" };
+            notes.push({ text: "Ana volvió a hacer visible su perfil." });
+            break;
+          }
+          case "deleteAccount": {
+            hirer = { ...hirer, exists: false };
+            notes.push({ text: "Miguel eliminó su cuenta. Su correo queda libre." });
+            if (worker.blocked.includes(hirer.email))
+              notes.push({
+                warn: true,
+                text: "El bloqueo era por cuenta: si vuelve con el mismo correo, el bloqueo ya no lo alcanza. Así está definido, y es lo que hay que mirar.",
+              });
+            break;
+          }
+          case "returnAccount": {
+            hirer = { state: "active", email: hirer.email, exists: true };
+            worker = { ...worker, blocked: worker.blocked.filter((e) => e !== hirer.email) };
+            notes.push({
+              warn: true,
+              text: "Miguel volvió con el mismo correo, como cuenta nueva y activa. Ana no lo tiene bloqueado.",
+            });
+            break;
+          }
+          case "week": {
+            day += 7;
+            const expired = offers.filter((o) => o.state === "delivered" && day - o.sentDay >= 14);
+            offers = offers.map((x) => (expired.includes(x) ? move(x, "expired", notes) : x));
+            notes.push({
+              text:
+                `Pasó una semana (día ${day}).` +
+                (expired.length
+                  ? ` ${expired.length} propuestas entregadas sin respuesta hace 14 días expiraron.`
+                  : ""),
+            });
+            if (worker.exchanged.length > 0)
+              notes.push({
+                text: "Es el momento de la pregunta de los siete días: ¿se hizo y le pagaron?",
+              });
+            break;
+          }
+        }
+        return { ...state, hirer, worker, offers, nextId, day, notes };
+      }
+
+      function view(state) {
+        const { hirer, worker, offers } = state;
+        const inbox = offers.filter((o) =>
+          ["delivered", "accepted", "declined", "expired"].includes(o.state),
+        );
+        return {
+          hirerState: !hirer.exists
+            ? "cuenta eliminada"
+            : { active: "activa", frozen: "congelada (por un reporte)", banned: "vetada" }[
+                hirer.state
+              ],
+          canRead: hirer.exists && hirer.state === "active" ? "sí" : "no",
+          canSend: can(state, "send")
+            ? "sí"
+            : "no" +
+              (worker.blocked.includes(hirer.email)
+                ? " (bloqueado por ella)"
+                : worker.profile === "paused"
+                  ? " (perfil en pausa)"
+                  : hirer.state !== "active"
+                    ? " (cuenta " + (hirer.state === "frozen" ? "congelada" : "vetada") + ")"
+                    : ""),
+          email: hirer.email + (hirer.exists ? "" : " (libre)"),
+          profile: worker.profile === "published" ? "visible en el muro" : "en pausa",
+          blocked: worker.blocked.length ? worker.blocked.join(", ") : "nadie",
+          inbox: inbox.length ? inbox.map((o) => `${o.id} (${label(o.state)})`).join(", ") : "nada",
+          exchange: worker.exchanged.length
+            ? `hecho en la ${worker.exchanged.join(", ")}`
+            : "no ha pasado",
+          queue: offers.filter((o) => o.state === "pending_review" || o.state === "on_hold"),
+        };
+      }
+
+      function label(s) {
+        return {
+          pending_review: "en revisión",
+          on_hold: "en espera",
+          delivered: "entregada",
+          accepted: "aceptada",
+          declined: "rechazada por ella",
+          expired: "expirada",
+          rejected_by_admin: "rechazada por el Admin",
+          reported: "reportada",
+        }[s];
+      }
+
+      /* ---------- The shell. Throwaway. ---------- */
+
+      const ACTIONS = {
+        hirer: [
+          ["send", "Enviar una propuesta a Ana"],
+          ["deleteAccount", "Eliminar su cuenta"],
+          ["returnAccount", "Volver con el mismo correo"],
+        ],
+        worker: [
+          ["accept", "Aceptar la primera entregada"],
+          ["decline", "Rechazar la primera entregada"],
+          ["report", "Reportar la primera entregada"],
+          ["block", "Bloquear a Miguel"],
+          ["pause", "Pausar su perfil"],
+          ["resume", "Volver a ser visible"],
+        ],
+        admin: [
+          ["deliver", "Entregar la primera en revisión"],
+          ["rejectByAdmin", "Rechazar la primera en revisión"],
+          ["unfreeze", "Descongelar a Miguel"],
+          ["ban", "Vetar a Miguel"],
+        ],
+        time: [["week", "Pasa una semana"]],
+      };
+
+      const SCENARIOS = [
+        {
+          title: "El camino feliz",
+          intro:
+            "Una propuesta, una persona la lee, Ana acepta. Mira qué cruza en el intercambio y que después nada se deshace.",
+          steps: ["send", "deliver", "accept", "block", "week"],
+        },
+        {
+          title: "Reporte con otras en camino",
+          intro:
+            "Miguel envía tres. Una llega, Ana la reporta. ¿Qué pasa con las dos que aún no ha leído nadie? Luego el Admin descongela.",
+          steps: ["send", "send", "send", "deliver", "report", "unfreeze", "deliver"],
+        },
+        {
+          title: "Bloqueo con una en revisión",
+          intro:
+            "Miguel envía dos, una llega, Ana lo bloquea. La segunda sigue en la cola. ¿Debería llegarle? Este es el supuesto que hay que decidir.",
+          steps: ["send", "send", "deliver", "block", "deliver"],
+        },
+        {
+          title: "Pausa",
+          intro:
+            "Miguel envía, Ana pausa. Lo enviado sigue llegando; nada nuevo entra. Al volver, todo sigue igual.",
+          steps: ["send", "pause", "deliver", "send", "resume", "send"],
+        },
+        {
+          title: "Bloqueado, se va y vuelve",
+          intro:
+            "Ana bloquea a Miguel. Él elimina su cuenta y vuelve con el mismo correo. El bloqueo no lo alcanza: así está definido, y es lo que hay que mirar de frente.",
+          steps: ["send", "deliver", "block", "deleteAccount", "returnAccount", "send"],
+        },
+        {
+          title: "Nadie responde",
+          intro: "Una propuesta entregada que nadie contesta. Dos semanas después expira sola.",
+          steps: ["send", "deliver", "week", "week"],
+        },
+      ];
+
+      let state = initial();
+      let scenarioIndex = 0;
+      let stepIndex = 0;
+
+      function dispatch(action) {
+        const next = reduce(state, action);
+        if (next === state) return;
+        state = next;
+        render();
+      }
+
+      function el(id) {
+        return document.getElementById(id);
+      }
+
+      function render() {
+        const v = view(state);
+        const set = (id, text) => {
+          const node = el(id);
+          const changed = node.textContent !== text && node.textContent !== "";
+          node.textContent = text;
+          node.parentElement.classList.toggle("changed", changed);
+        };
+        set("h-state", v.hirerState);
+        set("h-read", v.canRead);
+        set("h-send", v.canSend);
+        set("h-email", v.email);
+        set("w-profile", v.profile);
+        set("w-blocked", v.blocked);
+        set("w-inbox", v.inbox);
+        set("w-exchange", v.exchange);
+        el("offers").innerHTML = state.offers.length
+          ? state.offers
+              .map(
+                (o) =>
+                  `<div class="offer"><span>Propuesta ${o.id} · día ${o.sentDay}</span><span class="state">${label(o.state)}</span></div>`,
+              )
+              .join("")
+          : '<p class="muted" style="font-size:14px">ninguna todavía</p>';
+        el("queue").innerHTML = v.queue.length
+          ? v.queue
+              .map(
+                (o) =>
+                  `<div class="offer"><span>Propuesta ${o.id}</span><span class="state">${label(o.state)}</span></div>`,
+              )
+              .join("")
+          : '<p class="muted" style="font-size:14px">vacía</p>';
+        for (const group of Object.keys(ACTIONS)) {
+          el("a-" + group).innerHTML = ACTIONS[group]
+            .map(
+              ([a, text]) =>
+                `<button data-action="${a}" ${can(state, a) ? "" : "disabled"}>${text}</button>`,
+            )
+            .join("");
+        }
+        el("log").innerHTML = state.notes.length
+          ? state.notes
+              .map((n) => `<p class="${n.warn ? "warn" : ""}">${n.warn ? "⚠ " : ""}${n.text}</p>`)
+              .join("")
+          : '<p class="muted">Nada todavía. Aprieta un botón.</p>';
+        renderScenario();
+      }
+
+      function renderScenario() {
+        el("tabs").innerHTML = SCENARIOS.map(
+          (s, i) =>
+            `<button role="tab" aria-selected="${i === scenarioIndex}" data-scenario="${i}">${s.title}</button>`,
+        ).join("");
+        const s = SCENARIOS[scenarioIndex];
+        const all = Object.values(ACTIONS).flat();
+        const name = (a) => all.find(([k]) => k === a)[1];
+        el("scenario").innerHTML =
+          `<div class="scenario"><p>${s.intro}</p><ol class="steps">${s.steps.map((a, i) => `<li class="${i < stepIndex ? "done" : ""}">${i === stepIndex ? `<button class="primary" data-step="${a}">${name(a)}</button>` : name(a)}</li>`).join("")}</ol>${stepIndex >= s.steps.length ? '<p class="answer">Fin del recorrido. Mira el estado arriba y el registro abajo, y pregúntate si algo no debería ser posible.</p>' : ""}<div class="actions"><button data-restart="1">Empezar este recorrido desde cero</button></div></div>`;
+      }
+
+      document.addEventListener("click", (event) => {
+        const t = event.target.closest("button");
+        if (!t) return;
+        if (t.dataset.action) dispatch(t.dataset.action);
+        if (t.dataset.step) {
+          dispatch(t.dataset.step);
+          stepIndex += 1;
+          renderScenario();
+        }
+        if (t.dataset.scenario !== undefined) {
+          scenarioIndex = Number(t.dataset.scenario);
+          stepIndex = 0;
+          state = initial();
+          render();
+        }
+        if (t.dataset.restart) {
+          stepIndex = 0;
+          state = initial();
+          render();
+        }
+        if (t.id === "reset") {
+          state = initial();
+          stepIndex = 0;
+          render();
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>
