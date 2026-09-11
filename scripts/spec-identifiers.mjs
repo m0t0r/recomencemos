@@ -639,10 +639,9 @@ export function shellStringLiterals(source) {
       const start = j;
       while (j < source.length && !/[\s;&|<>()]/.test(source[j])) j += 1;
       // Quote removal, and nothing else — which is exactly what a shell does
-      // to the marker. Dropping every non-word character instead (as
-      // `gate-lib.sh` does for its own, coarser purpose) turns `<<END-OF-MSG`
-      // into `ENDOFMSG`, which no terminator line matches, so the body runs to
-      // the end of the file and the file reports clean.
+      // to the marker. Dropping every non-word character instead turns
+      // `<<END-OF-MSG` into `ENDOFMSG`, which no terminator line matches, so the
+      // body runs to the end of the file and the file reports clean.
       const term = source.slice(start, j).replace(/['"\\]/g, "");
       if (term !== "") pending.push({ term, stripTabs });
       i = j;

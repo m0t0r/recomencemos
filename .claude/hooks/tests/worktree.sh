@@ -48,6 +48,12 @@ run_wt "git am on the default branch"                     deny  "$(wtj 'git am p
 run_wt "a commit after && on the default branch"          deny  "$(wtj 'git add -A && git commit -m x' "$WTMAIN")"
 run_wt "a commit in a subshell on the default branch"     deny  "$(wtj '(git commit -m x)' "$WTMAIN")"
 run_wt "git -c k=v commit on the default branch"          deny  "$(wtj 'git -c user.name=t commit -m x' "$WTMAIN")"
+# #135: the hyphenated marker never ended, so the commit after it was body. It
+# leads with a command that is not git, so the verdict is the second command's.
+run_wt "a commit after a hyphenated heredoc"              deny  "$(wtj 'cat > /tmp/m <<END-OF-MSG
+body
+END-OF-MSG
+git commit -m x' "$WTMAIN")"
 
 # The case the whole gate exists to allow.
 run_wt "git commit from a worktree of the same repo"      allow "$(wtj 'git commit -m x' "$WTREE")"

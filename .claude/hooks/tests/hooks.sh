@@ -131,6 +131,12 @@ expect_decision "reading the artifact"                                allow "$(b
 expect_decision "heredoc into a scratch file naming the artifact"     allow "$(bj 'cat > /tmp/body.md <<EOF
 Source of truth: docs/efforts/0001-x/intent.md
 EOF')"
+# #135: a hyphenated marker used to be read as `ENDOFMSG`, so the body never
+# ended and the redirect after it was never seen.
+expect_decision "redirect into spec.md after a hyphenated heredoc"    deny  "$(bj 'cat > /tmp/m <<END-OF-MSG
+body
+END-OF-MSG
+echo x > docs/efforts/0001-x/spec.md')"
 
 section "Rule E: sub-issues under a spec's issue"
 expect_decision "parent 11 — approved, clean"                         allow "$(bj 'gh api --method POST repos/o/r/issues/11/sub_issues -F sub_issue_id=99')"
@@ -195,11 +201,135 @@ expect_decision "push to main inside a heredoc"                       allow "$(b
 git ""push origin main is refused by rule G
 EOF")"
 
+# Where a heredoc body ends decides what every Bash gate reads, and every way of
+# getting it wrong in the ending-too-late direction is a gate that allows a
+# command it never saw (#135). Each deny leads with `cat > /tmp/m`, so the
+# verdict comes from what follows the body and not from the line that opened it.
+section "Heredoc bodies: where a body ends"
+TAB=$'\t'
+# Quote removal as bash does it: a quoted space is part of the marker, and a
+# double quote inside single quotes is literal.
+expect_decision "after a single-quoted marker holding a space"        deny  "$(bj "cat > /tmp/m <<'END MSG'
+body
+END MSG
+gh pr merge 42")"
+expect_decision "after a single-quoted marker holding a double quote" deny  "$(bj "cat > /tmp/m <<'E\"F'
+body
+E\"F
+gh pr merge 42")"
+expect_decision "a << inside a comment announces nothing"             deny  "$(bj 'echo x # see <<EOF
+gh pr merge 42')"
+expect_decision "after a hyphenated marker"                           deny  "$(bj 'cat > /tmp/m <<END-OF-MSG
+body
+END-OF-MSG
+gh pr merge 42')"
+expect_decision "after a marker holding a dot"                        deny  "$(bj 'cat > /tmp/m <<MSG.1
+body
+MSG.1
+gh pr merge 42')"
+expect_decision "after a single-quoted hyphenated marker"             deny  "$(bj "cat > /tmp/m <<'END-OF-MSG'
+body
+END-OF-MSG
+gh pr merge 42")"
+expect_decision "after a double-quoted marker"                        deny  "$(bj 'cat > /tmp/m <<"EOF"
+body
+EOF
+gh pr merge 42')"
+expect_decision "after a backslash-escaped marker"                    deny  "$(bj 'cat > /tmp/m <<\EOF
+body
+EOF
+gh pr merge 42')"
+expect_decision "an approving review after a hyphenated marker"       deny  "$(bj 'cat > /tmp/m <<END-OF-MSG
+body
+END-OF-MSG
+gh pr review 42 --approve')"
+expect_decision "a stack merge after a hyphenated marker"             deny  "$(bj 'cat > /tmp/m <<END-OF-MSG
+body
+END-OF-MSG
+gh stack merge')"
+
+# Leading whitespace is stripped from a terminator line only for `<<-`, and only
+# tabs. An indented `  EOF` inside a plain body is a body line, so the prose after
+# it is still body.
+expect_decision "an indented terminator inside a plain body"          allow "$(bj 'git commit -F - <<EOF
+fix: where a body ends
+  EOF
+gh pr merge is what rule F refuses
+EOF')"
+expect_decision "<<- does not end at a space-indented terminator"     allow "$(bj "cat > /tmp/m <<-EOF
+body
+  EOF
+gh pr merge is what rule F refuses
+${TAB}EOF")"
+expect_decision "<<- ends at a tab-indented terminator"               deny  "$(bj "cat > /tmp/m <<-EOF
+${TAB}body
+${TAB}EOF
+gh pr merge 42")"
+
+# `<<<` is a here-string and a `<<` in arithmetic is a shift. Neither announces
+# a body, and reading one as a heredoc swallowed every line after it.
+expect_decision "a here-string, double-quoted"                        deny  "$(bj 'jq . <<<"$json"
+gh pr merge 42')"
+expect_decision "a here-string, single-quoted"                        deny  "$(bj "cat <<<'hello'
+gh pr merge 42")"
+expect_decision "a shift inside \$(( ))"                              deny  "$(bj 'echo $((1<<2))
+gh pr merge 42')"
+expect_decision "a shift-assign inside (( ))"                         deny  "$(bj '(( x <<= 1 ))
+gh pr merge 42')"
+
+# A marker the gate cannot resolve is read rather than stripped: the worst case
+# is then a loud refusal of prose, never a silent pass.
+expect_decision "an unresolvable marker is not stripped"              deny  "$(bj 'D=X; cat <<$D
+body
+X
+gh pr merge 42')"
+
+# Two heredocs on one line are read in order, each to its own terminator.
+expect_decision "the second of two heredocs is still body"            allow "$(bj 'cat <<A <<B
+first body
+A
+gh pr merge is prose in the second body
+B')"
+expect_decision "a command after both heredocs"                       deny  "$(bj 'cat <<A <<B
+first body
+A
+second body
+B
+gh pr merge 42')"
+
+# What already held, pinned so the rewrite cannot lose it.
+expect_decision "an unterminated heredoc is body to the end"          allow "$(bj 'cat > /tmp/m <<EOF
+gh pr merge is prose')"
+expect_decision "a heredoc inside a quoted substitution"              allow "$(bj "git commit -m \"\$(cat <<'EOF'
+fix: a message
+gh pr merge is what rule F refuses
+EOF
+)\"")"
+
 section "Rule G: no direct push to the default branch"
 expect_decision "push origin main"                                    deny  "$(bj 'git push origin main')"
 expect_decision "push HEAD:main"                                      deny  "$(bj 'git push origin HEAD:main')"
 expect_decision "push a ticket branch"                                allow "$(bj 'git push -u origin ticket/12-add-widget')"
 expect_decision "bare push while on main"                             deny  "$(bj 'git push')"
+
+# Every push on every line, each with its own refspec (#135). The refspec used to
+# be read over the whole command, so on a multi-line one it came from line 1.
+expect_decision "push HEAD:main after a hyphenated heredoc"           deny  "$(bj 'cat > /tmp/m <<END-OF-MSG
+body
+END-OF-MSG
+git push origin HEAD:main')"
+expect_decision "push origin main on line 2"                          deny  "$(bj 'echo hi
+git push origin main')"
+expect_decision "push HEAD:main on line 2"                            deny  "$(bj 'echo hi
+git push origin HEAD:main')"
+expect_decision "bare push on line 2 while on main"                   deny  "$(bj 'echo hi
+git push')"
+expect_decision "push a feature branch on line 2"                     allow "$(bj 'echo hi
+git push origin some-feature')"
+expect_decision "a feature push, then a push to main"                 deny  "$(bj 'git push origin some-feature
+git push origin main')"
+expect_decision "main as the second of two refspecs"                  deny  "$(bj 'git push origin some-feature main')"
+expect_decision "two feature refspecs"                                allow "$(bj 'git push origin some-feature other-feature')"
 
 # The case #174 was: a worktree on a ticket branch while the launch checkout --
 # CLAUDE_PROJECT_DIR, still the fixture root here -- has the default branch out.

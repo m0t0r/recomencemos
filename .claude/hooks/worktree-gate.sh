@@ -62,7 +62,6 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // ""')
 sub=""
 dir=""
 while IFS= read -r seg; do
-  seg="${seg#"${seg%%[![:space:]]*}"}"
   case "$seg" in
     git | git[[:space:]]*) ;;
     *) continue ;;
@@ -99,7 +98,7 @@ while IFS= read -r seg; do
       ;;
   esac
 done <<EOF
-$(printf '%s' "$cmd" | tr ';&|(){}' '\n\n\n\n\n\n')
+$(printf '%s' "$cmd" | segments_of)
 EOF
 
 [ -n "$sub" ] || exit 0

@@ -67,34 +67,65 @@ fi
 # Rule G. The default branch is read from the remote, so a fork of this template
 # that renames it stays protected without editing this hook. Outside any
 # repository there is nothing to push from, so there is nothing to refuse.
-if printf '%s' "$cmd" | grep -qE "${CMD_START}git[[:space:]]+push([[:space:]]|$)"; then
-  tree=$(tree_for "$(printf '%s' "$input" | jq -r '.cwd // ""')") || exit 0
-  default=$(default_branch_of "$tree")
+#
+# Every push is judged on its own: segments_of() yields one command per line, and
+# each that is `git push` is read for its own refspecs, so a push on any line of
+# a multi-line command is seen.
+#
+# `git push [flags] [remote] [refspec...]`: drop the flags, and every positional
+# after the remote is a refspec. "main", "HEAD:main" and ":main" (a delete) all
+# resolve to the branch after the last colon. With no refspec the push follows
+# the current branch.
+#
+# A flag that takes a separate value (`-o <opt>`) would be read as a positional.
+# Like the Plan gate's redirect match this is a heuristic, not a seal -- branch
+# protection on the remote is the seal.
+#
+# The loop runs in the current shell -- a herestring, never a pipe -- because
+# deny() exits, and an exit inside a pipeline's subshell would print the refusal
+# and let the script carry on to `exit 0`.
+refuse_push() {
+  deny "Pushing to '$default' directly bypasses review. Everything the agent writes becomes a PR: branch as ticket/<issue>-<slug>, push that, and open a PR. See docs/policy/build.md."
+}
 
-  # `git push [flags] [remote] [refspec]`. Drop flags and anything after a shell
-  # operator, then the second positional is the refspec: "main", "HEAD:main",
-  # ":main" (a delete) all resolve to the branch after the last colon. With no
-  # refspec the push follows the current branch.
-  #
-  # A flag that takes a separate value (`-o <opt>`) would be read as a
-  # positional. Like the Plan gate's redirect match this is a heuristic, not a
-  # seal — branch protection on the remote is the seal.
-  #
-  # No \b in the sed: BSD sed (macOS) does not support it, and silently not
-  # matching left the whole command in $tail, so the second "positional" was the
-  # word `push`. gate-test.sh covers it.
-  tail=$(printf '%s' "$cmd" | sed -E 's/.*git[[:space:]]+push//; s/[;&|].*//')
-  refspec=$(printf '%s' "$tail" | tr ' \t' '\n\n' | grep -v '^-' | grep -v '^$' | sed -n 2p)
+tree=""
+default=""
+while IFS= read -r seg; do
+  case "$seg" in
+    git[[:space:]]*) ;;
+    *) continue ;;
+  esac
 
-  if [ -n "$refspec" ]; then
-    dst="${refspec##*:}"
-  else
-    dst=$(branch_of "$tree")
+  # Word-splitting without globbing, as rule K does it.
+  set -f
+  # shellcheck disable=SC2086
+  set -- $seg
+  set +f
+  [ "${2:-}" = "push" ] || continue
+  shift 2
+
+  if [ -z "$tree" ]; then
+    tree=$(tree_for "$(printf '%s' "$input" | jq -r '.cwd // ""')") || exit 0
+    default=$(default_branch_of "$tree")
   fi
 
-  if [ "$dst" = "$default" ]; then
-    deny "Pushing to '$default' directly bypasses review. Everything the agent writes becomes a PR: branch as ticket/<issue>-<slug>, push that, and open a PR. See docs/policy/build.md."
+  remote=""
+  refspecs=0
+  for word in "$@"; do
+    case "$word" in -*) continue ;; esac
+    if [ -z "$remote" ]; then
+      remote="$word"
+      continue
+    fi
+    refspecs=$((refspecs + 1))
+    [ "${word##*:}" = "$default" ] && refuse_push
+  done
+
+  if [ "$refspecs" -eq 0 ] && [ "$(branch_of "$tree")" = "$default" ]; then
+    refuse_push
   fi
-fi
+done <<EOF
+$(printf '%s' "$cmd" | segments_of)
+EOF
 
 exit 0
