@@ -28,6 +28,10 @@ import { Suspense } from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { type Arrival, OwnProfileView } from "./_components/own-profile-view";
+import { PrototypeSwitcher } from "./_components/prototype/switcher";
+import { VariantB } from "./_components/prototype/variant-b";
+import { VariantC } from "./_components/prototype/variant-c";
+import { variantFrom } from "./_components/prototype/variant-keys";
 import { MY_PROFILE_PAGE_TITLE, MY_PROFILE_TITLE } from "./_lib/messages";
 
 export const metadata: Metadata = {
@@ -66,7 +70,23 @@ async function ProfilePanel({ searchParams }: { searchParams: SearchParams }) {
 
   if (!profile) redirect("/publish");
 
-  return <OwnProfileView profile={profile} offers={received} arrival={arrivalOf(params)} />;
+  // PROTOTYPE — `?variant=` picks one of three phone-first compositions (#275).
+  // The prototype branch only; the pick is folded into `OwnProfileView`.
+  const variant = variantFrom(typeof params.variant === "string" ? params.variant : undefined);
+  const props = { profile, offers: received, arrival: arrivalOf(params) };
+
+  return (
+    <>
+      {variant === "B" ? (
+        <VariantB {...props} />
+      ) : variant === "C" ? (
+        <VariantC {...props} />
+      ) : (
+        <OwnProfileView {...props} />
+      )}
+      <PrototypeSwitcher />
+    </>
+  );
 }
 
 function PanelSkeleton() {

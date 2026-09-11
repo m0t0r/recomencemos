@@ -66,9 +66,9 @@ import {
  * page and the id has to be identical in the server's HTML and the client's —
  * which a literal is by construction.
  */
-const PHOTO_SENTENCE_ID = "own-photo-state";
+export const PHOTO_SENTENCE_ID = "own-photo-state";
 
-function photoSentence(state: OwnProfile["photoState"]): string {
+export function photoSentence(state: OwnProfile["photoState"]): string {
   switch (state) {
     case "pending":
       return PHOTO_PENDING;
@@ -101,7 +101,7 @@ const ARRIVALS = {
   resumed: { title: RESUMED_CONFIRMATION, body: RESUMED_EXPLANATION },
 } as const;
 
-function ArrivalConfirmation({ arrival }: { arrival: Exclude<Arrival, null> }) {
+export function ArrivalConfirmation({ arrival }: { arrival: Exclude<Arrival, null> }) {
   const { title, body } = ARRIVALS[arrival];
 
   return (
@@ -137,7 +137,7 @@ function ArrivalConfirmation({ arrival }: { arrival: Exclude<Arrival, null> }) {
  * says instead is story 20's copy (#28), and a line here would be a second,
  * wrong source for it.
  */
-function Standing({ profile }: { profile: OwnProfile }) {
+export function Standing({ profile }: { profile: OwnProfile }) {
   if (profile.takenDown) return null;
 
   const paused = profile.pausedAt !== null;
@@ -181,7 +181,7 @@ function WorkHistoryList({ lines }: { lines: readonly string[] }) {
   );
 }
 
-function GatedTerms({ profile }: { profile: OwnProfile }) {
+export function GatedTerms({ profile }: { profile: OwnProfile }) {
   const nothing = !profile.about && profile.workHistory.length === 0;
   return (
     <dl className="flex flex-col gap-4">
@@ -196,7 +196,7 @@ function GatedTerms({ profile }: { profile: OwnProfile }) {
   );
 }
 
-function HeldTerms({ profile }: { profile: OwnProfile }) {
+export function HeldTerms({ profile }: { profile: OwnProfile }) {
   return (
     <dl className="flex flex-col gap-4">
       <Term term={FULL_NAME_TERM}>{profile.fullName}</Term>
