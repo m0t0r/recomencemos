@@ -14,9 +14,11 @@
  * looking for it would be reaching through the DOM for a node React already
  * holds. Its children stay Server Components and ship as markup.
  *
- * `list-none` plus the row's own chevron, because `display: grid` removes the
- * browser's marker — the standing notices measured that a summary without one
- * reads as static text.
+ * **The browser's own marker is removed in both engines' spellings** —
+ * `list-none` for the `::marker`, and the `-webkit-details-marker` rule for
+ * Safari's — and the row draws its own chevron in its place, placed where the
+ * grid puts it. The standing notices measured that a summary with no visible
+ * affordance reads as static text.
  */
 
 import { type ReactNode, useEffect, useRef } from "react";
@@ -37,7 +39,7 @@ export function RowSummary({
   return (
     <summary
       ref={ref}
-      className="focus-visible:ring-ring grid cursor-pointer list-none grid-cols-[1fr_auto] items-start gap-x-3 gap-y-1 rounded-sm py-5 focus-visible:ring-2 focus-visible:outline-none"
+      className="focus-visible:ring-ring grid cursor-pointer list-none [&::-webkit-details-marker]:hidden grid-cols-[1fr_auto] items-start gap-x-3 gap-y-1 rounded-sm py-5 focus-visible:ring-2 focus-visible:outline-none"
     >
       {children}
     </summary>

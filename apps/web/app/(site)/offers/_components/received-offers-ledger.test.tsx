@@ -71,7 +71,7 @@ describe("the ledger", () => {
 
   /** The email's `/offers/<id>` — that Offer open, and only that one. */
   it("opens exactly the row a link names", () => {
-    expect(rowsIn(render({ openId: DECLINED_ID })).map(isOpen)).toEqual([
+    expect(rowsIn(render({ open: { id: DECLINED_ID } })).map(isOpen)).toEqual([
       false,
       false,
       false,
@@ -93,7 +93,7 @@ describe("the ledger", () => {
 
   /** After a decision she lands on her row, with the result in it rather than above the page. */
   it("puts the result of an answer inside the row it answered", () => {
-    const rows = rowsIn(render({ openId: DECLINED_ID, arrival: JUST_DECLINED }));
+    const rows = rowsIn(render({ open: { id: DECLINED_ID, arrival: JUST_DECLINED } }));
 
     expect(rows.map((row) => row.includes(JUST_DECLINED))).toEqual([
       false,

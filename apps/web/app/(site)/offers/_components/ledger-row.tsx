@@ -4,24 +4,29 @@
  * and — while it waits on her — her answer, at its foot.
  *
  * **A native `<details>`, not the registry's accordion, and the reason is the
- * same one the standing notices gave.** It opens with the script tag removed and
+ * one the standing notices gave.** It opens with the script tag removed and
  * before hydration, and the server sets `open` on the row a link names — which
  * is how the delivery email's `/offers/<id>` lands on that Offer open. An
- * accordion needs JavaScript to open at all, and it would ship a client
- * component per row for a behaviour HTML already has.
+ * accordion needs JavaScript to open at all. `RowSummary` is a client component
+ * only to take focus on a deep link; opening and shutting are the browser's.
  *
  * **The summary carries one heading and phrasing content only**, which is
  * `summary`'s content model: the `h2` keeps every row in the document outline,
  * so a screen-reader user listing headings finds one per Offer.
  *
- * **Inside an open row the order is the old page's, top to bottom**: where it
- * stands, the terms, who claims to have written them, then the decision those
- * two bear on. What she agrees to is what she can see above the button.
+ * **Inside an open row the terms and who claims to have written them come
+ * before the answer**: what she agrees to is what she can see above the button.
  * Reporting joins _Aceptar_ and _No aceptar_ in the answer with story 10.
+ *
+ * **The ruling is the registry's `Separator`, inside the `<li>`** — the shape
+ * `profile-list/profile-row.tsx` uses, since a `<ul>` may not hold a divider
+ * as a direct child.
  */
 
+import { Separator } from "@repo/design-system/components/separator";
 import type { ReceivedOffer } from "@repo/domain/offers";
 import { ChevronDownIcon } from "lucide-react";
+import type { OpenRow } from "../_lib/ledger";
 import {
   OFFER_PAY_LABEL,
   OFFER_WHEN_LABEL,
@@ -44,9 +49,10 @@ import { RowSummary } from "./row-summary";
 export interface LedgerRowProps {
   readonly offer: ReceivedOffer;
   readonly now: Date;
-  readonly open: boolean;
-  /** The sentence an answer to this Offer landed with, if one just did. */
-  readonly arrival?: string | undefined;
+  /** Every row but the first is ruled off from the one above it. */
+  readonly separated: boolean;
+  /** Present when a link named this row: it renders open, with any answer's result. */
+  readonly opened?: OpenRow | undefined;
 }
 
 /**
@@ -71,21 +77,24 @@ function Sender({ offerId, hirerName }: { offerId: string; hirerName: string | n
   );
 }
 
-export function LedgerRow({ offer, now, open, arrival }: LedgerRowProps) {
+export function LedgerRow({ offer, now, separated, opened }: LedgerRowProps) {
   // The read only returns received states; this narrows the type and refuses
   // to render anything the read should not have handed over.
   const state = asReceivedState(offer.state);
   if (!state) return null;
 
+  const arrival = opened?.arrival;
+
   return (
-    <li className="border-border border-t first:border-t-0">
-      <details open={open} className="group">
+    <li>
+      {separated ? <Separator /> : null}
+      <details open={opened !== undefined} className="group">
         {/*
           A deep link with no answer to announce focuses the open row's summary,
           which also scrolls it into view. After an answer the result takes focus
           instead, so exactly one thing is asked to.
         */}
-        <RowSummary focusOnMount={open && arrival === undefined}>
+        <RowSummary focusOnMount={opened !== undefined && arrival === undefined}>
           <h2 className="font-heading text-foreground min-w-0 text-xl leading-7 font-medium text-pretty">
             {rowSignature(offer.hirerName)}
           </h2>
