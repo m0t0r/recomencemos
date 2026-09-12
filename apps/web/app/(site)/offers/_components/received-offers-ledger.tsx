@@ -30,7 +30,7 @@ import {
 } from "../_lib/messages";
 import { LedgerRow } from "./ledger-row";
 
-export function ReceivedOffersLedger({ offers, hasProfile, now, open }: LedgerView) {
+export function ReceivedOffersLedger({ offers, exchanges, hasProfile, now, open }: LedgerView) {
   if (offers.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3">
@@ -62,6 +62,7 @@ export function ReceivedOffersLedger({ offers, hasProfile, now, open }: LedgerVi
           <LedgerRow
             key={offer.id}
             offer={offer}
+            exchange={exchanges.find((exchange) => exchange.offerId === offer.id)}
             now={now}
             separated={index > 0}
             opened={offer.id === open?.id ? open : undefined}

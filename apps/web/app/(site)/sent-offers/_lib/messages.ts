@@ -70,7 +70,9 @@ export const OFFER_STATE_SENTENCES = {
    */
   on_hold: "Una persona la está leyendo. Normalmente toma menos de un día.",
   delivered: "Ya le llegó. Ahora ella decide.",
-  accepted: "Aceptó tu propuesta. Te enviamos sus datos por correo.",
+  // The copy line in the Contact Exchange below says whether the mail went out;
+  // this sentence says only what is true on every visit.
+  accepted: "Aceptó tu propuesta.",
   declined: "No aceptó esta propuesta.",
   expired: "Se venció sin respuesta.",
   rejected_by_admin: "No la dejamos pasar. No le llegó a nadie.",

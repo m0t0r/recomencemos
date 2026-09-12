@@ -8,10 +8,11 @@
  * a ledger that rendered nothing cannot pass by finding nothing.
  */
 
+import type { ContactExchange } from "@repo/domain/exchange";
 import type { ReceivedOffer, ReceivedOfferState } from "@repo/domain/offers";
 import { renderToStaticMarkup } from "react-dom/server";
 import { urlAttributesIn } from "@/testing/markup";
-import { JUST_DECLINED, RECEIVED_OFFERS_EMPTY_HEADING } from "../_lib/messages";
+import { JUST_ACCEPTED, JUST_DECLINED, RECEIVED_OFFERS_EMPTY_HEADING } from "../_lib/messages";
 import { ReceivedOffersLedger } from "./received-offers-ledger";
 
 const { acceptOffer, declineOffer } = vi.hoisted(() => ({
@@ -43,21 +44,45 @@ const OFFERS: readonly ReceivedOffer[] = [
   received("0192a3b4-0000-7000-8000-000000000005", "expired", "Coser cuatro cortinas"),
 ];
 
+const ACCEPTED_ID = "0192a3b4-0000-7000-8000-000000000003";
 const DECLINED_ID = "0192a3b4-0000-7000-8000-000000000004";
+
+/** What crossed on the accepted row, as she reads it. */
+const EXCHANGE: ContactExchange = {
+  offerId: ACCEPTED_ID,
+  exchangedAt: NOW,
+  side: "worker",
+  counterpart: {
+    fullName: "Carlos Restrepo",
+    phone: "+573105558899",
+    email: "carlos.sentinel@recomencemos.test",
+  },
+  own: {
+    fullName: "Ana María Restrepo Gómez",
+    phone: "+573001234567",
+    email: "ana.sentinel@recomencemos.test",
+  },
+  copy: "sent",
+};
 
 function render(overrides: Partial<Parameters<typeof ReceivedOffersLedger>[0]> = {}): string {
   return renderToStaticMarkup(
-    <ReceivedOffersLedger offers={OFFERS} hasProfile now={NOW} {...overrides} />,
+    <ReceivedOffersLedger offers={OFFERS} exchanges={[]} hasProfile now={NOW} {...overrides} />,
   );
 }
 
-/** Each row's `<details>`, whole, in document order. No row nests another. */
+/**
+ * Each row, whole, in document order — split on the list item rather than on
+ * `<details>`, because an accepted row nests a second disclosure (its folded
+ * terms) and a non-greedy match on `</details>` would end the row there.
+ */
 function rowsIn(html: string): string[] {
-  return [...html.matchAll(/<details[\s\S]*?<\/details>/g)].map(([row]) => row);
+  return [...html.matchAll(/<li>[\s\S]*?<\/li>/g)].map(([row]) => row);
 }
 
+/** Whether a row's own disclosure — its first `<details>` — is open. */
 function isOpen(row: string): boolean {
-  return /^<details[^>]*\sopen=""/.test(row);
+  return /<details[^>]*\sopen=""/.test(/<details[^>]*>/.exec(row)?.[0] ?? "");
 }
 
 describe("the ledger", () => {
@@ -113,6 +138,77 @@ describe("the ledger", () => {
 
     expect(ids.length).toBeGreaterThan(0);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("an accepted row", () => {
+  it("holds the Contact Exchange, and no other row does", () => {
+    const rows = rowsIn(render({ exchanges: [EXCHANGE] }));
+
+    expect(rows.map((row) => row.includes(EXCHANGE.counterpart.email))).toEqual([
+      false,
+      false,
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  /**
+   * **Both sides' details, once** — the success state. The name is left out of
+   * the count because his declared name is also the row's signature, which is
+   * story 8's and says something else about it.
+   */
+  it("carries each side's phone and address exactly once", () => {
+    const html = render({ exchanges: [EXCHANGE] });
+
+    for (const detail of [
+      "310 555 8899",
+      EXCHANGE.counterpart.email,
+      "300 123 4567",
+      EXCHANGE.own.email,
+    ]) {
+      expect(html.split(detail).length - 1, detail).toBe(1);
+    }
+  });
+
+  /** A `tel:` or `mailto:` built from what somebody typed is an href from user text. */
+  it("builds no link from a detail", () => {
+    const urls = urlAttributesIn(render({ exchanges: [EXCHANGE] }));
+
+    expect(urls.filter((url) => /^(tel|mailto):/i.test(url))).toEqual([]);
+  });
+
+  /**
+   * Right after she accepts, the exchange is what is announced — its heading
+   * takes focus and its details arrive in a status region, which the panel's
+   * own test finds through the accessibility tree — so the arrival sentence
+   * does not also ask for her attention.
+   */
+  it("says no arrival sentence of its own, right after she accepts", () => {
+    const html = render({
+      exchanges: [EXCHANGE],
+      open: { id: ACCEPTED_ID, arrival: JUST_ACCEPTED, justAccepted: true },
+    });
+
+    expect(rowsIn(html)[2]).not.toContain(JUST_ACCEPTED);
+  });
+
+  /**
+   * The card leads; what she agreed to is one tap away beneath it, and shut.
+   * Read as markup because a native `<details>` and its `open` are what the
+   * accessibility tree under happy-dom does not report.
+   */
+  it("folds the terms under the card, shut", () => {
+    const accepted = rowsIn(render({ exchanges: [EXCHANGE], open: { id: ACCEPTED_ID } }))[2] ?? "";
+
+    // The work also leads the shut summary, above everything, so the order that
+    // means something is the card against the fold that holds the terms.
+    expect(accepted.indexOf(EXCHANGE.counterpart.email)).toBeLessThan(
+      accepted.indexOf("Lo que aceptaste"),
+    );
+    expect(accepted).toMatch(/<details[^>]*>\s*<summary[^>]*>Lo que aceptaste/);
+    expect(accepted).not.toMatch(/<details[^>]*open=""[^>]*>\s*<summary[^>]*>Lo que aceptaste/);
   });
 });
 

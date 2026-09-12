@@ -29,6 +29,7 @@
  */
 
 import { Skeleton } from "@repo/design-system/components/skeleton";
+import { exchanges } from "@repo/domain/exchange";
 import { offers } from "@repo/domain/offers";
 import type { Metadata } from "next";
 import { Suspense } from "react";
@@ -60,9 +61,24 @@ async function SentOffersPanel() {
    */
   const session = await requireAccountPage("/sent-offers");
 
-  const sent = await offers.listSent(session.accountId, new Date());
+  /**
+   * **Her details reach this page through the exchange read and nowhere else.**
+   * `SentOffer` stays state-only, so no Offer in any other state can carry a
+   * detail of hers here; an accepted row gets the Contact Exchange beside it,
+   * read as he is party to it. Only his side's: an Account that is also a Worker
+   * holds exchanges `/offers` shows instead.
+   */
+  const [sent, exchanged] = await Promise.all([
+    offers.listSent(session.accountId, new Date()),
+    exchanges.listForParty(session.accountId),
+  ]);
 
-  return <SentOfferList offers={sent} />;
+  return (
+    <SentOfferList
+      offers={sent}
+      exchanges={exchanged.filter((exchange) => exchange.side === "hirer")}
+    />
+  );
 }
 
 /** Held at the shape the rows take, so the heading above them does not move. */

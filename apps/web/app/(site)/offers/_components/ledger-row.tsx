@@ -24,8 +24,13 @@
  */
 
 import { Separator } from "@repo/design-system/components/separator";
+import type { ContactExchange } from "@repo/domain/exchange";
 import type { ReceivedOffer } from "@repo/domain/offers";
 import { ChevronDownIcon } from "lucide-react";
+import {
+  ContactExchangePanel,
+  FoldedTerms,
+} from "@/app/(site)/_components/contact-exchange/contact-exchange";
 import type { OpenRow } from "../_lib/ledger";
 import {
   OFFER_PAY_LABEL,
@@ -48,6 +53,8 @@ import { RowSummary } from "./row-summary";
 
 export interface LedgerRowProps {
   readonly offer: ReceivedOffer;
+  /** Present on an accepted row: what crossed, as she reads it. */
+  readonly exchange?: ContactExchange | undefined;
   readonly now: Date;
   /** Every row but the first is ruled off from the one above it. */
   readonly separated: boolean;
@@ -77,13 +84,33 @@ function Sender({ offerId, hirerName }: { offerId: string; hirerName: string | n
   );
 }
 
-export function LedgerRow({ offer, now, separated, opened }: LedgerRowProps) {
+export function LedgerRow({ offer, exchange, now, separated, opened }: LedgerRowProps) {
   // The read only returns received states; this narrows the type and refuses
   // to render anything the read should not have handed over.
   const state = asReceivedState(offer.state);
   if (!state) return null;
 
-  const arrival = opened?.arrival;
+  // Right after she accepts, the Contact Exchange's heading takes focus and its
+  // details are announced — so the arrival sentence does not also ask to.
+  const justAccepted = exchange !== undefined && opened?.justAccepted === true;
+  const arrival = justAccepted ? undefined : opened?.arrival;
+
+  const terms = (
+    <>
+      <dl className="flex flex-col gap-4">
+        <OfferTerm label={OFFER_WORK_LABEL} value={offer.workDescription} />
+        <OfferTerm label={OFFER_PAY_LABEL} value={offer.payTerms} />
+        <OfferTerm label={OFFER_WHEN_LABEL} value={offer.whenText} />
+      </dl>
+
+      {/* `es-CO` long form; `dateTime` carries the machine-readable value. */}
+      <time dateTime={offer.sentAt.toISOString()} className="text-muted-foreground text-xs">
+        {offerSentOn(offer.sentAt)}
+      </time>
+
+      <Sender offerId={offer.id} hirerName={offer.hirerName} />
+    </>
+  );
 
   return (
     <li>
@@ -94,7 +121,7 @@ export function LedgerRow({ offer, now, separated, opened }: LedgerRowProps) {
           which also scrolls it into view. After an answer the result takes focus
           instead, so exactly one thing is asked to.
         */}
-        <RowSummary focusOnMount={opened !== undefined && arrival === undefined}>
+        <RowSummary focusOnMount={opened !== undefined && arrival === undefined && !justAccepted}>
           <h2 className="font-heading text-foreground min-w-0 text-xl leading-7 font-medium text-pretty">
             {rowSignature(offer.hirerName)}
           </h2>
@@ -130,18 +157,18 @@ export function LedgerRow({ offer, now, separated, opened }: LedgerRowProps) {
 
           <p className="text-foreground text-sm">{RECEIVED_STATE_SENTENCES[state]}</p>
 
-          <dl className="flex flex-col gap-4">
-            <OfferTerm label={OFFER_WORK_LABEL} value={offer.workDescription} />
-            <OfferTerm label={OFFER_PAY_LABEL} value={offer.payTerms} />
-            <OfferTerm label={OFFER_WHEN_LABEL} value={offer.whenText} />
-          </dl>
-
-          {/* `es-CO` long form; `dateTime` carries the machine-readable value. */}
-          <time dateTime={offer.sentAt.toISOString()} className="text-muted-foreground text-xs">
-            {offerSentOn(offer.sentAt)}
-          </time>
-
-          <Sender offerId={offer.id} hirerName={offer.hirerName} />
+          {/*
+            Accepted: the card leads — she comes back for a number — and the
+            terms it crossed for fold beneath it. Otherwise the terms, open.
+          */}
+          {exchange ? (
+            <>
+              <ContactExchangePanel exchange={exchange} justAccepted={justAccepted} />
+              <FoldedTerms side={exchange.side}>{terms}</FoldedTerms>
+            </>
+          ) : (
+            terms
+          )}
 
           {/* Only while there is an answer to give; an answered row has its state above. */}
           {state === "delivered" ? (

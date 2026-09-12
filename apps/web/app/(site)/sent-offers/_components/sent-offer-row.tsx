@@ -22,8 +22,13 @@
  */
 
 import { Badge } from "@repo/design-system/components/badge";
+import type { ContactExchange } from "@repo/domain/exchange";
 import type { SentOffer } from "@repo/domain/offers";
 import Link from "next/link";
+import {
+  ContactExchangePanel,
+  FoldedTerms,
+} from "@/app/(site)/_components/contact-exchange/contact-exchange";
 import {
   OFFER_PAY_LABEL,
   OFFER_PROFILE_LINK,
@@ -35,8 +40,32 @@ import {
 } from "../_lib/messages";
 import { offerBadge } from "../_lib/state-badge";
 
-export function SentOfferRow({ offer }: { readonly offer: SentOffer }) {
+export function SentOfferRow({
+  offer,
+  exchange,
+}: {
+  readonly offer: SentOffer;
+  /** Present on an accepted row: her details, as he reads them. */
+  readonly exchange?: ContactExchange | undefined;
+}) {
   const badge = offerBadge(offer.state, offer.reviewDelayed);
+
+  const terms = (
+    <dl className="flex flex-col gap-2 text-sm">
+      <div>
+        <dt className="text-muted-foreground">{OFFER_WORK_LABEL}</dt>
+        <dd className="whitespace-pre-line">{offer.workDescription}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground">{OFFER_PAY_LABEL}</dt>
+        <dd>{offer.payTerms}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground">{OFFER_WHEN_LABEL}</dt>
+        <dd>{offer.whenText}</dd>
+      </div>
+    </dl>
+  );
 
   return (
     <li className="border-border flex flex-col gap-3 border-b py-6 last:border-b-0">
@@ -66,20 +95,18 @@ export function SentOfferRow({ offer }: { readonly offer: SentOffer }) {
         <p className="text-foreground text-sm font-medium">{OFFER_REVIEW_DELAYED}</p>
       ) : null}
 
-      <dl className="flex flex-col gap-2 text-sm">
-        <div>
-          <dt className="text-muted-foreground">{OFFER_WORK_LABEL}</dt>
-          <dd className="whitespace-pre-line">{offer.workDescription}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">{OFFER_PAY_LABEL}</dt>
-          <dd>{offer.payTerms}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">{OFFER_WHEN_LABEL}</dt>
-          <dd>{offer.whenText}</dd>
-        </div>
-      </dl>
+      {/*
+        Accepted: her details on the card, and what he wrote folded beneath it,
+        the same shape her row takes. Otherwise the terms, open.
+      */}
+      {exchange ? (
+        <>
+          <ContactExchangePanel exchange={exchange} />
+          <FoldedTerms side={exchange.side}>{terms}</FoldedTerms>
+        </>
+      ) : (
+        terms
+      )}
 
       <div className="text-muted-foreground flex items-center gap-3 text-xs">
         {/*
