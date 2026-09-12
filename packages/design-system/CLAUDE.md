@@ -27,3 +27,19 @@ Guidance for working inside `packages/design-system`. Repo-wide conventions are 
 **Tailwind v4, one stylesheet, owned by the design system.** `packages/design-system/src/styles/globals.css` holds the private `--brand-*` ramp, the semantic `:root` tokens, and the `@theme inline` map that is the only seam components reach through; `apps/web/app/layout.tsx` imports it as `@repo/design-system/globals.css` and `apps/web/postcss.config.mjs` re-exports the package's PostCSS config. There is no `tailwind.config.js` — v4 is CSS-first. The `@source` globs in that file are what tell Tailwind to scan `apps/**`, so a new app workspace needs a glob added there or its classes will be missing from the build. **There is no dark mode.** The paper is the product's one ground (`DESIGN.md` → The world), and `next-themes`, the provider and the toggle are gone — so there is no `.dark` block and no `dark` variant. Do not add `dark:` overrides; add the mode deliberately or not at all. Use semantic tokens (`bg-background`, `text-muted-foreground`) throughout.
 
 **Contrast is a test, not a memory.** `apps/web/design-tokens.test.ts` resolves every semantic text pair in `globals.css` and fails under WCAG 2.2 AA's 4.5:1, and every non-text pair — `input`, `ring`, the five chart slots — under SC 1.4.11's 3:1. A change to an `L` value is red on the next `pnpm test` before it is reviewed; the tightest pairs today are `chart-5` on `background` at 3.04 and `input` on `background` at 3.85.
+
+## Why the test DOM is happy-dom
+
+**The DOM environment is happy-dom, not the jsdom Next's docs prescribe.** That is a deliberate deviation from the framework's documented path, so it was measured rather than preferred. Three axes, all favouring happy-dom:
+
+|                           | jsdom 30                               | happy-dom 20          |
+| ------------------------- | -------------------------------------- | --------------------- |
+| `engines.node`            | `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0` | `>=20.0.0`            |
+| transitive packages       | 39                                     | 10                    |
+| vitest `environment` cost | ~330 ms per test file                  | ~135 ms per test file |
+
+The engines line is the one that forced the decision: with `engineStrict` on, jsdom raises this repo's floor from any 24.x to 24.15+, which is a narrower runtime than anyone working here should have to hold for a test dependency. The environment cost is paid **per test file**, so it scales with the suite rather than being a one-off.
+
+**The correctness axis went the other way from the folklore.** A probe of eighteen DOM APIs found nine differences and every one favoured happy-dom: `matchMedia`, `ResizeObserver`, `IntersectionObserver`, `scrollIntoView`, `dialog.showModal`, `inert`, `checkVisibility`, `elementFromPoint`, and `Range.getClientRects` are all missing or throwing under jsdom and present under happy-dom. Nothing was present under jsdom and missing under happy-dom. That matters concretely here: `next-themes` reads `matchMedia` and Base UI reaches for `ResizeObserver`, so the jsdom route needs a setup file full of mocks before the first component test runs.
+
+Be honest about what that probe shows, though: it tested **presence, not fidelity**. jsdom's stated philosophy is to omit what it cannot implement correctly, so a happy-dom API that exists but never fires would be worse than an absent one you knowingly mocked. `src/components/dialog.test.tsx` is the guard against that — a portal plus a real `user-event` click is where a DOM environment actually breaks, and it is the case a real surface hits long before it hits Button. If it ever fails, reconsider the environment rather than the test.
