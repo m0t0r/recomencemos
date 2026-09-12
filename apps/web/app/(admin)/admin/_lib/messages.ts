@@ -57,38 +57,20 @@ export const BOUNCES_LABEL = "Correos rebotados";
 export const ADMIN_SESSION_REQUIRED = "No tienes acceso a esta página.";
 
 /**
- * A section with nothing waiting.
+ * The queue with nothing waiting.
  *
  * **It is a good state and the copy has to say so**, which is the acceptance
- * criterion in as many words. A section at zero means everything in it has been
+ * criterion in as many words. A queue at zero means everything in it has been
  * read and nobody is waiting behind the band — the best this screen can report.
  * The default empty state ("no hay nada") reads as an absence of data, which on
  * this surface would be indistinguishable from a source that failed to load.
  *
  * **The body states the age as zero**, which the criterion asks for outright:
- * _"a real and good state, saying the oldest-item age is zero"_. The figure in
- * the shell says the same thing about the whole queue; this says it about the
- * section the Admin is looking at, which is the one they are deciding about.
+ * _"a real and good state, saying the oldest-item age is zero"_ — the same figure
+ * the shell's headline shows, said again where the list would be.
  */
-export const QUEUE_EMPTY_TITLE = "Aquí no hay nada esperando.";
-export const QUEUE_EMPTY_BODY = "Todo está revisado: lo más antiguo en esta sección es 0 h.";
-
-/**
- * A section whose story has not landed.
- *
- * **It is not the empty state and must never read as one.** Zero means everything
- * was read; this means nothing was ever asked. Saying "no hay nada" here would be
- * the instrument that lies — an Admin would conclude the branch was clear when it
- * is not being counted at all, which is the unreviewed Offer this whole surface
- * exists to prevent. So the copy says what is true: there is no count and no
- * antiquity to show, because nothing is being recorded yet.
- *
- * It is temporary by construction and leaves with the section that replaces it.
- */
-export const SECTION_NOT_LIVE_TITLE = "Esta sección todavía no está funcionando.";
-export const SECTION_NOT_LIVE_BODY =
-  "Todavía no estamos guardando nada aquí, así que no hay cuenta ni antigüedad que mostrar. " +
-  "No quiere decir que esté vacía.";
+export const QUEUE_EMPTY_TITLE = "No hay nada esperando.";
+export const QUEUE_EMPTY_BODY = "Todo está revisado: lo más antiguo en la fila es 0 h.";
 
 /**
  * The age of the oldest item, which renders before anything else (story 7) —
@@ -108,35 +90,76 @@ export const OLDEST_ITEM_LABEL = "Lo más antiguo en la fila";
 export const oldestItemHours = (hours: number) => `${hours} h`;
 
 /**
- * The nav, and the control that hides it.
+ * How much is waiting, beside the oldest-item figure.
  *
- * **The toggle's name says what it does to the sections, not "sidebar".** The
- * person reading it is looking for their work, and the registry's own word for
- * the element is not a word anybody here would use.
+ * **Counted over every whole branch that answered, never over the rows that
+ * render** (C55) — so it can say 400 while twenty are on screen, which is the
+ * point of saying it. A phrase rather than a bare number, because "Fila, 12"
+ * read aloud is a list position as easily as a backlog.
  */
-export const QUEUE_NAV_LABEL = "Secciones de la fila";
-export const QUEUE_NAV_GROUP_LABEL = "Secciones";
-export const SIDEBAR_TOGGLE_LABEL = "Mostrar u ocultar las secciones";
-export const SIDEBAR_MOBILE_TITLE = "Secciones de la fila";
-export const SIDEBAR_MOBILE_DESCRIPTION = "Las cinco secciones, con lo que espera en cada una.";
+export const waitingInQueue = (total: number) => `${total} por revisar`;
 
 /**
- * How much is waiting in one section, announced.
+ * The one list (#277), and what it is called in the accessibility tree.
  *
- * **The number alone is what a sighted Admin scans and is not enough on its
- * own** — read out, "Propuestas, 12" is a list position as easily as a backlog.
- * The visible figure is `aria-hidden` and this is what is announced beside the
- * name, which is one fact rendered twice rather than two facts that can drift.
+ * **The name says the order**, because the order is the design: one list across
+ * every source, oldest first, so nothing old waits behind a section nobody
+ * opened. A screen-reader user entering the group hears that before the first
+ * row, which is the same fact a sighted Admin gets from the ages down the right.
  */
-export const sectionWaiting = (total: number) =>
-  `${total} ${total === 1 ? "pendiente" : "pendientes"}`;
+export const QUEUE_LIST_LABEL = "Lo que espera, lo más antiguo primero";
 
-/** A section with no resolver has no figure, and the dash is not a zero. */
-export const SECTION_NOT_LIVE_SHORT = "—";
-export const SECTION_NOT_LIVE_ANNOUNCEMENT = "todavía sin datos";
+/** The three columns. Short, because they are scanned rather than read. */
+export const SOURCE_COLUMN = "Tipo";
+export const SUMMARY_COLUMN = "Qué espera";
+export const AGE_COLUMN = "Esperando";
 
 /**
- * A section whose oldest item has passed its band.
+ * The keys, said where they work.
+ *
+ * **Said at all because a shortcut nobody is told about is not an accelerator.**
+ * The letters render as keycaps between these fragments; the scope sentence is
+ * WCAG 2.2 SC 2.1.4 made visible — the keys act only with focus in the list, so
+ * typing in a field never moves or decides anything.
+ *
+ * **Skill requests have no key**, and the last sentence says so rather than
+ * leaving an Admin to press _a_ on one and wonder: promoting means typing an
+ * identifier and a name, which no single key can stand in for.
+ */
+export const KEYS_MOVE = "para moverte";
+export const KEYS_DECIDE = "para decidir.";
+export const KEYS_SCOPE = "Funcionan con el foco en la lista, nunca mientras escribes.";
+export const KEYS_NOT_FOR_SKILLS = "Las capacidades pedidas se deciden con su formulario.";
+
+/**
+ * The filter that replaced the five routes.
+ *
+ * **It opens on everything**, and narrowing is a choice the Admin makes and
+ * can see in the control — the opposite of a route per source, where the
+ * narrowing was the default and the rest of the queue was a click away.
+ */
+export const FILTER_LABEL = "Mostrar";
+export const FILTER_ALL = "Todo";
+export const filterOption = (label: string, total: number) => `${label} (${total})`;
+
+/**
+ * When the display caps hide rows (C55): how many are on screen out of how many
+ * wait, and how the rest arrive.
+ */
+export const shownOfWaiting = (shown: number, total: number) =>
+  `Se ven ${shown} de ${total}. El resto aparece a medida que decides y vuelves a cargar.`;
+
+/**
+ * A row decided on this screen, in its summary line.
+ *
+ * **The row keeps its place and says so**, for the reason `OFFER_ROW_RESOLVED`
+ * gives: removing it would shift every row below under a cursor that is
+ * mid-queue. The next reload is what clears it.
+ */
+export const ROW_DECIDED = "Decidida";
+
+/**
+ * A row whose item has passed its source's band.
  *
  * **Text, not a colour**, which is the acceptance criterion and WCAG 2.2 AA's
  * 1.4.1 in the same sentence: the marker is a word an Admin reads and a screen
@@ -196,17 +219,14 @@ export const sourceFailed = (source: string) =>
   `No pudimos cargar ${source}. Puede haber elementos sin revisar aquí.`;
 
 /**
- * The panel that ends an Account's sessions (NFR13), and the nav row that reaches
- * it.
+ * The panel that ends an Account's sessions (NFR13), and the link in the shell's
+ * header that reaches it.
  *
- * **Its own group, below the five sections, because it is a tool and not a
- * backlog.** Nothing accumulates here, so it has no count, no oldest item and no
- * band — and a row in the queue's own list would be a control sitting inside an
- * instrument. The nav label is the verb; the heading on the page is the full
- * sentence, because a nav row is scanned and a heading is read.
+ * **A tool and not a backlog, so it is not a row in the list.** Nothing
+ * accumulates here, so it has no count, no oldest item and no band — and a row in
+ * the queue would be a control sitting inside an instrument. The link names the
+ * page it opens, so it is the heading's own words.
  */
-export const TOOLS_NAV_LABEL = "Herramientas";
-export const SESSIONS_NAV_LABEL = "Cerrar sesiones";
 export const SESSIONS_HEADING = "Cerrar sesiones de una cuenta";
 export const SESSIONS_EXPLANATION =
   "Cierra todas las sesiones abiertas de una cuenta. Queda registrado quién lo hizo y cuándo.";

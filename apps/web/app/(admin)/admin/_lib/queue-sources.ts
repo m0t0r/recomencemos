@@ -1,12 +1,12 @@
 /**
- * The queue's five sections, as a registry the shell renders and each section
- * ticket plugs into.
+ * The queue's five sources, as a registry the one list is merged from and each
+ * source ticket plugs into.
  *
- * **One route per concern, behind one shell** — the shape #96 settled, replacing
- * the single page that held all five. What that buys is that a section is
- * independently buildable: the shell below already knows how to count a branch,
- * age it, mark it late and say it is missing, so a section arrives by gaining a
- * `load` and nothing else.
+ * **One list, oldest first, across every source** — the shape the UX lab chose
+ * in #277, replacing #96's sidebar with a route per concern. What the registry
+ * still buys is that a source is independently buildable: the page already knows
+ * how to count a branch, age it, mark it late, merge it and say it is missing, so
+ * a source arrives by gaining a `load` and nothing else.
  *
  * **No `import "server-only"`, and that is ADR-0013's table applied rather than
  * skipped.** Mechanism 2 is for a module that is Next-only; this one holds types,
@@ -143,14 +143,9 @@ export interface QueueSource {
   /** English identifier, per ADR-0012 — it is a key, not a heading. */
   readonly key: string;
   /**
-   * The route segment under `/admin`. English, per ADR-0012 — a URL is an
-   * identifier and not UI copy — and deliberately not the same string as
-   * {@link QueueSource.key}: the Skill requests branch is keyed `skillRequests`
-   * and routed `skills`, because the key names the thing waiting and the segment
-   * names the section.
+   * The Spanish name a row's source column and the filter show, and the noun
+   * `sourceFailed` uses.
    */
-  readonly segment: string;
-  /** The Spanish nav label, page heading, and the noun `sourceFailed` uses. */
   readonly label: string;
   /**
    * The hours this section's oldest item may reach before it is late, or `null`
@@ -173,21 +168,20 @@ export interface QueueSource {
 }
 
 /**
- * The five, in the order they appear in the nav and in the order an Admin works
- * them.
+ * The five, in the order the filter offers them.
  *
- * **Offers lead, and the redirect at `/admin` follows from it**: they are the
- * only branch with a deadline attached, because NFR7's band is per Offer. A
- * Report or a Skill request has no equivalent clock, so nothing else competes for
- * the first position.
+ * **This order no longer decides what an Admin sees first** — the list is
+ * ordered by arrival across all five, so an old photo sits above a new Offer
+ * rather than behind a section nobody opened. Offers still lead the filter,
+ * because they are the only branch with a deadline attached: NFR7's band is per
+ * Offer.
  *
- * A sixth section is a spec amendment, not a ticket — the same rule the four
+ * A sixth source is a spec amendment, not a ticket — the same rule the four
  * signals are held to.
  */
 export const QUEUE_SOURCES: readonly QueueSource[] = [
   {
     key: "offers",
-    segment: "offers",
     label: OFFERS_LABEL,
     // NFR7: age of the oldest undelivered Offer ≤ 24 h.
     bandHours: 24,
@@ -234,7 +228,6 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
   },
   {
     key: "photos",
-    segment: "photos",
     label: PHOTOS_LABEL,
     /**
      * **No band, and inventing one would be a spec amendment.** NFR7 states one
@@ -275,13 +268,11 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
   },
   {
     key: "reports",
-    segment: "reports",
     label: REPORTS_LABEL,
     bandHours: null,
   },
   {
     key: "skillRequests",
-    segment: "skills",
     label: SKILL_REQUESTS_LABEL,
     bandHours: null,
     async load(): Promise<QueueBranch> {
@@ -300,18 +291,114 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
   },
   {
     key: "bounces",
-    segment: "bounces",
     label: BOUNCES_LABEL,
     bandHours: null,
   },
 ];
 
-/** The section a URL segment names, or `undefined` — which is a 404, not a 403. */
-export function sourceForSegment(segment: string): QueueSource | undefined {
-  return QUEUE_SOURCES.find((source) => source.segment === segment);
+/**
+ * What a source has to say about itself once it has been asked.
+ *
+ * Three states rather than two, and `absent` is the one that matters: a source
+ * whose story has not landed is not an empty source. Collapsing the two would
+ * report a depth of zero for a branch nobody counted.
+ *
+ * **Here rather than beside the read in `queue-data.ts`**, because that module is
+ * `server-only` and the merge below is pure — the arithmetic is tested at
+ * `web:test`, where a `server-only` import would throw.
+ */
+export type SectionState =
+  | { readonly status: "absent" }
+  | { readonly status: "loaded"; readonly branch: QueueBranch }
+  | { readonly status: "failed" };
+
+/** The branches that answered, for the figures computed across all of them. */
+export function branchesThatLoaded(states: readonly SectionState[]): readonly QueueBranch[] {
+  return states.filter((state) => state.status === "loaded").map((state) => state.branch);
 }
 
-/** The sections that have a resolver, in nav order. */
+/**
+ * One row of the merged list: an item, the source it came from, and the two
+ * figures the row shows about it.
+ *
+ * **Both figures are computed on the server, from the one clock reading the page
+ * takes**, so the browser never reads the clock — a row that aged by an hour
+ * between the server render and hydration would be a mismatch React reports and
+ * an Admin reads as a flicker.
+ */
+export interface QueueRow {
+  /**
+   * `<source>:<id>`. A photo is keyed by its profile and an Offer by its own id,
+   * so nothing stops two sources sharing one — and the key is what the table
+   * selects, expands and hands focus by.
+   */
+  readonly key: string;
+  readonly sourceKey: string;
+  readonly sourceLabel: string;
+  /** Whole hours, floored, never negative — `ageInHours`'s rules. */
+  readonly ageHours: number;
+  /** Past this row's own source's band. Only Offers have one. */
+  readonly late: boolean;
+  readonly item: QueueItem;
+}
+
+/**
+ * Every source that answered, as one list, **oldest first** — the whole of what
+ * the owner chose in the UX lab (#277, variant A): nothing old hides behind a
+ * section nobody opened, because there are no sections to open.
+ *
+ * **Each branch is still capped for display (C55)**, so the merge is of the
+ * oldest few of each rather than of everything waiting. That is honest about
+ * order — every row shown is older than every row of its own branch that is not —
+ * and the headline's count and age are computed over the whole branches instead,
+ * so the cap can never make the queue look shallower than it is.
+ *
+ * A source that failed or has no resolver contributes nothing here. Its absence
+ * is said by the failure card and the coverage line, one fact per element.
+ *
+ * Ties break on the key, so two items that arrived in the same millisecond render
+ * in the same order on every load rather than trading places under the cursor.
+ */
+export function queueRows(
+  sections: readonly { readonly source: QueueSource; readonly state: SectionState }[],
+  now: Date,
+): readonly QueueRow[] {
+  return sections
+    .flatMap(({ source, state }) =>
+      state.status === "loaded"
+        ? state.branch.items.map((item) => {
+            const ageHours = ageInHours(item.arrivedAt, now);
+
+            return {
+              key: `${source.key}:${item.id}`,
+              sourceKey: source.key,
+              sourceLabel: source.label,
+              ageHours,
+              // `>=` for `isPastBand`'s reason: an item that has reached the band
+              // has reached it.
+              late: source.bandHours !== null && ageHours >= source.bandHours,
+              item,
+            };
+          })
+        : [],
+    )
+    .toSorted(
+      (a, b) =>
+        a.item.arrivedAt.getTime() - b.item.arrivedAt.getTime() || a.key.localeCompare(b.key),
+    );
+}
+
+/**
+ * How many items are waiting across every branch that answered — **the whole
+ * branches, never the rows that render** (C55). A headline summing `items.length`
+ * would say forty while four hundred wait, which is the queue's depth detector
+ * reading a number that cannot exceed the display cap.
+ */
+export function waitingAcross(branches: readonly QueueBranch[]): number {
+  return branches.reduce((sum, branch) => sum + branch.total, 0);
+}
+
+/** The sources that have a resolver, in filter order. */
 export function liveSources(): readonly QueueSource[] {
   return QUEUE_SOURCES.filter((source) => source.load !== undefined);
 }

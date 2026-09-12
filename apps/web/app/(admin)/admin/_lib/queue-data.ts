@@ -33,19 +33,7 @@ import "server-only";
 
 import { cache } from "react";
 import { requireAdminPage } from "@/lib/admin";
-import { QUEUE_SOURCES, type QueueBranch, type QueueSource } from "./queue-sources";
-
-/**
- * What a section has to say about itself.
- *
- * Three states rather than two, and `absent` is the one that matters: a section
- * whose story has not landed is not an empty section. Collapsing the two would
- * report a depth of zero for a branch nobody counted.
- */
-export type SectionState =
-  | { readonly status: "absent" }
-  | { readonly status: "loaded"; readonly branch: QueueBranch }
-  | { readonly status: "failed" };
+import { QUEUE_SOURCES, type QueueSource, type SectionState } from "./queue-sources";
 
 /**
  * The Admin behind this request, read once however many callers ask.
@@ -77,7 +65,7 @@ export const loadSection = cache(async (key: string): Promise<SectionState> => {
   }
 });
 
-/** Every section, paired with its promise, in nav order. */
+/** Every source, paired with its promise, in filter order. */
 export function loadEverySection(): readonly {
   readonly source: QueueSource;
   readonly state: Promise<SectionState>;
@@ -85,7 +73,17 @@ export function loadEverySection(): readonly {
   return QUEUE_SOURCES.map((source) => ({ source, state: loadSection(source.key) }));
 }
 
-/** The branches that answered, for the figures computed across all of them. */
-export function branchesThatLoaded(states: readonly SectionState[]): readonly QueueBranch[] {
-  return states.filter((state) => state.status === "loaded").map((state) => state.branch);
+/**
+ * Every source, **settled** — what the one list is merged from.
+ *
+ * `loadSection` is `cache`d per request, so the shell's headline and the page's
+ * list awaiting this in two render positions are still one query per source.
+ * Nothing here rejects: a failure is already a value.
+ */
+export async function settleEverySection(): Promise<
+  readonly { readonly source: QueueSource; readonly state: SectionState }[]
+> {
+  return Promise.all(
+    loadEverySection().map(async ({ source, state }) => ({ source, state: await state })),
+  );
 }

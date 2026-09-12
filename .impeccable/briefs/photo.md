@@ -1,7 +1,7 @@
 # Surface brief: the photo
 
 **Target:** `apps/web/app/(site)/publish/_components/photo-field.tsx` and the three surfaces that
-render its result — `/publish`, `/my-profile`, `/admin/photos` · **Mode:** Operate · **Ticket:**
+render its result — `/publish`, `/my-profile`, the `/admin` queue · **Mode:** Operate · **Ticket:**
 [#18](https://github.com/m0t0r/recomencemos/issues/18) · **Shaped:** 2026-09-08 · **Locked:** —
 
 **Shaped without an interview**, as `publish.md` was and for the same reason: the Build session ran
@@ -92,7 +92,7 @@ network transfer over mobile data is a form that loses the profile to save the p
 ## Scope and boundaries
 
 **In:** the picker and its preview on `/publish`; the three non-approved states on `/my-profile`;
-the initial on the Wall, on `/profiles` and on the public card; the review rows on `/admin/photos`
+the initial on the Wall, on `/profiles` and on the public card; the photo's row in the `/admin` queue
 and the two decisions there; every refusal any of them can produce.
 
 **Out:** cropping, rotation, filters, more than one photo, a photo on anything that is not a
@@ -162,8 +162,8 @@ she published — with the state's sentence directly beneath it, associated to t
 sentence is the one existing string this ticket has to **correct**: `PHOTO_PENDING` today says her
 initial is shown, and on her own view it is not.
 
-**On `/admin/photos`** a row is the photo, large enough to decide on, plus the two decisions and
-nothing else. No name, no headline, no city: the Admin is deciding whether an image may be public,
+**In the `/admin` queue** (one list across every source since #277) a photo's row opens into the
+photo, large enough to decide on, plus the two decisions and nothing else. No name, no headline, no city: the Admin is deciding whether an image may be public,
 and every extra field is a fact about a person that the decision does not need. The image is served
 from quarantine through a short-lived signed read that only an Admin session can obtain — the object
 stays unreachable to everyone else, which is what NFR6 counts.

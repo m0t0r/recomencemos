@@ -1,43 +1,105 @@
 /**
- * `/admin` — the gate, and then the door to the section that leads.
+ * `/admin` — the queue, as one list across every source, oldest first (#277).
  *
- * **This was one page holding all five sources**, and the shape interview (#96)
- * replaced it with a nav and one route per concern. What is left here is a
- * redirect, and the order of its two statements is the requirement rather than
- * an implementation detail.
+ * **This was a redirect to `/admin/offers`**, the door into five routes behind a
+ * sidebar (#96). The UX lab compared that shape against one list and the list
+ * won, because with five routes the oldest item could still sit behind a section
+ * nobody opened. So this page is the whole queue again — the shape before #96 —
+ * with what #96 got right kept: every item rendered in full before it can be
+ * decided, and the count and the age computed over each whole branch.
+ *
+ * **The per-source routes are gone rather than kept as deep links.** A link to one
+ * source is the hiding this page exists to remove; the filter in the list is the
+ * way to narrow it, and it is the Admin's choice rather than the page's default.
  */
 
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { requireAdminPage } from "@/lib/admin";
-import { ADMIN_PAGE_TITLE } from "./_lib/messages";
+import { Suspense } from "react";
+import { QueueTable, type QueueFilter } from "./_components/queue-table";
+import { QueueEmpty, QueueSkeleton, SourceFailed } from "./_components/queue";
+import { ADMIN_PAGE_TITLE, QUEUE_LIST_LABEL, shownOfWaiting } from "./_lib/messages";
+import { settleEverySection } from "./_lib/queue-data";
+import { branchesThatLoaded, queueRows, waitingAcross } from "./_lib/queue-sources";
 
 export const metadata: Metadata = {
   title: ADMIN_PAGE_TITLE,
   robots: { index: false, follow: false },
 };
 
-export default async function AdminPage() {
-  /**
-   * **The gate runs before the redirect**, which the API contract states in as
-   * many words: an unauthenticated caller meets NFR14's 403 *here* and never
-   * learns that the five section routes exist. Redirecting first would answer a
-   * stranger with a `Location` header naming `/admin/offers` — a sign saying
-   * which routes are worth attacking, which is the disclosure answering 403
-   * rather than redirecting exists to avoid.
-   *
-   * The shell above this calls the same gate, and this call is not redundant:
-   * a layout and its page render concurrently, so the layout's refusal is racing
-   * this redirect rather than preceding it.
-   */
-  await requireAdminPage();
+/**
+ * The list, once every source has answered.
+ *
+ * **One boundary for the whole list, where there used to be one per section**,
+ * and that is the cost of oldest-first rather than an oversight: an order across
+ * every source cannot be drawn until every source has said what it holds. What
+ * keeps a slow source from hiding the day's state is the headline above, which is
+ * its own boundary and lands first.
+ */
+async function QueueList() {
+  const settled = await settleEverySection();
 
   /**
-   * **Offers lead because they are the only source with a deadline attached** —
-   * NFR7's band is per Offer, and a Report or a Skill request has no equivalent
-   * clock. That is also why this is a redirect rather than an overview page: an
-   * overview would be a sixth screen holding summaries of five, and the sidebar
-   * already carries every count.
+   * **The clock is read after the sources are awaited**, which is what puts it on
+   * the request-time path: `loadSection` awaits the session, a dynamic read, so no
+   * `connection()` is needed to say so. Reading it before the `await` fails the
+   * build with `blocking-prerender-current-time` — which is how the per-section
+   * page this replaced learned it first.
    */
-  redirect("/admin/offers");
+  const now = new Date();
+
+  const rows = queueRows(settled, now);
+  const waiting = waitingAcross(branchesThatLoaded(settled.map(({ state }) => state)));
+  const failed = settled.filter(({ state }) => state.status === "failed");
+
+  const filters: readonly QueueFilter[] = settled.flatMap(({ source, state }) =>
+    state.status === "loaded" && state.branch.total > 0
+      ? [{ key: source.key, label: source.label, total: state.branch.total }]
+      : [],
+  );
+
+  return (
+    <>
+      {/*
+        **Each failure named, above the rows that did arrive.** In one list this
+        matters more than it did per section: the rows that loaded fill the
+        screen, and nothing else would say a branch is missing from among them.
+      */}
+      {failed.map(({ source }) => (
+        <SourceFailed key={source.key} label={source.label} />
+      ))}
+
+      {rows.length === 0 ? (
+        // Empty is only the good news when nothing failed; with a source missing,
+        // the failure is the whole of what can honestly be said.
+        failed.length === 0 ? (
+          <QueueEmpty />
+        ) : null
+      ) : (
+        <>
+          {/*
+            C55: each branch is capped for display and counted whole, so when the
+            caps hide rows the page says how many are on screen out of how many
+            wait — the one place the two numbers meet.
+          */}
+          {rows.length < waiting ? (
+            <p className="text-muted-foreground text-sm leading-5">
+              {shownOfWaiting(rows.length, waiting)}
+            </p>
+          ) : null}
+
+          <QueueTable rows={rows} filters={filters} />
+        </>
+      )}
+    </>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <section className="flex min-w-0 flex-col gap-4">
+      <Suspense fallback={<QueueSkeleton label={QUEUE_LIST_LABEL} />}>
+        <QueueList />
+      </Suspense>
+    </section>
+  );
 }

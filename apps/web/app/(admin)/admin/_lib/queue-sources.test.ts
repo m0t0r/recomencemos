@@ -21,7 +21,11 @@ import {
   pendingSources,
   QUEUE_SOURCES,
   type QueueBranch,
-  sourceForSegment,
+  type QueueItem,
+  queueRows,
+  type QueueSource,
+  type SectionState,
+  waitingAcross,
 } from "./queue-sources";
 
 /**
@@ -40,6 +44,126 @@ const branch = (oldestArrivedAt: Date | null, total = 1): QueueBranch => ({
   items: [],
   total,
   oldestArrivedAt,
+});
+
+const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000);
+
+const anItem = (id: string, hours: number): QueueItem => ({
+  id,
+  summary: `Elemento ${id}`,
+  arrivedAt: hoursAgo(hours),
+});
+
+const aSource = (key: string, bandHours: number | null = null): QueueSource => ({
+  key,
+  label: `Fuente ${key}`,
+  bandHours,
+});
+
+const loaded = (items: readonly QueueItem[], total = items.length): SectionState => ({
+  status: "loaded",
+  branch: {
+    items,
+    total,
+    oldestArrivedAt: items.reduce<Date | null>(
+      (oldest, item) => (!oldest || item.arrivedAt < oldest ? item.arrivedAt : oldest),
+      null,
+    ),
+  },
+});
+
+describe("queueRows", () => {
+  /**
+   * **One list, oldest first, across every source** — the whole of what the
+   * owner chose in the UX lab. Interleaved on purpose: a merge that concatenated
+   * branches in registry order would pass a test whose sources happened to
+   * arrive already sorted.
+   */
+  it("puts every source in one list, oldest first", () => {
+    const rows = queueRows(
+      [
+        { source: aSource("offers", 24), state: loaded([anItem("o1", 5), anItem("o2", 30)]) },
+        { source: aSource("photos"), state: loaded([anItem("p1", 12)]) },
+        { source: aSource("skillRequests"), state: loaded([anItem("s1", 40)]) },
+      ],
+      NOW,
+    );
+
+    expect(rows.map((row) => row.item.id)).toEqual(["s1", "o2", "p1", "o1"]);
+    expect(rows.map((row) => row.ageHours)).toEqual([40, 30, 12, 5]);
+  });
+
+  /**
+   * **A source that failed or has no resolver contributes no rows, and is not
+   * silently zero.** Its absence is said elsewhere — the failure card names it
+   * and the coverage line names the rest — so this function's job is only not to
+   * invent anything for it.
+   */
+  it("skips a source that failed and a source that is not counting", () => {
+    const rows = queueRows(
+      [
+        { source: aSource("offers", 24), state: loaded([anItem("o1", 5)]) },
+        { source: aSource("photos"), state: { status: "failed" } },
+        { source: aSource("reports"), state: { status: "absent" } },
+      ],
+      NOW,
+    );
+
+    expect(rows.map((row) => row.sourceKey)).toEqual(["offers"]);
+  });
+
+  /**
+   * **A photo is keyed by its profile and an Offer by its own id**, so nothing
+   * stops two sources sharing an id. The key is what the table selects, expands
+   * and hands focus by — two rows answering to one key would move the cursor
+   * onto a row the Admin was not looking at.
+   */
+  it("keys each row so two sources can never collide", () => {
+    const rows = queueRows(
+      [
+        { source: aSource("offers", 24), state: loaded([anItem("same", 5)]) },
+        { source: aSource("photos"), state: loaded([anItem("same", 6)]) },
+      ],
+      NOW,
+    );
+
+    expect(new Set(rows.map((row) => row.key)).size).toBe(2);
+  });
+
+  /**
+   * **Late is the row's own source's band, and only Offers have one.** A photo
+   * four hundred hours old is not marked, for the reason `isPastBand` records:
+   * nothing is late against a clock nobody set.
+   */
+  it("marks a row late against its own source's band", () => {
+    const rows = queueRows(
+      [
+        { source: aSource("offers", 24), state: loaded([anItem("late", 24), anItem("fine", 23)]) },
+        { source: aSource("photos"), state: loaded([anItem("old", 400)]) },
+      ],
+      NOW,
+    );
+
+    expect(Object.fromEntries(rows.map((row) => [row.item.id, row.late]))).toEqual({
+      old: false,
+      late: true,
+      fine: false,
+    });
+  });
+});
+
+describe("waitingAcross", () => {
+  /**
+   * **C55 as a test: the whole branch's count, never the rendered rows.** Each
+   * branch is capped for display, so a headline summing `items.length` would say
+   * forty while four hundred wait — the queue's depth detector reading a number
+   * that cannot exceed the display cap.
+   */
+  it("sums each whole branch rather than the rows that render", () => {
+    expect(waitingAcross([branch(hoursAgo(3), 412), branch(null, 0), branch(hoursAgo(1), 7)])).toBe(
+      419,
+    );
+  });
 });
 
 describe("oldestAgeInHours", () => {
@@ -138,25 +262,24 @@ describe("the source registry", () => {
    */
   // Story 7 names the five: unreviewed Offers, unreviewed photos, Reports,
   // Skill requests and bounced addresses.
-  it("holds the five kinds of pending work, in nav order", () => {
-    expect(QUEUE_SOURCES.map((source) => source.segment)).toEqual([
+  it("holds the five kinds of pending work", () => {
+    expect(QUEUE_SOURCES.map((source) => source.key)).toEqual([
       "offers",
       "photos",
       "reports",
-      "skills",
+      "skillRequests",
       "bounces",
     ]);
   });
 
   /**
-   * **English segments and keys, Spanish labels** (ADR-0012). The URL is an
-   * identifier and not UI copy; the label is the only one of the three a person
-   * reads. This is the assertion that would have caught the spec routing the whole
-   * product in Spanish before a human did.
+   * **English keys, Spanish labels** (ADR-0012). The key is an identifier and not
+   * UI copy; the label is the only one of the two a person reads. This is the
+   * assertion that would have caught the spec naming the whole product in Spanish
+   * before a human did.
    */
-  it("routes in English and speaks in Spanish", () => {
+  it("names in English and speaks in Spanish", () => {
     for (const source of QUEUE_SOURCES) {
-      expect(source.segment).toMatch(/^[a-z][a-z-]*$/);
       expect(source.key).toMatch(/^[a-zA-Z]+$/);
       expect(source.label.trim().length).toBeGreaterThan(0);
     }
@@ -171,7 +294,7 @@ describe("the source registry", () => {
   // Offer.
   it("holds the twenty-four-hour band on Offers and on nothing else", () => {
     const banded = QUEUE_SOURCES.filter((source) => source.bandHours !== null);
-    expect(banded.map((source) => source.segment)).toEqual(["offers"]);
+    expect(banded.map((source) => source.key)).toEqual(["offers"]);
     expect(banded[0]?.bandHours).toBe(24);
   });
 
@@ -184,18 +307,12 @@ describe("the source registry", () => {
    * lands.
    */
   it("has a resolver only where the data exists", () => {
-    // Nav order, which is the order an Admin works the queue rather than an
-    // alphabetical one. Offers lead because NFR7 puts a 24-hour band on them and
-    // nothing else in the list carries a clock; photos follow, because a photo
-    // waiting costs a Worker her face on her own card.
-    expect(liveSources().map((source) => source.segment)).toEqual(["offers", "photos", "skills"]);
-    expect(pendingSources().map((source) => source.segment)).toEqual(["reports", "bounces"]);
-  });
-
-  it("finds a section by the segment its route carries", () => {
-    expect(sourceForSegment("skills")?.key).toBe("skillRequests");
-    // A segment nobody routed is a 404 from the router, never a section.
-    expect(sourceForSegment("hirers")).toBeUndefined();
+    expect(liveSources().map((source) => source.key)).toEqual([
+      "offers",
+      "photos",
+      "skillRequests",
+    ]);
+    expect(pendingSources().map((source) => source.key)).toEqual(["reports", "bounces"]);
   });
 });
 

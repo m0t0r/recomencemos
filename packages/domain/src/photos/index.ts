@@ -624,7 +624,7 @@ export const photos = {
    * object from — the only way an unreviewed photo is ever read.
    *
    * It takes no principal, and that is not an exception to the ownership rule:
-   * the caller is `/admin/photos`, which has already been through
+   * the caller is the `/admin` queue, which has already been through
    * `requireAdminPage`, and the key it passes came out of `pending` above. What
    * makes this safe is that nothing else in the app can reach this subpath with
    * a key it did not get from the queue.

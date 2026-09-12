@@ -18,16 +18,15 @@
  * than known, because a photo under review has not been re-encoded yet and its
  * dimensions are whatever her phone produced.
  *
- * **Focus returns to the row, not to the top of the page.** The queue is worked
- * top to bottom by one person, and a page that scrolled home after every decision
- * would cost them their position several hundred times a day. Third instance of
- * this rule after `sessions-panel.tsx` and `skill-request-row.tsx` — which is
- * where a hook stops being a guess, and is noted for whoever adds the fourth.
+ * **Focus follows `use-queue-row.ts`, like every other row's.** A decision that
+ * lands hands the keyboard to the next row still waiting; a refusal, or the last
+ * row, keeps it on the outcome. This row carried its own copy of that effect
+ * until the one table (#277) needed every row to hand on the same way.
  */
 
 import { Button } from "@repo/design-system/components/button";
 import { FieldDescription, FieldLegend, FieldSet } from "@repo/design-system/components/field";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useState } from "react";
 import { approvePhoto, rejectPhoto } from "../actions";
 import {
   PHOTO_APPROVE,
@@ -42,6 +41,7 @@ import {
   PHOTO_REVIEW_HEADING,
 } from "../_lib/messages";
 import type { QueueItem } from "../_lib/queue-sources";
+import { useQueueRow } from "../_lib/use-queue-row";
 
 type ApproveResult = Awaited<ReturnType<typeof approvePhoto>>;
 type RejectResult = Awaited<ReturnType<typeof rejectPhoto>>;
@@ -82,21 +82,18 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
     rejectPhoto.bind(null, item.id, reviewedKey),
     INITIAL_REJECT,
   );
-  const announcementRef = useRef<HTMLParagraphElement>(null);
+  /**
+   * **Which decision this row is currently answering for** — `offer-row.tsx`'s
+   * rule, for its reason: two results both persist, so a refused *Publicar*
+   * followed by a *No publicarla* that lands would otherwise be read from the
+   * first one's side. Set on submit, because it has to hold for the whole life
+   * of the outcome.
+   */
+  const [answering, setAnswering] = useState<"approve" | "reject" | null>(null);
 
-  // Read from the result objects rather than a derived boolean, so a second
-  // outcome moves focus too — each dispatch produces a fresh object.
-  useEffect(() => {
-    const settled =
-      approved.data ??
-      approved.serverError ??
-      rejected.data ??
-      rejected.serverError ??
-      approved.validationErrors ??
-      rejected.validationErrors;
-
-    if (settled) announcementRef.current?.focus();
-  }, [approved, rejected]);
+  const { announcementRef } = useQueueRow(
+    answering === "approve" ? approved : answering === "reject" ? rejected : INITIAL_APPROVE,
+  );
 
   /**
    * **A validation failure is announced too, and that clause is not
@@ -151,14 +148,21 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
       <FieldDescription>{PHOTO_REJECT_WARNING}</FieldDescription>
 
       <div className="flex flex-wrap gap-2">
-        <form action={approveAction}>
-          <Button type="submit" disabled={pending}>
+        {/* `data-queue-key` is what the table's `a`/`r` press; see `offer-row.tsx`. */}
+        <form action={approveAction} onSubmit={() => setAnswering("approve")}>
+          <Button type="submit" disabled={pending} data-queue-key="a" aria-keyshortcuts="a">
             {approving ? PHOTO_APPROVING : PHOTO_APPROVE}
           </Button>
         </form>
 
-        <form action={rejectAction}>
-          <Button type="submit" variant="outline" disabled={pending}>
+        <form action={rejectAction} onSubmit={() => setAnswering("reject")}>
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={pending}
+            data-queue-key="r"
+            aria-keyshortcuts="r"
+          >
             {rejecting ? PHOTO_REJECTING : PHOTO_REJECT}
           </Button>
         </form>

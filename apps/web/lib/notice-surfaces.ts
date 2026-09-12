@@ -80,12 +80,7 @@ export interface NoticeExemption {
 export const NOTICE_EXEMPT_ROUTES: readonly NoticeExemption[] = [
   { route: "/account", reason: "settings, not a surface where anybody meets anybody" },
   { route: "/admin", reason: "an operator's queue; the tone matrix drops warmth here" },
-  { route: "/admin/bounces", reason: "the same queue, one section down" },
-  { route: "/admin/offers", reason: "the same queue, one section down" },
-  { route: "/admin/photos", reason: "the same queue, one section down" },
-  { route: "/admin/reports", reason: "the same queue, one section down" },
-  { route: "/admin/sessions", reason: "the same queue, one section down" },
-  { route: "/admin/skills", reason: "the same queue, one section down" },
+  { route: "/admin/sessions", reason: "the queue's one tool, under the same shell" },
   { route: "/admin/enrol/[token]", reason: "a token-reached door with no session yet" },
   { route: "/continue", reason: "the Admin door's second step" },
   { route: "/my-profile/edit", reason: "a form; a person mid-task is not deciding whom to trust" },

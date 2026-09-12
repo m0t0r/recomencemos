@@ -89,7 +89,7 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
   const active =
     answering === "deliver" ? delivery : answering === "reject" ? refusal : NOTHING_YET;
 
-  const { rowRef, announcementRef } = useQueueRow(active);
+  const { announcementRef } = useQueueRow(active);
 
   const decided = Boolean(delivery.data ?? refusal.data);
   const working = delivering || rejecting;
@@ -101,17 +101,13 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
       : active.serverError?.message;
 
   return (
-    <div
-      ref={rowRef}
-      data-queue-row=""
-      data-resolved={decided ? "true" : undefined}
-      className="flex flex-col gap-3"
-    >
+    <div className="flex flex-col gap-3">
       {/*
-        **Where focus lands when the row above is decided**, which is why it is
-        the line naming both people rather than a button: the next thing an Admin
-        does is read, and a keyboard put straight onto *Entregar* would be a
-        keyboard one press away from delivering something unread.
+        **Where focus lands when the table hands the keyboard to this row**,
+        which is why it is the line naming both people rather than a button: the
+        next thing an Admin does is read, and a keyboard put straight onto
+        *Entregar* would be a keyboard one press away from delivering something
+        unread.
       */}
       <p tabIndex={-1} data-queue-anchor="" className={QUEUE_FOCUSABLE_LINE}>
         {item.summary}
@@ -156,19 +152,37 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
         outcome off the screen and shift every row below it under a cursor that is
         mid-queue; leaving the buttons live would invite a second press against a
         state the server has already moved.
+
+        **`data-queue-key` is what the table's `a`/`r` press**, so a key is this
+        button pressed — the same form, the same `onSubmit`, the same action — and
+        never a second route to the decision. `aria-keyshortcuts` says so to the
+        accessibility tree.
       */}
       {decided ? (
         <p className="text-muted-foreground text-sm leading-5">{OFFER_ROW_RESOLVED}</p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <form action={deliverAction} onSubmit={() => setAnswering("deliver")}>
-            <Button type="submit" disabled={working} aria-busy={delivering}>
+            <Button
+              type="submit"
+              disabled={working}
+              aria-busy={delivering}
+              data-queue-key="a"
+              aria-keyshortcuts="a"
+            >
               {delivering ? DELIVER_OFFER_SUBMITTING : DELIVER_OFFER_SUBMIT}
             </Button>
           </form>
 
           <form action={rejectAction} onSubmit={() => setAnswering("reject")}>
-            <Button type="submit" variant="outline" disabled={working} aria-busy={rejecting}>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={working}
+              aria-busy={rejecting}
+              data-queue-key="r"
+              aria-keyshortcuts="r"
+            >
               {rejecting ? REJECT_OFFER_SUBMITTING : REJECT_OFFER_SUBMIT}
             </Button>
           </form>

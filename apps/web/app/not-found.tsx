@@ -2,10 +2,10 @@
  * The 404, and the first one this app has had.
  *
  * **Until now every `notFound()` in the tree served Next.js's own English
- * default** — `404 / This page could not be found.` — and there are four callers
- * already: `(site)/my-profile/page.tsx`, `(token)/continue/page.tsx`,
- * `(token)/admin/enrol/[token]/page.tsx` and `(admin)/admin/_components/section.tsx`.
- * Plus every mistyped URL.
+ * default** — `404 / This page could not be found.` — and there are callers
+ * already: `(site)/my-profile/page.tsx`, `(token)/continue/page.tsx` and
+ * `(token)/admin/enrol/[token]/page.tsx`. Plus every mistyped URL, which since
+ * #277 includes the five per-source Admin routes that no longer exist.
  *
  * **Those callers do not sit against C51.** That concern is about a `404` costing
  * a Sentry event — *"every `404` is a returned response, not a thrown error"* —
