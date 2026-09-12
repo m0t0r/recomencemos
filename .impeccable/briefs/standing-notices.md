@@ -174,7 +174,8 @@ a density decision and not a content one.
 
 **The treatment prop is required, with no default**, so that the next surface takes this decision
 rather than inheriting it. The rule for taking it is in the type's own doc comment: disclosure where
-the notices sit above content the reader came for, expanded where they do not.
+the notices sit next to content the reader came for (above it until #276, below it since), expanded
+where they do not.
 
 ### What `/code-review` then changed, and it is the important part
 
@@ -299,7 +300,10 @@ page's last lines"), and this is the order it reserves against.
 **Outside every list boundary, still.** The argument in "Placement" above survives the move: the
 notices sit outside `ListBoundary`, so a failed read still leaves them on screen. What does not
 survive is the half about layout shift — _"notices above and outside the boundary cannot be moved by
-a grid that shifts below them."_ Below the grid, a fallback of the wrong height **does** move them.
-On a phone that shift is below the fold, so it does not count against the first screen, but it still
-lands under anyone who has scrolled down while the list streams — which is why the list skeleton
-still mirrors the row piece for piece, and why the spec's Wall rows keep **Yes** for that reason.
+a grid that shifts below them."_ Below the grid, the notices **do** move, and no fallback can stop
+it: the list skeleton draws six rows where a page holds up to twenty-four, so the block, and on the
+Wall _Cómo funciona_ after it, is pushed down on every load with more than six people. On a phone
+that happens below the fold, and the declined jump link means nothing sends a reader to the block
+while it is still moving. What the skeleton still protects is the first screen, the heading and the
+top rows, which is why the spec's Wall rows keep **Yes** for that narrower reason. CLS on `/` and
+`/profiles` measured 0.0 at 390 × 844 before and after the move.
