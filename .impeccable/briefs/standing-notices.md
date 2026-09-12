@@ -4,7 +4,9 @@
 `apps/web/app/(site)/profiles/page.tsx` and `apps/web/app/(site)/my-profile/page.tsx` · **Mode:**
 Operate · **Ticket:** [#22](https://github.com/m0t0r/recomencemos/issues/22) · **Shaped:**
 2026-09-08 · **Locked:** 2026-09-08 — **the disclosure treatment on the two lists, the expanded one
-on `/my-profile`**; see "The decision, taken visually" below
+on `/my-profile`**; see "The decision, taken visually" below · **Amended:** 2026-09-12 with
+[#276](https://github.com/m0t0r/recomencemos/issues/276) — **at the foot of the page on every
+surface**; see "Amended: the foot of the page" at the end
 
 **Shaped without an interview, by the same decision `wall.md` records.** The composition question
 was about to be put as a menu and the standing answer is _"I prefer seeing /prototype and decided
@@ -55,7 +57,8 @@ does not exist.**
 5 unchanged, and the note says why: _"the absence leads; warmth here reads as softening."_
 
 **Product-specific truth, and it is the whole argument.** Every neighbouring product in this category
-publishes a trust badge. This one publishes the absence of one, in the first screen of the page, in
+publishes a trust badge. This one publishes the absence of one, on every page that introduces
+anybody — at its foot since #276, where a reader who came to look reaches the people first — in
 its own voice, and puts the third statement — the one that costs a Worker something to learn — in the
 same block as the two that cost her nothing.
 
@@ -108,7 +111,11 @@ JavaScript and inside NFR3's byte budget rather than exempt from it. A component
 bundle satisfies both structurally instead of by measurement — and where a variant needs disclosure,
 it uses `<details>`, which is native HTML and works with the script tag removed.
 
-**Placement `[settled]`.** On the Wall and on `/profiles`, in the slot both pages already reserve with
+**Placement `[settled]`, and overturned by #276** — the paragraph below is the 2026-09-08 answer,
+kept because its argument about the boundary still holds; the position it argues for does not. See
+"Amended: the foot of the page" at the end.
+
+On the Wall and on `/profiles`, in the slot both pages already reserve with
 a comment: below the `<h2>`, above the list, and **outside `ListBoundary`**. Outside is not a detail —
 the spec's Wall `error` cell asks for _"the notices still render"_ when the read fails, and outside
 the boundary is the only place that is true. It is also the structural answer to this ticket's fifth
@@ -248,3 +255,51 @@ Warmth 5→3 row exists to refuse.
 - **No claim about verification or money anywhere else.** `testing/list-copy.ts` already asserts the
   two lists' own copy modules stay silent about both, and that assertion is what keeps this component
   the single source.
+
+## Amended: the foot of the page
+
+**2026-09-12, [#276](https://github.com/m0t0r/recomencemos/issues/276).** Decided in the UX lab on
+`prototype/ux-lab` at `f68ab0f` — the notices idea, variant **A, _El bloque_**: today's shape, a
+heading and three disclosures, kept as one block. **With one change**, in the owner's words:
+_"should be displayed at the bottom, not at the top."_ Rejected: B (_La franja_, a strip under the
+header on every page) and C (_En el momento_, each sentence pinned beside the button where that
+decision is taken).
+
+**What moved, and what did not.** Only the position. The copy, the order of the three statements,
+the `lead`/`detail` split, the `disclosure`/`expanded` treatments, the heading levels, the
+component and the one copy module are all unchanged, and #22's copy tests are untouched. The
+treatment rule — `disclosure` where the notices sit next to content the reader came for — still
+picks `disclosure` on the two lists: at the foot they follow that content instead of preceding it,
+and three expanded details there would add the same wall of platform prose that #220 measured at
+roughly 900 px on a profile, between the last person and the page's end.
+
+| Surface                                                                   | Where the block sits                                                                                                 | Decided by                                                                                 |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `/` (Wall)                                                                | Below the list and its link to `/profiles`, inside the recent-profiles section, before _Cómo funciona_. Heading `h3` | This ticket — "below the list" is the ticket's own reading of "bottom"                     |
+| `/profiles`                                                               | Below the list, below every page `MoreProfiles` appends, and at the foot of a `?after=` page. Heading `h2`           | Same                                                                                       |
+| `/profile/[slug]`                                                         | Already at the foot, and it stays last in the document                                                               | Unchanged                                                                                  |
+| `/offers`, `/sent-offers`, `/my-profile`                                  | Already at the foot                                                                                                  | Unchanged                                                                                  |
+| `/offers/[id]` — the One Offer page and, once built, the Contact Exchange | At the foot: terms → who sent it → her answer → the block. **Not** moved beside the decision                         | **The owner**, asked in the Build session on 2026-09-12 — a product call, not a layout one |
+
+**Two further owner decisions, both taken the same day:**
+
+- **No link from the top down to the block.** The ticket offered one as costing nothing; the owner
+  declined it. The block is at the foot and a reader who wants it scrolls there. This sits beside the
+  anti-goal above — no link to a longer page — without being the same rule: that one refuses to move
+  the statements elsewhere, and this one refuses a second pointer to where they already are.
+- **The decision surfaces keep the foot.** Accepting an Offer already opens a dialog that names what
+  crosses, so the decision moment is not bare, and the statements are one scroll below it.
+
+**The profile and #274's write bar.** #274 fixes a bar to the bottom of the screen. It is fixed to the
+viewport rather than placed in the document, so it does not compete with the block for "last": the
+block stays the last thing in `main`, and the bar has to reserve its own height below it so that it
+never covers the block's final disclosure. That reservation is #274's criterion ("must not hide the
+page's last lines"), and this is the order it reserves against.
+
+**Outside every list boundary, still.** The argument in "Placement" above survives the move: the
+notices sit outside `ListBoundary`, so a failed read still leaves them on screen. What does not
+survive is the half about layout shift — _"notices above and outside the boundary cannot be moved by
+a grid that shifts below them."_ Below the grid, a fallback of the wrong height **does** move them.
+On a phone that shift is below the fold, so it does not count against the first screen, but it still
+lands under anyone who has scrolled down while the list streams — which is why the list skeleton
+still mirrors the row piece for piece, and why the spec's Wall rows keep **Yes** for that reason.

@@ -310,16 +310,6 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-10">
       <h1 className="page-heading">{BROWSE_TITLE}</h1>
 
-      {/*
-        Story 11's three standing notices, in the slot this comment reserved —
-        above the list and outside `ListBoundary`, as on the Wall and for the
-        same reason. `h2` here, where the Wall renders `h3`: this sits directly
-        under the page's `h1` rather than inside a section of its own.
-      */}
-      <div className="max-w-3xl">
-        <StandingNotices treatment="disclosure" />
-      </div>
-
       {/* Rows stay at a reading measure; the column is wide so the heading lands where the Wall's does. */}
       <div className="flex max-w-3xl flex-col gap-8">
         {/*
@@ -330,7 +320,7 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
           it differs from the Wall's count line: that one is a read and goes
           when the read fails, while this is a fact about how the list is built
           and is still true of the list a reader is being offered a second route
-          to. It is the same reason the notice slot above is outside it.
+          to. It is the same reason the notices below are outside it.
 
           `max-w-prose` is the one thing here the Wall's line does not carry,
           and it is the ladder's rule rather than a departure from the Wall:
@@ -368,6 +358,24 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
             <BrowseList searchParams={searchParams} />
           </Suspense>
         </ListBoundary>
+      </div>
+
+      {/*
+        Story 11's three standing notices, **below the list**, as on the Wall
+        and for the same reason (#276): the reader meets the people first, and
+        the three statements are still one block on every page of results.
+
+        Below the list's boundary rather than inside it, so a failed read still
+        leaves them on screen. They sit below `MoreProfiles` too — it appends
+        further pages inside the list, so the block stays at the foot however
+        far a reader scrolls, and on a `?after=` page rendered with JavaScript
+        unavailable it is at the foot of that page.
+
+        `h2` here, where the Wall renders `h3`: this sits directly in the page's
+        `main` rather than inside a section with a heading of its own.
+      */}
+      <div className="max-w-3xl pt-4">
+        <StandingNotices treatment="disclosure" />
       </div>
     </main>
   );
