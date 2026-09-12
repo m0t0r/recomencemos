@@ -77,8 +77,8 @@ const reactNamespaceImport = {
         const survivor = declarations.find(isNamespaceImport) ?? offending[0];
 
         // The whole file's rewrite rides on the first report alone. oxlint merges a report's fixes
-        // into one span and applies no two overlapping spans in a pass, so one fix per declaration
-        // left every declaration after the first for a second `--fix` run.
+        // into one span and applies no two overlapping spans in a pass, so a fix per declaration
+        // would leave every declaration after the first for a second `--fix` run.
         function fixAll(fixer) {
           const fixes = [];
           for (const node of offending) {
