@@ -35,9 +35,6 @@ import {
   PHOTO_REJECT_WARNING,
   PHOTO_REJECTED,
   QUEUE_EMPTY_BODY,
-  QUEUE_EMPTY_TITLE,
-  SECTION_NOT_LIVE_BODY,
-  SECTION_NOT_LIVE_TITLE,
   SKILL_REQUESTS_LABEL,
 } from "./messages";
 import { liveSources, pendingSources } from "./queue-sources";
@@ -85,33 +82,18 @@ describe("the coverage line", () => {
   });
 });
 
-describe("empty and not-live", () => {
-  /**
-   * **They are different sentences and must stay different.** Zero means
-   * everything was read; not-live means nothing was ever asked. The failure this
-   * guards is somebody collapsing both into a generic "no hay nada", which on a
-   * moderation queue is indistinguishable from a screen that failed to load.
-   */
-  it("says two different things", () => {
-    expect(SECTION_NOT_LIVE_TITLE).not.toBe(QUEUE_EMPTY_TITLE);
-    expect(SECTION_NOT_LIVE_BODY).not.toBe(QUEUE_EMPTY_BODY);
-  });
-
+describe("the empty queue", () => {
   /**
    * The empty state states the age as zero, which the acceptance criterion asks
    * for outright: _"a real and good state, saying the oldest-item age is zero"_.
+   *
+   * **The not-live sentence this used to be paired with left with the sections**
+   * (#277). A source with no resolver has no section to stand in any more; the
+   * coverage line above is what says it is not counting, and it states no figure
+   * for it — which is the case above that keeps a zero from being added.
    */
-  it("states the age as zero where the section is empty", () => {
+  it("states the age as zero when nothing is waiting", () => {
     expect(QUEUE_EMPTY_BODY).toContain("0 h");
-  });
-
-  /**
-   * And the not-live copy states no figure at all. A zero here would be the
-   * instrument that lies; this is the assertion that keeps one from being added
-   * for symmetry.
-   */
-  it("states no figure at all where the section is not counting", () => {
-    expect(SECTION_NOT_LIVE_TITLE + SECTION_NOT_LIVE_BODY).not.toMatch(/\d/);
   });
 });
 
@@ -132,10 +114,10 @@ describe("empty and not-live", () => {
  * is a second list to remember, and forgetting it is exactly how eleven strings
  * went unchecked; a namespace import cannot be forgotten, so a string added here
  * tomorrow is covered the moment it is written. The `typeof` filter is what
- * skips the builders -- `coverageNotice`, `sectionWaiting`, `photoWaitingSince`
+ * skips the builders -- `coverageNotice`, `waitingInQueue`, `photoWaitingSince`
  * and the rest -- each of which has cases of its own above and below.
  */
-const strings = Object.entries(messages).filter(
+const strings = Object.entries<unknown>(messages).filter(
   (entry): entry is [string, string] => typeof entry[1] === "string",
 );
 

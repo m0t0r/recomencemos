@@ -224,7 +224,7 @@ export async function presignUpload(
  * established who is asking, and expires in a minute.
  *
  * **There are exactly two callers and they are the two people the spec lets see
- * an unreviewed photo.** The Admin, on `/admin/photos`, because deciding
+ * an unreviewed photo.** The Admin, on the `/admin` queue, because deciding
  * requires looking. And **the Worker herself**, on `/my-profile`, because the
  * spec's own cell for that surface is _"photo pending → **her own photo
  * shown**, dignified, described as under review, not flagged"_ — her face is

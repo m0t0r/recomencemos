@@ -9,19 +9,19 @@
  * the feature has been half-built. So promotion ships beside the request rather
  * than behind the section route that will eventually hold it.
  *
- * **This is the plain version of a row, on purpose.** The shaped section — the
- * fixed row rhythm, the same affordances in the same position every time, the
- * decline that is the other half — belongs to the Admin queue's own ticket, where
- * there is a sidebar to sit in and four other sources to be consistent with.
- * What is here is what has to be true whatever that section looks like: her words
- * in full, two named fields, one action, and an answer that is announced.
+ * **This is the plain version of a row, on purpose.** What is here is what has
+ * to be true wherever the row sits — her words in full, two named fields, one
+ * action, and an answer that is announced. It opens inside the one table (#277)
+ * like every other source's row.
  *
- * **Focus and the announcement are `use-queue-row.ts`'s now.** This file used to
- * carry its own copy of the effect, marked as the second instance of a rule
- * `sessions-panel.tsx` wrote down and deliberately did not extract. The Offer row
- * is the third, so the hook exists — and with it the rule's queue-item form: a
- * promotion that lands hands the keyboard to the next request rather than back to
- * the one just resolved.
+ * **It has no key.** The table's `a`/`r` press a row's own decision buttons, and
+ * promoting a request means typing an identifier and a name first — no single
+ * key can stand in for that, so this row's button carries no `data-queue-key`
+ * and the table's hint says so.
+ *
+ * **Focus and the announcement are `use-queue-row.ts`'s**: a promotion that lands
+ * hands the keyboard to the next row still waiting rather than back to the one
+ * just resolved.
  */
 
 import { Button } from "@repo/design-system/components/button";
@@ -71,7 +71,7 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
   const labelHelpId = useId();
   const cuocId = useId();
   const cuocHelpId = useId();
-  const { rowRef, announcementRef } = useQueueRow(result);
+  const { announcementRef } = useQueueRow(result);
 
   // next-safe-action's own formatted-error shape; `_errors` is its name, not ours.
   /* oxlint-disable no-underscore-dangle */
@@ -85,12 +85,7 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
     : (result.serverError?.message ?? slugError ?? labelError ?? cuocError);
 
   return (
-    <div
-      ref={rowRef}
-      data-queue-row=""
-      data-resolved={result.data ? "true" : undefined}
-      className="flex flex-col gap-3"
-    >
+    <div className="flex flex-col gap-3">
       {/*
         Her words, in full and unedited. The spec's rule for every branch is that
         it renders in full so nothing is acted on unread, and on this source that

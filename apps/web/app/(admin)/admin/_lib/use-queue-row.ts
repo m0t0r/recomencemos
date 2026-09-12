@@ -31,7 +31,7 @@
  * the panel's rule, correctly, for the case where nothing moved.
  */
 
-import { useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 
 /**
  * What an element this hook may focus wears, so that it shows it has focus.
@@ -60,53 +60,40 @@ export interface QueueRowResult {
 }
 
 /**
- * The next row still waiting on a decision, or nothing at the end of the branch.
+ * How a decided row hands the keyboard on: the list that holds it moves its
+ * cursor to the next row still waiting and focuses it, and answers `false` when
+ * there is nowhere onward.
  *
- * **It walks the rendered list rather than an index passed in**, because the row
- * does not know its own position and giving it one would make every row depend on
- * the branch that holds it. The list is the DOM's, which is the same list the
- * Admin is looking at — including, in the failing case, a row a colleague's
- * decision has not yet removed.
+ * **The list owns the handoff because the list owns the cursor.** This used to be
+ * a walk of the rendered DOM — four `data-` attributes, from the decided row to
+ * the next one's anchor — which worked while every row was open on a
+ * single-source page. In the one table (#277) only the selected row is open, so
+ * the next row's anchor is inside a detail that is `hidden` until the table
+ * selects it; a walk cannot focus what the table has not shown yet. So the rule
+ * stays here and the *where* moves to the component that knows it.
  *
- * **Rows already decided are stepped over.** An Admin who works two rows out of
- * order should not be handed back to the one they finished with, and a decided
- * row has nothing left to press.
- *
- * **Four attributes are the contract, and it is spelled out because the failure is
- * silent.** `data-queue-list` on the branch, `data-queue-row` on each row's root,
- * `data-resolved` once that row is decided, and `data-queue-anchor` on the line
- * focus lands on. Any one of them missing degrades to the announcement fallback,
- * which is indistinguishable from "this was the last row" — so the marker on the
- * list is named rather than inferred from a `ul`, which a section could stop being
- * without anybody noticing. `_components/queue.tsx` carries the first and
- * `offer-row.tsx` and `skill-request-row.tsx` carry the rest; the case in
- * `offer-row.test.tsx` renders the real branch around the real row, so a drift in
- * any of the four is red rather than quiet.
+ * **Absent means "no list"** — a row rendered on its own, which is what the row
+ * tests do — and the row then keeps focus on its own outcome, which is the
+ * last-row rule rather than a new one.
  */
-function nextUndecidedAnchor(row: HTMLElement): HTMLElement | null {
-  const list = row.closest("[data-queue-list]");
-  if (!list) return null;
-
-  const rows = [...list.querySelectorAll<HTMLElement>("[data-queue-row]")];
-  const position = rows.indexOf(row);
-  if (position < 0) return null;
-
-  const next = rows.slice(position + 1).find((each) => each.dataset.resolved !== "true");
-
-  return next?.querySelector<HTMLElement>("[data-queue-anchor]") ?? null;
-}
+export const QueueHandoff = createContext<(() => boolean) | null>(null);
 
 /**
- * The two refs a queue row needs: one on its root, one on its announcement.
+ * The line focus lands on when the table hands the keyboard to a row: the
+ * sentence an Admin has to read before deciding, never a control.
+ */
+export const QUEUE_ANCHOR = "data-queue-anchor";
+
+/**
+ * The ref a queue row puts on its announcement.
  *
- * The announcement ref is what a refusal focuses, and it is also the fallback
- * when the decided row was the last one in the branch — there is nowhere onward,
- * and dropping focus to the document would cost exactly the re-orientation this
- * exists to prevent.
+ * It is what a refusal focuses, and it is also the fallback when the decided row
+ * was the last one waiting — there is nowhere onward, and dropping focus to the
+ * document would cost exactly the re-orientation this exists to prevent.
  */
 export function useQueueRow(result: QueueRowResult) {
-  const rowRef = useRef<HTMLDivElement>(null);
   const announcementRef = useRef<HTMLParagraphElement>(null);
+  const handoff = useContext(QueueHandoff);
 
   /**
    * Read from `result` rather than from a derived boolean: a boolean stays `true`
@@ -115,13 +102,16 @@ export function useQueueRow(result: QueueRowResult) {
    */
   useEffect(() => {
     if (result.data) {
-      const onward = rowRef.current ? nextUndecidedAnchor(rowRef.current) : null;
-      (onward ?? announcementRef.current)?.focus();
+      if (!handoff?.()) announcementRef.current?.focus();
       return;
     }
 
     if (result.serverError ?? result.validationErrors) announcementRef.current?.focus();
+    // `handoff` is deliberately not a dependency: the table rebuilds it on every
+    // render, and re-running this effect for a new function with the same result
+    // would hand the keyboard on a second time.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
-  return { rowRef, announcementRef };
+  return { announcementRef };
 }
