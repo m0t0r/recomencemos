@@ -263,6 +263,10 @@ export function QueueTable({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    // **A held key is not a second press.** A decision hands focus to the next
+    // row the moment it lands, so an autorepeating `a` would deliver an Offer
+    // nobody opened — and `r` would delete a photo, which cannot be undone.
+    if (event.repeat) return;
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
     if (!(event.target instanceof Element) || event.target.closest(TYPING)) return;
 

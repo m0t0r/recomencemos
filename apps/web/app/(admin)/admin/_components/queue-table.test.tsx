@@ -13,7 +13,7 @@
  * decided unread.
  */
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueueTable } from "./queue-table";
 import {
@@ -328,6 +328,25 @@ describe("after a decision", () => {
     expect(toggleFor(OFFER_B)).toHaveAttribute("aria-expanded", "true");
     expect(toggleFor(OFFER_A)).toHaveAttribute("aria-expanded", "true");
     expect(within(rowFor(OFFER_A)).getByText(ROW_DECIDED)).toBeInTheDocument();
+  });
+
+  /**
+   * **A held key decides one row, not the next one too.** The decision hands
+   * focus to the next row the moment it lands, so without this an autorepeating
+   * `a` would deliver an Offer nobody opened.
+   */
+  it("ignores a held key on the row it hands on to", async () => {
+    const user = userEvent.setup();
+    aQueue();
+
+    await user.click(toggleFor(OFFER_A));
+    await user.keyboard("a");
+    await waitFor(() => expect(lineFor(OFFER_B)).toHaveFocus());
+
+    fireEvent.keyDown(lineFor(OFFER_B), { key: "a", repeat: true });
+
+    expect(actions.deliverOffer).toHaveBeenCalledTimes(1);
+    expect(within(rowFor(OFFER_B)).queryByText(ROW_DECIDED)).toBeNull();
   });
 
   /** A row already decided is stepped over, not handed back. */
