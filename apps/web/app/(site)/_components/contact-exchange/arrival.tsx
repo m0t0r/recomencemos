@@ -25,7 +25,7 @@
  * shell.
  */
 
-import { type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
+import * as React from "react";
 
 export function ExchangeHeading({
   id,
@@ -34,11 +34,11 @@ export function ExchangeHeading({
 }: {
   readonly id: string;
   readonly focusOnMount: boolean;
-  readonly children: ReactNode;
+  readonly children: React.ReactNode;
 }) {
-  const ref = useRef<HTMLHeadingElement>(null);
+  const ref = React.useRef<HTMLHeadingElement>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (focusOnMount) ref.current?.focus();
   }, [focusOnMount]);
 
@@ -63,9 +63,9 @@ export function AnnouncedDetails({
 }: {
   /** True on the visit that followed her answer, and on no other. */
   readonly announce: boolean;
-  readonly children: ReactNode;
+  readonly children: React.ReactNode;
 }) {
-  const hydrated = useSyncExternalStore(
+  const hydrated = React.useSyncExternalStore(
     subscribeToNothing,
     () => true,
     () => false,
