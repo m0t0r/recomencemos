@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * The Admin queue as one table (#277): every source in one list, oldest first, a
- * row opened in full before anything on it can be decided, and a keyboard that
+ * The Admin queue as one table: every source in one list, oldest first, a row
+ * opened in full before anything on it can be decided, and a keyboard that
  * moves and decides.
  *
  * **The shadcn data-table shape — the registry's `table` for the markup and
- * TanStack Table for the model.** TanStack owns the row model, the column
- * filter that replaced the five per-source routes, and which rows are expanded;
- * this file owns the markup, the focus and the keys, which is the split the
- * library is built around. It is v9's `useTable` with its features registered
- * explicitly, so the bundle carries expanding and filtering and nothing else.
+ * TanStack Table for the model.** TanStack owns the row model, the source filter
+ * and which rows are expanded; this file owns the markup, the focus and the keys,
+ * which is the split the library is built around. It is v9's `useTable` with its
+ * features registered explicitly, so the bundle carries expanding and filtering
+ * and nothing else.
  *
  * **Nothing is decided unread, and that is structural rather than a habit.**
  * A collapsed row's detail is `hidden`, so its decision buttons are not in the
@@ -22,8 +22,10 @@
  * **The keys are WCAG 2.2 SC 2.1.4's "active only on focus" form.** The handler
  * sits on the list's own group, so a key does nothing unless focus is inside the
  * queue — and it does nothing inside a field, where _j_ is a letter somebody is
- * typing. `a`/`r` press a button the row marked with `data-queue-key`, so a key
- * is that button pressed, never a second route to the decision.
+ * typing. **A decision key acts only on the row that holds focus**: focusing a
+ * row's control selects it, and `a`/`r` pressed anywhere but inside the selected
+ * row do nothing. They press a button the row marked with `data-queue-key`, so a
+ * key is that button pressed, never a second route to the decision.
  */
 
 import { Kbd } from "@repo/design-system/components/kbd";
@@ -78,28 +80,39 @@ import {
   SOURCE_COLUMN,
   SUMMARY_COLUMN,
 } from "../_lib/messages";
-import type { QueueItem, QueueRow } from "../_lib/queue-sources";
+import type { QueueFilter, QueueItem, QueueRow } from "../_lib/queue-sources";
 import { QUEUE_ANCHOR, QUEUE_FOCUSABLE_LINE, QueueHandoff } from "../_lib/use-queue-row";
 
-/** One option of the source filter: the whole branch's count (C55), not the rows shown. */
-export interface QueueFilter {
-  readonly key: string;
-  readonly label: string;
-  readonly total: number;
-}
+/**
+ * How each source's row opens, and whether the keys can decide it.
+ *
+ * **One entry per source, so a source is one edit.** `keys` is `false` for a row
+ * decided by typing — a Skill request is promoted by writing an identifier and a
+ * name, which no single key can stand in for — and the hint says so when such a
+ * row is in the list. A source with no entry opens into its summary and nothing
+ * to press.
+ */
+const SOURCE_ROWS: Readonly<
+  Record<
+    string,
+    { readonly Row: ComponentType<{ readonly item: QueueItem }>; readonly keys: boolean }
+  >
+> = {
+  offers: { Row: OfferRow, keys: true },
+  photos: { Row: PhotoRow, keys: true },
+  skillRequests: { Row: SkillRequestRow, keys: false },
+};
 
 /**
- * Which sources open into a row of their own, by key.
+ * Whether the source filter keeps a row. Anything but a source key — nothing
+ * chosen, or the empty "everything" option — keeps them all.
  *
- * A source with no entry opens into its summary and nothing to press — which is
- * the shape a source ticket replaces with its own row, exactly as it was when each
- * source had a route.
+ * Filtered on the key rather than the label the cell shows: the key is the
+ * identifier, and a label reworded in `messages.ts` must not break the filter.
  */
-const ROW_DETAIL: Record<string, ComponentType<{ readonly item: QueueItem }>> = {
-  offers: OfferRow,
-  photos: PhotoRow,
-  skillRequests: SkillRequestRow,
-};
+function keptBy(value: unknown, row: QueueRow): boolean {
+  return typeof value !== "string" || value === "" || row.sourceKey === value;
+}
 
 /**
  * The two features this table uses, and no others.
@@ -119,9 +132,7 @@ const columns = column.columns([
   column.accessor("sourceLabel", {
     id: "source",
     header: SOURCE_COLUMN,
-    // Filtered on the key rather than the label the cell shows: the key is the
-    // identifier, and a label reworded in `messages.ts` must not break the filter.
-    filterFn: (row, _columnId, value) => row.original.sourceKey === value,
+    filterFn: (row, _columnId, value) => keptBy(value, row.original),
   }),
   column.accessor((row) => row.item.summary, { id: "summary", header: SUMMARY_COLUMN }),
   column.accessor("ageHours", { id: "age", header: AGE_COLUMN }),
@@ -129,6 +140,9 @@ const columns = column.columns([
 
 /** Where a single-key shortcut must never fire (SC 2.1.4): somebody is typing. */
 const TYPING = "input, textarea, select, [contenteditable]";
+
+/** Marks both of a row's table rows, so a key can tell which row holds focus. */
+const ROW_KEY = "data-row-key";
 
 export function QueueTable({
   rows,
@@ -209,8 +223,8 @@ export function QueueTable({
 
   const visible = table.getRowModel().rows;
   const sourceFilter = table.getColumn("source");
-  const filterValue =
-    typeof sourceFilter?.getFilterValue() === "string" ? sourceFilter.getFilterValue() : "";
+  const filterValue = sourceFilter?.getFilterValue();
+  const shownSource = typeof filterValue === "string" ? filterValue : "";
 
   useEffect(() => {
     const target = pendingFocus.current;
@@ -250,7 +264,7 @@ export function QueueTable({
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
-    if (event.target instanceof Element && event.target.closest(TYPING)) return;
+    if (!(event.target instanceof Element) || event.target.closest(TYPING)) return;
 
     if (event.key === "j" || event.key === "k") {
       const at = visible.findIndex((row) => row.id === selected);
@@ -263,11 +277,14 @@ export function QueueTable({
     }
 
     if (event.key === "a" || event.key === "r") {
-      const button = selected
-        ? details.current
-            .get(selected)
-            ?.querySelector<HTMLButtonElement>(`[data-queue-key="${event.key}"]`)
-        : null;
+      // The row holding focus, and only when it is the selected one — a key must
+      // never decide a row other than the one the Admin is on.
+      const focusedRow = event.target.closest<HTMLElement>(`[${ROW_KEY}]`)?.dataset.rowKey;
+      if (!selected || focusedRow !== selected) return;
+
+      const button = details.current
+        .get(selected)
+        ?.querySelector<HTMLButtonElement>(`[data-queue-key="${event.key}"]`);
       if (!button || button.disabled) return;
       event.preventDefault();
       button.click();
@@ -279,7 +296,7 @@ export function QueueTable({
 
     // The row being read may be one the filter just hid; the first row the
     // filter keeps is the one to open instead.
-    const kept = rows.filter((row) => value === "" || row.sourceKey === value);
+    const kept = rows.filter((row) => keptBy(value, row));
     if (!kept.some((row) => row.key === selected) && kept[0]) select(kept[0].key);
   }
 
@@ -291,15 +308,24 @@ export function QueueTable({
         <p id={hintId} className="text-muted-foreground max-w-prose text-xs leading-5 text-pretty">
           <Kbd>j</Kbd> <Kbd>k</Kbd> {KEYS_MOVE} · <Kbd>a</Kbd> <Kbd>r</Kbd> {KEYS_DECIDE}{" "}
           {KEYS_SCOPE}
-          {rows.some((row) => !hasKeys(row.sourceKey)) ? ` ${KEYS_NOT_FOR_SKILLS}` : null}
+          {rows.some((row) => SOURCE_ROWS[row.sourceKey]?.keys === false)
+            ? ` ${KEYS_NOT_FOR_SKILLS}`
+            : null}
         </p>
 
         <div className="flex items-center gap-2">
           <Label htmlFor={filterId}>{FILTER_LABEL}</Label>
+          {/*
+            **The platform's `<select>` in the registry's box (`selectBox`), not
+            the registry's `Select`.** It is a short, flat list of options, and the
+            Base UI popup would bring floating-ui onto this route for it; the
+            native control also takes the keyboard's own list behaviour, which the
+            `TYPING` guard above already leaves alone.
+          */}
           <select
             id={filterId}
             className={cn(selectBox, "w-auto")}
-            value={filterValue as string}
+            value={shownSource}
             onChange={(event) => onFilter(event.target.value)}
           >
             <option value="">{filterOption(FILTER_ALL, everything)}</option>
@@ -312,12 +338,6 @@ export function QueueTable({
         </div>
       </div>
 
-      {/*
-        **The group is where the keys live**, which is the whole of SC 2.1.4's
-        "active only on focus": outside it no key does anything. Named and
-        described, so a screen-reader user entering it hears the order and the
-        keys before the first row.
-      */}
       {/*
         The listener is delegation, not an affordance: the keys act on the rows'
         own buttons, which are the interactive elements, and the group itself
@@ -357,12 +377,15 @@ export function QueueTable({
             {visible.map((row) => {
               const open = row.getIsExpanded();
               const isDecided = decided.has(row.id);
-              const Detail = ROW_DETAIL[row.original.sourceKey];
+              const Detail = SOURCE_ROWS[row.original.sourceKey]?.Row;
               const detailId = `${baseId}-${row.id}`;
 
               return (
                 <Fragment key={row.id}>
-                  <TableRow data-state={row.id === selected ? "selected" : undefined}>
+                  <TableRow
+                    data-row-key={row.id}
+                    data-state={row.id === selected ? "selected" : undefined}
+                  >
                     {row.getAllCells().map((cell) => {
                       if (cell.column.id === "summary") {
                         return (
@@ -373,6 +396,14 @@ export function QueueTable({
                             scope="row"
                             className="w-full max-w-0 py-0 font-normal"
                           >
+                            {/*
+                              **A plain `<button>`, not the registry's `Button`.**
+                              It is the row's header text doing double duty as its
+                              disclosure control, so it has to truncate and read
+                              as the line it names; `Button`'s fixed height,
+                              padding and centred inline-flex are a control's
+                              shape, and the column would stop scanning as text.
+                            */}
                             <button
                               type="button"
                               ref={(element) => {
@@ -382,6 +413,12 @@ export function QueueTable({
                               aria-expanded={open}
                               aria-controls={detailId}
                               onClick={() => select(row.id)}
+                              // Focus selects: a decision key acts on the row that
+                              // holds focus, so arriving on a row by Tab has to
+                              // make it the row the keys decide.
+                              onFocus={() => {
+                                if (row.id !== selected) select(row.id);
+                              }}
                               className={cn(
                                 QUEUE_FOCUSABLE_LINE,
                                 "block w-full truncate py-3 text-left",
@@ -429,6 +466,7 @@ export function QueueTable({
                   */}
                   <TableRow
                     id={detailId}
+                    data-row-key={row.id}
                     hidden={!open}
                     ref={(element) => {
                       if (element) details.current.set(row.id, element);
@@ -483,13 +521,4 @@ function RowHandoff({
   const value = useCallback(() => handOn(rowKey), [handOn, rowKey]);
 
   return <QueueHandoff.Provider value={value}>{children}</QueueHandoff.Provider>;
-}
-
-/**
- * Whether a source's row carries buttons the keys can press. Skill requests are
- * decided by typing, so they have none — and the hint says so when one is in the
- * list.
- */
-function hasKeys(sourceKey: string): boolean {
-  return sourceKey === "offers" || sourceKey === "photos";
 }

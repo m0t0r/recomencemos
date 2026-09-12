@@ -64,13 +64,11 @@ export interface QueueRowResult {
  * cursor to the next row still waiting and focuses it, and answers `false` when
  * there is nowhere onward.
  *
- * **The list owns the handoff because the list owns the cursor.** This used to be
- * a walk of the rendered DOM — four `data-` attributes, from the decided row to
- * the next one's anchor — which worked while every row was open on a
- * single-source page. In the one table (#277) only the selected row is open, so
- * the next row's anchor is inside a detail that is `hidden` until the table
- * selects it; a walk cannot focus what the table has not shown yet. So the rule
- * stays here and the *where* moves to the component that knows it.
+ * **The list owns the handoff because the list owns the cursor.** Only the
+ * selected row is open, so the next row's anchor is inside a detail that is
+ * `hidden` until the list selects it — nothing walking the rendered DOM could
+ * focus it. So the rule stays here and the *where* belongs to the component that
+ * knows it.
  *
  * **Absent means "no list"** — a row rendered on its own, which is what the row
  * tests do — and the row then keeps focus on its own outcome, which is the

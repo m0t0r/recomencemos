@@ -111,6 +111,18 @@ const aQueue = () => render(<QueueTable rows={ROWS} filters={FILTERS} />);
 /** The control that opens a row: its summary, as a button in the row's header cell. */
 const toggleFor = (row: QueueRow) => screen.getByRole("button", { name: row.item.summary });
 
+/**
+ * The line inside an open row that the handoff focuses: the row's words as they
+ * read in the detail, rather than the control in the header cell that shares
+ * them.
+ */
+const lineFor = (row: QueueRow) => {
+  const toggle = toggleFor(row);
+  const line = screen.getAllByText(row.item.summary).find((element) => element !== toggle);
+  if (line === undefined) throw new Error(`No open line reads "${row.item.summary}".`);
+  return line;
+};
+
 /** The table row whose header cell names this item. */
 const rowFor = (row: QueueRow) => {
   const found = screen
@@ -239,6 +251,31 @@ describe("the keys", () => {
   });
 
   /**
+   * **A key decides the row that holds focus, never another.** Arriving on a
+   * row's control by Tab opens it, so `a` pressed there decides that row — not
+   * the one that was open before it.
+   */
+  it("decide only the row that holds focus", async () => {
+    const user = userEvent.setup();
+    aQueue();
+
+    await user.click(toggleFor(OFFER_A));
+    // Past the open row's two decisions to the next row's control.
+    await user.tab();
+    await user.tab();
+    await user.tab();
+
+    expect(toggleFor(OFFER_B)).toHaveFocus();
+    expect(toggleFor(OFFER_B)).toHaveAttribute("aria-expanded", "true");
+
+    await user.keyboard("a");
+
+    expect(await screen.findByText(offerDelivered("Ana"))).toBeInTheDocument();
+    expect(within(rowFor(OFFER_B)).getByText(ROW_DECIDED)).toBeInTheDocument();
+    expect(within(rowFor(OFFER_A)).queryByText(ROW_DECIDED)).toBeNull();
+  });
+
+  /**
    * **WCAG 2.2 SC 2.1.4, and the half of it that bites.** A Skill request is
    * promoted by typing into fields, and a single-key shortcut that fired there
    * would move the cursor under the Admin's hands on every _j_ in a word.
@@ -287,9 +324,7 @@ describe("after a decision", () => {
     // Waited for rather than read at once: the decided row drops its buttons in
     // one render and the table moves focus in the next, so the outcome can be on
     // screen a render before the keyboard has moved.
-    await waitFor(() =>
-      expect(screen.getByText(OFFER_B.item.summary, { selector: "p" })).toHaveFocus(),
-    );
+    await waitFor(() => expect(lineFor(OFFER_B)).toHaveFocus());
     expect(toggleFor(OFFER_B)).toHaveAttribute("aria-expanded", "true");
     expect(toggleFor(OFFER_A)).toHaveAttribute("aria-expanded", "true");
     expect(within(rowFor(OFFER_A)).getByText(ROW_DECIDED)).toBeInTheDocument();
@@ -307,11 +342,8 @@ describe("after a decision", () => {
     await user.click(toggleFor(OFFER_A));
     await user.click(screen.getByRole("button", { name: DELIVER_OFFER_SUBMIT }));
 
-    // The photo has no line to read before the image, so its row's own control
-    // takes the keyboard.
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: PHOTO.item.summary })).toHaveFocus(),
-    );
+    // Past the decided Offer to the photo, and onto its line rather than a control.
+    await waitFor(() => expect(lineFor(PHOTO)).toHaveFocus());
   });
 
   /** The last row has nowhere onward, so focus stays on its outcome. */
@@ -328,9 +360,9 @@ describe("after a decision", () => {
 });
 
 /**
- * **The filter replaces the five routes, and it is the Admin's choice rather
- * than the page's default** — the list opens on everything, and narrowing it is
- * something done on purpose and visible in the control.
+ * **Narrowing is the Admin's choice rather than the page's default** — the list
+ * opens on everything, and narrowing it is something done on purpose and visible
+ * in the control.
  */
 it("narrows the list to one source when asked", async () => {
   const user = userEvent.setup();
