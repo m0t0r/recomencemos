@@ -25,7 +25,7 @@
 import { Card, CardContent, CardHeader } from "@repo/design-system/components/card";
 import type { ContactExchange, ExchangeSide } from "@repo/domain/exchange";
 import { formatColombianPhone } from "@repo/domain/policy";
-import type { ReactNode } from "react";
+import * as React from "react";
 import { AnnouncedDetails, ExchangeHeading } from "./arrival";
 import { CopyDetail } from "./copy-detail";
 import {
@@ -133,7 +133,7 @@ export function FoldedTerms({
   children,
 }: {
   readonly side: ExchangeSide;
-  readonly children: ReactNode;
+  readonly children: React.ReactNode;
 }) {
   return (
     <details className="border-border border-t pt-3">

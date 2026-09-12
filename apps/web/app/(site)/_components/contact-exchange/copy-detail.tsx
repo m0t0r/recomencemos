@@ -24,18 +24,18 @@
  */
 
 import { Button } from "@repo/design-system/components/button";
-import { useEffect, useRef, useState } from "react";
+import * as React from "react";
 import { COPIED, COPY_DETAIL, copiedName } from "./messages";
 
 /** How long _Copiado_ stays before the button reads _Copiar_ again. */
 export const COPIED_FOR_MS = 2000;
 
 export function CopyDetail({ value, label }: { readonly value: string; readonly label: string }) {
-  const [copied, setCopied] = useState(false);
-  const reset = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [copied, setCopied] = React.useState(false);
+  const reset = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // A button that unmounts inside the window leaves no timer behind.
-  useEffect(() => () => clearTimeout(reset.current), []);
+  React.useEffect(() => () => clearTimeout(reset.current), []);
 
   async function copy() {
     try {
