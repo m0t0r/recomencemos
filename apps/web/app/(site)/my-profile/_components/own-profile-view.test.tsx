@@ -4,20 +4,49 @@
  * clause — the `javascript:` sentinel), and that it says who sees what.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ReceivedOffer } from "@repo/domain/offers";
 import type { OwnProfile } from "@repo/domain/profiles";
 import { urlAttributesIn } from "@/testing/markup";
 import { OwnProfileView } from "./own-profile-view";
 import {
+  CLOSED_HEADING,
+  closedLine,
   EDIT_LINK,
   HELD_HEADING,
+  NONE_WAITING,
+  OFFERS_LINK,
+  PAUSE_LIMITS,
+  PAUSE_SWITCH_LABEL,
+  PAUSED_CONFIRMATION,
+  pausedSince,
   PHOTO_ABSENT,
   PHOTO_PENDING,
   PUBLISHED_CONFIRMATION,
+  RESUMED_CONFIRMATION,
   SAVED_CONFIRMATION,
+  STILL_VISIBLE,
+  VISIBLE_LINE,
   WALL_LINK,
+  waitingCount,
 } from "../_lib/messages";
+
+/**
+ * **Both action modules are doubled**, for `photo-field.test.tsx`'s reason: a
+ * `"use server"` module is not stripped in a Vitest run, so importing the view
+ * would pull `@repo/domain` into happy-dom, where it refuses — correctly. The
+ * actions' behaviour verifies at seam 3 against the compiled endpoints.
+ */
+const { pauseProfile, resumeProfile, changePhoto, createPhotoUpload } = vi.hoisted(() => ({
+  pauseProfile: vi.fn(),
+  resumeProfile: vi.fn(),
+  changePhoto: vi.fn(),
+  createPhotoUpload: vi.fn(),
+}));
+
+vi.mock("../actions", () => ({ pauseProfile, resumeProfile, changePhoto }));
+vi.mock("@/app/(site)/publish/actions", () => ({ createPhotoUpload }));
 
 const PAYLOAD = "javascript:alert(1)";
 
@@ -46,7 +75,7 @@ describe("the view", () => {
     // payload ever becomes an attribute, wherever it renders, and a URL-valued
     // attribute is not something the accessibility tree reports.
     const html = renderToStaticMarkup(
-      <OwnProfileView profile={profile} justPublished={false} justSaved={false} />,
+      <OwnProfileView profile={profile} offers={[]} arrival={null} />,
     );
     expect(html).toContain(PAYLOAD);
 
@@ -57,24 +86,39 @@ describe("the view", () => {
   });
 
   it("shows the phone as a number to read, not as a link", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
 
     expect(screen.queryByRole("link", { name: /300 123 4567/ })).toBeNull();
   });
 
+  /**
+   * The confirmation is found by its sentence rather than as "the" status
+   * region: her photo control carries a progress region of its own, so the page
+   * has two, and only one of them is the arrival.
+   */
   it("renders the confirmation with the Wall linked when she has just published", () => {
-    render(<OwnProfileView profile={profile} justPublished justSaved={false} />);
+    render(<OwnProfileView profile={profile} offers={[]} arrival="published" />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(PUBLISHED_CONFIRMATION);
+    expect(screen.getByText(PUBLISHED_CONFIRMATION)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: WALL_LINK })).toHaveAttribute("href", "/");
   });
 
   it("renders the saved confirmation, and not publishing's, when she has just saved", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} justSaved />);
+    render(<OwnProfileView profile={profile} offers={[]} arrival="saved" />);
 
-    const status = screen.getByRole("status");
-    expect(status).toHaveTextContent(SAVED_CONFIRMATION);
-    expect(status).not.toHaveTextContent(PUBLISHED_CONFIRMATION);
+    expect(screen.getByText(SAVED_CONFIRMATION)).toBeInTheDocument();
+    expect(screen.queryByText(PUBLISHED_CONFIRMATION)).toBeNull();
+  });
+
+  // Each arrival with the row it leaves behind: a confirmation is only said
+  // while the row agrees with it (see the two cases under "her Pause").
+  it.each([
+    ["paused", PAUSED_CONFIRMATION, new Date("2026-09-11T14:00:00Z")],
+    ["resumed", RESUMED_CONFIRMATION, null],
+  ] as const)("says so when she arrives having %s", (arrival, sentence, pausedAt) => {
+    render(<OwnProfileView profile={{ ...profile, pausedAt }} offers={[]} arrival={arrival} />);
+
+    expect(screen.getByText(sentence)).toBeInTheDocument();
   });
 
   /**
@@ -83,7 +127,7 @@ describe("the view", () => {
    * finding `sign-in-link.tsx` records at length.
    */
   it("offers a link into the edit form", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
 
     expect(screen.getByRole("link", { name: EDIT_LINK })).toHaveAttribute(
       "href",
@@ -92,15 +136,152 @@ describe("the view", () => {
   });
 
   it("renders no confirmation otherwise", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
 
-    expect(screen.queryByRole("status")).toBeNull();
+    for (const sentence of [
+      PUBLISHED_CONFIRMATION,
+      SAVED_CONFIRMATION,
+      PAUSED_CONFIRMATION,
+      RESUMED_CONFIRMATION,
+    ]) {
+      expect(screen.queryByText(sentence)).toBeNull();
+    }
+  });
+});
+
+describe("her Pause", () => {
+  const PAUSED_AT = new Date("2026-09-11T14:00:00Z");
+
+  it("says she is on the Wall, with the switch off", () => {
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+
+    expect(screen.getByText(VISIBLE_LINE)).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL })).not.toBeChecked();
+  });
+
+  it("says since when she is paused, with the same switch on", () => {
+    render(
+      <OwnProfileView profile={{ ...profile, pausedAt: PAUSED_AT }} offers={[]} arrival={null} />,
+    );
+
+    expect(screen.getByText(pausedSince(PAUSED_AT))).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL })).toBeChecked();
+  });
+
+  // The two limits she needs before relying on it are what the switch announces.
+  it("names its two limits as the switch's description", () => {
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+
+    expect(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL })).toHaveAccessibleDescription(
+      PAUSE_LIMITS,
+    );
+  });
+
+  it("is not offered while the profile is taken down, and claims no state", () => {
+    render(
+      <OwnProfileView
+        profile={{ ...profile, pausedAt: PAUSED_AT, takenDown: true }}
+        offers={[]}
+        arrival={null}
+      />,
+    );
+
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByText(VISIBLE_LINE)).toBeNull();
+    expect(screen.queryByText(pausedSince(PAUSED_AT))).toBeNull();
+  });
+
+  /**
+   * **A redirect is not proof the act happened.** A resume posted while taken
+   * down writes nothing and still redirects; the confirmation is only said while
+   * the row agrees with it, so she is never told she is back on the Wall when
+   * she is not.
+   */
+  it("does not confirm a resume the row does not show", () => {
+    render(
+      <OwnProfileView profile={{ ...profile, takenDown: true }} offers={[]} arrival="resumed" />,
+    );
+
+    expect(screen.queryByText(RESUMED_CONFIRMATION)).toBeNull();
+  });
+
+  it("does not confirm a pause the row does not show", () => {
+    render(<OwnProfileView profile={profile} offers={[]} arrival="paused" />);
+
+    expect(screen.queryByText(PAUSED_CONFIRMATION)).toBeNull();
+  });
+
+  /**
+   * **The ceiling's refusal, and the state it left her in.** The refusal's own
+   * sentence carries the count and the wait; the switch adds which state the
+   * profile is in now, because only it knows.
+   */
+  it("says the ceiling's refusal and which state she is in now", async () => {
+    const refusal = "Usaste el botón de pausa 10 veces hoy, que es el máximo.";
+    pauseProfile.mockResolvedValue({
+      serverError: { code: "rate_limited", message: refusal, retryAfter: 720 },
+    });
+
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+    fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
+
+    expect(await screen.findByText(refusal)).toBeInTheDocument();
+    expect(screen.getByText(STILL_VISIBLE)).toBeInTheDocument();
+  });
+});
+
+/** One Offer that reached her, in `state`, from somebody who gave `hirerName`. */
+function offer(id: string, state: ReceivedOffer["state"], hirerName: string | null) {
+  return {
+    id,
+    state,
+    workDescription: `Cocinar para ocho personas ${id}`,
+    payTerms: "$120.000 por el día",
+    whenText: "El sábado",
+    sentAt: new Date("2026-09-10T12:00:00Z"),
+    hirerName,
+  } satisfies ReceivedOffer;
+}
+
+describe("the Offers that reached her", () => {
+  it("counts the ones waiting and links the list where she answers them", () => {
+    render(
+      <OwnProfileView
+        profile={profile}
+        offers={[offer("a", "delivered", "Carlos Restrepo"), offer("b", "delivered", null)]}
+        arrival={null}
+      />,
+    );
+
+    expect(screen.getByText(waitingCount(2))).toBeInTheDocument();
+    expect(screen.getByText("Carlos Restrepo")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: OFFERS_LINK })).toHaveAttribute("href", "/offers");
+  });
+
+  it("says plainly when none is waiting", () => {
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+
+    expect(screen.getByText(NONE_WAITING)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: CLOSED_HEADING })).toBeNull();
+  });
+
+  it("lists what closed, under its own heading", () => {
+    render(
+      <OwnProfileView
+        profile={profile}
+        offers={[offer("c", "accepted", "Carlos Restrepo")]}
+        arrival={null}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: CLOSED_HEADING })).toBeInTheDocument();
+    expect(screen.getByText(closedLine("Carlos Restrepo", "Aceptada"))).toBeInTheDocument();
   });
 });
 
 describe("the tiers", () => {
   it("heads the held section by who sees it", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
 
     expect(screen.getByRole("heading", { name: HELD_HEADING })).toBeInTheDocument();
   });
@@ -136,7 +317,7 @@ describe("her own photo", () => {
   };
 
   it("says a person is looking at it", () => {
-    render(<OwnProfileView profile={pending} justPublished={false} justSaved={false} />);
+    render(<OwnProfileView profile={pending} offers={[]} arrival={null} />);
 
     expect(screen.getByText(PHOTO_PENDING)).toBeInTheDocument();
   });
@@ -147,14 +328,31 @@ describe("her own photo", () => {
    * face. The state is a sentence, and a sentence is all it is.
    */
   it("does not announce the wait as a problem", () => {
-    render(<OwnProfileView profile={pending} justPublished={false} justSaved={false} />);
+    render(<OwnProfileView profile={pending} offers={[]} arrival={null} />);
 
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  /** An approved photo is on her card; a sentence saying she has none would be false. */
+  it("says nothing about a photo that is approved", () => {
+    render(
+      <OwnProfileView
+        profile={{
+          ...profile,
+          photoUrl: "https://photos.recomencemos.test/photos/aaaaaaaaaaaaaaaaaaaaa.webp",
+          photoState: "approved",
+        }}
+        offers={[]}
+        arrival={null}
+      />,
+    );
+
+    expect(screen.queryByText(PHOTO_ABSENT)).toBeNull();
+  });
+
   /** And the absent state says the other cause of the same shape. */
   it("names the initial as what stands in for a photo she has not added", () => {
-    render(<OwnProfileView profile={profile} justPublished={false} justSaved={false} />);
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
 
     expect(screen.getByText(PHOTO_ABSENT)).toBeInTheDocument();
   });

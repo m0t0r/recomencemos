@@ -3,8 +3,9 @@
  *
  * Shaped at `.impeccable/briefs/own-profile.md`; the state set is the spec's
  * (`## UX design`, the Own profile row). Mode is **Operate**. The layout was
- * chosen by `/prototype` UI on this route; the losers live on
- * `prototype/16-ui-variants`.
+ * chosen by `/prototype` UI on this route, twice: #16's three tiers, whose
+ * losers live on `prototype/16-ui-variants`, and #275's whole side on one page,
+ * whose phone-first losers live on `prototype/275-phone-variants`.
  *
  * Three cells are routes or interrupts, decided before anything paints:
  * **signed out →** `/sign-in` with a way back; **a session with no profile →**
@@ -20,13 +21,14 @@
  */
 
 import { Skeleton } from "@repo/design-system/components/skeleton";
+import { offers } from "@repo/domain/offers";
 import { profiles } from "@repo/domain/profiles";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
-import { OwnProfileView } from "./_components/own-profile-view";
+import { type Arrival, OwnProfileView } from "./_components/own-profile-view";
 import { MY_PROFILE_PAGE_TITLE, MY_PROFILE_TITLE } from "./_lib/messages";
 
 export const metadata: Metadata = {
@@ -36,19 +38,36 @@ export const metadata: Metadata = {
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
+/**
+ * Which redirect she arrived by. Each action sets exactly one flag, so the order
+ * here only matters for a hand-typed URL carrying several — and then the first
+ * wins rather than two confirmations competing for one region.
+ */
+function arrivalOf(params: Awaited<SearchParams>): Arrival {
+  for (const arrival of ["published", "saved", "paused", "resumed"] as const) {
+    if (params[arrival] === "1") return arrival;
+  }
+  return null;
+}
+
 async function ProfilePanel({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireAccountPage("/my-profile");
-  const [profile, params] = await Promise.all([profiles.findOwn(session.accountId), searchParams]);
+
+  /**
+   * **Her profile and the Offers that reached her, together** (#275). Neither
+   * waits on the other, and the Offers read is scoped by profile ownership in its
+   * own `where` clause, so it answers an empty list — never somebody else's — for
+   * a session that reaches it.
+   */
+  const [profile, received, params] = await Promise.all([
+    profiles.findOwn(session.accountId),
+    offers.listReceived(session.accountId),
+    searchParams,
+  ]);
 
   if (!profile) redirect("/publish");
 
-  return (
-    <OwnProfileView
-      profile={profile}
-      justPublished={params.published === "1"}
-      justSaved={params.saved === "1"}
-    />
-  );
+  return <OwnProfileView profile={profile} offers={received} arrival={arrivalOf(params)} />;
 }
 
 function PanelSkeleton() {

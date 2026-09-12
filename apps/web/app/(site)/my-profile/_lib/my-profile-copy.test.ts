@@ -7,11 +7,34 @@ import {
   shoutedWords,
   wordCount,
 } from "@/testing/voice";
-import { MY_PROFILE_COPY, MY_PROFILE_LABELS, publishedOn } from "./messages";
+import {
+  closedLine,
+  MY_PROFILE_COPY,
+  MY_PROFILE_LABELS,
+  offerArrivedOn,
+  pausedSince,
+  publishedOn,
+  senderName,
+  waitingCount,
+} from "./messages";
 
+const DATE = new Date("2026-08-10T15:00:00Z");
+
+/**
+ * The fixed strings, and every built one at the values it is built from — a
+ * sentence assembled from parts is still a sentence a person reads, and the
+ * rules below have to run over what is actually rendered.
+ */
 const copy = [
   ...Object.entries(MY_PROFILE_COPY),
-  ["PUBLISHED_ON", publishedOn(new Date("2026-08-10T15:00:00Z"))],
+  ["PUBLISHED_ON", publishedOn(DATE)],
+  ["PAUSED_SINCE", pausedSince(DATE)],
+  ["WAITING_ONE", waitingCount(1)],
+  ["WAITING_MANY", waitingCount(12)],
+  ["OFFER_ARRIVED_ON", offerArrivedOn(DATE)],
+  ["CLOSED_LINE_NAMED", closedLine("Carlos Restrepo", "Aceptada")],
+  ["CLOSED_LINE_UNNAMED", closedLine(null, "Vencida")],
+  ["SENDER_UNNAMED", senderName(null)],
 ] as [string, string][];
 
 describe.each(copy)("%s", (_name, value) => {
