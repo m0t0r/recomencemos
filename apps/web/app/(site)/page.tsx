@@ -18,8 +18,8 @@
  *
  * **Nothing is cached, so each read sits inside a designed `<Suspense>`
  * boundary**: the vocabulary strip on the cover, and the list. The framing
- * sits between them, and story 11's standing notices go above the list; both
- * fallbacks hold their layout so neither moves when the rows arrive.
+ * sits between them, and story 11's standing notices go below the list; both
+ * fallbacks hold their layout so nothing after them moves when the rows arrive.
  *
  * **The error boundary is inside the page rather than at the route**, for the
  * same reason — see `_components/profile-list/list-boundary.tsx`.
@@ -155,29 +155,6 @@ export default function WallPage() {
           {RECENT_HEADING}
         </h2>
 
-        {/*
-          Story 11's three standing notices, in the slot this comment reserved:
-          above the list, below the heading, and **outside `ListBoundary`** — the
-          spec's Wall `error` cell asks for the notices to still render when the
-          read fails, and outside the boundary is the only place that is true.
-
-          It is also why story 11's fifth criterion holds more strongly than the
-          mechanism it names. That criterion reasons from the skeleton's height —
-          a regression there "moves them" — but the notices sit above the grid
-          *and* outside its boundary, so a fallback of the wrong height moves the
-          rows below it and cannot reach anything above. Measured rather than
-          argued: screenshotting `/profiles` in its skeleton state and again
-          resolved, the first differing scanline is y = 524 of 844, and the
-          notices occupy roughly y = 160-360.
-
-          `h3`, not `h2`: this is inside the recent-profiles section, under that
-          section's own heading. `/profiles` renders the same component at `h2`
-          because there it sits directly under the page's `h1`.
-        */}
-        <div className="max-w-3xl">
-          <StandingNotices treatment="disclosure" level={3} />
-        </div>
-
         {/* Rows stay at a reading measure; the section is wide so the heading lines up with the cover. */}
         <div className="max-w-3xl">
           <ListBoundary>
@@ -185,6 +162,34 @@ export default function WallPage() {
               <WallList />
             </Suspense>
           </ListBoundary>
+        </div>
+
+        {/*
+          Story 11's three standing notices, **below the list** (#276). They
+          used to sit above it, and the UX lab's notices idea kept the block as
+          it was, with one change in the owner's words: _"displayed at the
+          bottom, not at the top."_ A reader who came to look reaches the people
+          first; a reader who wants the three statements still finds all three
+          together, at the foot of the list they just read. There is
+          deliberately no link down to them from the top — the owner's call,
+          recorded in `.impeccable/briefs/standing-notices.md`.
+
+          Still **outside `ListBoundary`**: the spec's Wall `error` cell asks
+          for the notices to still render when the read fails, and outside the
+          boundary is the only place that is true.
+
+          Below the grid, the skeleton's height is what keeps them still. A
+          fallback of the wrong height now moves this block and everything
+          after it when the rows arrive — below the fold on a phone, so it is
+          not a first-screen shift, but it is one under a reader who has already
+          scrolled down while the list streams.
+
+          `h3`, not `h2`: this is inside the recent-profiles section, under that
+          section's own heading. `/profiles` renders the same component at `h2`
+          because there it sits directly in the page's `main`.
+        */}
+        <div className="max-w-3xl pt-4">
+          <StandingNotices treatment="disclosure" level={3} />
         </div>
       </section>
 

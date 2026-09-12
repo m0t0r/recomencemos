@@ -3,10 +3,11 @@
  * surfaces.
  *
  * **It holds the layout, and that is the whole requirement.** The standing
- * notices sit above the list, so a fallback shorter or narrower than its content
- * moves them when the rows arrive — a layout shift the design would have had to
- * specify on purpose. It therefore mirrors the row piece for piece: the avatar,
- * the headline, the name line, the chips.
+ * notices sit below the list (#276), so a fallback shorter or narrower than its
+ * content moves them — and on the Wall, the three steps after them — when the
+ * rows arrive: a layout shift under a reader who has already scrolled there,
+ * which the design would have had to specify on purpose. It therefore mirrors
+ * the row piece for piece: the avatar, the headline, the name line, the chips.
  *
  * **Mirrored rather than measured to a number.** A hard-coded height is a
  * measurement that goes stale the first time a row gains a line and nothing says

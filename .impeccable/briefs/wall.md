@@ -21,7 +21,8 @@ taken visually" settled — one primary, rows not cards, chips, the ordering nam
 on `/profiles` — survives; what changed is the world the page is drawn in. The vocabulary strip is
 the product's one authored motion and stops under `prefers-reduced-motion`; `motion-policy` is still
 `UNSET`, so that is a habit rather than a requirement. Story 11's notices keep their slot above the
-list.
+list. _(Moved below it by [#276](https://github.com/m0t0r/recomencemos/issues/276) — see
+`standing-notices.md`.)_
 
 **Amended 2026-09-07 with [#184](https://github.com/m0t0r/recomencemos/issues/184): `/profiles`
 takes the Wall's framing, and the framing is where the two were still saying different things.**
@@ -169,13 +170,14 @@ two causes, never a badge).
 | `rate limited` | n/a — neither surface has a ceiling (NFR26 binds gated reads and actions, not the public lists)     | n/a                                                                                                                                    |
 
 **The error state is scoped on purpose.** A route-level `error.tsx` would replace the whole page
-including the notices story 11 puts above the grid — and the spec's own words for this cell are that
+including the notices story 11 puts beside the grid (below it since #276) — and the spec's own words for this cell are that
 those notices still render. So the boundary sits **inside** the page, around the grid alone.
 
 ## Interaction and layout
 
-- **Hierarchy:** framing (if any) → the notice slot story 11 will fill → the grid. The grid is the
-  page; nothing above it may grow enough to push the first card below the fold on a phone.
+- **Hierarchy:** framing (if any) → the grid → story 11's notices. The grid is the page; nothing
+  above it may grow enough to push the first card below the fold on a phone. _(The notices sat
+  between the framing and the grid until #276 moved them to the foot.)_
 - **Topology:** one column on a phone, two from `sm`, three from `lg`. Structural, not fluid.
 - **The Suspense fallback holds the layout exactly** — same column count, same card height. A
   fallback of a different shape is a layout shift the brief just specified.
