@@ -115,9 +115,12 @@ time, so the section shows the most recent few and links `/offers` for the rest 
   section, so a keyboard user is not made to tab through each row to reach the next section
   `[assumed]`.
 - **The switch is a real submit button inside a real form**, carrying `role="switch"` and
-  `aria-checked` `[assumed]`. Base UI's `Switch` toggles in JavaScript and would do nothing unhydrated,
-  so it can lend its look, not its behaviour. Which of the two endpoints the form posts to is decided
-  by the current state, so a repeat tap is a no-op rather than an undo.
+  `aria-checked`. It is the registry's `Switch` given `nativeButton` and
+  `render={<button type="submit" />}`: unhydrated that HTML posts natively, and once hydrated Base UI
+  cancels the native submit, so `onCheckedChange` re-issues it with `requestSubmit()` — both measured,
+  which overturned the earlier assumption that the registry `Switch` could lend only its look. Which of
+  the two endpoints the form posts to is decided by the current state, so a repeat tap is a no-op
+  rather than an undo.
 - **Announcement:** the arrival region says the new state after the redirect; the rate-limited
   sentence is announced where the switch is.
 - Headings are `<h2>`s, so a screen reader's heading list reads the page's sections.
@@ -125,8 +128,8 @@ time, so the section shows the most recent few and links `/offers` for the rest 
 ## Constraints and open decisions
 
 - `noindex`, both halves, unchanged.
-- Registry components: `Avatar`, `Alert`, `Button`, `Skeleton`, `Separator`; `Switch` for its look
-  only. Semantic tokens only.
+- Registry components: `Avatar`, `Alert`, `Button`, `Skeleton`, `Separator`, `Switch`, `Field`.
+  Semantic tokens only.
 - Every string in `_lib/messages.ts` under `my-profile-copy.test.ts`; `docs/policy/voice.md` is the
   register. _Pausar mi perfil_, _en pausa_.
 - No spec identifier in any string a person reads.
