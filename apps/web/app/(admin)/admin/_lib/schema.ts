@@ -7,10 +7,12 @@
  * reachable without ever rendering the form.
  */
 
+import { SKILL_GROUP_IDS } from "@repo/domain/policy";
 import { z } from "zod";
 import {
   ADDRESS_LOOKS_WRONG,
   PROMOTE_CUOC_SHAPE,
+  PROMOTE_GROUP_REQUIRED,
   PROMOTE_LABEL_REQUIRED,
   PROMOTE_LABEL_TOO_LONG,
   PROMOTE_SLUG_REQUIRED,
@@ -112,6 +114,13 @@ export const promoteSkillFields = z.object({
     .min(1, PROMOTE_LABEL_REQUIRED)
     .max(PROMOTE_LABEL_MAX, PROMOTE_LABEL_TOO_LONG),
   /**
+   * **Required, and one of the closed list** (ADR-0021): an entry with no group is
+   * one the Hirer's index cannot reach. The form offers only the thirteen, so a
+   * value outside them is a forged post rather than a slip, and it gets the same
+   * sentence an empty choice does.
+   */
+  group: z.enum(SKILL_GROUP_IDS, { message: PROMOTE_GROUP_REQUIRED }),
+  /**
    * `""` becomes absent rather than a refusal: an empty optional field is how the
    * form says "no code", and asking Zod to distinguish the two would make the
    * absence a validation problem.
@@ -130,6 +139,7 @@ export const promoteSkillSchema = z.preprocess(
       ? {
           slug: field(raw, "slug"),
           labelEs: field(raw, "labelEs"),
+          group: field(raw, "group"),
           cuocCode: field(raw, "cuocCode"),
         }
       : raw,

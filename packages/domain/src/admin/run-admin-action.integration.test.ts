@@ -87,6 +87,7 @@ const INPUTS = {
     requestId: REQUEST_ID,
     slug: "sewing-machine-repair",
     labelEs: "Arreglo máquinas de coser",
+    group: "repairs",
   },
   deliverOffer: { offerId: OFFER_ID },
   rejectOffer: { offerId: OFFER_ID },

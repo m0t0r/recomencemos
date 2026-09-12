@@ -148,6 +148,27 @@
       "when": 1789220345978,
       "tag": "0020_legal_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789254671432,
+      "tag": "0021_skill_group",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789255323709,
+      "tag": "0022_backfill_skill_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789255324059,
+      "tag": "0023_skill_group_known",
+      "breakpoints": true
     }
   ]
 }

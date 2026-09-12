@@ -13,6 +13,7 @@ import userEvent from "@testing-library/user-event";
 import { fieldNamesFrom } from "@/testing/form-data";
 import { SkillRequestRow } from "./skill-request-row";
 import {
+  PROMOTE_GROUP_LABEL,
   PROMOTE_LABEL_LABEL,
   PROMOTE_SLUG_LABEL,
   PROMOTE_SUBMIT,
@@ -51,6 +52,19 @@ beforeEach(() => {
   promoteSkill.mockResolvedValue({ data: { labelEs: "Arreglo máquinas de coser" } });
 });
 
+/** What an Admin types and chooses before promoting, in the order the form asks. */
+async function fillIn(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByRole("textbox", { name: PROMOTE_SLUG_LABEL }), "sewing-repair");
+  await user.type(
+    screen.getByRole("textbox", { name: PROMOTE_LABEL_LABEL }),
+    "Arreglo máquinas de coser",
+  );
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: PROMOTE_GROUP_LABEL }),
+    "furniture_and_textiles",
+  );
+}
+
 /**
  * **Her words, in full.** The spec's rule for every branch is that it renders in
  * full so nothing is acted on unread, and this source is where that bites: the
@@ -70,8 +84,8 @@ it("renders the request as she wrote it", () => {
  * and this row is the one the four remaining queue sections will copy.
  *
  * The hidden-input half is asked of the browser's own serialiser: the form the
- * promote button submits posts the three fields an Admin types, and a mirrored
- * request id would be a fourth key.
+ * promote button submits posts the four fields an Admin fills in, and a mirrored
+ * request id would be a fifth key.
  */
 it("binds the request it is about to promote instead of mirroring it into the form", async () => {
   const user = userEvent.setup();
@@ -79,18 +93,33 @@ it("binds the request it is about to promote instead of mirroring it into the fo
 
   expect(bound).toHaveBeenCalledWith("7");
   const promote = screen.getByRole<HTMLButtonElement>("button", { name: PROMOTE_SUBMIT });
-  expect(fieldNamesFrom(promote).toSorted()).toEqual(["cuocCode", "labelEs", "slug"]);
+  expect(fieldNamesFrom(promote).toSorted()).toEqual(["cuocCode", "group", "labelEs", "slug"]);
 
-  await user.type(screen.getByRole("textbox", { name: PROMOTE_SLUG_LABEL }), "sewing-repair");
-  await user.type(
-    screen.getByRole("textbox", { name: PROMOTE_LABEL_LABEL }),
-    "Arreglo máquinas de coser",
-  );
+  await fillIn(user);
   await user.click(screen.getByRole("button", { name: PROMOTE_SUBMIT }));
 
   const sent = promoteSkill.mock.calls.at(-1)?.[1] as FormData;
   expect(sent.get("slug")).toBe("sewing-repair");
   expect(sent.get("labelEs")).toBe("Arreglo máquinas de coser");
+  expect(sent.get("group")).toBe("furniture_and_textiles");
+});
+
+/**
+ * **A group is a choice nobody has made until somebody makes it.** The first
+ * option is empty and the control is required, so the browser refuses a
+ * promotion that would file an entry under whatever happened to be listed first.
+ */
+it("refuses to promote until a group is chosen", async () => {
+  const user = userEvent.setup();
+  render(<SkillRequestRow item={item} />);
+
+  const group = screen.getByRole<HTMLSelectElement>("combobox", { name: PROMOTE_GROUP_LABEL });
+  expect(group).toBeRequired();
+  expect(group).toHaveValue("");
+  expect(group.form?.checkValidity()).toBe(false);
+
+  await fillIn(user);
+  expect(group.form?.checkValidity()).toBe(true);
 });
 
 /**
@@ -104,11 +133,7 @@ it("quotes the entry back and closes the form", async () => {
   const user = userEvent.setup();
   render(<SkillRequestRow item={item} />);
 
-  await user.type(screen.getByRole("textbox", { name: PROMOTE_SLUG_LABEL }), "sewing-repair");
-  await user.type(
-    screen.getByRole("textbox", { name: PROMOTE_LABEL_LABEL }),
-    "Arreglo máquinas de coser",
-  );
+  await fillIn(user);
   await user.click(screen.getByRole("button", { name: PROMOTE_SUBMIT }));
 
   expect(await screen.findByText(skillPromoted("Arreglo máquinas de coser"))).toBeInTheDocument();
@@ -128,11 +153,7 @@ it("moves focus to the announcement, whichever way it went", async () => {
   });
   render(<SkillRequestRow item={item} />);
 
-  await user.type(screen.getByRole("textbox", { name: PROMOTE_SLUG_LABEL }), "sewing-repair");
-  await user.type(
-    screen.getByRole("textbox", { name: PROMOTE_LABEL_LABEL }),
-    "Arreglo máquinas de coser",
-  );
+  await fillIn(user);
   await user.click(screen.getByRole("button", { name: PROMOTE_SUBMIT }));
 
   const announcement = await screen.findByText("Otra persona ya la resolvió.");

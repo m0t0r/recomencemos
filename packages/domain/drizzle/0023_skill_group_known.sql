@@ -1,0 +1,1 @@
+ALTER TABLE "skill" ADD CONSTRAINT "skill_group_known" CHECK ("skill"."skill_group" IN ('home_and_laundry', 'food', 'care_and_teaching', 'beauty', 'building', 'furniture_and_textiles', 'transport', 'farm_and_garden', 'repairs', 'commerce_and_office', 'remote_work', 'recycling', 'other'));

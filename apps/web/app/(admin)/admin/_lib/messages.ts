@@ -284,6 +284,14 @@ export const PROMOTE_SLUG_HELP = "En inglés, con guiones. Viaja en los enlaces 
 export const PROMOTE_LABEL_LABEL = "Nombre que se lee";
 export const PROMOTE_LABEL_HELP =
   "En español, como lo diría ella. Es lo que aparece en el formulario.";
+/**
+ * The group is how a Hirer reaches the entry before he knows its exact name, so
+ * the help says that rather than naming the concept.
+ */
+export const PROMOTE_GROUP_LABEL = "Grupo";
+export const PROMOTE_GROUP_HELP = "Dónde la encuentra quien busca por tipo de trabajo.";
+/** The empty first option: a choice nobody made, never a default group. */
+export const PROMOTE_GROUP_CHOOSE = "Elige un grupo";
 export const PROMOTE_CUOC_LABEL = "Código CUOC (opcional)";
 export const PROMOTE_CUOC_HELP = "Si la capacidad corresponde a una ocupación de la CUOC.";
 export const PROMOTE_SUBMIT = "Agregar";
@@ -294,6 +302,7 @@ export const PROMOTE_SLUG_REQUIRED = "Escribe el identificador en inglés.";
 export const PROMOTE_SLUG_SHAPE = "Solo minúsculas, números y guiones.";
 export const PROMOTE_LABEL_REQUIRED = "Escribe el nombre que se va a leer.";
 export const PROMOTE_LABEL_TOO_LONG = "Acórtalo: hasta 80 caracteres.";
+export const PROMOTE_GROUP_REQUIRED = "Elige el grupo donde va esta capacidad.";
 /** Says what to do rather than what the code is (voice guide, Do 3). */
 export const PROMOTE_CUOC_SHAPE = "Escribe los cinco dígitos del código, o déjalo vacío.";
 

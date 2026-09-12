@@ -25,6 +25,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { count, eq } from "drizzle-orm";
 import { MIGRATIONS_FOLDER } from "#migrate";
+import { SKILL_GROUP_IDS } from "#policy/skill-groups";
 import * as schema from "#schema";
 import { findSkillsBySlug, listActiveSkills } from "#skills";
 import { test } from "#testing/fixtures";
@@ -40,21 +41,23 @@ import type { TestDatabase } from "#testing/fixtures";
  * means a rename that this test cannot follow fails as a rename, naming the tag
  * it looked for.
  */
-async function seedSql(): Promise<string> {
+async function journalledSql(tagFragment: string): Promise<string> {
   const journal = JSON.parse(
     await readFile(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
 
-  const entries = journal.entries.filter((entry) => entry.tag.includes("seed_skill_vocabulary"));
+  const entries = journal.entries.filter((entry) => entry.tag.includes(tagFragment));
   if (entries.length !== 1) {
     throw new Error(
-      `expected exactly one journalled migration whose tag names the vocabulary seed, found ${entries.length}. ` +
-        "If it was renamed, this test has lost the file whose idempotency it checks.",
+      `expected exactly one journalled migration whose tag contains "${tagFragment}", found ${entries.length}. ` +
+        "If it was renamed, this test has lost the file whose behaviour it checks.",
     );
   }
 
   return readFile(join(MIGRATIONS_FOLDER, `${entries[0]?.tag}.sql`), "utf8");
 }
+
+const seedSql = () => journalledSql("seed_skill_vocabulary");
 
 /** Every seeded row, including the columns the module deliberately withholds. */
 async function everyRow(database: TestDatabase) {
@@ -63,6 +66,7 @@ async function everyRow(database: TestDatabase) {
       slug: schema.skill.slug,
       labelEs: schema.skill.labelEs,
       cuocCode: schema.skill.cuocCode,
+      group: schema.skill.group,
       active: schema.skill.active,
     })
     .from(schema.skill)
@@ -102,6 +106,29 @@ describe("the seeded vocabulary", () => {
     const rows = await everyRow(database);
 
     expect(rows.filter((row) => !/^\d{5}$/.test(row.cuocCode ?? ""))).toEqual([]);
+  });
+
+  /**
+   * **Every seeded entry sits in one of the seed's own groups**, and `other` is
+   * not one of them: it is for an entry an Admin promotes that fits none of the
+   * twelve, and a seeded entry landing there would mean the backfill failed to
+   * name it — which is the one mistake that would otherwise look like success.
+   */
+  test("places every seeded entry in one of the seed's own groups", async ({ database }) => {
+    const rows = await everyRow(database);
+    const seedGroups = new Set<string>(SKILL_GROUP_IDS.filter((id) => id !== "other"));
+
+    expect(rows.filter((row) => row.group === null || !seedGroups.has(row.group))).toEqual([]);
+  });
+
+  /**
+   * The other direction: a group nothing was sorted into is an empty page in
+   * the index a Hirer is offered, so each of the twelve holds at least one entry.
+   */
+  test("leaves none of the seed's groups empty", async ({ database }) => {
+    const held = new Set((await everyRow(database)).map((row) => row.group));
+
+    expect(SKILL_GROUP_IDS.filter((id) => id !== "other" && !held.has(id))).toEqual([]);
   });
 
   /**
@@ -248,5 +275,32 @@ describe("reading the vocabulary back", () => {
 
   test("answers an empty request without asking the engine", async ({ database }) => {
     expect(await findSkillsBySlug(database.db, [])).toEqual([]);
+  });
+});
+
+describe("the group backfill", () => {
+  /**
+   * **The branch the backfill exists for.** A database that has seen Admin
+   * promotions holds entries no seed heading names, and the column cannot be
+   * made `NOT NULL` until every one of them has a group. So an entry the seed
+   * never named is put back to `NULL` — which is exactly how it stood before the
+   * backfill ran — and the backfill's own SQL is replayed over it: that entry
+   * lands in `other`, and every seeded entry keeps the group it already had.
+   */
+  test("files an entry the seed never named under other, and moves no seeded one", async ({
+    database,
+  }) => {
+    await database.db.insert(schema.skill).values({
+      slug: "sewing-machine-repair",
+      labelEs: "Arreglo máquinas de coser",
+      group: null,
+    });
+    const seeded = (await everyRow(database)).filter((row) => row.slug !== "sewing-machine-repair");
+
+    await database.client.exec(await journalledSql("backfill_skill_groups"));
+
+    const after = await everyRow(database);
+    expect(after.find((row) => row.slug === "sewing-machine-repair")?.group).toBe("other");
+    expect(after.filter((row) => row.slug !== "sewing-machine-repair")).toEqual(seeded);
   });
 });

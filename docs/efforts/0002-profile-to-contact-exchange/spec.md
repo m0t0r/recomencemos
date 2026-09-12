@@ -680,7 +680,10 @@ and there will not be one
 `UNIQUE (capability_profile_id, position)`. "Ordered" with no ordering column means an edit silently
 reorders her history.
 
-**Skill** — the closed vocabulary. `slug` (natural key), `labelEs`, `cuocCode`, `active`. `public`.
+**Skill** — the closed vocabulary. `slug` (natural key), `labelEs`, `cuocCode`, `group`, `active`. `public`.
+_Amended with #273: `group` is one **SkillGroup** from a closed list of thirteen in code, `TEXT` +
+`CHECK`, backfilled from the seed's own headings and chosen by an Admin at promotion
+([ADR-0021](../../adr/0021-skills-are-grouped-from-a-closed-list.md))._
 Seeded by an **idempotent migration**, so the test vocabulary and the production vocabulary cannot
 drift and NFR21 is measured against the list production actually has. Grows only through Admin
 promotion.
