@@ -169,6 +169,26 @@ export interface ExportedOffer {
   readonly sentAt: Date;
   /** When a person read it and let it through. `null` while it is still waiting. */
   readonly deliveredAt: Date | null;
+  /** `null` unless it was accepted. */
+  readonly exchange: ExportedExchange | null;
+}
+
+/**
+ * **Her side of a Contact Exchange, and only hers.**
+ *
+ * What she gave when the Offer was accepted is held about her, and it can
+ * differ from her profile after an edit — so it is a fact of its own and it is
+ * carried. What she *received* is the other party's name, phone and email, held
+ * about somebody who made no request; it is withheld for the reason the
+ * counterpart is withheld from every Offer above.
+ */
+export interface ExportedExchange {
+  readonly exchangedAt: Date;
+  readonly yourDetails: {
+    readonly fullName: string | null;
+    readonly phone: string | null;
+    readonly email: string;
+  };
 }
 
 /** Everything this platform holds about one person, as of today's schema. */
@@ -292,12 +312,20 @@ async function exportedOffers(
       state: schema.offer.state,
       sentAt: schema.offer.createdAt,
       deliveredAt: schema.offer.deliveredAt,
+      exchangedAt: schema.contactExchange.createdAt,
+      workerFullName: schema.contactExchange.workerFullName,
+      workerPhone: schema.contactExchange.workerPhone,
+      workerEmail: schema.contactExchange.workerEmail,
+      hirerName: schema.contactExchange.hirerName,
+      hirerPhone: schema.contactExchange.hirerPhone,
+      hirerEmail: schema.contactExchange.hirerEmail,
     })
     .from(schema.offer)
     .leftJoin(
       schema.capabilityProfile,
       eq(schema.capabilityProfile.id, schema.offer.capabilityProfileId),
     )
+    .leftJoin(schema.contactExchange, eq(schema.contactExchange.offerId, schema.offer.id))
     .where(
       or(
         eq(schema.offer.hirerAccountId, accountId),
@@ -308,15 +336,53 @@ async function exportedOffers(
 
   // Field by field, like every other projection here, and the counterpart is
   // absent by construction rather than by being dropped afterwards.
-  return rows.map((row) => ({
-    side: row.sent ? ("sent" as const) : ("received" as const),
-    workDescription: row.workDescription,
-    payTerms: row.payTerms,
-    whenText: row.whenText,
-    state: row.state,
-    sentAt: row.sentAt,
-    deliveredAt: row.deliveredAt,
-  }));
+  return rows.map((row) => {
+    const side = row.sent ? ("sent" as const) : ("received" as const);
+
+    return {
+      side,
+      workDescription: row.workDescription,
+      payTerms: row.payTerms,
+      whenText: row.whenText,
+      state: row.state,
+      sentAt: row.sentAt,
+      deliveredAt: row.deliveredAt,
+      exchange: exportedExchange(side, row),
+    };
+  });
+}
+
+/**
+ * Her side of the snapshot, chosen by the side she stood on. The other side's
+ * three columns are in the row and are never read here.
+ *
+ * `null` when there is no exchange — the left join found none, so every one of
+ * these columns is `NULL`, the address included. On an exchange row the address
+ * is `NOT NULL`, so it is also what decides.
+ */
+function exportedExchange(
+  side: ExportedOffer["side"],
+  row: {
+    readonly exchangedAt: Date | null;
+    readonly workerFullName: string | null;
+    readonly workerPhone: string | null;
+    readonly workerEmail: string | null;
+    readonly hirerName: string | null;
+    readonly hirerPhone: string | null;
+    readonly hirerEmail: string | null;
+  },
+): ExportedExchange | null {
+  const sent = side === "sent";
+  const email = sent ? row.hirerEmail : row.workerEmail;
+
+  if (row.exchangedAt === null || email === null) return null;
+
+  return {
+    exchangedAt: row.exchangedAt,
+    yourDetails: sent
+      ? { fullName: row.hirerName, phone: row.hirerPhone, email }
+      : { fullName: row.workerFullName, phone: row.workerPhone, email },
+  };
 }
 
 async function exportedProfile(

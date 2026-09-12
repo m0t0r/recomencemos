@@ -67,6 +67,7 @@ import { db as pooledDatabase } from "#connection";
 import { hasConsented, recordConsent } from "#consent/index";
 import type { ConsentVersions } from "#consent/registry";
 import type { DomainDatabase, DomainTransaction } from "#database";
+import { type ExchangeDelivery, writeExchange } from "#exchange";
 import { asOfferSendingState, MOST_RESTRICTIVE_OFFER_SENDING_STATE } from "#policy/account-states";
 import { type ContactDetailKind, rejectContactDetails } from "#policy/contact-details";
 import {
@@ -592,10 +593,19 @@ export async function findReceivedOfferSender(
  * the state** because it is hers: the Offer is on her own list, and the surface
  * tells her what it already says.
  */
-export type AnswerOfferOutcome =
-  | { readonly ok: true }
+export type AnswerRefusal =
   | { readonly ok: false; readonly reason: "not_found" }
   | { readonly ok: false; readonly reason: "already_answered"; readonly state: OfferState };
+
+export type AnswerOfferOutcome = { readonly ok: true } | AnswerRefusal;
+
+/**
+ * Accepting answers with the exchange it wrote — what the two copies need, for
+ * the action to send once the transaction has committed.
+ */
+export type AcceptOfferOutcome =
+  | { readonly ok: true; readonly exchange: ExchangeDelivery }
+  | AnswerRefusal;
 
 const NOT_FOUND = { ok: false, reason: "not_found" } as const;
 
@@ -613,13 +623,18 @@ const NOT_FOUND = { ok: false, reason: "not_found" } as const;
  * `OF offer` rather than a bare `FOR UPDATE`, because the join would otherwise
  * lock her profile row too — which `deliverOffer` writes, so every accept would
  * serialise against every delivery to her for no reason.
+ *
+ * `andThen` runs in the same transaction, after the state has moved, and its
+ * result is the answer's — which is how accepting writes the exchange beneath
+ * the same lock without this function knowing what an exchange is.
  */
-async function answerReceivedOffer(
+async function answerReceivedOffer<T>(
   db: DomainDatabase,
   accountId: string,
   offerId: string,
   to: "accepted" | "declined",
-): Promise<AnswerOfferOutcome> {
+  andThen: (tx: DomainTransaction, offerId: string) => Promise<T>,
+): Promise<{ readonly ok: true; readonly result: T } | AnswerRefusal> {
   if (!isOfferId(offerId)) return NOT_FOUND;
 
   return db.transaction(async (tx) => {
@@ -646,31 +661,28 @@ async function answerReceivedOffer(
 
     await tx.update(schema.offer).set({ state: to }).where(eq(schema.offer.id, row.id));
 
-    /**
-     * **The exchange, under `UNIQUE (offer_id)`.** The lock above is what refuses
-     * a second accept; this constraint is what would refuse it if the lock were
-     * ever wrong. What the row snapshots, and what crosses on screen and by email,
-     * is story 9's.
-     */
-    if (to === "accepted") {
-      await tx.insert(schema.contactExchange).values({ offerId: row.id });
-    }
-
-    return { ok: true as const };
+    return { ok: true as const, result: await andThen(tx, row.id) };
   });
 }
 
 /**
- * She accepts. **No ceiling sits on this** (DD7): refusing a Worker the
- * acceptance she has waited for, to slow a harvester who would have to be sent
- * the Offer first, protects the wrong person.
+ * She accepts, and the Contact Exchange is written in the same transaction —
+ * both sides' details snapshotted beneath the lock, under `UNIQUE (offer_id)`.
+ * **Nothing is sent from here**: the action sends the two copies once this has
+ * committed, from the exchange it hands back.
+ *
+ * **No ceiling sits on this** (DD7): refusing a Worker the acceptance she has
+ * waited for, to slow a harvester who would have to be sent the Offer first,
+ * protects the wrong person.
  */
 export async function acceptOffer(
   db: DomainDatabase,
   accountId: string,
   offerId: string,
-): Promise<AnswerOfferOutcome> {
-  return answerReceivedOffer(db, accountId, offerId, "accepted");
+): Promise<AcceptOfferOutcome> {
+  const outcome = await answerReceivedOffer(db, accountId, offerId, "accepted", writeExchange);
+
+  return outcome.ok ? { ok: true, exchange: outcome.result } : outcome;
 }
 
 /**
@@ -682,7 +694,9 @@ export async function declineOffer(
   accountId: string,
   offerId: string,
 ): Promise<AnswerOfferOutcome> {
-  return answerReceivedOffer(db, accountId, offerId, "declined");
+  const outcome = await answerReceivedOffer(db, accountId, offerId, "declined", async () => {});
+
+  return outcome.ok ? { ok: true } : outcome;
 }
 
 /** One Offer waiting for a person to read it, as the Admin queue needs it. */
@@ -811,7 +825,7 @@ export const offers = {
     return findReceivedOfferSender(pooledDatabase(), accountId, offerId);
   },
 
-  async accept(accountId: string, offerId: string): Promise<AnswerOfferOutcome> {
+  async accept(accountId: string, offerId: string): Promise<AcceptOfferOutcome> {
     return acceptOffer(pooledDatabase(), accountId, offerId);
   },
 

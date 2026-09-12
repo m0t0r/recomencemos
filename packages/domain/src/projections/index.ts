@@ -41,6 +41,7 @@
  */
 
 import type { CityId } from "#policy/cities";
+import type { CopyState, ExchangeSide } from "#policy/exchange-states";
 import { asOfferState, isOfferReviewDelayed, type OfferState } from "#policy/offer-states";
 import type { PhotoState } from "#policy/profile-states";
 import type { VocabularyEntry } from "#skills";
@@ -335,6 +336,69 @@ export function toReceivedOffer(record: ReceivedOfferRecord): ReceivedOffer {
   return {
     ...toReceivedOfferTerms(record),
     hirerName: record.hirerName,
+  };
+}
+
+/**
+ * One side's three details, as they crossed.
+ *
+ * **Nullable name and number, and the reason is his rather than hers.** Her
+ * three are always present — the profile will not publish without them — but a
+ * Hirer who sent an Offer before the platform asked senders to name themselves
+ * (C4) has neither, and the surface says so rather than rendering a blank.
+ */
+export interface ExchangedParty {
+  readonly fullName: string | null;
+  readonly phone: string | null;
+  readonly email: string;
+}
+
+/** Everything the exchange projection may read. Built by `#exchange`. */
+export interface ExchangeRecord {
+  readonly offerId: string;
+  readonly exchangedAt: Date;
+  readonly worker: ExchangedParty;
+  readonly hirer: ExchangedParty;
+  readonly workerCopy: CopyState;
+  readonly hirerCopy: CopyState;
+}
+
+/**
+ * **The Contact Exchange, as one party reads it** — hers on her received row,
+ * his on his sent one.
+ *
+ * `counterpart` is what crossed to the reader and `own` is what the reader gave
+ * — the success state's "both sides' details, once". `copy` is **the reader's
+ * own** copy by email and never the other side's: whether her email failed is a
+ * fact about her inbox, and it is not his to know.
+ *
+ * `offerId` is the join back to the row it renders on, and the only id here: the
+ * exchange's own key reaches no browser.
+ */
+export interface ContactExchange {
+  readonly offerId: string;
+  readonly exchangedAt: Date;
+  readonly side: ExchangeSide;
+  readonly counterpart: ExchangedParty;
+  readonly own: ExchangedParty;
+  readonly copy: CopyState;
+}
+
+function exchangedParty(party: ExchangedParty): ExchangedParty {
+  return { fullName: party.fullName, phone: party.phone, email: party.email };
+}
+
+/** The reader's view, field by field from the whitelist. */
+export function toContactExchange(record: ExchangeRecord, side: ExchangeSide): ContactExchange {
+  const worker = side === "worker";
+
+  return {
+    offerId: record.offerId,
+    exchangedAt: record.exchangedAt,
+    side,
+    counterpart: exchangedParty(worker ? record.hirer : record.worker),
+    own: exchangedParty(worker ? record.worker : record.hirer),
+    copy: worker ? record.workerCopy : record.hirerCopy,
   };
 }
 

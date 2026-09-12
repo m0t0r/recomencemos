@@ -33,6 +33,7 @@ import { logRequestError } from "@repo/observability/log-request-error";
 import { redirect } from "next/navigation";
 import { accountActionClient } from "@/lib/account";
 import { returnActionError } from "@/lib/safe-action";
+import { deliverExchange } from "./_lib/deliver-exchange";
 import { OFFER_GONE } from "./_lib/messages";
 import { acceptInputSchema, answerOfferIdArg, declineInputSchema } from "./_lib/answer-schema";
 
@@ -81,11 +82,19 @@ function redirectOrRefuse(
   return returnActionError(projectClientError(refusal));
 }
 
+/**
+ * **The exchange commits inside `offers.accept`, and the two copies go out here,
+ * after it** — before the redirect, so the row she lands on already says
+ * whether her copy was sent. `deliverExchange` never throws: a failed copy is
+ * recorded against its side and the accept stands.
+ */
 export const acceptOffer = accountActionClient
   .bindArgsSchemas([answerOfferIdArg])
   .inputSchema(acceptInputSchema)
   .stateAction(async ({ bindArgsParsedInputs: [offerId], ctx }) => {
     const outcome = await offers.accept(ctx.session.accountId, offerId);
+
+    if (outcome.ok) await deliverExchange(outcome.exchange);
 
     return redirectOrRefuse(outcome, offerId, "accepted");
   });
