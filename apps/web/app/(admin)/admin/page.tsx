@@ -9,7 +9,7 @@
  */
 
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import * as React from "react";
 import { requireAdminPage } from "@/lib/admin";
 import { QueueTable } from "./_components/queue-table";
 import { QueueEmpty, QueueSkeleton, SourceFailed } from "./_components/queue";
@@ -89,9 +89,9 @@ export default async function AdminPage() {
 
   return (
     <section className="flex min-w-0 flex-col gap-4">
-      <Suspense fallback={<QueueSkeleton label={QUEUE_LIST_LABEL} />}>
+      <React.Suspense fallback={<QueueSkeleton label={QUEUE_LIST_LABEL} />}>
         <QueueList />
-      </Suspense>
+      </React.Suspense>
     </section>
   );
 }

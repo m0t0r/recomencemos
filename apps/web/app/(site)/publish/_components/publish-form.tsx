@@ -17,7 +17,7 @@
  */
 
 import type { ConsentVersions } from "@repo/domain/consent";
-import { useId, useState } from "react";
+import * as React from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
 import { type PublishFieldName, PUBLISH_FAILED } from "@/app/_lib/profile-form/messages";
 import { publishProfileSchema } from "@/app/_lib/profile-form/schema";
@@ -46,7 +46,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
    * nothing, the upload has not finished when she submits, or JavaScript never
    * ran. All three publish a profile without a photo, which is the design.
    */
-  const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [photoKey, setPhotoKey] = React.useState<string | null>(null);
 
   const machine = useProfileForm({
     /**
@@ -63,7 +63,7 @@ export function PublishForm({ vocabulary, prefill, consentVersions }: PublishFor
     faultMessage: PUBLISH_FAILED,
   });
   const form = useProfileFields(prefill, machine.refusedValues);
-  const base = useId();
+  const base = React.useId();
 
   const idFor = (field: PublishFieldName, index?: number) =>
     index === undefined ? `${base}-${field}` : `${base}-${field}-${index}`;

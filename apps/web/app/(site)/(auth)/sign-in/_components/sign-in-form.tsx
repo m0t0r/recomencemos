@@ -51,7 +51,7 @@ import { Input } from "@repo/design-system/components/input";
 import { Label } from "@repo/design-system/components/label";
 import { cn } from "@repo/design-system/lib/utils";
 import { InfoIcon, TriangleAlertIcon } from "lucide-react";
-import { useId } from "react";
+import * as React from "react";
 import { useFormStatus } from "react-dom";
 import {
   DOOR_DIVIDER,
@@ -84,10 +84,10 @@ export interface SignInFormProps {
 
 export function SignInForm({ googleAvailable, returnPath, error }: SignInFormProps) {
   const machine = useSignIn({ returnPath, error });
-  const emailId = useId();
-  const sharedDeviceId = useId();
-  const helpId = useId();
-  const emailErrorId = useId();
+  const emailId = React.useId();
+  const sharedDeviceId = React.useId();
+  const helpId = React.useId();
+  const emailErrorId = React.useId();
 
   /**
    * **TanStack Form owns field state and client-side validation; it does not own

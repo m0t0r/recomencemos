@@ -8,7 +8,7 @@
  * adds no URL segment, so every path below is exactly where it was.
  */
 
-import { Suspense } from "react";
+import * as React from "react";
 import { SiteFooter } from "./_components/site-footer/site-footer";
 import { SiteHeader, SiteHeaderPlaceholder } from "./_components/site-header/site-header";
 
@@ -30,9 +30,9 @@ export default function SiteLayout({ children }: Readonly<{ children: React.Reac
         before it paints, and the fallback holds the header's exact height so
         nothing moves when the read resolves.
       */}
-      <Suspense fallback={<SiteHeaderPlaceholder />}>
+      <React.Suspense fallback={<SiteHeaderPlaceholder />}>
         <SiteHeader />
-      </Suspense>
+      </React.Suspense>
       <div className="flex grow flex-col">{children}</div>
       <SiteFooter />
     </div>

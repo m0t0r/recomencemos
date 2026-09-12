@@ -49,18 +49,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import {
-  type ComponentType,
-  Fragment,
-  type KeyboardEvent,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import * as React from "react";
 import { OfferRow } from "./offer-row";
 import { PhotoRow } from "./photo-row";
 import { PastBandMarker } from "./queue";
@@ -95,7 +84,7 @@ import { QUEUE_ANCHOR, QUEUE_FOCUSABLE_LINE, QueueHandoff } from "../_lib/use-qu
 const SOURCE_ROWS: Readonly<
   Record<
     string,
-    { readonly Row: ComponentType<{ readonly item: QueueItem }>; readonly keys: boolean }
+    { readonly Row: React.ComponentType<{ readonly item: QueueItem }>; readonly keys: boolean }
   >
 > = {
   offers: { Row: OfferRow, keys: true },
@@ -157,36 +146,37 @@ export function QueueTable({
    * outcome is still being announced when the keyboard moves on. Any selection
    * the Admin makes themselves closes the decided one — by then it has been said.
    */
-  const [selected, setSelected] = useState<string | null>(rows[0]?.key ?? null);
-  const [lastDecided, setLastDecided] = useState<string | null>(null);
+  const [selected, setSelected] = React.useState<string | null>(rows[0]?.key ?? null);
+  const [lastDecided, setLastDecided] = React.useState<string | null>(null);
 
   /**
    * Rows decided on this screen. A ref as well as state, because a handoff reads
    * it from inside a row's effect, which can run before this component has
    * re-rendered with the previous decision.
    */
-  const [decided, setDecided] = useState<ReadonlySet<string>>(() => new Set());
-  const decidedRef = useRef<ReadonlySet<string>>(decided);
+  const [decided, setDecided] = React.useState<ReadonlySet<string>>(() => new Set());
+  const decidedRef = React.useRef<ReadonlySet<string>>(decided);
 
-  const toggles = useRef(new Map<string, HTMLButtonElement>());
-  const details = useRef(new Map<string, HTMLElement>());
+  const toggles = React.useRef(new Map<string, HTMLButtonElement>());
+  const details = React.useRef(new Map<string, HTMLElement>());
 
   /**
    * What to focus once the next render has shown it. A ref and an effect rather
    * than a focus call where the decision is made, because the row being focused
    * is `hidden` until that render lands and a hidden element cannot take focus.
    */
-  const pendingFocus = useRef<{ readonly key: string; readonly onto: "anchor" | "toggle" } | null>(
-    null,
-  );
+  const pendingFocus = React.useRef<{
+    readonly key: string;
+    readonly onto: "anchor" | "toggle";
+  } | null>(null);
 
-  const baseId = useId();
+  const baseId = React.useId();
   const hintId = `${baseId}-keys`;
   const filterId = `${baseId}-filter`;
 
-  const data = useMemo(() => [...rows], [rows]);
+  const data = React.useMemo(() => [...rows], [rows]);
 
-  const expanded = useMemo<ExpandedState>(
+  const expanded = React.useMemo<ExpandedState>(
     () => ({
       ...(lastDecided ? { [lastDecided]: true } : {}),
       ...(selected ? { [selected]: true } : {}),
@@ -226,7 +216,7 @@ export function QueueTable({
   const filterValue = sourceFilter?.getFilterValue();
   const shownSource = typeof filterValue === "string" ? filterValue : "";
 
-  useEffect(() => {
+  React.useEffect(() => {
     const target = pendingFocus.current;
     if (!target) return;
     pendingFocus.current = null;
@@ -262,7 +252,7 @@ export function QueueTable({
     return true;
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     // **A held key is not a second press.** A decision hands focus to the next
     // row the moment it lands, so an autorepeating `a` would deliver an Offer
     // nobody opened — and `r` would delete a photo, which cannot be undone.
@@ -385,7 +375,7 @@ export function QueueTable({
               const detailId = `${baseId}-${row.id}`;
 
               return (
-                <Fragment key={row.id}>
+                <React.Fragment key={row.id}>
                   <TableRow
                     data-row-key={row.id}
                     data-state={row.id === selected ? "selected" : undefined}
@@ -493,7 +483,7 @@ export function QueueTable({
                       </RowHandoff>
                     </TableCell>
                   </TableRow>
-                </Fragment>
+                </React.Fragment>
               );
             })}
           </TableBody>
@@ -520,9 +510,9 @@ function RowHandoff({
 }: {
   rowKey: string;
   handOn: (key: string) => boolean;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
-  const value = useCallback(() => handOn(rowKey), [handOn, rowKey]);
+  const value = React.useCallback(() => handOn(rowKey), [handOn, rowKey]);
 
   return <QueueHandoff.Provider value={value}>{children}</QueueHandoff.Provider>;
 }

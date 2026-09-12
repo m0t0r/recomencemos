@@ -21,18 +21,18 @@
  * affordance reads as static text.
  */
 
-import { type ReactNode, useEffect, useRef } from "react";
+import * as React from "react";
 
 export function RowSummary({
   focusOnMount,
   children,
 }: {
   readonly focusOnMount: boolean;
-  readonly children: ReactNode;
+  readonly children: React.ReactNode;
 }) {
-  const ref = useRef<HTMLElement>(null);
+  const ref = React.useRef<HTMLElement>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (focusOnMount) ref.current?.focus();
   }, [focusOnMount]);
 

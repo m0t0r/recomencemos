@@ -34,7 +34,7 @@ import { buttonVariants } from "@repo/design-system/components/button-variants";
 import { profiles } from "@repo/domain/profiles";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Suspense } from "react";
+import * as React from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { ListEmptyState } from "./_components/profile-list/empty-state";
 import { ListBoundary } from "./_components/profile-list/list-boundary";
@@ -141,9 +141,9 @@ export default function WallPage() {
       <Cover
         profilesId={PROFILES_ID}
         strip={
-          <Suspense fallback={<VocabularyStripPlaceholder />}>
+          <React.Suspense fallback={<VocabularyStripPlaceholder />}>
             <VocabularyStrip />
-          </Suspense>
+          </React.Suspense>
         }
       />
 
@@ -159,9 +159,9 @@ export default function WallPage() {
         {/* Rows stay at a reading measure; the section is wide so the heading lines up with the cover. */}
         <div className="max-w-3xl">
           <ListBoundary>
-            <Suspense fallback={<ProfileListSkeleton />}>
+            <React.Suspense fallback={<ProfileListSkeleton />}>
               <WallList />
-            </Suspense>
+            </React.Suspense>
           </ListBoundary>
         </div>
 

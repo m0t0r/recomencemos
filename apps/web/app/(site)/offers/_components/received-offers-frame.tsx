@@ -25,7 +25,7 @@
 
 import { Separator } from "@repo/design-system/components/separator";
 import { Skeleton } from "@repo/design-system/components/skeleton";
-import { type ReactNode, Suspense } from "react";
+import * as React from "react";
 import type { LedgerView } from "../_lib/ledger";
 import { RECEIVED_OFFERS_HEADING, RECEIVED_OFFERS_LEAD, waitingCount } from "../_lib/messages";
 import { ReceivedOffersLedger } from "./received-offers-ledger";
@@ -77,14 +77,14 @@ export function ReceivedOffersFrame({
 }: {
   readonly ledger: Ledger;
   /** The page's `<StandingNotices>`, rendered at the foot. */
-  readonly notices: ReactNode;
+  readonly notices: React.ReactNode;
 }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
       <header className="flex flex-col gap-2">
         <h1 className="page-heading">{RECEIVED_OFFERS_HEADING}</h1>
         <p className="text-muted-foreground">{RECEIVED_OFFERS_LEAD}</p>
-        <Suspense
+        <React.Suspense
           fallback={
             <div aria-hidden="true">
               <Skeleton className="h-6 w-48" />
@@ -92,12 +92,12 @@ export function ReceivedOffersFrame({
           }
         >
           <WaitingCount ledger={ledger} />
-        </Suspense>
+        </React.Suspense>
       </header>
 
-      <Suspense fallback={<RowsSkeleton />}>
+      <React.Suspense fallback={<RowsSkeleton />}>
         <Rows ledger={ledger} />
-      </Suspense>
+      </React.Suspense>
 
       {notices}
     </main>

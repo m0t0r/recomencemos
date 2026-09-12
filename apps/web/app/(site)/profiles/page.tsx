@@ -28,7 +28,7 @@ import { skills } from "@repo/domain/skills";
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
-import { Suspense } from "react";
+import * as React from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { CountAnnouncement } from "../_components/profile-list/count-announcement";
 import { ListEmptyState } from "../_components/profile-list/empty-state";
@@ -194,9 +194,9 @@ function BrowseFiltersPanel() {
             `Cualquier capacidad` is what an unfiltered search sends — so holding
             the whole panel for it would trade three ready controls for one.
           */
-          <Suspense fallback={<SkillOptionsFallback />}>
+          <React.Suspense fallback={<SkillOptionsFallback />}>
             <SkillOptions />
-          </Suspense>
+          </React.Suspense>
         }
       />
     </NuqsAdapter>
@@ -344,9 +344,9 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
           component reading that outside a boundary opts the whole route out of
           the static shell.
         */}
-        <Suspense fallback={<FiltersSkeleton />}>
+        <React.Suspense fallback={<FiltersSkeleton />}>
           <BrowseFiltersPanel />
-        </Suspense>
+        </React.Suspense>
 
         {/*
           The escape the Wall does not need: a page of this list that failed still
@@ -354,9 +354,9 @@ export default function BrowsePage({ searchParams }: { readonly searchParams: Se
           "the unfiltered list is still reachable".
         */}
         <ListBoundary escape={{ href: "/profiles", label: TO_BROWSE }}>
-          <Suspense fallback={<ProfileListSkeleton />}>
+          <React.Suspense fallback={<ProfileListSkeleton />}>
             <BrowseList searchParams={searchParams} />
-          </Suspense>
+          </React.Suspense>
         </ListBoundary>
       </div>
 

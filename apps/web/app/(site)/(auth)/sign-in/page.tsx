@@ -21,7 +21,7 @@ import { safeReturnPath } from "@repo/domain/auth-handler";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import * as React from "react";
 import { auth, googleSignInAvailable } from "@/lib/auth";
 import { SignInForm } from "./_components/sign-in-form";
 import { SIGN_IN_TITLE } from "./_lib/messages";
@@ -152,9 +152,9 @@ export default function SignInPage({ searchParams }: { searchParams: SearchParam
     <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-4 py-10">
       <h1 className="page-heading">{SIGN_IN_TITLE}</h1>
 
-      <Suspense fallback={<PanelSkeleton />}>
+      <React.Suspense fallback={<PanelSkeleton />}>
         <SignInPanel searchParams={searchParams} />
-      </Suspense>
+      </React.Suspense>
     </main>
   );
 }

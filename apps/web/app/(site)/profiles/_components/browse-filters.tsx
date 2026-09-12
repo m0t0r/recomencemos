@@ -56,7 +56,7 @@ import { selectBox } from "@repo/design-system/components/input-variants";
 import { CITIES } from "@repo/domain/policy";
 import Link from "next/link";
 import { debounce, parseAsString, useQueryStates } from "nuqs";
-import { type ReactNode, useTransition } from "react";
+import * as React from "react";
 import { RadioChips } from "@/app/_components/radio-chips";
 import { FILTER_KEYS, isNarrowed, MAX_QUERY_LENGTH } from "../_lib/filters";
 import {
@@ -103,7 +103,7 @@ const CITY_CHIPS = [
 
 export interface BrowseFiltersProps {
   /** The `<option>` list, streamed — see the note above about the fallback. */
-  readonly skillOptions: ReactNode;
+  readonly skillOptions: React.ReactNode;
 }
 
 /**
@@ -116,7 +116,7 @@ export interface BrowseFiltersProps {
  * one.
  */
 export function BrowseFiltersForm({ skillOptions }: BrowseFiltersProps) {
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = React.useTransition();
   const [params, setParams] = useQueryStates(FILTER_PARSERS, {
     shallow: false,
     history: "push",

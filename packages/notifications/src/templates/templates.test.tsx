@@ -13,7 +13,7 @@
 
 import { render } from "@react-email/components";
 import { AppError } from "@repo/errors/app-error";
-import type { ReactElement } from "react";
+import * as React from "react";
 import { BaseEmail } from "#templates/base";
 import { CONTACT_EXCHANGE_SUBJECTS, ContactExchangeEmail } from "#templates/contact-exchange";
 import { MAGIC_LINK_SUBJECT, MagicLinkEmail, safeUrl } from "#templates/magic-link";
@@ -29,7 +29,7 @@ import { OFFER_DELIVERED_SUBJECT, OfferDeliveredEmail } from "#templates/offer-d
  */
 const templates: ReadonlyArray<{
   readonly name: string;
-  render(payload: { scripted: string; linked: string }): ReactElement;
+  render(payload: { scripted: string; linked: string }): React.ReactElement;
 }> = [
   {
     name: "base",

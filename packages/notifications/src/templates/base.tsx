@@ -34,7 +34,7 @@ import {
   Text,
   pixelBasedPreset,
 } from "@react-email/components";
-import type { ReactNode } from "react";
+import * as React from "react";
 import { FONT_STACK, palette } from "#palette";
 
 export interface BaseEmailProps {
@@ -55,7 +55,7 @@ export interface BaseEmailProps {
    * spends it.
    */
   readonly preview: string;
-  readonly children: ReactNode;
+  readonly children: React.ReactNode;
 }
 
 export function BaseEmail({ title, preview, children }: BaseEmailProps) {

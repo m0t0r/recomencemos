@@ -26,7 +26,7 @@
  */
 
 import type { VocabularyEntry } from "@repo/domain/skills";
-import { useSyncExternalStore } from "react";
+import * as React from "react";
 import { usePhotoPicker } from "@/app/_components/photo/photo-picker";
 import { initialOf, ProfileCard } from "@/app/(site)/_components/profile-card";
 // The signing action is `/publish`'s, and there is one: a second endpoint that
@@ -78,7 +78,7 @@ export function OwnCard({
   photoUrl,
   describedBy,
 }: OwnCardProps) {
-  const hydrated = useSyncExternalStore(
+  const hydrated = React.useSyncExternalStore(
     subscribeToNothing,
     () => true,
     () => false,

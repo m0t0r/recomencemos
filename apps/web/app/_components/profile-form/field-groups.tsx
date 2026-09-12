@@ -38,7 +38,7 @@
  * spelling by accident is the failure worth avoiding.
  */
 
-import type { ReactNode } from "react";
+import * as React from "react";
 import {
   FieldDescription,
   FieldGroup,
@@ -146,7 +146,7 @@ export interface ProfileFieldGroupsProps {
    * most abandonable thing on the page — so it goes after everything that
    * cannot be skipped, and never between her and the submit.
    */
-  readonly photoSlot?: ReactNode;
+  readonly photoSlot?: React.ReactNode;
 }
 
 export function ProfileFieldGroups({

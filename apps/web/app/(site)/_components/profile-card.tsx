@@ -29,7 +29,7 @@ import {
   CardTitle,
 } from "@repo/design-system/components/card";
 import type { VocabularyEntry } from "@repo/domain/skills";
-import type { ReactNode } from "react";
+import * as React from "react";
 import { SkillChips } from "./profile-list/skill-chips";
 
 export interface ProfileCardProps {
@@ -83,7 +83,7 @@ export interface ProfileCardProps {
    * becomes `PhotoPicker`. Every other caller leaves it unset and gets the plain
    * `Avatar`, which carries `photoUrl` and `photoAlt` above.
    */
-  readonly photoSlot?: ReactNode;
+  readonly photoSlot?: React.ReactNode;
   readonly className?: string;
 }
 

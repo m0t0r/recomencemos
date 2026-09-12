@@ -20,7 +20,7 @@
  */
 
 import { Alert, AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
-import type { RefObject } from "react";
+import * as React from "react";
 import type { Feedback } from "@/app/_lib/form/use-action-form";
 import {
   OFFER_FIELD_LABELS,
@@ -32,7 +32,7 @@ import type { OfferSummary } from "../_lib/offer-summary";
 export interface OfferSummaryRegionProps {
   readonly summary: OfferSummary | undefined;
   readonly feedback: Feedback | undefined;
-  readonly summaryRef: RefObject<HTMLDivElement | null>;
+  readonly summaryRef: React.RefObject<HTMLDivElement | null>;
   /** The id of the control a summary item links to. */
   readonly idFor: (field: keyof typeof OFFER_FIELD_LABELS) => string;
 }

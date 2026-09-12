@@ -14,7 +14,7 @@
  * drift, and the copy that drifts is the one nobody opens until an incident.
  */
 
-import { useEffect, useRef, useState, useTransition, type RefObject } from "react";
+import * as React from "react";
 
 import { reportClientError, type BoundaryError } from "./report-client-error";
 
@@ -26,7 +26,7 @@ export interface ErrorBoundaryState {
   /** The retry button's handler. */
   onRetry: () => void;
   /** Attach to the boundary's heading: it takes focus when the boundary mounts. */
-  headingRef: RefObject<HTMLHeadingElement | null>;
+  headingRef: React.RefObject<HTMLHeadingElement | null>;
   /**
    * Attach to the element carrying `role="alert"`. It is how the boundary
    * knows *where on the page it was* — which is where the restored content
@@ -117,19 +117,19 @@ function focusRestoredContent(position: Position | null): void {
  * button that reliably does nothing to a server error.
  */
 export function useErrorBoundary(error: BoundaryError, retry: () => void): ErrorBoundaryState {
-  const [reference, setReference] = useState<string | undefined>(undefined);
-  const [isRetrying, startRetry] = useTransition();
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [reference, setReference] = React.useState<string | undefined>(undefined);
+  const [isRetrying, startRetry] = React.useTransition();
+  const headingRef = React.useRef<HTMLHeadingElement>(null);
 
   /** The error this boundary has already reported, so it reports each one once. */
-  const reportedError = useRef<BoundaryError | undefined>(undefined);
+  const reportedError = React.useRef<BoundaryError | undefined>(undefined);
   /** Whether the unmount about to happen is a recovery rather than a navigation. */
-  const isRecovering = useRef(false);
-  const container = useRef<HTMLElement | null>(null);
+  const isRecovering = React.useRef(false);
+  const container = React.useRef<HTMLElement | null>(null);
   /** Where the boundary stood, captured while it is still mounted. */
-  const position = useRef<Position | null>(null);
+  const position = React.useRef<Position | null>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     // Identity, not a boolean. An effect can run more than once for one error —
     // React's development Strict Mode invokes it twice on purpose, and a
     // remounted subtree does the same in production — and each extra run would
@@ -141,7 +141,7 @@ export function useErrorBoundary(error: BoundaryError, retry: () => void): Error
     setReference(reportClientError(error));
   }, [error]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     // Keyed on the transition ending rather than on a new error arriving: a
     // retry that fails may re-throw the *same* error object, which the report
     // guard above short-circuits. Clearing it there would leave this stuck
@@ -150,7 +150,7 @@ export function useErrorBoundary(error: BoundaryError, retry: () => void): Error
     if (!isRetrying) isRecovering.current = false;
   }, [isRetrying]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     // The container is `role="alert"`, so it is announced on mount; moving
     // focus into it is what gives a keyboard user somewhere to be afterwards.
     headingRef.current?.focus();

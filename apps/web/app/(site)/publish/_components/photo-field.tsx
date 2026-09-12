@@ -22,7 +22,7 @@
  */
 
 import { Field, FieldDescription, FieldTitle } from "@repo/design-system/components/field";
-import { useId } from "react";
+import * as React from "react";
 import { PhotoPicker } from "@/app/_components/photo/photo-picker";
 import {
   PHOTO_CHOOSE,
@@ -58,7 +58,7 @@ const SENTENCES = {
 } as const;
 
 export function PhotoField({ onPhotoKeyChange, hydrated }: PhotoFieldProps) {
-  const helpId = useId();
+  const helpId = React.useId();
 
   return (
     <Field>

@@ -27,7 +27,7 @@
  * the format is decided by the server-side re-encode from the bytes themselves.
  */
 
-import { useEffect, useRef, useState } from "react";
+import * as React from "react";
 import {
   PHOTO_TOO_LARGE,
   PHOTO_UNREADABLE,
@@ -95,7 +95,7 @@ const REFUSALS: Record<DownscaleRefusal, string> = {
 };
 
 export function usePhotoUpload({ signUpload, onPhotoKeyChange }: PhotoUploadOptions): PhotoUpload {
-  const [state, setState] = useState<PhotoStep>({ step: "idle" });
+  const [state, setState] = React.useState<PhotoStep>({ step: "idle" });
 
   /**
    * **Which pick is still the one that counts.**
@@ -109,7 +109,7 @@ export function usePhotoUpload({ signUpload, onPhotoKeyChange }: PhotoUploadOpti
    * object it uploaded is an unattached quarantine key, which is the state an
    * abandoned upload already leaves.
    */
-  const pickToken = useRef(0);
+  const pickToken = React.useRef(0);
 
   /**
    * **An object URL is a document-lifetime allocation, not a value.** Each
@@ -117,7 +117,7 @@ export function usePhotoUpload({ signUpload, onPhotoKeyChange }: PhotoUploadOpti
    * one is released whenever this one changes, and the last one on unmount.
    */
   const previewUrl = "previewUrl" in state ? state.previewUrl : null;
-  useEffect(() => {
+  React.useEffect(() => {
     if (!previewUrl) return;
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);

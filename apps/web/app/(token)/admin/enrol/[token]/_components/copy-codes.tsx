@@ -17,7 +17,7 @@
  */
 
 import { Button } from "@repo/design-system/components/button";
-import { useState } from "react";
+import * as React from "react";
 import { COPY_CODES, COPY_CODES_DONE, COPY_CODES_FAILED } from "../_lib/messages";
 
 /**
@@ -30,7 +30,7 @@ import { COPY_CODES, COPY_CODES_DONE, COPY_CODES_FAILED } from "../_lib/messages
 type CopyState = "ready" | "copied" | "failed";
 
 export function CopyCodes({ codes }: { readonly codes: readonly string[] }) {
-  const [state, setState] = useState<CopyState>("ready");
+  const [state, setState] = React.useState<CopyState>("ready");
 
   async function copy() {
     try {

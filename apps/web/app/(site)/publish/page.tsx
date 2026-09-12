@@ -23,7 +23,7 @@ import { skills } from "@repo/domain/skills";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import * as React from "react";
 import { requireAccountPage } from "@/lib/account";
 import { PublishForm } from "./_components/publish-form";
 import { PUBLISH_INTRO, PUBLISH_PAGE_TITLE, PUBLISH_TITLE } from "@/app/_lib/profile-form/messages";
@@ -78,9 +78,9 @@ export default function PublishPage() {
         <p className="text-muted-foreground text-pretty">{PUBLISH_INTRO}</p>
       </div>
 
-      <Suspense fallback={<PanelSkeleton />}>
+      <React.Suspense fallback={<PanelSkeleton />}>
         <PublishPanel />
-      </Suspense>
+      </React.Suspense>
     </main>
   );
 }

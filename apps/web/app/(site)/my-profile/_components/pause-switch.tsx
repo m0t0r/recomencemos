@@ -31,7 +31,7 @@
 import { Alert, AlertDescription } from "@repo/design-system/components/alert";
 import { Field, FieldDescription, FieldLabel } from "@repo/design-system/components/field";
 import { Switch } from "@repo/design-system/components/switch";
-import { useActionState, useId, useRef } from "react";
+import * as React from "react";
 import { feedbackFor } from "@/app/_lib/form/feedback";
 import { pauseProfile, resumeProfile } from "../actions";
 import {
@@ -48,11 +48,11 @@ type ResumeResult = Awaited<ReturnType<typeof resumeProfile>>;
 const NOTHING_YET: PauseResult & ResumeResult = {};
 
 export function PauseSwitch({ paused }: { readonly paused: boolean }) {
-  const switchId = useId();
-  const limitsId = useId();
-  const form = useRef<HTMLFormElement>(null);
-  const [pauseResult, pauseAction, pausing] = useActionState(pauseProfile, NOTHING_YET);
-  const [resumeResult, resumeAction, resuming] = useActionState(resumeProfile, NOTHING_YET);
+  const switchId = React.useId();
+  const limitsId = React.useId();
+  const form = React.useRef<HTMLFormElement>(null);
+  const [pauseResult, pauseAction, pausing] = React.useActionState(pauseProfile, NOTHING_YET);
+  const [resumeResult, resumeAction, resuming] = React.useActionState(resumeProfile, NOTHING_YET);
 
   const feedback = feedbackFor(paused ? resumeResult : pauseResult, PAUSE_FAULT);
   const working = pausing || resuming;

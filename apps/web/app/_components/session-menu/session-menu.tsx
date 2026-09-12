@@ -46,7 +46,7 @@ import {
 } from "@repo/design-system/components/dropdown-menu";
 import { IdCardIcon, InboxIcon, LogOutIcon, SendIcon, UserRoundIcon } from "lucide-react";
 import Link from "next/link";
-import { useActionState } from "react";
+import * as React from "react";
 import type { signOut } from "./actions";
 import {
   ACCOUNT,
@@ -159,7 +159,7 @@ export function SessionMenu({
   receivedOffersHref,
   profile,
 }: SessionMenuProps) {
-  const [result, formAction, pending] = useActionState(action, INITIAL);
+  const [result, formAction, pending] = React.useActionState(action, INITIAL);
 
   /**
    * Only a *returned* refusal reaches here. A success redirects, so this state

@@ -48,7 +48,7 @@ import {
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
 import { Textarea } from "@repo/design-system/components/textarea";
-import { useId } from "react";
+import * as React from "react";
 import { AuthorizationConsent } from "@/app/_components/consent/authorization";
 import { INITIAL_RESULT, useActionForm } from "@/app/_lib/form/use-action-form";
 import {
@@ -113,12 +113,12 @@ export interface OfferFormProps {
 }
 
 export function OfferForm({ profileSlug, consentVersions, alreadyIdentified }: OfferFormProps) {
-  const workId = useId();
-  const payId = useId();
-  const whenId = useId();
-  const nameId = useId();
-  const phoneId = useId();
-  const consentId = useId();
+  const workId = React.useId();
+  const payId = React.useId();
+  const whenId = React.useId();
+  const nameId = React.useId();
+  const phoneId = React.useId();
+  const consentId = React.useId();
 
   const machine = useActionForm<OfferSummary, RefusedOfferValues>({
     action: sendOffer.bind(null, profileSlug, consentVersions),

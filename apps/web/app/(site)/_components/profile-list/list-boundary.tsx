@@ -27,7 +27,7 @@ import { Button } from "@repo/design-system/components/button";
 import { buttonVariants } from "@repo/design-system/components/button-variants";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Component, type ReactNode } from "react";
+import * as React from "react";
 import type { BoundaryError } from "@/lib/report-client-error";
 import { useErrorBoundary } from "@/lib/use-error-boundary";
 import {
@@ -98,8 +98,8 @@ function ListFailure({
  * It holds no behaviour of its own beyond that — everything a person sees or
  * hears is in {@link ListFailure}.
  */
-export class ListBoundary extends Component<
-  { readonly children: ReactNode; readonly escape?: ListEscape },
+export class ListBoundary extends React.Component<
+  { readonly children: React.ReactNode; readonly escape?: ListEscape },
   { readonly error: BoundaryError | null }
 > {
   override state: { readonly error: BoundaryError | null } = { error: null };

@@ -20,7 +20,7 @@ import { skills } from "@repo/domain/skills";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import * as React from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
 import { requireAccountPage } from "@/lib/account";
 import { EditForm } from "./_components/edit-form";
@@ -99,9 +99,9 @@ export default function EditProfilePage() {
         <p className="text-muted-foreground text-pretty">{EDIT_INTRO}</p>
       </div>
 
-      <Suspense fallback={<PanelSkeleton />}>
+      <React.Suspense fallback={<PanelSkeleton />}>
         <EditPanel />
-      </Suspense>
+      </React.Suspense>
     </main>
   );
 }

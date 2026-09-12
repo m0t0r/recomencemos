@@ -19,7 +19,7 @@
  * she typed, which on the unhydrated path is the only copy of it there is.
  */
 
-import { useId } from "react";
+import * as React from "react";
 import type { VocabularyEntry } from "@/app/_components/profile-form/skill-picker";
 import type { PublishFieldName } from "@/app/_lib/profile-form/messages";
 import { type UpdateProfileValues, updateProfileSchema } from "@/app/_lib/profile-form/schema";
@@ -43,7 +43,7 @@ export function EditForm({ vocabulary, defaults }: EditFormProps) {
     faultMessage: SAVE_FAILED,
   });
   const form = useProfileFields(defaults, machine.refusedValues);
-  const base = useId();
+  const base = React.useId();
 
   const idFor = (field: PublishFieldName, index?: number) =>
     index === undefined ? `${base}-${field}` : `${base}-${field}-${index}`;

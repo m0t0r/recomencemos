@@ -26,7 +26,7 @@ import { Skeleton } from "@repo/design-system/components/skeleton";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import * as React from "react";
 import { auth } from "@/lib/auth";
 import { SessionList } from "./_components/session-list";
 import { SessionsPanel } from "./_components/sessions-panel";
@@ -176,9 +176,9 @@ export default function AccountPage() {
       */}
       <h1 className="page-heading">{ACCOUNT_TITLE}</h1>
 
-      <Suspense fallback={<PanelSkeleton />}>
+      <React.Suspense fallback={<PanelSkeleton />}>
         <AccountPanel />
-      </Suspense>
+      </React.Suspense>
     </main>
   );
 }

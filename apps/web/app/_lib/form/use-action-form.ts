@@ -32,16 +32,7 @@
  *   the server's per-field verdict arrives as `validationErrors`.
  */
 
-import {
-  type FormEvent,
-  type RefObject,
-  startTransition,
-  useActionState,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import * as React from "react";
 import type { z } from "zod";
 import type { ActionError } from "@/lib/safe-action";
 import { type Feedback, feedbackFor } from "./feedback";
@@ -127,14 +118,17 @@ export interface ActionFormMachine<Summary, Values> {
   /** A ceiling or a transport fault: neither is a field error. */
   readonly feedback: Feedback | undefined;
   /** Focus lands here on every failed outcome — the count before the field. */
-  readonly summaryRef: RefObject<HTMLDivElement | null>;
+  readonly summaryRef: React.RefObject<HTMLDivElement | null>;
   /**
    * The `<form onSubmit>`. Parses the form's own bytes with the schema the
    * action will parse them with; a valid form is never intercepted, and a
    * refused one is stopped here, its validators run, and focus moved to the
    * summary.
    */
-  readonly guardSubmit: (event: FormEvent<HTMLFormElement>, runValidators: () => void) => void;
+  readonly guardSubmit: (
+    event: React.FormEvent<HTMLFormElement>,
+    runValidators: () => void,
+  ) => void;
 }
 
 const subscribeToNothing = () => () => {};
@@ -161,16 +155,16 @@ export function useActionForm<Summary, Values>({
    */
   const call = action as (state: ActionFormResult, formData: FormData) => Promise<ActionFormResult>;
 
-  const [result, formAction, pending] = useActionState(call, initial);
+  const [result, formAction, pending] = React.useActionState(call, initial);
 
-  const hydrated = useSyncExternalStore(
+  const hydrated = React.useSyncExternalStore(
     subscribeToNothing,
     () => true,
     () => false,
   );
 
-  const [clientSummary, setClientSummary] = useState<Summary | undefined>(undefined);
-  const summaryRef = useRef<HTMLDivElement>(null);
+  const [clientSummary, setClientSummary] = React.useState<Summary | undefined>(undefined);
+  const summaryRef = React.useRef<HTMLDivElement>(null);
 
   /**
    * The server's verdict outranks the browser's: once a submit has gone out,
@@ -181,7 +175,7 @@ export function useActionForm<Summary, Values>({
   const serverErrors = result.serverError?.fieldErrors ?? result.validationErrors;
   const summary = summaryFromValidationErrors(serverErrors) ?? clientSummary;
 
-  useEffect(() => {
+  React.useEffect(() => {
     // Read from `result` rather than a derived boolean: `result` is a fresh
     // object per dispatch, which is what makes "on every outcome" true.
     if (result.serverError ?? result.validationErrors) {
@@ -199,7 +193,7 @@ export function useActionForm<Summary, Values>({
       // `<form>` for the unhydrated path.
       event.preventDefault();
       setClientSummary(undefined);
-      startTransition(() => formAction(formData));
+      React.startTransition(() => formAction(formData));
       return;
     }
 

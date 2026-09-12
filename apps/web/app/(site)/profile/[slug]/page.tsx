@@ -52,7 +52,7 @@ import { profiles, SLUG_PATTERN } from "@repo/domain/profiles";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import * as React from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { type CeilingRefusal, chargeCeilings } from "@/lib/ceilings";
@@ -243,9 +243,9 @@ function PanelSkeleton() {
 export default function ProfilePage({ params }: { readonly params: Params }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
-      <Suspense fallback={<PanelSkeleton />}>
+      <React.Suspense fallback={<PanelSkeleton />}>
         <ProfilePanel params={params} />
-      </Suspense>
+      </React.Suspense>
 
       {/*
         Story 11's standing notices. `/profile` is a required prefix in

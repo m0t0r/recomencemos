@@ -44,7 +44,7 @@ import { Skeleton } from "@repo/design-system/components/skeleton";
 import { CURRENT_CONSENT_VERSIONS } from "@repo/domain/consent";
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { Suspense } from "react";
+import * as React from "react";
 import {
   AUTHORIZATION_ANCHOR,
   AuthorizationText,
@@ -148,9 +148,9 @@ export default function PrivacyNoticePage() {
       </header>
 
       <Section heading={NOTICE_COPY.RESPONSIBLE_HEADING}>
-        <Suspense fallback={<LinesSkeleton lines={2} />}>
+        <React.Suspense fallback={<LinesSkeleton lines={2} />}>
           <ResponsibleParty />
-        </Suspense>
+        </React.Suspense>
       </Section>
 
       <Section heading={NOTICE_COPY.DATA_HEADING}>
@@ -188,9 +188,9 @@ export default function PrivacyNoticePage() {
       <Section heading={NOTICE_COPY.RIGHTS_HEADING}>
         <p className="text-pretty">{NOTICE_COPY.RIGHTS_INTRO}</p>
         <Bullets items={RIGHTS_ITEMS} />
-        <Suspense fallback={<LinesSkeleton lines={1} />}>
+        <React.Suspense fallback={<LinesSkeleton lines={1} />}>
           <RightsContact />
-        </Suspense>
+        </React.Suspense>
       </Section>
 
       {/*

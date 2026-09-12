@@ -50,7 +50,7 @@ import { FieldDescription, FieldError } from "@repo/design-system/components/fie
 import { cn } from "@repo/design-system/lib/utils";
 import { PHOTO_INPUT_ACCEPT } from "@repo/storage/limits";
 import { CameraIcon, UserRoundIcon } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import * as React from "react";
 import { type SignPhotoUpload, usePhotoUpload } from "@/app/_lib/photo/use-photo-upload";
 import { PHOTO_PREPARING, PHOTO_UPLOADING } from "@/app/_lib/profile-form/messages";
 
@@ -85,7 +85,7 @@ export interface PhotoPickerProps {
    * state is a button** rather than a circle, which is `/publish`'s — there is
    * no one yet whose initial to show.
    */
-  readonly placeholder?: ReactNode;
+  readonly placeholder?: React.ReactNode;
   /** Every change to the key that counts; see `usePhotoUpload`. */
   readonly onPhotoKeyChange?: (photoKey: string | null) => void;
   /**
@@ -101,9 +101,9 @@ export interface PhotoPickerProps {
 /** The control and what it says, for a surface that places them apart. */
 export interface PhotoPickerParts {
   /** The circle — or, on `/publish` before a pick, the button. The one tab stop. */
-  readonly control: ReactNode;
+  readonly control: React.ReactNode;
   /** Its progress, its refusal, or why it is waiting for JavaScript. */
-  readonly messages: ReactNode;
+  readonly messages: React.ReactNode;
 }
 
 export function usePhotoPicker({
@@ -117,8 +117,8 @@ export function usePhotoPicker({
   describedBy,
   size = "lg",
 }: PhotoPickerProps): PhotoPickerParts {
-  const inputId = useId();
-  const statusId = useId();
+  const inputId = React.useId();
+  const statusId = React.useId();
 
   /**
    * **Where a commit stands, kept apart from where the upload stands.** The
@@ -127,7 +127,7 @@ export function usePhotoPicker({
    * about different things, so they are two pieces of state rather than one
    * machine reaching into the other.
    */
-  const [commitment, setCommitment] = useState<
+  const [commitment, setCommitment] = React.useState<
     | { readonly step: "none" | "working" | "taken" }
     | { readonly step: "refused"; readonly message: string }
   >({ step: "none" });

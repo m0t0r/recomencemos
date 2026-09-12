@@ -87,3 +87,81 @@ lint_fixture "apps/web inherits the refusal" apps/web/.oxlintrc.json 1 \
   'testing-library\(no-container\)' "$LINT/container.test.tsx"
 lint_fixture "design-system inherits the refusal" packages/design-system/.oxlintrc.json 1 \
   'testing-library\(no-container\)' "$LINT/container.test.tsx"
+
+# The repository's own rule, from `scripts/oxlint-plugin.mjs` through the same `jsPlugins` door:
+# React is reached through one namespace import and nothing is pulled out of it by name. A local
+# path in `jsPlugins` is the part most likely to stop resolving from a config that `extends` the
+# root, so each workspace that renders React is checked to still load it.
+cat > "$LINT/react-named.tsx" <<'EOF'
+import { useState } from "react";
+export const useCount = () => useState(0);
+EOF
+
+cat > "$LINT/react-type.tsx" <<'EOF'
+import type { ReactNode } from "react";
+export const Slot = (props: { children: ReactNode }) => props.children;
+EOF
+
+cat > "$LINT/react-default.tsx" <<'EOF'
+import React from "react";
+export const Empty = () => React.createElement("p");
+EOF
+
+cat > "$LINT/react-reexport.ts" <<'EOF'
+export { useState } from "react";
+EOF
+
+cat > "$LINT/react-namespace.tsx" <<'EOF'
+import * as React from "react";
+export function Slot(props: { children: React.ReactNode }) {
+  const [count] = React.useState(0);
+  return <React.Suspense fallback={count}>{props.children}</React.Suspense>;
+}
+EOF
+
+# The fix is how the repository was migrated, so it is pinned too: a value import and a type
+# import in one file, a shorthand property, a JSX tag pair, and a directive whose text is a hook's
+# name. One pass has to leave a single namespace import and nothing else to report.
+cat > "$LINT/react-fix.tsx" <<'EOF'
+"use client";
+import { Suspense, useState, type ReactNode } from "react";
+import type { RefObject } from "react";
+export function Probe(props: { children: ReactNode; r: RefObject<null> }) {
+  const [count] = useState(0);
+  const hooks = { useState };
+  return <Suspense fallback={count}>{props.children}{String(hooks)}</Suspense>;
+}
+EOF
+"$OXLINT" -c "$REPO/.oxlintrc.json" --no-ignore -A all -D repo/react-namespace-import --fix \
+  "$LINT/react-fix.tsx" >/dev/null 2>&1
+
+section "react-namespace-import (root config)"
+lint_fixture "a named hook import is refused" .oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-named.tsx"
+lint_fixture "a named type import is refused" .oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-type.tsx"
+lint_fixture "the default import is refused" .oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-default.tsx"
+lint_fixture "a re-export from react is refused" .oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-reexport.ts"
+lint_clean "the namespace import passes" .oxlintrc.json "$LINT/react-namespace.tsx"
+
+section "react-namespace-import (workspace configs)"
+lint_fixture "apps/web inherits the rule" apps/web/.oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-named.tsx"
+lint_fixture "design-system inherits the rule" packages/design-system/.oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-named.tsx"
+lint_fixture "notifications inherits the rule" packages/notifications/.oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-named.tsx"
+
+section "react-namespace-import (fix)"
+lint_clean "one fix pass leaves nothing to report" .oxlintrc.json "$LINT/react-fix.tsx"
+expect_run "the fix leaves exactly one import from react" 0 '^1$' -- \
+  grep -c 'from "react"' "$LINT/react-fix.tsx"
+expect_run "a shorthand property keeps its key" 0 'hooks = \{ useState: React\.useState \}' -- \
+  cat "$LINT/react-fix.tsx"
+expect_run "a JSX tag pair is qualified at both ends" 0 \
+  '<React\.Suspense fallback=\{count\}>.*</React\.Suspense>' -- cat "$LINT/react-fix.tsx"
+expect_run "a type from the removed import is qualified" 0 'r: React\.RefObject<null>' -- \
+  cat "$LINT/react-fix.tsx"
+expect_run "the directive is untouched" 0 '^"use client";$' -- cat "$LINT/react-fix.tsx"

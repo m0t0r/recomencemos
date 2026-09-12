@@ -15,7 +15,7 @@
 
 import type { GatedIdentity } from "@repo/domain/profiles";
 import { act, render, screen, within } from "@testing-library/react";
-import { Suspense } from "react";
+import * as React from "react";
 import { prerender } from "react-dom/static";
 import { urlAttributesIn } from "@/testing/markup";
 import { ABOUT_HEADING, NOTHING_MORE, TO_BROWSE, WORK_HISTORY_HEADING } from "../_lib/messages";
@@ -59,9 +59,9 @@ async function renderView(workHistory: readonly string[] = [`Panadería La Espig
 
   await act(async () => {
     result = render(
-      <Suspense fallback={<p>cargando</p>}>
+      <React.Suspense fallback={<p>cargando</p>}>
         <GatedProfileView profile={profile} workHistory={Promise.resolve(workHistory)} />
-      </Suspense>,
+      </React.Suspense>,
     );
   });
 
@@ -77,9 +77,9 @@ async function renderView(workHistory: readonly string[] = [`Panadería La Espig
  */
 async function markupOf(workHistory: readonly string[] = [`Panadería La Espiga ${PAYLOAD}`]) {
   const { prelude } = await prerender(
-    <Suspense fallback={<p>cargando</p>}>
+    <React.Suspense fallback={<p>cargando</p>}>
       <GatedProfileView profile={profile} workHistory={Promise.resolve(workHistory)} />
-    </Suspense>,
+    </React.Suspense>,
   );
 
   return new Response(prelude).text();
@@ -217,9 +217,9 @@ describe("a profile with nothing in the two long fields", () => {
   it("says so, and points at the Skills that are still there", async () => {
     await act(async () => {
       render(
-        <Suspense fallback={<p>cargando</p>}>
+        <React.Suspense fallback={<p>cargando</p>}>
           <GatedProfileView profile={{ ...profile, about: "" }} workHistory={Promise.resolve([])} />
-        </Suspense>,
+        </React.Suspense>,
       );
     });
 

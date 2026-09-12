@@ -13,7 +13,7 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
-import type { ReactElement } from "react";
+import * as React from "react";
 import {
   type NotificationsEnv,
   resendApiKey,
@@ -75,7 +75,7 @@ export interface Notification {
   readonly entityId: string;
   readonly subject: string;
   /** A React Email template element. The transport renders it. */
-  readonly body: ReactElement;
+  readonly body: React.ReactElement;
 }
 
 /** What the transport hands back. One field, because one field is all a line needs. */
