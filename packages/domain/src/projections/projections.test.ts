@@ -167,13 +167,32 @@ describe("the exchanged projection", () => {
   });
 });
 
+/** Where her profile stands: paused, and not taken down. Hers alone to read. */
+const STANDING = { pausedAt: new Date("2026-09-11T14:00:00Z"), takenDown: false } as const;
+
 describe("her own projection", () => {
   it("carries all five, her photo state, and her photo whatever its state", () => {
-    const own = toOwnProfile(record);
+    const own = toOwnProfile(record, STANDING);
 
     expect(counts(own)).toEqual({ fullName: 1, phone: 1, email: 1, about: 1, workHistory: 1 });
     expect(own.photoState).toBe("pending");
     expect(own.photoUrl).toBe(PHOTO_URL);
+  });
+
+  it("carries when she paused and whether it is taken down", () => {
+    expect(toOwnProfile(record, STANDING)).toMatchObject(STANDING);
+  });
+
+  // A paused profile is never served to anyone else, so neither shape may
+  // learn to carry the fact — the record they read does not even hold it.
+  it.each([
+    ["public", toPublicProfile],
+    ["gated", toGatedProfile],
+  ])("the %s shape carries neither", (_name, project) => {
+    const output = project(record);
+
+    expect("pausedAt" in output).toBe(false);
+    expect("takenDown" in output).toBe(false);
   });
 });
 
@@ -183,7 +202,7 @@ describe("every projection", () => {
     ["gated identity", toGatedIdentity],
     ["gated", toGatedProfile],
     ["exchanged", toExchangedProfile],
-    ["own", toOwnProfile],
+    ["own", (from: typeof record) => toOwnProfile(from, STANDING)],
   ])("%s defines no toJSON and is a plain object", (_name, project) => {
     const output = project(record);
 

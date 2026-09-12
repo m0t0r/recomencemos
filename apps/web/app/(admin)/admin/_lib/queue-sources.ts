@@ -42,12 +42,14 @@ import {
   OFFER_PAY_FIELD,
   OFFER_WHEN_FIELD,
   OFFER_WORK_FIELD,
+  OFFER_WORKER_PROFILE_FIELD,
   offerSummary,
   OFFERS_LABEL,
   photoWaitingSince,
   PHOTOS_LABEL,
   REPORTS_LABEL,
   SKILL_REQUESTS_LABEL,
+  workerPausedSince,
 } from "./messages";
 
 /**
@@ -212,6 +214,16 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
             { label: OFFER_WORK_FIELD, value: offer.workDescription },
             { label: OFFER_PAY_FIELD, value: offer.payTerms },
             { label: OFFER_WHEN_FIELD, value: offer.whenText },
+            // Her Pause (story 25): the Offer is still hers to receive, and the
+            // Admin delivering it is told she is not on the site right now.
+            ...(offer.workerPausedAt
+              ? [
+                  {
+                    label: OFFER_WORKER_PROFILE_FIELD,
+                    value: workerPausedSince(offer.workerPausedAt),
+                  },
+                ]
+              : []),
           ],
           arrivedAt: offer.sentAt,
         })),

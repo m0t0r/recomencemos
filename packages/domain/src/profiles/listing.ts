@@ -35,6 +35,7 @@ import type { CityId } from "#policy/cities";
 import { type Page, PAGE_SIZE, pageOf } from "#policy/listing";
 import { toSearchPatterns } from "#policy/search-text";
 import { PUBLIC_COLUMNS, toPublic } from "#profiles/public-columns";
+import { visibleToOthers } from "#profiles/visibility";
 import type { PublicProfile } from "#projections";
 import * as schema from "#schema";
 
@@ -70,8 +71,6 @@ export interface BrowseOptions extends ListOptions, BrowseFilters {}
 
 /** What a page of either list is. */
 export type ProfileListPage = Page<PublicProfile>;
-
-const publishedOnly = eq(schema.capabilityProfile.state, "published");
 
 /**
  * What separates one list from the other: how it sorts, and how a cursor is
@@ -177,7 +176,7 @@ async function readPage(
   const rows = await db
     .select(PUBLIC_COLUMNS)
     .from(schema.capabilityProfile)
-    .where(and(publishedOnly, ...filtersOf(options), ...(after ? [after] : [])))
+    .where(and(visibleToOthers, ...filtersOf(options), ...(after ? [after] : [])))
     .orderBy(...ordering.orderBy)
     // One more than the page shows, so "is there another page" is answered by a
     // row rather than guessed from a full one.

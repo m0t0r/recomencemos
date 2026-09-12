@@ -13,6 +13,7 @@
  * load where a `window` exists. Nothing here asserts against a DOM.
  */
 
+import { OFFER_WORKER_PROFILE_FIELD, workerPausedSince } from "./messages";
 import {
   isPastBand,
   liveSources,
@@ -22,6 +23,16 @@ import {
   type QueueBranch,
   sourceForSegment,
 } from "./queue-sources";
+
+/**
+ * **The Offers read is doubled, and only it.** The branch's `load` is the thing
+ * under test — what an item may carry — and the read behind it is seam 2's, where
+ * `pendingOffers` is asserted against PGlite. Nothing else in this file calls a
+ * facade, so the other two stay real.
+ */
+const { pending } = vi.hoisted(() => ({ pending: vi.fn() }));
+
+vi.mock("@repo/domain/offers", () => ({ offers: { pending } }));
 
 const NOW = new Date("2026-08-29T12:00:00.000Z");
 
@@ -185,5 +196,66 @@ describe("the source registry", () => {
     expect(sourceForSegment("skills")?.key).toBe("skillRequests");
     // A segment nobody routed is a 404 from the router, never a section.
     expect(sourceForSegment("hirers")).toBeUndefined();
+  });
+});
+
+/**
+ * **Her Pause, where an Admin sees her** (story 25). The queue is not changed by
+ * a pause — an Offer sent before it is still read and delivered — but the Admin
+ * delivering it is told she is not on the site right now, as one more field on
+ * the item. It is present only while she is paused, so the three terms stay the
+ * whole row for everybody else.
+ */
+/** One pending Offer as `offers.pending` returns it, to a Worker paused since `workerPausedAt` or not. */
+function anOffer(id: string, workerPausedAt: Date | null) {
+  return {
+    id,
+    workDescription: "Cocinar para ocho personas el sábado",
+    payTerms: "$120.000 por el día",
+    whenText: "El sábado",
+    sentAt: new Date("2026-09-10T12:00:00.000Z"),
+    workerFirstName: "Lucía",
+    workerLastInitial: "M",
+    workerPausedAt,
+    hirerName: "Carlos Restrepo",
+  };
+}
+
+/** The Offers section's branch, through the registry the shell renders from. */
+async function loadOffers() {
+  const source = sourceForSegment("offers");
+  if (!source?.load) throw new Error("the Offers section has no resolver");
+  return source.load();
+}
+
+describe("the Offers branch", () => {
+  const PAUSED_AT = new Date("2026-09-11T14:00:00.000Z");
+
+  it("says since when she is paused, on an Offer to a paused Worker", async () => {
+    pending.mockResolvedValue({
+      items: [anOffer("a", PAUSED_AT)],
+      total: 1,
+      oldestSentAt: new Date("2026-09-10T12:00:00.000Z"),
+    });
+
+    const [item] = (await loadOffers()).items;
+
+    expect(item?.fields).toContainEqual({
+      label: OFFER_WORKER_PROFILE_FIELD,
+      value: workerPausedSince(PAUSED_AT),
+    });
+  });
+
+  it("carries only the three terms for a Worker who is not paused", async () => {
+    pending.mockResolvedValue({
+      items: [anOffer("b", null)],
+      total: 1,
+      oldestSentAt: new Date("2026-09-10T12:00:00.000Z"),
+    });
+
+    const [item] = (await loadOffers()).items;
+
+    expect(item?.fields).toHaveLength(3);
+    expect(item?.fields?.map((field) => field.label)).not.toContain(OFFER_WORKER_PROFILE_FIELD);
   });
 });
