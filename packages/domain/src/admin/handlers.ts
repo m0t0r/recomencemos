@@ -29,6 +29,7 @@ import { eq, sql } from "drizzle-orm";
 import type { AdminActionName } from "#admin/names";
 import type { DomainDatabase } from "#database";
 import { asOfferState, mayTransitionOffer, type OfferState } from "#policy/offer-states";
+import type { SkillGroupId } from "#policy/skill-groups";
 import * as schema from "#schema";
 import {
   ADMIN_ACCOUNT_NOT_FOUND,
@@ -140,6 +141,8 @@ export interface AdminActionShapes {
       readonly requestId: string;
       readonly slug: string;
       readonly labelEs: string;
+      /** Required: an entry with no group is a Skill the Hirer's index cannot reach. */
+      readonly group: SkillGroupId;
       readonly cuocCode?: string | undefined;
     };
     result: { readonly slug: string; readonly labelEs: string };
@@ -414,7 +417,7 @@ export const ADMIN_ACTION_HANDLERS = {
     };
   },
 
-  async promoteSkill(tx, { requestId, slug, labelEs, cuocCode }) {
+  async promoteSkill(tx, { requestId, slug, labelEs, group, cuocCode }) {
     /**
      * **Locked, because two Admins are the case this exists for.** NFR33's
      * eleven actions are performed by whoever is on the queue, and the spec is
@@ -477,7 +480,7 @@ export const ADMIN_ACTION_HANDLERS = {
      */
     const [promoted] = await tx
       .insert(schema.skill)
-      .values({ slug, labelEs, cuocCode: cuocCode ?? null })
+      .values({ slug, labelEs, group, cuocCode: cuocCode ?? null })
       .onConflictDoNothing({ target: schema.skill.slug })
       .returning({ slug: schema.skill.slug, labelEs: schema.skill.labelEs });
 

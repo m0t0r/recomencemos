@@ -10,9 +10,9 @@
  * than behind the section route that will eventually hold it.
  *
  * **This is the plain version of a row, on purpose.** What is here is what has
- * to be true wherever the row sits — her words in full, two named fields, one
- * action, and an answer that is announced. It opens inside the one table (#277)
- * like every other source's row.
+ * to be true wherever the row sits — her words in full, the fields that name the
+ * entry, one action, and an answer that is announced. It opens inside the one
+ * table (#277) like every other source's row.
  *
  * **It has no key.** The table's `a`/`r` press a row's own decision buttons, and
  * promoting a request means typing an identifier and a name first — no single
@@ -34,11 +34,16 @@ import {
   FieldSet,
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
+import { selectBox } from "@repo/design-system/components/input-variants";
+import { SKILL_GROUPS } from "@repo/domain/policy";
 import * as React from "react";
 import { promoteSkill } from "../actions";
 import {
   PROMOTE_CUOC_HELP,
   PROMOTE_CUOC_LABEL,
+  PROMOTE_GROUP_CHOOSE,
+  PROMOTE_GROUP_HELP,
+  PROMOTE_GROUP_LABEL,
   PROMOTE_HEADING,
   PROMOTE_LABEL_HELP,
   PROMOTE_LABEL_LABEL,
@@ -72,6 +77,8 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
   const slugHelpId = React.useId();
   const labelId = React.useId();
   const labelHelpId = React.useId();
+  const groupId = React.useId();
+  const groupHelpId = React.useId();
   const cuocId = React.useId();
   const cuocHelpId = React.useId();
   const { announcementRef } = useQueueRow(result);
@@ -80,12 +87,13 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
   /* oxlint-disable no-underscore-dangle */
   const slugError = result.validationErrors?.slug?._errors?.[0];
   const labelError = result.validationErrors?.labelEs?._errors?.[0];
+  const groupError = result.validationErrors?.group?._errors?.[0];
   const cuocError = result.validationErrors?.cuocCode?._errors?.[0];
   /* oxlint-enable no-underscore-dangle */
 
   const announcement = result.data
     ? skillPromoted(result.data.labelEs)
-    : (result.serverError?.message ?? slugError ?? labelError ?? cuocError);
+    : (result.serverError?.message ?? slugError ?? labelError ?? groupError ?? cuocError);
 
   return (
     <div className="flex flex-col gap-3">
@@ -153,6 +161,34 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
                 aria-describedby={labelError ? `${labelHelpId} ${labelId}-error` : labelHelpId}
               />
               {labelError ? <FieldError id={`${labelId}-error`}>{labelError}</FieldError> : null}
+            </Field>
+
+            {/*
+              A native `<select>` over the closed list (ADR-0021): thirteen fixed
+              choices, posted with the rest of the form whether or not JavaScript
+              ran. The empty first option is what makes `required` mean something
+              — without it the browser would submit whichever group is listed first.
+            */}
+            <Field>
+              <FieldLabel htmlFor={groupId}>{PROMOTE_GROUP_LABEL}</FieldLabel>
+              <FieldDescription id={groupHelpId}>{PROMOTE_GROUP_HELP}</FieldDescription>
+              <select
+                id={groupId}
+                name="group"
+                required
+                defaultValue=""
+                className={selectBox}
+                aria-invalid={groupError !== undefined}
+                aria-describedby={groupError ? `${groupHelpId} ${groupId}-error` : groupHelpId}
+              >
+                <option value="">{PROMOTE_GROUP_CHOOSE}</option>
+                {SKILL_GROUPS.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.label}
+                  </option>
+                ))}
+              </select>
+              {groupError ? <FieldError id={`${groupId}-error`}>{groupError}</FieldError> : null}
             </Field>
 
             <Field>

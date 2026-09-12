@@ -36,6 +36,7 @@ import { CITY_IDS } from "#policy/cities";
 import { COPY_STATES, INITIAL_COPY_STATE } from "#policy/exchange-states";
 import { INITIAL_OFFER_STATE, OFFER_STATES } from "#policy/offer-states";
 import { PHOTO_STATES, PROFILE_STATES } from "#policy/profile-states";
+import { SKILL_GROUP_IDS } from "#policy/skill-groups";
 import { SKILL_REQUEST_STATES } from "#policy/skill-request-states";
 import { CEILINGED_ACTIONS } from "#rate-limit";
 
@@ -535,6 +536,18 @@ export const skill = pgTable(
     cuocCode: text("cuoc_code"),
 
     /**
+     * Which {@link SKILL_GROUP_IDS} group the entry belongs to — how a Hirer
+     * finds someone by the kind of work before he knows the exact word for it.
+     * Exactly one per entry, chosen by an Admin at promotion and never by a
+     * Worker; the seeded entries took theirs from the headings the seed was
+     * already sorted under. `TEXT` + `CHECK`, for the city column's reason.
+     *
+     * `skill_group` rather than `group`, which is a reserved word in SQL and
+     * would have to be quoted by hand in every statement that names it.
+     */
+    group: text("skill_group"),
+
+    /**
      * Whether the entry may still be chosen. Retiring a Skill flips this; nothing
      * deletes a row a CapabilityProfile may already point at.
      */
@@ -551,6 +564,8 @@ export const skill = pgTable(
      * the seed migration is idempotent at all.
      */
     unique("skill_slug_key").on(table.slug),
+
+    check("skill_group_known", inList(table.group, SKILL_GROUP_IDS)),
 
     /**
      * The picker and the browse filter both read the active list in label order,
