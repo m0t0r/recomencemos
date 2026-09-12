@@ -5,6 +5,9 @@
  * helps, and — the sentence this boundary exists to carry — that **a failed read
  * is not a lost answer**. She may have answered one a minute ago.
  *
+ * It is also `/offers/[id]`'s boundary: that route is the same ledger with a
+ * row open, reading the same list, so a failure there is this failure.
+ *
  * A `section` rather than a `main`: the site layout owns the landmark and this
  * replaces the segment inside it. `useErrorBoundary` is the focus and reporting
  * protocol every route-level boundary here shares.

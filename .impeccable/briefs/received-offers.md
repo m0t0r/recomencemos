@@ -1,120 +1,136 @@
 # Surface brief: `/offers`
 
-**Target:** `apps/web/app/(site)/offers/page.tsx` · **Mode:** Read · **Ticket:**
-[#25](https://github.com/m0t0r/recomencemos/issues/25), story 8 · **Shaped:** 2026-09-10 ·
-**Locked:** 2026-09-10, **variant A** ("el trabajo primero") — three compositions built and compared
-running at 390 px against five Offers in four states; the losing two are on `prototype/25-variants`
+**Target:** `apps/web/app/(site)/offers/page.tsx`, and `apps/web/app/(site)/offers/[id]/page.tsx`
+as the same surface with one row open · **Mode:** Operate · **Ticket:**
+[#271](https://github.com/m0t0r/recomencemos/issues/271), under
+[#178](https://github.com/m0t0r/recomencemos/issues/178) · **Shaped:** 2026-09-12 ·
+**Settled in the UX lab:** idea 1, **variant A — _El cuaderno_**, on `prototype/ux-lab` at
+`f68ab0f` (`apps/web/app/(site)/prototype/offers/_components/ledger.tsx`). Rejected there: B
+(_Una a la vez_, one full-screen card at a time) and C (_Lado a lado_, columns to compare).
 
-**Written from the spec, `PRODUCT.md`, `docs/policy/voice.md` and `DESIGN.md` with no answer
-round**, on the terms `sent-offers.md` set: `[settled]` where one of those settles it, `[open]`
-where it is composition, and every `[open]` becomes a `?variant=` on the real route.
+**Supersedes** the story 8 brief for this route, which was a list with no decision on it and a
+separate page per Offer. The decision criteria of [`received-offer.md`](received-offer.md) — terms
+before controls, equal weight, the dialog that names what crosses — are carried in whole below; that
+brief's layout is not.
+
+**Shape round, 2026-09-12**, three answers from the owner: _Reportar_ waits for story 10; story 8's
+words stay; `/offers/<id>` is this ledger with that row open.
 
 ## Job and audience
 
-**A Worker who has been told an Offer reached her.** The email that says so links to the Offer
-itself; she arrives here either from that link's back-path or from the menu, on a phone, often a
-borrowed one, often on mobile data. She wants to know three things, in this order: _is there
-something waiting for my answer_, _what is it asking and what does it pay_, and _who claims to be
-asking_.
-
-Tone is **Reading an Offer (Worker)** from the voice guide, unchanged: everything in front of her,
-nothing nudging. No _¡Nueva propuesta!_, no unread dot, no countdown, no count of how many are
-waiting in a colour that means hurry.
+**A Worker reading the Offers that reached her, on a phone, and deciding on the one in front of
+her.** She arrives from the menu, or from the delivery email's link to one Offer. She wants three
+things in this order: _is anything waiting on me_, _what is it and what does it pay_, and _if I say
+yes, what happens_. Tone is **Reading an Offer (Worker)**, unchanged: everything in front of her,
+nothing nudging.
 
 ## Outcome and proof
 
-**The primary thing to understand:** which Offers still need her answer, and what each one is.
+**The primary thing to do:** read, decide and see the result without ever leaving the list.
 
-At 390 × 844, with five Offers across four states:
+At 390 × 844, against Offers in all four received states:
 
-| #   | Criterion                                                                                                                          |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Every row says **what work** and **what pay** without a tap                                                                        |
-| 2   | A row still waiting on her answer is told apart from an answered one **by words**, not by colour or position                       |
-| 3   | The name he gave is on the row and is **said to be his own claim**; an Offer with no name says so rather than rendering a blank    |
-| 4   | Each row opens the Offer through a link that **names its destination**                                                             |
-| 5   | **No accept or decline control on this page.** The decision is made with the full terms in front of her, which is the Offer's page |
-| 6   | A declined Offer is **still here, as declined** — a decision she made is one she can come back and read                            |
-| 7   | Nothing on the page is his phone, his email, or anything of hers that crosses only at acceptance                                   |
-| 8   | The empty state says **what makes an Offer arrive** and **that a person reads each one first**, and does not read as an error      |
-| 9   | Rows stream under a Suspense boundary whose fallback holds the row's height                                                        |
+| #   | Criterion                                                                                                                                                           |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Every Offer is a ruled row saying, shut: **who signed it** (as a claim), **how long ago**, the **first lines of the work**, its **state in words**, and the **pay** |
+| 2   | The heading block says **how many still wait on her**, and that **a person read each Offer before it arrived**                                                      |
+| 3   | A row **opens in place** — no navigation — to the state, the three terms, the sent date, who claims to have sent it, and, while waiting, the answer                 |
+| 4   | The terms come **before** the controls, and _Aceptar_ and _No aceptar_ carry **equal weight**                                                                       |
+| 5   | _Aceptar_ is **two steps**; the second **names what crosses in both directions** and **that it cannot be undone**, and is reachable from a keyboard                 |
+| 6   | After an answer she is **on her row, open**, with the result in it, **focused and announced** as a `status`                                                         |
+| 7   | An answered row **stays**, saying what she answered; an answered or expired row has **no controls**                                                                 |
+| 8   | The email's `/offers/<id>` lands on **that row, open**, with and without JavaScript; somebody else's id is **the same 404** as a missing one                        |
+| 9   | Nothing is his phone or email, or her own full name, phone or email — nothing has crossed                                                                           |
 
-**Product-specific truth.** A marketplace inbox ranks, badges and nudges, because its business is
-the reply. This one is **principle 1 — introduce, then leave**: the page's job ends at "here is what
-arrived", and a page that pressed her to answer would be the platform standing between two people
-rather than stepping out.
+**Product-specific truth.** An inbox ranks, badges and nudges because its business is the reply.
+This one is principle 1 — _introduce, then leave_ — so the only number on the page is a count, said
+in words, of what still waits; and the one interruption is the dialog that says what her yes gives
+away.
 
 ## Selected direction
 
-**Structural thesis: a row is an Offer, and it reads like the note it is.** Work, pay and when are
-what the Hirer wrote; the state is ours to say; the name is his claim.
+**Structural thesis: a notebook of rows, each one a note that opens where it lies.** The row is the
+Offer; opening it is reading it; its foot is the answer.
 
-**`[settled]`, and out of scope for a variant:**
+**`[settled]`:**
 
-- **Only what a person let through.** `RECEIVED_OFFER_STATES` — delivered, accepted, declined,
-  expired. An Offer still in review is not hers yet; one she Reported is hidden from her.
-- **No decision controls on the list.** The ticket's own words: _what she is agreeing to is what she
-  can see_, and a row is a summary.
-- **The name is badged as declared** (C4). Absence first: _Aquí no verificamos a nadie_ is the
-  sentence the Wall's notice already says; the row points at it rather than restating it.
-- **The state is a text label and a sentence**, as `/sent-offers` settled: readable with the
-  stylesheet off, announced by a screen reader, and **never red** — nothing on this page is an alarm.
-- **A ruled list** (`DESIGN.md` → Layout). Rows are separated by the ruling, never by cards.
-- **Newest first**, on the index DD2 already built for exactly this read.
-- **`noindex`**, both halves: the prefix is on `GATED_ROUTE_PREFIXES`, and the page sets its own
-  `metadata.robots`.
-- **Semantic tokens only, registry components only, light only.**
-
-**`[open]`, and each becomes a variant:**
-
-1. ~~What leads the row.~~ **The work leads.** It is what the Hirer wrote first and the question she
-   has first — _what is this asking of me_ — so it is the scanning anchor.
-2. ~~Whether waiting and answered are one list or two.~~ **One list**, newest first, with the state on
-   each row as a label and a sentence. Two sections sorted her Offers into piles the platform chose.
-3. ~~How much of the terms a row carries.~~ **The work cut to three lines, the pay and the when in
-   full**; the whole Offer is one link away, which is where the answer is taken anyway.
+- **One ledger, newest first**, rows divided by the ruling and the margin line beside them from
+  `sm` up (`DESIGN.md` → Layout). No sections: a waiting pile above an answered one is the platform
+  sorting her Offers for her.
+- **A row is a native `<details>`.** It opens before hydration and without JavaScript, and the server
+  sets `open` on the row a link names — which is what makes the email's link land on that Offer. The
+  registry's accordion needs the script to open; the standing notices made the same call.
+- **`/offers/[id]` is this ledger with that row open.** One read, one layout; the actions still
+  redirect to `/offers/<id>?answered=…`, which is now her row with the result in it.
+- **The row leads with the name, said as a signature** — _Firma como Carlos Restrepo_, or _Firma sin
+  nombre_ — in the display face, because it is the row's heading. Inside the open row, _Aquí no
+  verificamos a nadie_ comes before the name again, beside the decision it bears on.
+- **How long ago is elapsed time**: _hace menos de una hora_, _hace 5 horas_, _hace 3 días_ — never
+  _ayer_, which elapsed hours cannot always make true.
+- **Story 8's words**: _Por responder / Aceptada / No aceptada / Vencida_, and _No aceptar_. The lab's
+  _Acordada_ says the two agreed on the work, which the platform never knows.
+- **The dialog second step, equal weight, _Aceptar y dar mis datos_**, all as `received-offer.md`
+  settled them.
+- **_Reportar_ is story 10's** ([#27](https://github.com/m0t0r/recomencemos/issues/27)). It joins the
+  answer as a third control, and the answer's buttons wrap rather than shrink so it fits without a
+  re-layout. No disabled stub stands in for it.
+- **The Contact Exchange is story 9's** ([#26](https://github.com/m0t0r/recomencemos/issues/26)). An
+  accepted row is where it lands; until then the row says _La aceptaste._
+- **No Hirer location.** The lab showed one; the product holds none, and the Hirer is anyone,
+  anywhere.
+- **Semantic tokens only, registry components only, light only. `noindex`, both halves.**
 
 ## Scope and boundaries
 
-- **Fidelity:** production.
-- **Breadth:** the route, its states, the row, the empty state, the session-menu entry that reaches
-  it.
-- **Untouched:** the projection; `SiteHeader`'s layout and every row but the one this surface adds;
-  the standing notices' treatment elsewhere; the delivery email.
-- **Anti-goals:** no search, no filter, no sort control, no pagination at launch volume, no unread
-  state, no count in the header, no illustration in the empty state.
+- **Fidelity:** production. **Breadth:** both routes, every received state, the answer, its
+  refusals, the empty and failed states.
+- **Untouched:** the domain and its projections; the two actions' bodies; the delivery email; the
+  standing notices; `SiteHeader`.
+- **Anti-goals:** no search, filter, sort or pagination at launch volume; no unread dot; no colour
+  that means hurry; no reply box, counter-offer, rating, _save for later_ or timer; no row open by
+  default at `/offers`.
 
 ## States and ranges
 
 | State               | What it shows                                                                                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `empty`             | Nothing has reached her. What makes an Offer arrive, that a person reads each first, and a route to her own profile — or to `/publish` if she has none |
-| `loading`           | Row skeletons at the row's height, so the heading above does not move                                                                                  |
-| `partial`           | Some rows painted, the rest streaming                                                                                                                  |
-| `error`             | The list failed to load: what failed, that retrying helps, and that nothing she decided has changed                                                    |
-| `permission denied` | Signed out → `/sign-in` with a way back. There is no not-the-owner case: the read is scoped by the principal, so it returns nothing                    |
+| `empty`             | Nothing has reached her: what makes an Offer arrive, that a person reads each first, and a route to her profile — or to `/publish` if she has none     |
+| `loading`           | Row skeletons at a shut row's height, and a line where the waiting count goes, so the heading does not move                                            |
+| `partial`           | The heading and lead painted; the count and the rows streaming, off one read                                                                           |
+| `error`             | The list failed: what failed, that retrying helps, and that nothing she answered changed — for both routes                                             |
+| `permission denied` | Signed out → `/sign-in` with a way back. At `/offers/[id]`, an Offer not in her list → 404, returned                                                   |
+| `success`           | Accepted → _Aceptaste esta propuesta._ in the row. Declined → confirmed in the row, and it stays confirmed on every later visit                        |
+| refused             | Answered already in another tab → she is told so, on the row that shows what it is. No longer hers to answer → an `alert` that says where the rest are |
 
-**Ranges:** 0, 1, 5 and 40 rows; each of the four received states at least once; a 600-character
-`workDescription` beside a 20-character one; a Hirer name of 60 characters and one that is `null`.
+**Ranges:** 0, 1, 5 and 40 rows; each received state at least once; a 600-character work description
+beside a 20-character one; a 60-character Hirer name and a `null` one.
 
 ## Interaction and layout
 
 Single column, `max-w-3xl`, the phone first.
 
-**Reading order:** heading → lead → the rows → the standing notices.
+**Reading order:** heading → lead → waiting count → the rows → the standing notices. Inside an open
+row: the result of an answer, if any → the state sentence → the three terms → the sent date → who
+claims to have sent it → the answer.
 
 **Keyboard and announcement:**
 
-- Each row's link is reachable and names its destination.
-- The list announces its count once when the boundary resolves, not per row — the rule the Wall,
-  `/profiles` and `/sent-offers` already follow.
+- Each row's summary is one control that reports its expanded state; opening it puts the row's
+  content next in reading order.
+- A deep link focuses its open row's summary, which scrolls it into view.
+- After an answer, the result inside the row is an `<output>` that takes focus on mount — so it is
+  announced once, politely.
+- The dialog opens on _Volver_ and returns focus to _Aceptar_ on close.
+- The list announces its count once when it resolves, not per row.
 
-**No motion.**
+**Motion:** the chevron's turn, and what the registry's dialog ships. Nothing else.
 
 ## Constraints
 
-- **WCAG 2.2 AA.** State in words; every link names its destination; contrast on every pair.
-- **NFR3's byte budget.** Re-measure with `pnpm page-weight`.
-- **No spec identifier in any rendered string.**
-- **Verified running** at seam 3. The route does not exist on the default branch, so there is **no
-  before** and the pull request says so; the story demo is what shows it working.
+- **WCAG 2.2 AA.** State in words; every control names its act; focus visible.
+- **NFR3's byte budget.** `/offers` now carries the answer's dialog; re-measure with
+  `pnpm page-weight` and say the compression.
+- **No spec identifier in any rendered string**, and every `id` on the page unique — many answer
+  regions share one page now.
+- **Verified running** at seam 3 at 390 px, with a before/after capture of the flow and the story
+  demo.

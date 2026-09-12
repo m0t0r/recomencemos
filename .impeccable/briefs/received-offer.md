@@ -1,5 +1,12 @@
 # Surface brief: `/offers/[id]`
 
+> **Layout superseded by [#271](https://github.com/m0t0r/recomencemos/issues/271), 2026-09-12.**
+> `/offers/[id]` is now the `/offers` ledger with this Offer's row open — see
+> [`received-offers.md`](received-offers.md). What this brief decided about the **decision** still
+> holds and is carried into that one: terms before controls, equal weight, the dialog second step
+> naming what crosses, _Aceptar y dar mis datos_, declining in one tap. What it decided about a
+> separate page, a back link and a heading of its own does not.
+
 **Target:** `apps/web/app/(site)/offers/[id]/page.tsx` · **Mode:** Decide · **Ticket:**
 [#25](https://github.com/m0t0r/recomencemos/issues/25), story 8 · **Shaped:** 2026-09-10 ·
 **Locked:** 2026-09-10, **variant A** ("diálogo encima") — three compositions built and compared
