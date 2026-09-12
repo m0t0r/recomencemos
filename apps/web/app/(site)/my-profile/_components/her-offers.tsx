@@ -18,6 +18,7 @@
  */
 
 import { buttonVariants } from "@repo/design-system/components/button-variants";
+import { Separator } from "@repo/design-system/components/separator";
 import type { ReceivedOffer, ReceivedOfferState } from "@repo/domain/offers";
 import { isTerminalOfferState } from "@repo/domain/policy";
 import Link from "next/link";
@@ -70,16 +71,21 @@ export function HerOffers({ offers }: { readonly offers: readonly ReceivedOffer[
         </p>
 
         {waiting.length > 0 ? (
-          <ul className="ruled-page divide-border flex flex-col divide-y">
-            {waiting.slice(0, WAITING_SHOWN).map((offer) => (
-              <li key={offer.id} className="flex flex-col gap-1 py-3">
-                <span className="text-foreground font-medium">{senderName(offer.hirerName)}</span>
-                <span className="text-muted-foreground line-clamp-1 text-sm">
-                  {offer.workDescription}
-                </span>
-                <span className="text-muted-foreground text-xs">
-                  {offerArrivedOn(offer.sentAt)}
-                </span>
+          <ul className="ruled-page flex flex-col">
+            {waiting.slice(0, WAITING_SHOWN).map((offer, index) => (
+              // The ruling is the registry `Separator` inside the `<li>`, the
+              // shape `ledger-row.tsx` gives: a `<ul>` may not hold a divider.
+              <li key={offer.id}>
+                {index > 0 ? <Separator /> : null}
+                <div className="flex flex-col gap-1 py-3">
+                  <span className="text-foreground font-medium">{senderName(offer.hirerName)}</span>
+                  <span className="text-muted-foreground line-clamp-1 text-sm">
+                    {offer.workDescription}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {offerArrivedOn(offer.sentAt)}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

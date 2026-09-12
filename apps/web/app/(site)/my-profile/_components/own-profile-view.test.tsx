@@ -168,6 +168,24 @@ describe("her Pause", () => {
     expect(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL })).toBeChecked();
   });
 
+  /**
+   * **A tap posts before the page has hydrated** (NFR4). The registry `Switch`
+   * is a `<span>` by default and does nothing without JavaScript; what the
+   * server sends here has to be a submit button inside the form, so a native
+   * tap is the post. Read as the string React sends, because that is the
+   * document an unhydrated browser acts on.
+   */
+  it("is a submit button in its form in the HTML the server sends", () => {
+    const html = renderToStaticMarkup(
+      <OwnProfileView profile={profile} offers={[]} arrival={null} />,
+    );
+    const switches = html.match(/<button[^>]*role="switch"[^>]*>/g) ?? [];
+
+    expect(switches).toHaveLength(1);
+    expect(switches[0]).toContain('type="submit"');
+    expect(html.indexOf("<form")).toBeLessThan(html.indexOf('role="switch"'));
+  });
+
   // The two limits she needs before relying on it are what the switch announces.
   it("names its two limits as the switch's description", () => {
     render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
