@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@repo/design-system/components/card";
 import type { VocabularyEntry } from "@repo/domain/skills";
+import type { ReactNode } from "react";
 import { SkillChips } from "./profile-list/skill-chips";
 
 export interface ProfileCardProps {
@@ -75,6 +76,14 @@ export interface ProfileCardProps {
    * where `absent`, `pending` and `rejected` are one shape with three causes.
    */
   readonly photoDescribedBy?: string;
+  /**
+   * **What stands where the photo does, when the photo is a control** — on her
+   * own page, where the owner's rule for #275 is that her photo is the thing she
+   * taps to change it. The card stays the card a stranger sees; only the circle
+   * becomes `PhotoPicker`. Every other caller leaves it unset and gets the plain
+   * `Avatar`, which carries `photoUrl` and `photoAlt` above.
+   */
+  readonly photoSlot?: ReactNode;
   readonly className?: string;
 }
 
@@ -98,6 +107,7 @@ export function ProfileCard({
   photoUrl,
   photoAlt = "",
   photoDescribedBy,
+  photoSlot,
   className,
 }: ProfileCardProps) {
   return (
@@ -109,12 +119,14 @@ export function ProfileCard({
         this card is how she sees what everyone else sees.
       */}
       <CardHeader className="flex flex-row items-start gap-4">
-        <Avatar size="lg" aria-hidden={photoUrl ? undefined : true}>
-          {photoUrl ? (
-            <AvatarImage src={photoUrl} alt={photoAlt} aria-describedby={photoDescribedBy} />
-          ) : null}
-          <AvatarFallback>{initialOf(firstName)}</AvatarFallback>
-        </Avatar>
+        {photoSlot ?? (
+          <Avatar size="lg" aria-hidden={photoUrl ? undefined : true}>
+            {photoUrl ? (
+              <AvatarImage src={photoUrl} alt={photoAlt} aria-describedby={photoDescribedBy} />
+            ) : null}
+            <AvatarFallback>{initialOf(firstName)}</AvatarFallback>
+          </Avatar>
+        )}
         <div className="flex min-w-0 flex-col gap-1">
           {/*
             Unconditional, as the Wall row renders the same line: `headlineField`
