@@ -127,6 +127,9 @@ const PUBLISHED = [
   // whether it is served a gated profile. A different aggregate from the
   // profile, and a Hirer may hold no profile at all.
   "@repo/domain/accounts",
+  // #26's one: reading an exchange as one of its two parties, and recording
+  // where a copy went. Writing one is `acceptOffer`'s, inside its transaction.
+  "@repo/domain/exchange",
 ];
 
 describe("the domain package's export map", () => {

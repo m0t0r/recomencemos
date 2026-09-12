@@ -10,6 +10,7 @@
 
 import {
   type ProfileRecord,
+  toContactExchange,
   toExchangedContact,
   toExchangedProfile,
   toGatedIdentity,
@@ -169,6 +170,31 @@ describe("the exchanged projection", () => {
 
 /** Where her profile stands: paused, and not taken down. Hers alone to read. */
 const STANDING = { pausedAt: new Date("2026-09-11T14:00:00Z"), takenDown: false } as const;
+
+/**
+ * **What reaches his screen at exchange, counted with the same five sentinels.**
+ * He already holds her self-description and work history from the gated read;
+ * the exchange view is the other half of the exchanged projection, and it
+ * carries her three held details and neither of the gated two — so the two
+ * reads together are the five, and neither alone is.
+ */
+describe("the Contact Exchange, as he reads it", () => {
+  it("carries her three held details and neither of the gated two", () => {
+    const view = toContactExchange(
+      {
+        offerId: "0199a1f0-2b3c-7def-8000-0123456789ab",
+        exchangedAt: new Date("2026-09-12T15:00:00Z"),
+        worker: { fullName: SENTINELS.fullName, phone: SENTINELS.phone, email: SENTINELS.email },
+        hirer: { fullName: "Carlos Restrepo", phone: null, email: "carlos@recomencemos.test" },
+        workerCopy: "sent",
+        hirerCopy: "sent",
+      },
+      "hirer",
+    );
+
+    expect(counts(view)).toEqual({ fullName: 1, phone: 1, email: 1, about: 0, workHistory: 0 });
+  });
+});
 
 describe("her own projection", () => {
   it("carries all five, her photo state, and her photo whatever its state", () => {

@@ -48,6 +48,19 @@ const SENTINEL = {
   workDescription: "SentinelDescripcionDelTrabajo",
   payTerms: "SentinelCondicionesDePago",
   whenText: "SentinelCuandoEsElTrabajo",
+  // Her three as they crossed when that Offer was accepted (story 9). Distinct
+  // from `hirerName` and `hirerPhone` above on purpose: the snapshot is a copy
+  // taken at one moment, and after an edit the two are different facts.
+  exchangedName: "SentinelNombreQueCruzo",
+  exchangedPhone: "+573002223344",
+  exchangedEmail: "sentinel-cruzado@recomencemos.test",
+} as const;
+
+/** The addressee's three as they crossed — about somebody else, so never exported to her. */
+const COUNTERPART = {
+  fullName: "SentinelContraparteNombre",
+  phone: "+573005556677",
+  email: "sentinel-contraparte@recomencemos.test",
 } as const;
 
 async function anAccountWithEverything(database: TestDatabase): Promise<string> {
@@ -98,7 +111,8 @@ async function anAccountWithEverything(database: TestDatabase): Promise<string> 
 }
 
 /**
- * One Offer this Account sent, so the export has both sides of a person in it.
+ * One Offer this Account sent, accepted, so the export has both sides of a
+ * person in it and one Contact Exchange.
  *
  * **Addressed to somebody else's profile**, which is what makes `side` mean
  * something: a row matching both keys at once would be an Offer to oneself,
@@ -114,7 +128,7 @@ async function anOfferSentBy(database: TestDatabase, accountId: string): Promise
   await database.db.insert(schema.user).values({
     id: "the-addressee",
     name: "",
-    email: "addressee@recomencemos.test",
+    email: COUNTERPART.email,
     emailVerified: true,
   });
 
@@ -123,22 +137,37 @@ async function anOfferSentBy(database: TestDatabase, accountId: string): Promise
     .values({
       accountId: "the-addressee",
       slug: "k7m2qx6vb4tn5rzd",
-      fullName: "Luz Marina Ospina",
+      fullName: COUNTERPART.fullName,
       firstName: "Luz",
       lastInitial: "O",
       city: "pereira",
       headline: "Arreglo tuberías y baños",
-      phone: "+573005556677",
+      phone: COUNTERPART.phone,
       searchText: "luz pereira tuberias",
     })
     .returning({ id: schema.capabilityProfile.id });
 
-  await database.db.insert(schema.offer).values({
-    capabilityProfileId: (addressee as { id: bigint }).id,
-    hirerAccountId: accountId,
-    workDescription: SENTINEL.workDescription,
-    payTerms: SENTINEL.payTerms,
-    whenText: SENTINEL.whenText,
+  const [offer] = await database.db
+    .insert(schema.offer)
+    .values({
+      capabilityProfileId: (addressee as { id: bigint }).id,
+      hirerAccountId: accountId,
+      workDescription: SENTINEL.workDescription,
+      payTerms: SENTINEL.payTerms,
+      whenText: SENTINEL.whenText,
+      state: "accepted",
+      deliveredAt: new Date(),
+    })
+    .returning({ id: schema.offer.id });
+
+  await database.db.insert(schema.contactExchange).values({
+    offerId: (offer as { id: string }).id,
+    workerFullName: COUNTERPART.fullName,
+    workerPhone: COUNTERPART.phone,
+    workerEmail: COUNTERPART.email,
+    hirerName: SENTINEL.exchangedName,
+    hirerPhone: SENTINEL.exchangedPhone,
+    hirerEmail: SENTINEL.exchangedEmail,
   });
 }
 
@@ -198,6 +227,31 @@ describe("the subject-access export", () => {
     for (const verification of verifications) {
       expect(dump).not.toContain(verification.identifier);
     }
+  });
+
+  /**
+   * **Her side of an exchange, and none of the other's.** What she gave at
+   * acceptance is held about her and can differ from her profile after an
+   * edit, so it is exported. What she received is held about somebody who made
+   * no request — the rule `offer.capabilityProfileId` already follows.
+   */
+  test("carries her side of a Contact Exchange and none of the other side's", async ({
+    database,
+  }) => {
+    const accountId = await anAccountWithEverything(database);
+    const subject = await buildSubjectAccessExport(database.db, accountId);
+
+    expect(subject?.offers[0]?.exchange).toEqual({
+      exchangedAt: expect.any(Date),
+      yourDetails: {
+        fullName: SENTINEL.exchangedName,
+        phone: SENTINEL.exchangedPhone,
+        email: SENTINEL.exchangedEmail,
+      },
+    });
+
+    const dump = JSON.stringify(subject);
+    for (const detail of Object.values(COUNTERPART)) expect(dump).not.toContain(detail);
   });
 
   // An ordinary answer to a consulta about an address that never registered here,
@@ -287,6 +341,16 @@ const EXPORTED_BY_COLUMN: Record<string, string> = {
   // Which side of the Offer this Account stands on, derived from which key
   // matched rather than stored — so a row cannot be mislabelled.
   "offer.hirerAccountId": "side",
+  // Her side of the snapshot, whichever side she stood on: the three she gave,
+  // and when. Each pair is carried for one side and withheld for the other,
+  // which is the whole of the `exchange` field's logic.
+  "contact_exchange.createdAt": "exchange",
+  "contact_exchange.workerFullName": "exchange",
+  "contact_exchange.workerPhone": "exchange",
+  "contact_exchange.workerEmail": "exchange",
+  "contact_exchange.hirerName": "exchange",
+  "contact_exchange.hirerPhone": "exchange",
+  "contact_exchange.hirerEmail": "exchange",
 };
 
 /**
@@ -345,6 +409,12 @@ const EXCLUDED: Record<string, string> = {
   "block.workerProfileId": "her decision about him; disclosed to neither party",
   "block.hirerAccountId": "her decision about him; disclosed to neither party",
   "block.createdAt": "her decision about him; disclosed to neither party",
+  "contact_exchange.id": "a surrogate key, and not a fact about her",
+  "contact_exchange.offerId": "the join to the Offer this entry already sits under",
+  // Whether our copy email reached the transport. Bookkeeping about a send, and
+  // the details it copied are carried above.
+  "contact_exchange.workerCopy": "delivery bookkeeping for a copy email",
+  "contact_exchange.hirerCopy": "delivery bookkeeping for a copy email",
 };
 
 /**
@@ -365,6 +435,7 @@ const TABLES = {
   profile_skill: schema.profileSkill,
   offer: schema.offer,
   block: schema.block,
+  contact_exchange: schema.contactExchange,
 };
 
 const COLUMNS = Object.entries(TABLES).flatMap(([table, definition]) =>

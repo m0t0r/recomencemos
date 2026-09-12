@@ -13,6 +13,7 @@
     "#connection": "./src/connection.ts",
     "#consent/*": "./src/consent/*.ts",
     "#database": "./src/database.ts",
+    "#exchange": "./src/exchange/index.ts",
     "#export": "./src/export.ts",
     "#migrate": "./src/migrate/index.ts",
     "#offers": "./src/offers/index.ts",
@@ -29,6 +30,7 @@
     "#testing/auth-stack": "./src/testing/auth-stack.ts",
     "#testing/database": "./src/testing/database.ts",
     "#testing/fixtures": "./src/testing/fixtures.ts",
+    "#testing/parties": "./src/testing/parties.ts",
     "#user-messages": "./src/user-messages.ts"
   },
   "exports": {
@@ -37,6 +39,7 @@
     "./admin-enrolment": "./src/admin/enrolment-read.ts",
     "./auth-handler": "./src/auth/index.ts",
     "./consent": "./src/consent/index.ts",
+    "./exchange": "./src/exchange/index.ts",
     "./export": "./src/export.ts",
     "./health": "./src/health.ts",
     "./migrate": "./src/migrate/index.ts",

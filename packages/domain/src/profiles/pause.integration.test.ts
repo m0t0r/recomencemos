@@ -281,7 +281,7 @@ describe("what a pause does not reach", () => {
 
     await pauseProfile(database.db, ana.accountId, PAUSED_AT);
 
-    expect(await acceptOffer(database.db, ana.accountId, offerId)).toEqual({ ok: true });
+    expect(await acceptOffer(database.db, ana.accountId, offerId)).toMatchObject({ ok: true });
     expect(await offerStateOf(database, offerId)).toBe("accepted");
   });
 

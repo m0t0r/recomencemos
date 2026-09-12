@@ -26,97 +26,17 @@
 
 import { drizzle } from "drizzle-orm/pglite";
 import { eq } from "drizzle-orm";
-import { CURRENT_CONSENT_VERSIONS } from "#consent/index";
 import {
   acceptOffer,
   declineOffer,
   findReceivedOfferSender,
   findReceivedOfferTerms,
   listReceivedOffers,
-  sendOffer,
 } from "#offers";
-import type { OfferState } from "#policy/offer-states";
-import { publishProfile } from "#profiles";
 import * as schema from "#schema";
-import { signedInAccountId } from "#testing/auth-stack";
 import { test } from "#testing/fixtures";
 import type { TestDatabase } from "#testing/fixtures";
-
-/** Distinct values for everything NFR11 holds back until she accepts. */
-const WORKER = {
-  email: "ana.sentinel@recomencemos.test",
-  fullName: "Ana María Restrepo Gómez",
-  phoneDigits: "3001234567",
-} as const;
-
-const HIRER = {
-  email: "carlos.sentinel@recomencemos.test",
-  name: "Carlos Restrepo",
-  phoneDigits: "3105558899",
-} as const;
-
-const TERMS = {
-  workDescription: "Necesito que cocines almuerzos para ocho personas el sábado",
-  payTerms: "$120.000 por el día, pagados el mismo sábado",
-  whenText: "Sábado 12 de septiembre, desde las 7 de la mañana",
-} as const;
-
-/** A published Worker, through the module that owns publishing. */
-async function aWorker(database: TestDatabase, email: string = WORKER.email) {
-  const accountId = await signedInAccountId(database, email);
-
-  const published = await publishProfile(database.db, accountId, {
-    fullName: WORKER.fullName,
-    firstName: "Ana María",
-    lastInitial: "R",
-    city: "pereira",
-    headline: "Cocino almuerzos y comida casera para eventos pequeños",
-    about: "Catorce años cocinando para familias y oficinas.",
-    phone: `+57${WORKER.phoneDigits}`,
-    skillSlugs: ["home-cooking"],
-    workHistory: ["Cocina de un restaurante en el centro de Pereira"],
-    consentVersions: CURRENT_CONSENT_VERSIONS,
-  });
-
-  if (!published.ok) throw new Error("the fixture profile did not publish");
-
-  return { accountId, slug: published.slug };
-}
-
-async function aHirer(database: TestDatabase, email: string = HIRER.email) {
-  return signedInAccountId(database, email);
-}
-
-/** One Offer from `hirer` to `slug`, left in `state` — its id. */
-async function anOfferIn(
-  database: TestDatabase,
-  hirer: string,
-  slug: string,
-  state: OfferState = "delivered",
-  workDescription: string = TERMS.workDescription,
-): Promise<string> {
-  const sent = await sendOffer(database.db, hirer, {
-    ...TERMS,
-    workDescription,
-    profileSlug: slug,
-    identity: { hirerName: HIRER.name, hirerPhone: HIRER.phoneDigits },
-    consentVersions: CURRENT_CONSENT_VERSIONS,
-  });
-
-  if (!sent.ok) throw new Error(`the fixture Offer did not send: ${sent.reason}`);
-
-  if (state !== "pending_review") {
-    await database.db
-      .update(schema.offer)
-      .set({
-        state,
-        deliveredAt: state === "on_hold" || state === "rejected_by_admin" ? null : new Date(),
-      })
-      .where(eq(schema.offer.id, sent.offerId));
-  }
-
-  return sent.offerId;
-}
+import { aHirer, anOfferIn, aWorker, HIRER, TERMS, WORKER } from "#testing/parties";
 
 async function stateOf(database: TestDatabase, offerId: string): Promise<string | undefined> {
   const [row] = await database.db
@@ -312,7 +232,7 @@ describe("accepting an Offer", () => {
     const hirer = await aHirer(database);
     const offerId = await anOfferIn(database, hirer, ana.slug);
 
-    expect(await acceptOffer(database.db, ana.accountId, offerId)).toEqual({ ok: true });
+    expect(await acceptOffer(database.db, ana.accountId, offerId)).toMatchObject({ ok: true });
     expect(await stateOf(database, offerId)).toBe("accepted");
     expect(await exchangesFor(database, offerId)).toBe(1);
   });
@@ -394,9 +314,19 @@ describe("accepting an Offer", () => {
     const hirer = await aHirer(database);
     const offerId = await anOfferIn(database, hirer, ana.slug);
 
-    await database.db.insert(schema.contactExchange).values({ offerId });
+    const snapshot = {
+      offerId,
+      workerFullName: WORKER.fullName,
+      workerPhone: `+57${WORKER.phoneDigits}`,
+      workerEmail: WORKER.email,
+      hirerName: HIRER.name,
+      hirerPhone: `+57${HIRER.phoneDigits}`,
+      hirerEmail: HIRER.email,
+    };
 
-    await expect(database.db.insert(schema.contactExchange).values({ offerId })).rejects.toThrow();
+    await database.db.insert(schema.contactExchange).values(snapshot);
+
+    await expect(database.db.insert(schema.contactExchange).values(snapshot)).rejects.toThrow();
   });
 
   /**
@@ -420,7 +350,7 @@ describe("accepting an Offer", () => {
       logger: { logQuery: (query) => statements.push(query) },
     });
 
-    expect(await acceptOffer(watched, ana.accountId, offerId)).toEqual({ ok: true });
+    expect(await acceptOffer(watched, ana.accountId, offerId)).toMatchObject({ ok: true });
 
     const inside = statements.slice(statements.findIndex((query) => /^begin/i.test(query)) + 1);
     const [first] = inside;

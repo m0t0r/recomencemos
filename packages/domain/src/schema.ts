@@ -33,6 +33,7 @@ import { user } from "#auth-schema";
 import { inList } from "#column-types";
 import { CONSENT_SIDES } from "#consent/registry";
 import { CITY_IDS } from "#policy/cities";
+import { COPY_STATES, INITIAL_COPY_STATE } from "#policy/exchange-states";
 import { INITIAL_OFFER_STATE, OFFER_STATES } from "#policy/offer-states";
 import { PHOTO_STATES, PROFILE_STATES } from "#policy/profile-states";
 import { SKILL_REQUEST_STATES } from "#policy/skill-request-states";
@@ -1185,16 +1186,28 @@ export const block = pgTable(
  * violation rather than a second disclosure — the same discipline NFR15 applies
  * to a Report's freeze.
  *
- * **The snapshot columns are story 9's, deliberately.** The spec has this row
- * snapshot both sides' name, phone and email at the moment of crossing, and
- * *exactly which details cross* is the question that ticket owns — its
- * confirmation names them and its projection is the one NFR10 counts. They
- * arrive as an additive expand on this table, which is empty on every
- * environment anyone outside this repository can reach.
+ * **It snapshots both sides' name, phone and email at the moment of crossing**
+ * (story 9), all `personal`, so a later edit or deletion does not rewrite
+ * history two people are already acting on. She corrects her number a week
+ * later; he holds the one she gave, and the page must go on showing him that
+ * one rather than a number he was never sent. The snapshot is written by
+ * `#exchange` inside `acceptOffer`'s transaction, beneath its lock, so it and
+ * the state change commit together or not at all.
+ *
+ * **`NOT NULL` on every column but two**, and the two are the Hirer's name and
+ * number: both are `NULL` on an Account that sent an Offer before the platform
+ * asked senders for them (C4), and a snapshot that invented a value would be
+ * handing her something he never said. His address is always there — it is the
+ * Account's key.
+ *
+ * **The copy by email is a column per side** rather than a table, because there
+ * are exactly two and each moves once. `#policy/exchange-states` says what each
+ * state means; `pending` is written here and is what "commits first, then sends"
+ * leaves behind when the send never answers.
  *
  * **A `BIGINT IDENTITY`, not a UUIDv7.** The exception DD2 makes for `Offer.id`
  * is argued from a URL, and this id reaches none: the exchange is shown on the
- * Offer's own route.
+ * Offer's own row, on both sides.
  */
 export const contactExchange = pgTable(
   "contact_exchange",
@@ -1210,6 +1223,20 @@ export const contactExchange = pgTable(
       .notNull()
       .references(() => offer.id, { onDelete: "cascade" }),
 
+    /** Hers, from her profile and her Account, as they stood when she accepted. */
+    workerFullName: text("worker_full_name").notNull(),
+    workerPhone: text("worker_phone").notNull(),
+    workerEmail: text("worker_email").notNull(),
+
+    /** His, from his Account. Name and number are his own claim, and may be absent. */
+    hirerName: text("hirer_name"),
+    hirerPhone: text("hirer_phone"),
+    hirerEmail: text("hirer_email").notNull(),
+
+    /** Where each side's copy by email is. Moved once, after the commit. */
+    workerCopy: text("worker_copy").notNull().default(INITIAL_COPY_STATE),
+    hirerCopy: text("hirer_copy").notNull().default(INITIAL_COPY_STATE),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -1218,6 +1245,9 @@ export const contactExchange = pgTable(
      * asks every table for — a unique constraint is one.
      */
     unique("contact_exchange_offer_id_key").on(table.offerId),
+
+    check("contact_exchange_worker_copy_known", inList(table.workerCopy, COPY_STATES)),
+    check("contact_exchange_hirer_copy_known", inList(table.hirerCopy, COPY_STATES)),
   ],
 );
 
