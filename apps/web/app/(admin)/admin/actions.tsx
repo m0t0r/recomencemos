@@ -195,9 +195,9 @@ export const deliverOffer = adminActionClient
     /**
      * **A failed send does not undo the delivery**, and it does not fail the
      * action either: she can read the Offer on the site, which is why the site
-     * is the durable channel. It is reported rather than swallowed —
+     * is the durable channel. It is not swallowed —
      * `notifier.send` throws on a transport fault by contract, so this is a
-     * real incident and has earned its event.
+     * real incident, logged at error level.
      */
     try {
       const notifier = createNotifierFromEnv(logger);
@@ -207,9 +207,9 @@ export const deliverOffer = adminActionClient
         to: recipientEmail,
         // The identifier a log line may carry (NFR18). Her address is not it.
         recipientId: recipientAccountId,
-        // `<kind>/<entity-id>`: two sends about one Offer are one delivery, so
-        // a retry after a timeout returns the original response rather than
-        // writing to her twice.
+        // With her Account id, the idempotency key: two sends to her about one
+        // Offer are one delivery, so a retry after a timeout returns the
+        // original response rather than writing to her twice.
         entityId: delivered,
         subject: OFFER_DELIVERED_SUBJECT,
         body: (

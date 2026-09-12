@@ -158,8 +158,8 @@ needed rather than be improvised afterwards.
 1. **Stop the bleeding.** `fly secrets set NOTIFICATIONS_KILL_SWITCH=on`. Every send is refused,
    logged, and never delivered. The machine restarts, which is a few seconds — cheaper than any
    alternative. Empty, `off`, `false`, `0` and `no` leave sending on; _everything else engages it_.
-2. **Enumerate the blast radius.** Every send emits one `info` line carrying `exchange_id` and the
-   recipient's **id**, never their address (NFR18). Query the drain for `notification.sent` over the
+2. **Enumerate the blast radius.** Every send emits one `info` line carrying the recipient's
+   **id**, never their address (NFR18), and a Contact Exchange send carries `exchange_id` too. Query the drain for `notification.sent` over the
    window. **Without that line the affected set is not even knowable**, which is why it is in the
    design rather than in this document.
 3. **Decide whether to notify**, which is a `docs/policy/` question and not one this runbook answers:

@@ -52,8 +52,9 @@ export function auth(): AuthHandler {
          */
         recipientId: signInAttemptId,
         /**
-         * The idempotency key is `magic-link/<entityId>`, and it must be unique
-         * per request rather than per address: two links to one address inside
+         * The idempotency key is `magic-link/<entityId>/<recipientId>` — the
+         * attempt id twice, which is harmless — and it must be unique per request
+         * rather than per address: two links to one address inside
          * Resend's 24-hour key window are two deliveries she asked for, and a
          * shared key would silently return the first response and send nothing
          * the second time — which is the resend the consumed-link state offers.
