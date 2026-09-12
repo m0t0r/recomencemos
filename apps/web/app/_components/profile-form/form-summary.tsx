@@ -14,7 +14,7 @@
  */
 
 import { Alert, AlertDescription, AlertTitle } from "@repo/design-system/components/alert";
-import type { RefObject } from "react";
+import * as React from "react";
 import { FIELD_LABELS, SUMMARY_KEPT, workHistoryLineLabel } from "@/app/_lib/profile-form/messages";
 import type { Summary } from "@/app/_lib/profile-form/summary";
 import type { Feedback } from "@/app/_lib/profile-form/use-profile-form";
@@ -22,7 +22,7 @@ import type { Feedback } from "@/app/_lib/profile-form/use-profile-form";
 export interface FormSummaryProps {
   readonly summary: Summary | undefined;
   readonly feedback: Feedback | undefined;
-  readonly summaryRef: RefObject<HTMLDivElement | null>;
+  readonly summaryRef: React.RefObject<HTMLDivElement | null>;
   /** The id of the control a summary item links to. */
   readonly idFor: (field: keyof typeof FIELD_LABELS, index?: number) => string;
   /** Accessible name for the region. */

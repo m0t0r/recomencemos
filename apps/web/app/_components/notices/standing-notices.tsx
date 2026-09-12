@@ -34,7 +34,7 @@
 import { Separator } from "@repo/design-system/components/separator";
 import { cn } from "@repo/design-system/lib/utils";
 import { BanknoteIcon, ChevronDownIcon, MessageSquareOffIcon, ShieldOffIcon } from "lucide-react";
-import type { ComponentType } from "react";
+import * as React from "react";
 import {
   NOTICES_HEADING,
   STANDING_NOTICES,
@@ -79,7 +79,7 @@ export type NoticesTreatment = "disclosure" | "expanded";
  * and must not say "hidden" — `CONTEXT.md` bans that description in words and it
  * would be just as false in a glyph.
  */
-const MARKS: Record<StandingNotice["key"], ComponentType<{ className?: string }>> = {
+const MARKS: Record<StandingNotice["key"], React.ComponentType<{ className?: string }>> = {
   verification: ShieldOffIcon,
   money: BanknoteIcon,
   block: MessageSquareOffIcon,

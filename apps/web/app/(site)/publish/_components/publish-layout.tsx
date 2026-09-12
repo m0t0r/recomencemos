@@ -19,7 +19,7 @@
  * _autorización_ above the fields, and the verb on the button.
  */
 
-import type { ReactNode } from "react";
+import * as React from "react";
 import { Button } from "@repo/design-system/components/button";
 import { FieldGroup } from "@repo/design-system/components/field";
 import { AuthorizationConsent } from "@/app/_components/consent/authorization";
@@ -48,7 +48,7 @@ export interface PublishLayoutProps {
    * two surfaces carries a photo control today. Passing it in leaves the edit
    * form's markup unchanged rather than making it opt out of something.
    */
-  readonly photoSlot?: ReactNode;
+  readonly photoSlot?: React.ReactNode;
 }
 
 export function PublishLayout({

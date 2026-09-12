@@ -80,7 +80,7 @@
 
 import { headers } from "next/headers";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import * as React from "react";
 import type { AuthSession } from "@repo/domain/auth-handler";
 import { auth } from "@/lib/auth";
 import { SessionMenuNoScript } from "@/app/_components/session-menu/no-script";
@@ -128,7 +128,7 @@ export interface AppHeaderProps {
    * where `forbidden.tsx` deliberately offers no route onward — chrome that
    * offered one anyway would put the link back on the page that refuses it.
    */
-  readonly signedOut?: ReactNode;
+  readonly signedOut?: React.ReactNode;
 }
 
 /**

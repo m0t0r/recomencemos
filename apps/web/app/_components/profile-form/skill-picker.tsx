@@ -48,7 +48,7 @@ import {
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
 import { cn } from "@repo/design-system/lib/utils";
-import { type KeyboardEvent, useId, useState } from "react";
+import * as React from "react";
 import {
   SKILL_FILTER_LABEL,
   SKILL_NOT_LISTED_HELP,
@@ -103,24 +103,24 @@ export function SkillPicker({
   hydrated,
   layout = "list",
 }: SkillPickerProps) {
-  const helpId = useId();
-  const errorId = useId();
-  const countId = useId();
-  const filterId = useId();
-  const entryId = useId();
-  const notListedId = useId();
-  const notListedHelpId = useId();
-  const [query, setQuery] = useState("");
-  const [notListed, setNotListed] = useState(false);
+  const helpId = React.useId();
+  const errorId = React.useId();
+  const countId = React.useId();
+  const filterId = React.useId();
+  const entryId = React.useId();
+  const notListedId = React.useId();
+  const notListedHelpId = React.useId();
+  const [query, setQuery] = React.useState("");
+  const [notListed, setNotListed] = React.useState(false);
   /** Which entry holds the tab stop. A slug rather than an index, so filtering cannot strand it. */
-  const [active, setActive] = useState<string | undefined>(undefined);
+  const [active, setActive] = React.useState<string | undefined>(undefined);
   /**
    * How many times a pick has been refused for being the seventh. A count
    * rather than a flag because the sentence never changes, and an unchanged
    * `alert` that is already mounted is announced once and never again — so the
    * count is the `key` that makes the second refusal a second announcement.
    */
-  const [refusals, setRefusals] = useState(0);
+  const [refusals, setRefusals] = React.useState(0);
 
   const atMaximum = selected.length >= LIMITS.skills;
   const needle = fold(query.trim());
@@ -161,7 +161,7 @@ export function SkillPicker({
    * carrying `data-skill-entry` take part: the "not on the list" control below
    * the list is a checkbox too, and it is not a place End should land.
    */
-  function moveFocus(event: KeyboardEvent<HTMLFieldSetElement>) {
+  function moveFocus(event: React.KeyboardEvent<HTMLFieldSetElement>) {
     if (!MOVEMENT_KEYS.has(event.key)) return;
 
     const boxes = [...event.currentTarget.querySelectorAll<HTMLElement>("[data-skill-entry]")];
@@ -348,9 +348,9 @@ export function SkillPicker({
  */
 function SkillRequest() {
   const machine = useSkillRequest();
-  const fieldId = useId();
-  const helpId = useId();
-  const errorId = useId();
+  const fieldId = React.useId();
+  const helpId = React.useId();
+  const errorId = React.useId();
 
   return (
     <div className="border-border mt-2 flex flex-col gap-3 rounded-md border p-3">

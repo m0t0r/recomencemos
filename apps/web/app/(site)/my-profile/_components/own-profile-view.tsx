@@ -28,7 +28,7 @@ import { cityLabel, formatColombianPhone } from "@repo/domain/policy";
 import type { OwnProfile } from "@repo/domain/profiles";
 import { DoorOpenIcon, GlobeIcon, LockKeyholeIcon, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import * as React from "react";
 import { HerOffers } from "./her-offers";
 import { OwnCard } from "./own-card";
 import { PauseSwitch } from "./pause-switch";
@@ -178,7 +178,7 @@ function Standing({ profile }: { profile: OwnProfile }) {
   );
 }
 
-function Term({ term, children }: { term: string; children: ReactNode }) {
+function Term({ term, children }: { term: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
       <dt className="text-muted-foreground text-sm">{term}</dt>
@@ -238,7 +238,7 @@ function Tier({
   id: string;
   heading: string;
   icon: LucideIcon;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <section

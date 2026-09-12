@@ -26,7 +26,7 @@
 
 import { Button } from "@repo/design-system/components/button";
 import { FieldDescription, FieldLegend, FieldSet } from "@repo/design-system/components/field";
-import { useActionState, useState } from "react";
+import * as React from "react";
 import { approvePhoto, rejectPhoto } from "../actions";
 import {
   PHOTO_APPROVE,
@@ -74,11 +74,11 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
    * photo the Admin looked at rather than to whatever the row points at when it
    * commits.
    */
-  const [approved, approveAction, approving] = useActionState(
+  const [approved, approveAction, approving] = React.useActionState(
     approvePhoto.bind(null, item.id, reviewedKey),
     INITIAL_APPROVE,
   );
-  const [rejected, rejectAction, rejecting] = useActionState(
+  const [rejected, rejectAction, rejecting] = React.useActionState(
     rejectPhoto.bind(null, item.id, reviewedKey),
     INITIAL_REJECT,
   );
@@ -89,7 +89,7 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
    * first one's side. Set on submit, because it has to hold for the whole life
    * of the outcome.
    */
-  const [answering, setAnswering] = useState<"approve" | "reject" | null>(null);
+  const [answering, setAnswering] = React.useState<"approve" | "reject" | null>(null);
 
   const { announcementRef } = useQueueRow(
     answering === "approve" ? approved : answering === "reject" ? rejected : INITIAL_APPROVE,

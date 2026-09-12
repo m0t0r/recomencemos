@@ -23,7 +23,7 @@
 
 import { buttonVariants } from "@repo/design-system/components/button-variants";
 import Link from "next/link";
-import { Suspense } from "react";
+import * as React from "react";
 import { requireAdminPage } from "@/lib/admin";
 import { QueueHeadline, QueueHeadlineSkeleton } from "./_components/queue";
 import { Coverage, PublishRateSignal } from "./_components/shell-notices";
@@ -118,9 +118,9 @@ export default async function AdminQueueLayout({
             the rows it describes.
           */}
           <div className="ml-auto">
-            <Suspense fallback={<QueueHeadlineSkeleton />}>
+            <React.Suspense fallback={<QueueHeadlineSkeleton />}>
               <Headline />
-            </Suspense>
+            </React.Suspense>
           </div>
         </div>
       </div>
@@ -136,9 +136,9 @@ export default async function AdminQueueLayout({
           The clock is read here, after the gate, so the read is on the request
           path rather than a prerendered one.
         */}
-        <Suspense fallback={null}>
+        <React.Suspense fallback={null}>
           <PublishRateSignal now={requestNow()} />
-        </Suspense>
+        </React.Suspense>
 
         {children}
       </div>

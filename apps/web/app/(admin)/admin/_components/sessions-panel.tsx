@@ -25,7 +25,7 @@ import { Button } from "@repo/design-system/components/button";
 import { Card } from "@repo/design-system/components/card";
 import { Field, FieldError, FieldLabel } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
-import { useActionState, useEffect, useId, useRef } from "react";
+import * as React from "react";
 import { revokeSessions } from "../actions";
 import {
   SESSIONS_EMAIL_LABEL,
@@ -41,10 +41,10 @@ type Result = Awaited<ReturnType<typeof revokeSessions>>;
 const INITIAL: Result = {};
 
 export function SessionsPanel() {
-  const [result, formAction, pending] = useActionState(revokeSessions, INITIAL);
-  const emailId = useId();
-  const errorId = useId();
-  const announcementRef = useRef<HTMLParagraphElement>(null);
+  const [result, formAction, pending] = React.useActionState(revokeSessions, INITIAL);
+  const emailId = React.useId();
+  const errorId = React.useId();
+  const announcementRef = React.useRef<HTMLParagraphElement>(null);
 
   /**
    * **Focus returns to where the work was, not to the top of the page.**
@@ -60,7 +60,7 @@ export function SessionsPanel() {
    * boolean stays `true` across a second outcome, so focus would move once and
    * never again. `result` is a fresh object per dispatch.
    */
-  useEffect(() => {
+  React.useEffect(() => {
     if (result.data ?? result.serverError ?? result.validationErrors) {
       announcementRef.current?.focus();
     }

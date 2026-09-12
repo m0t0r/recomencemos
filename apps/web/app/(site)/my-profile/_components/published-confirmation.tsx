@@ -12,12 +12,12 @@
  */
 
 import { Alert } from "@repo/design-system/components/alert";
-import { type ReactNode, useEffect, useRef } from "react";
+import * as React from "react";
 
-export function PublishedConfirmation({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
+export function PublishedConfirmation({ children }: { children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     ref.current?.focus();
   }, []);
 

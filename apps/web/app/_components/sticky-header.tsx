@@ -37,13 +37,13 @@
  * below it reflows when it sticks.
  */
 
-import { useEffect, useRef, useState } from "react";
+import * as React from "react";
 
 export function StickyHeader({ children, ...props }: React.ComponentProps<"header">) {
-  const sentinel = useRef<HTMLDivElement>(null);
-  const [elevated, setElevated] = useState(false);
+  const sentinel = React.useRef<HTMLDivElement>(null);
+  const [elevated, setElevated] = React.useState(false);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const node = sentinel.current;
     if (!node) return;
 

@@ -48,7 +48,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@repo/design-system/compone
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import { cityLabel } from "@repo/domain/policy";
 import type { GatedIdentity } from "@repo/domain/profiles";
-import { Suspense, use } from "react";
+import * as React from "react";
 import { displayName, initialOf } from "@/app/(site)/_components/profile-card";
 import { SkillChips } from "@/app/(site)/_components/profile-list/skill-chips";
 import { photoAlt } from "@/app/(site)/_lib/lists/messages";
@@ -129,7 +129,7 @@ function WorkHistoryList({ lines }: { readonly lines: readonly string[] }) {
  * looking at when both are missing.
  */
 function WorkHistorySection({ lines }: { readonly lines: Promise<readonly string[]> }) {
-  const history = use(lines);
+  const history = React.use(lines);
   if (history.length === 0) return null;
 
   return (
@@ -256,9 +256,9 @@ export function GatedProfileView({ profile, workHistory }: GatedProfileViewProps
           )}
         </Section>
 
-        <Suspense fallback={<WorkHistorySkeleton />}>
+        <React.Suspense fallback={<WorkHistorySkeleton />}>
           <WorkHistorySection lines={workHistory} />
-        </Suspense>
+        </React.Suspense>
       </div>
 
       <BackToList />

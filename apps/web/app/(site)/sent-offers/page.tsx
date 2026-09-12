@@ -32,7 +32,7 @@ import { Skeleton } from "@repo/design-system/components/skeleton";
 import { exchanges } from "@repo/domain/exchange";
 import { offers } from "@repo/domain/offers";
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import * as React from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { SentOfferList } from "./_components/sent-offer-list";
@@ -145,13 +145,13 @@ export default function SentOffersPage({ searchParams }: { readonly searchParams
         <p className="text-muted-foreground">{SENT_OFFERS_LEAD}</p>
       </header>
 
-      <Suspense fallback={null}>
+      <React.Suspense fallback={null}>
         <SentConfirmation searchParams={searchParams} />
-      </Suspense>
+      </React.Suspense>
 
-      <Suspense fallback={<RowsSkeleton />}>
+      <React.Suspense fallback={<RowsSkeleton />}>
         <SentOffersPanel />
-      </Suspense>
+      </React.Suspense>
 
       {/*
         Story 11's standing notices. `/sent-offers` is a required prefix in

@@ -38,7 +38,7 @@
  * needs only rendering.
  */
 
-import { startTransition, useActionState, useState } from "react";
+import * as React from "react";
 import { requestSkill } from "@/app/(site)/publish/actions";
 import { skillRequestFields } from "./schema";
 import { noticeFor, type SkillRequestNotice } from "./skill-request-notice";
@@ -62,9 +62,9 @@ export interface SkillRequestMachine {
 }
 
 export function useSkillRequest(): SkillRequestMachine {
-  const [result, dispatch, pending] = useActionState(requestSkill, INITIAL);
-  const [fieldError, setFieldError] = useState<string | undefined>(undefined);
-  const [text, setText] = useState("");
+  const [result, dispatch, pending] = React.useActionState(requestSkill, INITIAL);
+  const [fieldError, setFieldError] = React.useState<string | undefined>(undefined);
+  const [text, setText] = React.useState("");
 
   /**
    * **Emptied when a request lands — adjusted during render, keyed on the result
@@ -84,7 +84,7 @@ export function useSkillRequest(): SkillRequestMachine {
    * `result` is a fresh object per dispatch, so this fires for every outcome —
    * including two successes in a row, which is the case that started this.
    */
-  const [actedOn, setActedOn] = useState(result);
+  const [actedOn, setActedOn] = React.useState(result);
 
   if (actedOn !== result) {
     setActedOn(result);
@@ -104,7 +104,7 @@ export function useSkillRequest(): SkillRequestMachine {
 
     const formData = new FormData();
     formData.set("text", parsed.data.text);
-    startTransition(() => dispatch(formData));
+    React.startTransition(() => dispatch(formData));
   }
 
   return { pending, notice: noticeFor(result), text, setText, send, fieldError };

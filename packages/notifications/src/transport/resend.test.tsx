@@ -11,7 +11,7 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
-import { createElement } from "react";
+import * as React from "react";
 import type { OutboundMessage } from "#send";
 import { type ResendEmailsApi, createResendTransport } from "#transport/resend";
 
@@ -21,7 +21,7 @@ const message: OutboundMessage = {
   recipientId: "acc_01HZY",
   entityId: "mlr_01J4K",
   subject: "Tu enlace para entrar a Recomencemos",
-  body: createElement("p", null, "enlace"),
+  body: React.createElement("p", null, "enlace"),
   idempotencyKey: "magic-link/mlr_01J4K",
 };
 

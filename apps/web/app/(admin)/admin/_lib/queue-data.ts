@@ -31,7 +31,7 @@ import "server-only";
  * quota argument NFR26 and C51 make everywhere else in this app.
  */
 
-import { cache } from "react";
+import * as React from "react";
 import { requireAdminPage } from "@/lib/admin";
 import { QUEUE_SOURCES, type SettledSource, type SourceState } from "./queue-sources";
 
@@ -42,7 +42,7 @@ import { QUEUE_SOURCES, type SettledSource, type SourceState } from "./queue-sou
  * whichever component asked first — and the cached rejection interrupts every
  * other, which is the same 403 arriving by the same route rather than several.
  */
-const admin = cache(requireAdminPage);
+const admin = React.cache(requireAdminPage);
 
 /**
  * This request's clock, read once however many callers ask.
@@ -55,7 +55,7 @@ const admin = cache(requireAdminPage);
  * Call it only after the gate or a gated read: a clock read on a prerendered path
  * fails the build with `blocking-prerender-current-time`.
  */
-export const requestNow = cache(() => new Date());
+export const requestNow = React.cache(() => new Date());
 
 /**
  * One source's branch, gated and deduplicated.
@@ -64,7 +64,7 @@ export const requestNow = cache(() => new Date());
  * compares arguments by identity — and a key is a value, which is what makes the
  * shell's call and the page's call the same call.
  */
-export const loadSource = cache(async (key: string): Promise<SourceState> => {
+export const loadSource = React.cache(async (key: string): Promise<SourceState> => {
   await admin();
 
   const source = QUEUE_SOURCES.find((each) => each.key === key);

@@ -14,7 +14,7 @@
  * way every other redirect does — as `?error=` on the URL.
  */
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import * as React from "react";
 import { requestMagicLink, startGoogleSignIn } from "../actions";
 import {
   CHECK_YOUR_EMAIL_HINT,
@@ -85,7 +85,7 @@ export interface UseSignInOptions {
 }
 
 export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachine {
-  const [sharedDevice, setSharedDevice] = useState(false);
+  const [sharedDevice, setSharedDevice] = React.useState(false);
 
   /**
    * **Bound, not hidden.** `returnPath` and `sharedDevice` travel as bound
@@ -114,17 +114,17 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
    * the control is. Fixing it means a natively-operable checkbox, which is a
    * design-system change and a decision about this surface, not a change here.
    */
-  const [result, formAction, emailPending] = useActionState(
+  const [result, formAction, emailPending] = React.useActionState(
     requestMagicLink.bind(null, returnPath, sharedDevice),
     INITIAL,
   );
 
-  const [, googleFormAction] = useActionState(
+  const [, googleFormAction] = React.useActionState(
     startGoogleSignIn.bind(null, returnPath, sharedDevice),
     INITIAL_GOOGLE,
   );
 
-  const announcementRef = useRef<HTMLDivElement>(null);
+  const announcementRef = React.useRef<HTMLDivElement>(null);
 
   const consumedLink = error === "INVALID_TOKEN";
   const arrivedWithGoogleError = Boolean(error) && !consumedLink;
@@ -135,7 +135,7 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
    * the reason it is still there. The region is `role="status"` too, so a change
    * nobody is focused on is still announced.
    */
-  useEffect(() => {
+  React.useEffect(() => {
     // Read from `result` inside the effect rather than from a derived boolean:
     // a boolean stays `true` across a second failure, so focus would move on the
     // first outcome and never again. `result` is a fresh object per dispatch,

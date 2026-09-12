@@ -31,7 +31,7 @@
  * the panel's rule, correctly, for the case where nothing moved.
  */
 
-import { createContext, useContext, useEffect, useRef } from "react";
+import * as React from "react";
 
 /**
  * What an element this hook may focus wears, so that it shows it has focus.
@@ -74,7 +74,7 @@ export interface QueueRowResult {
  * tests do — and the row then keeps focus on its own outcome, which is the
  * last-row rule rather than a new one.
  */
-export const QueueHandoff = createContext<(() => boolean) | null>(null);
+export const QueueHandoff = React.createContext<(() => boolean) | null>(null);
 
 /**
  * The line focus lands on when the table hands the keyboard to a row: the
@@ -90,15 +90,15 @@ export const QUEUE_ANCHOR = "data-queue-anchor";
  * document would cost exactly the re-orientation this exists to prevent.
  */
 export function useQueueRow(result: QueueRowResult) {
-  const announcementRef = useRef<HTMLParagraphElement>(null);
-  const handoff = useContext(QueueHandoff);
+  const announcementRef = React.useRef<HTMLParagraphElement>(null);
+  const handoff = React.useContext(QueueHandoff);
 
   /**
    * Read from `result` rather than from a derived boolean: a boolean stays `true`
    * across a second outcome, so focus would move once and never again. `result`
    * is a fresh object per dispatch.
    */
-  useEffect(() => {
+  React.useEffect(() => {
     if (result.data) {
       if (!handoff?.()) announcementRef.current?.focus();
       return;

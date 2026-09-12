@@ -21,7 +21,7 @@
  * streaming, and it is absent exactly where streaming is.
  */
 
-import { useEffect, useState } from "react";
+import * as React from "react";
 import { announcedCount } from "../../_lib/lists/messages";
 
 export interface CountAnnouncementProps {
@@ -46,7 +46,7 @@ export interface CountAnnouncementProps {
 
 export function CountAnnouncement({ count, label }: CountAnnouncementProps) {
   const announcement = label ?? announcedCount(count);
-  const [announced, setAnnounced] = useState("");
+  const [announced, setAnnounced] = React.useState("");
 
   /*
     The external system this effect synchronizes with is the accessibility tree,
@@ -56,7 +56,7 @@ export function CountAnnouncement({ count, label }: CountAnnouncementProps) {
     Deriving the text during render, as the rule advises, would put it in the
     first commit and silence the thing this component exists to do.
   */
-  useEffect(() => {
+  React.useEffect(() => {
     // oxlint-disable-next-line set-state-in-effect, no-deriving-state-in-effects -- see above.
     setAnnounced(announcement);
   }, [announcement]);

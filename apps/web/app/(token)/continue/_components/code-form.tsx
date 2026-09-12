@@ -41,7 +41,7 @@ import { Field, FieldDescription, FieldLabel } from "@repo/design-system/compone
 import { Input } from "@repo/design-system/components/input";
 import { cn } from "@repo/design-system/lib/utils";
 import { GENERIC_ERROR_CODE } from "@repo/errors/app-error";
-import { startTransition, useActionState, useEffect, useId, useRef, useState } from "react";
+import * as React from "react";
 import { verifyCode } from "../actions";
 import {
   CODE_DESCRIPTION,
@@ -57,13 +57,13 @@ type VerifyResult = Awaited<ReturnType<typeof verifyCode>>;
 const INITIAL: VerifyResult = {};
 
 export function CodeForm() {
-  const [code, setCode] = useState("");
-  const [result, formAction, pending] = useActionState(verifyCode, INITIAL);
+  const [code, setCode] = React.useState("");
+  const [result, formAction, pending] = React.useActionState(verifyCode, INITIAL);
 
-  const codeId = useId();
-  const descriptionId = useId();
-  const formRef = useRef<HTMLFormElement>(null);
-  const announcementRef = useRef<HTMLDivElement>(null);
+  const codeId = React.useId();
+  const descriptionId = React.useId();
+  const formRef = React.useRef<HTMLFormElement>(null);
+  const announcementRef = React.useRef<HTMLDivElement>(null);
 
   /**
    * The last value this component submitted on its own, so a completed code is
@@ -71,9 +71,9 @@ export function CodeForm() {
    * fires again; a refused code sitting in the field does not resubmit itself
    * while the person reads what happened.
    */
-  const autoSubmitted = useRef<string | undefined>(undefined);
+  const autoSubmitted = React.useRef<string | undefined>(undefined);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (!isCompleteTotpCode(code)) {
       autoSubmitted.current = undefined;
       return;
@@ -100,7 +100,7 @@ export function CodeForm() {
    * outcome" true — a derived boolean stays `true` across a second refusal and
    * would move focus once and never again.
    */
-  useEffect(() => {
+  React.useEffect(() => {
     if (result.serverError ?? result.validationErrors) announcementRef.current?.focus();
   }, [result]);
 
@@ -139,7 +139,7 @@ export function CodeForm() {
           onSubmit={(event) => {
             const formData = new FormData(event.currentTarget);
             event.preventDefault();
-            startTransition(() => formAction(formData));
+            React.startTransition(() => formAction(formData));
           }}
           className="flex flex-col gap-4"
         >

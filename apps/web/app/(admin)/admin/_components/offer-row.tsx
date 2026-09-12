@@ -28,7 +28,7 @@
  */
 
 import { Button } from "@repo/design-system/components/button";
-import { useActionState, useState } from "react";
+import * as React from "react";
 import {
   DELIVER_OFFER_SUBMIT,
   DELIVER_OFFER_SUBMITTING,
@@ -60,11 +60,11 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
    * input. It also keeps the two decisions two endpoints, each with its own audit
    * name, rather than one endpoint branching on a value in the body.
    */
-  const [delivery, deliverAction, delivering] = useActionState(
+  const [delivery, deliverAction, delivering] = React.useActionState(
     deliverOffer.bind(null, item.id),
     NOTHING_YET,
   );
-  const [refusal, rejectAction, rejecting] = useActionState(
+  const [refusal, rejectAction, rejecting] = React.useActionState(
     rejectOffer.bind(null, item.id),
     NOTHING_YET,
   );
@@ -84,7 +84,7 @@ export function OfferRow({ item }: { readonly item: QueueItem }) {
    * for the whole life of the outcome and `pending` is false again by the time
    * anybody reads it.
    */
-  const [answering, setAnswering] = useState<"deliver" | "reject" | null>(null);
+  const [answering, setAnswering] = React.useState<"deliver" | "reject" | null>(null);
 
   const active =
     answering === "deliver" ? delivery : answering === "reject" ? refusal : NOTHING_YET;

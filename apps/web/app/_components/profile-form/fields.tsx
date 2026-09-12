@@ -27,7 +27,7 @@ import { Button } from "@repo/design-system/components/button";
 import { Input } from "@repo/design-system/components/input";
 import { Textarea } from "@repo/design-system/components/textarea";
 import { RadioChips } from "@/app/_components/radio-chips";
-import { useId } from "react";
+import * as React from "react";
 import {
   ABOUT_HELP,
   ABOUT_LABEL,
@@ -89,8 +89,8 @@ export function TextField({
   maxLength,
   className,
 }: TextFieldProps) {
-  const helpId = useId();
-  const errorId = useId();
+  const helpId = React.useId();
+  const errorId = React.useId();
 
   return (
     <form.Field name={name} validators={{ onBlur: optionalOnBlur(schema), onSubmit: schema }}>
@@ -131,8 +131,8 @@ export interface FieldProps {
 }
 
 export function AboutField({ form, id, serverError }: FieldProps) {
-  const helpId = useId();
-  const errorId = useId();
+  const helpId = React.useId();
+  const errorId = React.useId();
 
   return (
     <form.Field name="about" validators={{ onBlur: aboutField, onSubmit: aboutField }}>
@@ -177,7 +177,7 @@ const CITY_CHIPS = CITY_IDS.map((city) => ({ value: city, label: CITY_LABELS[cit
  * between them. Not a `Select`: three options do not want a dropdown on a phone.
  */
 export function CityField({ form, id, serverError }: FieldProps) {
-  const errorId = useId();
+  const errorId = React.useId();
 
   return (
     <form.Field name="city" validators={{ onSubmit: cityField }}>
@@ -226,7 +226,7 @@ export function WorkHistoryFields({
   serverErrorFor,
   hydrated,
 }: WorkHistoryFieldsProps) {
-  const helpId = useId();
+  const helpId = React.useId();
 
   return (
     <form.Field name="workHistory" mode="array">
@@ -281,7 +281,7 @@ function WorkHistoryLine({
   serverError: string | undefined;
   onRemove: (() => void) | undefined;
 }) {
-  const errorId = useId();
+  const errorId = React.useId();
 
   return (
     <form.Field

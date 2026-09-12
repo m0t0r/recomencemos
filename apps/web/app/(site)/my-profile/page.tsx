@@ -25,7 +25,7 @@ import { offers } from "@repo/domain/offers";
 import { profiles } from "@repo/domain/profiles";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import * as React from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { requireAccountPage } from "@/lib/account";
 import { type Arrival, OwnProfileView } from "./_components/own-profile-view";
@@ -87,9 +87,9 @@ export default function MyProfilePage({ searchParams }: { searchParams: SearchPa
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10">
       <h1 className="page-heading">{MY_PROFILE_TITLE}</h1>
-      <Suspense fallback={<PanelSkeleton />}>
+      <React.Suspense fallback={<PanelSkeleton />}>
         <ProfilePanel searchParams={searchParams} />
-      </Suspense>
+      </React.Suspense>
       {/*
         Story 11's three standing notices, at the foot rather than at the head,
         which is the one placement decision this surface takes for itself.

@@ -20,11 +20,11 @@
 import { buttonVariants } from "@repo/design-system/components/button-variants";
 import { cn } from "@repo/design-system/lib/utils";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import * as React from "react";
 import { TO_PUBLISH } from "../../_lib/lists/messages";
 import { COVER_LEAD, COVER_TITLE, COVER_TO_PROFILES } from "../../_lib/wall/messages";
 
-export function Cover({ strip, profilesId }: { strip: ReactNode; profilesId: string }) {
+export function Cover({ strip, profilesId }: { strip: React.ReactNode; profilesId: string }) {
   return (
     <section className="bg-ink text-ink-foreground" aria-labelledby="cover-heading">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pt-14 pb-10 sm:gap-10 sm:pt-24 sm:pb-14">

@@ -42,7 +42,7 @@ import {
   FieldLabel,
 } from "@repo/design-system/components/field";
 import Link from "next/link";
-import { useId } from "react";
+import * as React from "react";
 import { AUTHORIZATION_CHECKBOX_HELP, CONSENT_LABELS } from "@/app/_lib/consent/messages";
 import { AUTHORIZATION_ANCHOR, AuthorizationText, PRIVACY_NOTICE_PATH } from "./authorization-text";
 
@@ -80,8 +80,8 @@ export function AuthorizationConsent({
   error,
   id: checkboxId,
 }: AuthorizationConsentProps) {
-  const helpId = useId();
-  const errorId = useId();
+  const helpId = React.useId();
+  const errorId = React.useId();
 
   return (
     // **No `data-invalid` on the `Field`, and its absence is the fix rather than

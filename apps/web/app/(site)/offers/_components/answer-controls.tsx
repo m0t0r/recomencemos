@@ -49,7 +49,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@repo/design-system/components/dialog";
-import { useActionState } from "react";
+import * as React from "react";
 import {
   ACCEPT,
   ACCEPT_CONFIRM,
@@ -76,11 +76,11 @@ export interface AnswerControlsProps {
 }
 
 export function AnswerControls({ offerId, hirerName }: AnswerControlsProps) {
-  const [accepted, acceptAction, accepting] = useActionState(
+  const [accepted, acceptAction, accepting] = React.useActionState(
     acceptOffer.bind(null, offerId),
     INITIAL_ACCEPT,
   );
-  const [declined, declineAction, declining] = useActionState(
+  const [declined, declineAction, declining] = React.useActionState(
     declineOffer.bind(null, offerId),
     INITIAL_DECLINE,
   );

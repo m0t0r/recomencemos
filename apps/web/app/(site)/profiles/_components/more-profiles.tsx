@@ -24,7 +24,7 @@
 import { buttonVariants } from "@repo/design-system/components/button-variants";
 import type { PublicProfile } from "@repo/domain/profiles";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import * as React from "react";
 import { ProfileRow } from "../../_components/profile-list/profile-row";
 import { announcedMore } from "../../_lib/lists/messages";
 import { loadMoreProfiles } from "../actions";
@@ -44,18 +44,18 @@ export function MoreProfiles({
   readonly initialCursor: string;
   readonly filters: BrowseFilters;
 }) {
-  const [rows, setRows] = useState<readonly PublicProfile[]>([]);
+  const [rows, setRows] = React.useState<readonly PublicProfile[]>([]);
   /*
     How many arrived on the **last** page, which is not `rows.length`.
     Announcing the running total said "48 perfiles más" when 24 had come.
   */
-  const [lastAppended, setLastAppended] = useState(0);
-  const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [pending, setPending] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const sentinel = useRef<HTMLDivElement>(null);
+  const [lastAppended, setLastAppended] = React.useState(0);
+  const [cursor, setCursor] = React.useState<string | null>(initialCursor);
+  const [pending, setPending] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+  const sentinel = React.useRef<HTMLDivElement>(null);
 
-  const loadMore = useCallback(async () => {
+  const loadMore = React.useCallback(async () => {
     if (pending || cursor === null) return;
 
     setPending(true);
@@ -78,7 +78,7 @@ export function MoreProfiles({
     setCursor(page.nextCursor);
   }, [cursor, pending, filters]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const node = sentinel.current;
     if (node === null || cursor === null || failed) return;
 

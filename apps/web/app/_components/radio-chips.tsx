@@ -29,7 +29,7 @@
 import { FieldLabel } from "@repo/design-system/components/field";
 import { RadioGroup, RadioGroupItem } from "@repo/design-system/components/radio-group";
 import { cn } from "@repo/design-system/lib/utils";
-import { useId } from "react";
+import * as React from "react";
 
 export interface RadioChip {
   readonly value: string;
@@ -56,7 +56,7 @@ export function RadioChips({
   /** `stack` for a form field, `wrap` for a filter bar. See the note above. */
   readonly layout: "stack" | "wrap";
 }) {
-  const base = useId();
+  const base = React.useId();
 
   return (
     <RadioGroup

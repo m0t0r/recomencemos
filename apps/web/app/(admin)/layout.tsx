@@ -22,7 +22,7 @@
  * `metadata.robots` for the `<meta>` half, because NFR8 wants both.
  */
 
-import { Suspense } from "react";
+import * as React from "react";
 import { AdminHeader, AdminHeaderPlaceholder } from "./_components/admin-header/admin-header";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -41,9 +41,9 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
         blocking on it would make the 403 — a page with nothing to read from the
         database — wait on a session read to paint a header that will be empty.
       */}
-      <Suspense fallback={<AdminHeaderPlaceholder />}>
+      <React.Suspense fallback={<AdminHeaderPlaceholder />}>
         <AdminHeader />
-      </Suspense>
+      </React.Suspense>
       {children}
     </div>
   );

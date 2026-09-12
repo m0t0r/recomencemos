@@ -29,7 +29,7 @@
 import { Button } from "@repo/design-system/components/button";
 import { cn } from "@repo/design-system/lib/utils";
 import { InfoIcon, TriangleAlertIcon } from "lucide-react";
-import { useActionState, useEffect, useRef } from "react";
+import * as React from "react";
 import { useFormStatus } from "react-dom";
 import { signOutEverywhere } from "../actions";
 import { closeOthersButton, FEEDBACK_REGION_LABEL, ONLY_THIS_SESSION } from "../_lib/messages";
@@ -48,8 +48,8 @@ export interface SessionsPanelProps {
 }
 
 export function SessionsPanel({ otherCount }: SessionsPanelProps) {
-  const [result, formAction] = useActionState(signOutEverywhere, INITIAL);
-  const announcementRef = useRef<HTMLDivElement | null>(null);
+  const [result, formAction] = React.useActionState(signOutEverywhere, INITIAL);
+  const announcementRef = React.useRef<HTMLDivElement | null>(null);
 
   const success = result.data?.message;
   /**
@@ -69,7 +69,7 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
    * otherwise have to go looking for what happened. Moving focus to the note
    * says what happened first and leaves the button one step away.
    */
-  useEffect(() => {
+  React.useEffect(() => {
     if (announcement) announcementRef.current?.focus();
   }, [announcement]);
 

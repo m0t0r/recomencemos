@@ -15,12 +15,12 @@
  * is good news or neutral news, never a fault.
  */
 
-import { type ReactNode, useEffect, useRef } from "react";
+import * as React from "react";
 
-export function ArrivalStatus({ children }: { readonly children: ReactNode }) {
-  const ref = useRef<HTMLOutputElement>(null);
+export function ArrivalStatus({ children }: { readonly children: React.ReactNode }) {
+  const ref = React.useRef<HTMLOutputElement>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     ref.current?.focus();
   }, []);
 

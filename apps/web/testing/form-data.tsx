@@ -14,7 +14,7 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import * as React from "react";
 
 type FormControl = HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement;
 
@@ -42,7 +42,7 @@ const TEST_FORM = "formulario de prueba";
  * For a component with no form of its own: rendered inside a named one, so the
  * accessibility tree hands the form back by role, and that form returned.
  */
-export function renderInForm(ui: ReactNode): HTMLFormElement {
+export function renderInForm(ui: React.ReactNode): HTMLFormElement {
   render(<form aria-label={TEST_FORM}>{ui}</form>);
   return screen.getByRole<HTMLFormElement>("form", { name: TEST_FORM });
 }

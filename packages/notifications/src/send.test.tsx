@@ -10,7 +10,7 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
-import { createElement } from "react";
+import * as React from "react";
 import {
   KILL_SWITCH_VARIABLE,
   type Notification,
@@ -29,7 +29,7 @@ const notification: Notification = {
   recipientId: "acc_01HZY",
   entityId: "mlr_01J4K",
   subject: "Tu enlace para entrar a Recomencemos",
-  body: createElement("p", null, "enlace"),
+  body: React.createElement("p", null, "enlace"),
 };
 
 interface RecordedLine {

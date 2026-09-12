@@ -34,7 +34,7 @@ import {
   FieldSet,
 } from "@repo/design-system/components/field";
 import { Input } from "@repo/design-system/components/input";
-import { useActionState, useId } from "react";
+import * as React from "react";
 import { promoteSkill } from "../actions";
 import {
   PROMOTE_CUOC_HELP,
@@ -64,13 +64,16 @@ export function SkillRequestRow({ item }: { readonly item: QueueItem }) {
    * new reference per render, which `useActionState` is fine with — it is the
    * shape `/publish` already uses for the consent versions.
    */
-  const [result, formAction, pending] = useActionState(promoteSkill.bind(null, item.id), INITIAL);
-  const slugId = useId();
-  const slugHelpId = useId();
-  const labelId = useId();
-  const labelHelpId = useId();
-  const cuocId = useId();
-  const cuocHelpId = useId();
+  const [result, formAction, pending] = React.useActionState(
+    promoteSkill.bind(null, item.id),
+    INITIAL,
+  );
+  const slugId = React.useId();
+  const slugHelpId = React.useId();
+  const labelId = React.useId();
+  const labelHelpId = React.useId();
+  const cuocId = React.useId();
+  const cuocHelpId = React.useId();
   const { announcementRef } = useQueueRow(result);
 
   // next-safe-action's own formatted-error shape; `_errors` is its name, not ours.
