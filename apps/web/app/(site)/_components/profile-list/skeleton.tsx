@@ -2,12 +2,18 @@
  * The list's Suspense fallback, and the load-bearing one on both public
  * surfaces.
  *
- * **It holds the layout, and that is the whole requirement.** The standing
- * notices sit below the list (#276), so a fallback shorter or narrower than its
- * content moves them — and on the Wall, the three steps after them — when the
- * rows arrive: a layout shift under a reader who has already scrolled there,
- * which the design would have had to specify on purpose. It therefore mirrors
- * the row piece for piece: the avatar, the headline, the name line, the chips.
+ * **It holds the first screen, and that is the whole requirement.** What a
+ * reader sees first on a phone is the heading and the top rows, so a fallback
+ * shorter or narrower than those rows moves them when the real ones arrive — a
+ * layout shift the design would have had to specify on purpose. It therefore
+ * mirrors the row piece for piece: the avatar, the headline, the name line, the
+ * chips.
+ *
+ * **It does not hold what comes after the list, and it cannot.** Since #276 the
+ * standing notices sit below the list, and on the Wall the three steps below
+ * them. A page holds up to twenty-four rows and this draws `count`, so those
+ * move down when the rows arrive — below the fold on a phone. A fallback sized
+ * to a full page would be too tall for a short one and move them the other way.
  *
  * **Mirrored rather than measured to a number.** A hard-coded height is a
  * measurement that goes stale the first time a row gains a line and nothing says
@@ -43,8 +49,9 @@ function RowSkeleton() {
 
 /**
  * @param count how many placeholder rows to draw. Six is past the fold on a
- * phone, which is as far as a fallback can usefully hold: rows below it move
- * nothing above them when the real ones arrive.
+ * phone, which is as far as a fallback can usefully hold: the rows the real
+ * list adds beyond it land below the fold, and push down only what sits under
+ * the list.
  */
 export function ProfileListSkeleton({ count = 6 }: { readonly count?: number }) {
   return (

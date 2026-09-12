@@ -170,8 +170,9 @@ two causes, never a badge).
 | `rate limited` | n/a — neither surface has a ceiling (NFR26 binds gated reads and actions, not the public lists)     | n/a                                                                                                                                    |
 
 **The error state is scoped on purpose.** A route-level `error.tsx` would replace the whole page
-including the notices story 11 puts beside the grid (below it since #276) — and the spec's own words for this cell are that
-those notices still render. So the boundary sits **inside** the page, around the grid alone.
+including the notices story 11 puts next to the grid (above it until #276, below it since) — and
+the spec's own words for this cell are that those notices still render. So the boundary sits
+**inside** the page, around the grid alone.
 
 ## Interaction and layout
 

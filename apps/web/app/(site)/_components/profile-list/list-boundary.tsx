@@ -4,15 +4,13 @@
  * The grid's error state, scoped to the grid.
  *
  * **Why this is not `error.tsx`.** A route-level boundary replaces the whole
- * segment, and on these two pages the segment includes the two standing notices
- * — nobody is verified, and the platform holds no money. The spec's `error` cell
- * for the Wall says those notices still render, so the boundary has to sit
- * *inside* the page, between the framing and the grid. A page that dropped both
- * notices the moment a query failed would be at its least honest exactly when
- * something was already wrong.
- *
- * The notices themselves are story 11's and are not here yet; this is the
- * structure that has somewhere to put them.
+ * segment, and on these two pages the segment includes story 11's three
+ * standing notices — nobody is verified, the platform holds no money, and a
+ * Block stops only the sending. The spec's `error` cell for the Wall says those
+ * notices still render, so the boundary has to sit *inside* the page, around
+ * the grid alone; the notices sit outside it, below the list since #276. A page
+ * that dropped them the moment a query failed would be at its least honest
+ * exactly when something was already wrong.
  *
  * **What it catches.** The grid is a streamed Suspense boundary, so a failure in
  * the server component inside it is re-thrown on the client and caught by the

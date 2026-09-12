@@ -46,13 +46,16 @@ import {
  *
  * The brief marked prominence `[open]` and it was taken by looking at three
  * candidates on the real Wall at 390 × 844. What was chosen is **not one of
- * them** — it is `disclosure` where the notices sit above content the reader came
- * for, and `expanded` where they do not:
+ * them** — it is `disclosure` where the notices sit next to content the reader
+ * came for, and `expanded` where they do not:
  *
  * - `disclosure` — every heading and every lead is on screen; only the detail is
- *   a tap away. Used on `/` and `/profiles`, where showing the detail too pushed
- *   the first profile row entirely below the fold, and the Wall's whole job is
- *   that a reader meets three or four people and forms a view.
+ *   a tap away. Used on `/` and `/profiles`, where — above the list, as they
+ *   were until #276 — showing the detail too pushed the first profile row
+ *   entirely below the fold, and the Wall's whole job is that a reader meets
+ *   three or four people and forms a view. At the foot it stays `disclosure`,
+ *   so the explanation is one tap away rather than a run of platform prose
+ *   after the last person.
  * - `expanded` — heading, lead and detail all read in full. Used on
  *   `/my-profile`, where the notices sit at the foot and compete with nothing.
  *

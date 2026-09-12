@@ -18,8 +18,9 @@
  *
  * **Nothing is cached, so each read sits inside a designed `<Suspense>`
  * boundary**: the vocabulary strip on the cover, and the list. The framing
- * sits between them, and story 11's standing notices go below the list; both
- * fallbacks hold their layout so nothing after them moves when the rows arrive.
+ * sits between them, and story 11's standing notices go below the list. Both
+ * fallbacks hold the first screen still when the rows arrive; what sits below
+ * the list — the notices, then *Cómo funciona* — moves, off-screen.
  *
  * **The error boundary is inside the page rather than at the route**, for the
  * same reason — see `_components/profile-list/list-boundary.tsx`.
@@ -167,8 +168,8 @@ export default function WallPage() {
         {/*
           Story 11's three standing notices, **below the list** (#276). They
           used to sit above it, and the UX lab's notices idea kept the block as
-          it was, with one change in the owner's words: _"displayed at the
-          bottom, not at the top."_ A reader who came to look reaches the people
+          it was, with one change in the owner's words: _"should be displayed at
+          the bottom, not at the top."_ A reader who came to look reaches the people
           first; a reader who wants the three statements still finds all three
           together, at the foot of the list they just read. There is
           deliberately no link down to them from the top — the owner's call,
@@ -178,11 +179,13 @@ export default function WallPage() {
           for the notices to still render when the read fails, and outside the
           boundary is the only place that is true.
 
-          Below the grid, the skeleton's height is what keeps them still. A
-          fallback of the wrong height now moves this block and everything
-          after it when the rows arrive — below the fold on a phone, so it is
-          not a first-screen shift, but it is one under a reader who has already
-          scrolled down while the list streams.
+          **They move when the rows arrive, and that is accepted rather than
+          prevented.** The list's fallback draws six rows, and a page holds up
+          to twenty-four plus the count line and the link to `/profiles`, which
+          the fallback does not draw. So this block and _Cómo funciona_ after it
+          are pushed down on every load with more than six people. On a phone
+          they start below the fold, so the shift never touches the first
+          screen, and the first screen is what the skeleton exists to hold still.
 
           `h3`, not `h2`: this is inside the recent-profiles section, under that
           section's own heading. `/profiles` renders the same component at `h2`
