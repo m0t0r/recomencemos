@@ -67,10 +67,10 @@ export interface Notification {
   readonly recipientId: string;
   /**
    * The id of the thing this send is *about* — an Offer, an exchange, a magic
-   * link request. It is the `<entity-id>` half of the idempotency key, so two
-   * sends about the same entity are one delivery and a retry after a timeout
-   * returns the original response instead of delivering a stranger's phone
-   * number twice (DD14).
+   * link request. With the recipient it makes the idempotency key, so two sends
+   * to one person about the same entity are one delivery and a retry after a
+   * timeout returns the original response instead of delivering a stranger's
+   * phone number twice (DD14).
    */
   readonly entityId: string;
   readonly subject: string;
@@ -143,15 +143,23 @@ export interface NotifierOptions {
 }
 
 /**
- * DD14's key, exactly: `<event-type>/<entity-id>`.
+ * DD14's key, with the recipient appended: `<event-type>/<entity-id>/<recipient-id>`.
  *
  * Keys last 24 hours, and the same key with a *different* payload is a 409 —
- * which is the correct failure for a bug that changed the body under a retry,
- * and the reason `entityId` must identify the thing being sent about rather than
- * the person being sent to.
+ * which is the correct failure for a bug that changed the body under a retry.
+ *
+ * **The recipient is in it because a Contact Exchange has two.** DD14 wrote
+ * `contact-exchange/<id>` when every entity had one recipient; the exchange
+ * sends a copy to her and a copy to him, both about the same exchange, and
+ * keyed on the exchange alone the second is the first key with a different
+ * body. Resend answers that with a 409, and one side never receives the copy of
+ * what was accepted. A retry to the *same* person about the same thing is still
+ * one delivery, which is the property the key exists for. The spec's Build
+ * amendments record the change.
  */
 export function idempotencyKeyFor(notification: Notification): string {
   const entityId = notification.entityId.trim();
+  const recipientId = notification.recipientId.trim();
 
   if (!entityId) {
     throw new AppError({
@@ -166,7 +174,20 @@ export function idempotencyKeyFor(notification: Notification): string {
     });
   }
 
-  const key = `${notification.kind}/${entityId}`;
+  if (!recipientId) {
+    throw new AppError({
+      code: "notification_recipient_id_missing",
+      status: 500,
+      message:
+        `A ${notification.kind} notification was built with no recipientId, so two ` +
+        "recipients of one entity would share an idempotency key and the second send " +
+        "would be refused as a changed retry.",
+      userMessage: SEND_FAILED,
+      context: { kind: notification.kind, entityId },
+    });
+  }
+
+  const key = `${notification.kind}/${entityId}/${recipientId}`;
 
   if (key.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
     throw new AppError({
@@ -196,6 +217,13 @@ export function idempotencyKeyFor(notification: Notification): string {
  * Names are `snake_case` per
  * [ADR-0005](../../../docs/adr/0005-log-line-fields-are-named-for-the-line.md) —
  * the line names what it carries for itself, whatever the source called it.
+ *
+ * **`exchange_id` on the two kinds that are about an exchange**, beside the
+ * `entity_id` every line carries. A completed send is the one thing in this
+ * system with no undo, and `deploy-and-rollback.md` §4 enumerates a bad one's
+ * blast radius by querying for `exchange_id` — so the line names it for what it
+ * is, rather than leaving an operator to know which kinds' `entity_id` happens
+ * to be an exchange.
  */
 function sentLine(
   notification: Notification,
@@ -207,10 +235,14 @@ function sentLine(
     notification: notification.kind,
     recipient_id: notification.recipientId,
     entity_id: notification.entityId,
+    ...(EXCHANGE_KINDS.has(notification.kind) ? { exchange_id: notification.entityId } : {}),
     message_id: receipt.id,
     transport: channel,
   };
 }
+
+/** The kinds whose `entityId` is a Contact Exchange. */
+const EXCHANGE_KINDS: ReadonlySet<NotificationKind> = new Set(["contact-exchange", "check-in"]);
 
 /**
  * The suppression line — `warn`, and deliberately **not** an `info` `event`.

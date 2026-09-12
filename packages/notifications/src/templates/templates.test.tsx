@@ -15,6 +15,7 @@ import { render } from "@react-email/components";
 import { AppError } from "@repo/errors/app-error";
 import type { ReactElement } from "react";
 import { BaseEmail } from "#templates/base";
+import { CONTACT_EXCHANGE_SUBJECTS, ContactExchangeEmail } from "#templates/contact-exchange";
 import { MAGIC_LINK_SUBJECT, MagicLinkEmail, safeUrl } from "#templates/magic-link";
 import { OFFER_DELIVERED_SUBJECT, OfferDeliveredEmail } from "#templates/offer-delivered";
 
@@ -52,6 +53,21 @@ const templates: ReadonlyArray<{
     name: "offer-delivered",
     render: ({ scripted, linked }) => <OfferDeliveredEmail firstName={scripted} url={linked} />,
   },
+  /**
+   * **All three of the counterpart's details are user-controlled** — each typed
+   * by the other party — and they are the whole point of this mail, so the
+   * scripted payload goes in every one of them, for each side.
+   */
+  ...(["worker", "hirer"] as const).map((side) => ({
+    name: `contact-exchange (to the ${side})`,
+    render: ({ scripted, linked }: { scripted: string; linked: string }) => (
+      <ContactExchangeEmail
+        recipientSide={side}
+        counterpart={{ fullName: scripted, phone: scripted, email: scripted }}
+        url={linked}
+      />
+    ),
+  })),
 ];
 
 const SAFE_URL = "https://recomencemos.online/api/auth/magic-link/verify?token=abc";
@@ -258,6 +274,108 @@ describe("the magic-link email", () => {
       expect(text, `"${banned}" is on a CONTEXT.md Avoid list`).not.toContain(banned);
     }
   });
+});
+
+describe.each(["worker", "hirer"] as const)("the Contact Exchange email, to the %s", (side) => {
+  const counterpart = {
+    fullName: "SENTINEL_FULL_NAME",
+    phone: "+573105558899",
+    email: "sentinel@recomencemos.test",
+  };
+  const props = {
+    recipientSide: side,
+    counterpart,
+    url: "https://recomencemos.online/offers/0199a1f0-2b3c-7def-8000-0123456789ab",
+  };
+
+  /** The one thing this mail exists to carry — the other side's three details. */
+  it("carries each of the other side's three details", async () => {
+    const text = await render(<ContactExchangeEmail {...props} />, { plainText: true });
+
+    for (const detail of Object.values(counterpart)) expect(text).toContain(detail);
+  });
+
+  /**
+   * **The screen is the original and this is the copy** — the tone matrix's
+   * Contact Exchange row, and the reason a failed send loses nothing.
+   */
+  it("says it is a copy of what the site already shows", async () => {
+    const text = await render(<ContactExchangeEmail {...props} />, { plainText: true });
+
+    expect(text).toContain("este correo es una copia");
+  });
+
+  /** The standing guidance and the no-money notice, in the standing notices' words. */
+  it("says nobody here is verified and that no money passes through here", async () => {
+    const text = await render(<ContactExchangeEmail {...props} />, { plainText: true });
+
+    expect(text).toContain("Aquí no verificamos a nadie");
+    expect(text).toContain("Por aquí no pasa el dinero");
+  });
+
+  /**
+   * **A detail is text, never a link.** A `tel:` or `mailto:` built from what a
+   * stranger typed is an `href` derived from user text, which DD14 refuses in
+   * every template.
+   */
+  it("builds no link from a detail somebody typed", async () => {
+    const html = await render(<ContactExchangeEmail {...props} />);
+
+    expect(html).not.toContain("tel:");
+    expect(html).not.toContain("mailto:");
+  });
+
+  it("opens with exactly one h1", async () => {
+    const html = await render(<ContactExchangeEmail {...props} />);
+
+    expect(html.match(/<h1/g)).toHaveLength(1);
+  });
+
+  it("has a subject that carries no exclamation mark and names nobody", () => {
+    expect(CONTACT_EXCHANGE_SUBJECTS[side]).not.toContain("!");
+    expect(CONTACT_EXCHANGE_SUBJECTS[side]).not.toContain(counterpart.fullName);
+  });
+
+  it("uses no word from CONTEXT.md's Avoid lists", async () => {
+    const text = (
+      await render(<ContactExchangeEmail {...props} />, { plainText: true })
+    ).toLowerCase();
+
+    for (const banned of [
+      "damnificad",
+      "víctima",
+      "afectad",
+      "beneficiari",
+      "necesitad",
+      "usuario",
+      "candidat",
+      "hoja de vida",
+      "vacante",
+      "donación",
+      "oferta",
+      "empleo",
+      "match",
+      "contrat",
+    ]) {
+      expect(text, `"${banned}" is on a CONTEXT.md Avoid list`).not.toContain(banned);
+    }
+  });
+});
+
+/** An Offer written before the platform asked senders to name themselves (C4). */
+it("says so when the Hirer gave no name and no number, rather than leaving a blank", async () => {
+  const text = await render(
+    <ContactExchangeEmail
+      recipientSide="worker"
+      counterpart={{ fullName: null, phone: null, email: "sentinel@recomencemos.test" }}
+      url="https://recomencemos.online/offers/0199a1f0-2b3c-7def-8000-0123456789ab"
+    />,
+    { plainText: true },
+  );
+
+  expect(text).toContain("No escribió su nombre.");
+  expect(text).toContain("No dejó un teléfono.");
+  expect(text).toContain("sentinel@recomencemos.test");
 });
 
 describe("the delivered-Offer email", () => {

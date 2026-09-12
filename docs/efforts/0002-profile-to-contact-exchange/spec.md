@@ -3556,7 +3556,7 @@ deploy.
 
 ### Amendments made during Build
 
-**One, and it is a narrowing rather than a change of intent.**
+**Three, and none is a change of intent.**
 
 1. **The gated read admits `active`, not "anything but `frozen`."** Story 5 and the `GET
 /profile/[slug]` row both said _"whose `offerSendingState` is not `frozen`"_, which was written
@@ -3567,6 +3567,25 @@ deploy.
    predicate positively over the registry, so a fourth member added later is refused rather than
    admitted by omission. Raised by `/code-review`'s Spec axis on #23, which is also where the
    argument for amending rather than reverting is set out.
+
+2. **The idempotency key names its recipient: `<kind>/<entity-id>/<recipient-id>`.** DD14 fixed the
+   form as `<event-type>/<entity-id>` and gave `contact-exchange/<id>` as its example, which was
+   written when every entity had one recipient. The Contact Exchange sends a copy to her and a copy
+   to him about the same exchange, so under DD14's form both carry one key with two bodies — and
+   Resend answers the second with a 409, leaving one side without the copy of what was accepted. The
+   recipient's Account id restores the property DD14 wanted: a retry to the **same** person about the
+   same thing is one delivery. It applies to all four kinds, so there is one rule rather than a case.
+   Settled with the owner in #26's shape round. The `notification.sent` line also gains
+   `exchange_id` on the two exchange kinds, which is the field `deploy-and-rollback.md` §4 already
+   told an operator to query; `entity_id` stays on every line.
+
+3. **Story 9 enqueues the two sends and no check-ins.** The high-level design reads _"commits
+   first, then enqueues both sends and both check-ins"_, written before DD10 settled that the
+   scheduler calls in and never holds a queue: the check-ins job reads `contact_exchange` oldest
+   first, and the row's `created_at` is the whole of what it needs. So there is nothing to enqueue
+   for a check-in, and story 18 builds the job that reads the row. The two sends are "enqueued" as
+   the `pending` copy state each side's row is born with, and recorded as `sent` or `failed` once
+   the send answers. Settled in #26's plan.
 
 ### Advisor recommendations overridden, and why
 

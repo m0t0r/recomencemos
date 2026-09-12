@@ -168,6 +168,36 @@ describe("the sent line", () => {
     expect(JSON.stringify(logger.lines)).not.toContain("example.com");
   });
 
+  /**
+   * **The field an operator is told to query.** `deploy-and-rollback.md` §4
+   * enumerates a bad send's blast radius by `exchange_id`, so both kinds that are
+   * about an exchange carry it under that name. `entity_id` stays on every line,
+   * which is what a query across all four kinds binds to.
+   */
+  it.each(["contact-exchange", "check-in"] as const)(
+    "names the exchange a %s send was about as exchange_id",
+    async (kind) => {
+      const logger = recordingLogger();
+      const notifier = createNotifier({ transport: delivers(), logger, env: {} });
+
+      await notifier.send({ ...notification, kind, entityId: "812" });
+
+      expect(logger.lines[0]?.fields).toMatchObject({ entity_id: "812", exchange_id: "812" });
+    },
+  );
+
+  it.each(["magic-link", "offer-delivered"] as const)(
+    "carries no exchange_id on a %s send, which is about no exchange",
+    async (kind) => {
+      const logger = recordingLogger();
+      const notifier = createNotifier({ transport: delivers(), logger, env: {} });
+
+      await notifier.send({ ...notification, kind });
+
+      expect(logger.lines[0]?.fields).not.toHaveProperty("exchange_id");
+    },
+  );
+
   it("names the transport, so a second channel is legible on the line", async () => {
     const logger = recordingLogger();
     const notifier = createNotifier({
@@ -216,14 +246,27 @@ describe("a transport failure", () => {
 });
 
 describe("idempotencyKeyFor", () => {
-  // DD14 fixes the form: `<event-type>/<entity-id>`. A retry after a timeout
-  // returns the original response instead of delivering a stranger's phone
-  // number twice.
-  it("is <kind>/<entity-id>", () => {
-    expect(idempotencyKeyFor(notification)).toBe("magic-link/mlr_01J4K");
-    expect(
-      idempotencyKeyFor({ ...notification, kind: "contact-exchange", entityId: "exc_7" }),
-    ).toBe("contact-exchange/exc_7");
+  // DD14's `<event-type>/<entity-id>`, with the recipient appended. A retry to
+  // the same person about the same thing is one delivery — a retry after a
+  // timeout returns the original response instead of delivering a stranger's
+  // phone number twice.
+  it("is <kind>/<entity-id>/<recipient-id>", () => {
+    expect(idempotencyKeyFor(notification)).toBe("magic-link/mlr_01J4K/acc_01HZY");
+  });
+
+  /**
+   * **Why the recipient is in the key.** A Contact Exchange is the first thing
+   * this product sends about to two people: one copy to her and one to him,
+   * both about the same exchange. Keyed on the exchange alone, the second is
+   * the same key with a different body, which Resend answers with a 409 — and
+   * one of the two never receives the copy of what they accepted.
+   */
+  it("gives the two sides of one exchange two keys", () => {
+    const toHer = { ...notification, kind: "contact-exchange" as const, entityId: "812" };
+    const toHim = { ...toHer, recipientId: "acc_02HIRER" };
+
+    expect(idempotencyKeyFor(toHer)).toBe("contact-exchange/812/acc_01HZY");
+    expect(idempotencyKeyFor(toHim)).toBe("contact-exchange/812/acc_02HIRER");
   });
 
   it("reaches the transport on every call", async () => {
@@ -232,7 +275,14 @@ describe("idempotencyKeyFor", () => {
 
     await notifier.send(notification);
 
-    expect(transport.calls[0]?.idempotencyKey).toBe("magic-link/mlr_01J4K");
+    expect(transport.calls[0]?.idempotencyKey).toBe("magic-link/mlr_01J4K/acc_01HZY");
+  });
+
+  // The same collision one field over: an empty recipient id would key both
+  // sides of an exchange identically, which is the 409 the recipient is there
+  // to prevent.
+  it("refuses an empty recipient id rather than colliding the two sides", () => {
+    expect(() => idempotencyKeyFor({ ...notification, recipientId: " " })).toThrow(AppError);
   });
 
   // An empty entity id would key every send of that kind identically, so the
