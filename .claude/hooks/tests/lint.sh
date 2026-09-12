@@ -1,8 +1,14 @@
-# The one piece of lint configuration here that is a gate in its own right: a component test finds
-# what it asserts on through the accessibility tree, and raw DOM access is
-# refused (#261). It is oxlint configuration rather than a script, so there is no
-# branching of ours to test -- what these cases pin is that the configuration
-# still *runs*.
+# The lint configuration here that is a gate in its own right, and there are two pieces of it.
+#
+# The first: a component test finds what it asserts on through the accessibility tree, and raw DOM
+# access is refused (#261). It is oxlint configuration rather than a script, so there is no
+# branching of ours to test -- what those cases pin is that the configuration still *runs*.
+#
+# The second is ours: `repo/react-namespace-import`, from `scripts/oxlint-plugin.mjs`. That one has
+# branching, so its cases pin what it refuses and what its fix writes as well as that it loads.
+# They live here rather than in a file named for the script because they need the same real
+# configs, and the failure mode below -- a `jsPlugins` entry that quietly stops loading -- is
+# shared by both.
 #
 # That is worth a suite because of how it can fail. The two rules come from
 # `eslint-plugin-testing-library` through oxlint's `jsPlugins`, which oxlint's own
@@ -135,6 +141,49 @@ EOF
 "$OXLINT" -c "$REPO/.oxlintrc.json" --no-ignore -A all -D repo/react-namespace-import --fix \
   "$LINT/react-fix.tsx" >/dev/null 2>&1
 
+# A type-only namespace import is not the allowed form. Accepted, it would survive a fix that
+# deleted the value import beside it, and `React.useState` would then resolve through a name that
+# does not exist at runtime -- `/code-review` found it compiling to exactly that.
+cat > "$LINT/react-type-namespace.tsx" <<'EOF'
+import type * as React from "react";
+export const Slot = (props: { children: React.ReactNode }) => props.children;
+EOF
+
+cat > "$LINT/react-fix-type.tsx" <<'EOF'
+import type * as React from "react";
+import { useState } from "react";
+export const useCount = () => useState(0);
+export type Slot = React.ReactNode;
+EOF
+"$OXLINT" -c "$REPO/.oxlintrc.json" --no-ignore -A all -D repo/react-namespace-import --fix \
+  "$LINT/react-fix-type.tsx" >/dev/null 2>&1
+
+# Two shapes the fix must refuse to touch rather than write wrong, both found by `/code-review`:
+# a local re-export, which would become `export { React.useState }` and not parse, and a nested
+# `React` binding, which would capture the rewritten reference and still compile. Each is linted
+# after a `--fix` run, so a refusal that is still reported is also one the fix left alone.
+cat > "$LINT/react-reexport-local.ts" <<'EOF'
+import { useState } from "react";
+export { useState };
+EOF
+
+cat > "$LINT/react-shadowed.ts" <<'EOF'
+import { useState } from "react";
+export function pair() {
+  const React = 1;
+  return [React, useState];
+}
+EOF
+for fixture in react-reexport-local.ts react-shadowed.ts; do
+  "$OXLINT" -c "$REPO/.oxlintrc.json" --no-ignore -A all -D repo/react-namespace-import --fix \
+    "$LINT/$fixture" >/dev/null 2>&1
+done
+
+# A bare import pulls nothing out of React, so the rule has nothing to say about it.
+cat > "$LINT/react-bare.ts" <<'EOF'
+import "react";
+EOF
+
 section "react-namespace-import (root config)"
 lint_fixture "a named hook import is refused" .oxlintrc.json 1 \
   'repo\(react-namespace-import\)' "$LINT/react-named.tsx"
@@ -145,6 +194,8 @@ lint_fixture "the default import is refused" .oxlintrc.json 1 \
 lint_fixture "a re-export from react is refused" .oxlintrc.json 1 \
   'repo\(react-namespace-import\)' "$LINT/react-reexport.ts"
 lint_clean "the namespace import passes" .oxlintrc.json "$LINT/react-namespace.tsx"
+lint_fixture "a type-only namespace import is refused" .oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-type-namespace.tsx"
 
 section "react-namespace-import (workspace configs)"
 lint_fixture "apps/web inherits the rule" apps/web/.oxlintrc.json 1 \
@@ -165,3 +216,16 @@ expect_run "a JSX tag pair is qualified at both ends" 0 \
 expect_run "a type from the removed import is qualified" 0 'r: React\.RefObject<null>' -- \
   cat "$LINT/react-fix.tsx"
 expect_run "the directive is untouched" 0 '^"use client";$' -- cat "$LINT/react-fix.tsx"
+lint_clean "a type-only namespace beside a value import fixes in one pass" .oxlintrc.json \
+  "$LINT/react-fix-type.tsx"
+expect_run "the surviving namespace import is a value import" 0 \
+  '^import \* as React from "react";$' -- cat "$LINT/react-fix-type.tsx"
+lint_fixture "a local re-export is still refused after a fix run" .oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-reexport-local.ts"
+expect_run "a local re-export is left for a person" 0 '^export \{ useState \};$' -- \
+  cat "$LINT/react-reexport-local.ts"
+lint_fixture "a shadowed React is still refused after a fix run" .oxlintrc.json 1 \
+  'repo\(react-namespace-import\)' "$LINT/react-shadowed.ts"
+expect_run "a shadowed React is left for a person" 0 '^  return \[React, useState\];$' -- \
+  cat "$LINT/react-shadowed.ts"
+lint_clean "a bare import passes" .oxlintrc.json "$LINT/react-bare.ts"

@@ -5,8 +5,8 @@
 // `react-namespace-import`: React is reached through one `import * as React from "react"`, and
 // nothing is pulled out of it by name — not a hook, not a type, not the default export. Nothing
 // off the shelf says that: oxlint's `no-restricted-imports` refuses the namespace import too once
-// it is given any name list, and `eslint-react`'s `prefer-namespace-import` only ever refused the
-// default import and was dropped by its v5.
+// it is given any name list, `eslint-react`'s `prefer-namespace-import` at 2.13 refuses the default
+// import and lets a named one through, and its 5.19 no longer ships that rule at all.
 //
 // The fix is the whole refactor. Every reference to a named binding is rewritten through the
 // scope manager rather than by text search, so `"use client"` is never read as a `use` call and a
@@ -17,15 +17,18 @@ const NAMESPACE = "React";
 
 /** The text a reference to `specifier`'s binding becomes once the namespace is the only import. */
 function qualified(specifier) {
-  if (specifier.type === "ImportDefaultSpecifier") return NAMESPACE;
-  if (specifier.type === "ImportNamespaceSpecifier") return NAMESPACE;
+  if (specifier.type !== "ImportSpecifier") return NAMESPACE;
   const imported = specifier.imported;
   return `${NAMESPACE}.${imported.type === "Identifier" ? imported.name : imported.value}`;
 }
 
-/** A declaration that already is the one allowed form. */
+/**
+ * A declaration that already is the one allowed form. `import type * as React` is not it: as the
+ * survivor it would leave every value reference the fix rewrote pointing through a type-only name.
+ */
 function isNamespaceImport(node) {
   return (
+    node.importKind !== "type" &&
     node.specifiers.length === 1 &&
     node.specifiers[0].type === "ImportNamespaceSpecifier" &&
     node.specifiers[0].local.name === NAMESPACE
@@ -55,7 +58,8 @@ const reactNamespaceImport = {
 
     return {
       ImportDeclaration(node) {
-        if (node.source.value === SOURCE) declarations.push(node);
+        // A bare `import "react"` pulls nothing out of it, so it is not this rule's business.
+        if (node.source.value === SOURCE && node.specifiers.length > 0) declarations.push(node);
       },
       ExportNamedDeclaration(node) {
         if (node.source?.value === SOURCE) context.report({ node, messageId: "reexport" });
@@ -102,6 +106,31 @@ const reactNamespaceImport = {
           return fixes;
         }
 
+        // Two shapes the rewrite cannot express, and each is left for a person rather than
+        // written wrong. `export { useState }` would become `export { React.useState }`, which does
+        // not parse. And a `React` bound by anything but these imports — a local `const React` in
+        // the reference's scope — would capture the rewritten `React.useState` and still compile.
+        const ownDeclarations = new Set(declarations);
+        function fixIsSafe() {
+          for (const node of offending) {
+            for (const specifier of node.specifiers) {
+              for (const variable of sourceCode.getDeclaredVariables(specifier)) {
+                for (const reference of variable.references) {
+                  if (reference.identifier.parent?.type === "ExportSpecifier") return false;
+                  for (let scope = reference.from; scope; scope = scope.upper) {
+                    const bound = scope.set.get(NAMESPACE);
+                    if (bound === undefined) continue;
+                    if (!bound.defs.every((def) => ownDeclarations.has(def.parent))) return false;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          return true;
+        }
+        const fixable = fixIsSafe();
+
         for (const node of offending) {
           const what = node.specifiers
             .map((specifier) =>
@@ -113,7 +142,7 @@ const reactNamespaceImport = {
             node,
             messageId: "namespace",
             data: { what: what.length > 0 ? what.join(", ") : "everything" },
-            ...(node === offending[0] ? { fix: fixAll } : {}),
+            ...(fixable && node === offending[0] ? { fix: fixAll } : {}),
           });
         }
       },
