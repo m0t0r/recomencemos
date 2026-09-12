@@ -143,7 +143,7 @@ EOF
 
 # A type-only namespace import is not the allowed form. Accepted, it would survive a fix that
 # deleted the value import beside it, and `React.useState` would then resolve through a name that
-# does not exist at runtime -- `/code-review` found it compiling to exactly that.
+# does not exist at runtime.
 cat > "$LINT/react-type-namespace.tsx" <<'EOF'
 import type * as React from "react";
 export const Slot = (props: { children: React.ReactNode }) => props.children;
@@ -158,7 +158,7 @@ EOF
 "$OXLINT" -c "$REPO/.oxlintrc.json" --no-ignore -A all -D repo/react-namespace-import --fix \
   "$LINT/react-fix-type.tsx" >/dev/null 2>&1
 
-# Two shapes the fix must refuse to touch rather than write wrong, both found by `/code-review`:
+# Two shapes the fix must refuse to touch rather than write wrong:
 # a local re-export, which would become `export { React.useState }` and not parse, and a nested
 # `React` binding, which would capture the rewritten reference and still compile. Each is linted
 # after a `--fix` run, so a refusal that is still reported is also one the fix left alone.
