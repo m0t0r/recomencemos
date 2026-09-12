@@ -358,10 +358,10 @@ function anOffer(id: string, workerPausedAt: Date | null) {
   };
 }
 
-/** The Offers section's branch, through the registry the shell renders from. */
+/** The Offers branch, through the registry the queue is merged from. */
 async function loadOffers() {
-  const source = sourceForSegment("offers");
-  if (!source?.load) throw new Error("the Offers section has no resolver");
+  const source = QUEUE_SOURCES.find((each) => each.key === "offers");
+  if (!source?.load) throw new Error("the Offers source has no resolver");
   return source.load();
 }
 
