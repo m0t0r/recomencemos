@@ -10,6 +10,7 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { requireAdminPage } from "@/lib/admin";
 import { QueueTable } from "./_components/queue-table";
 import { QueueEmpty, QueueSkeleton, SourceFailed } from "./_components/queue";
 import { ADMIN_PAGE_TITLE, QUEUE_LIST_LABEL, shownOfWaiting } from "./_lib/messages";
@@ -76,7 +77,16 @@ async function QueueList() {
   );
 }
 
-export default function AdminPage() {
+export default async function AdminPage() {
+  /**
+   * **The gate again, before this page renders anything** — not redundant with
+   * the layout's. A layout and its page render concurrently, so without this the
+   * page's skeleton would render beside the refusal and its label would ride in
+   * the 403's payload; and if the layout's gate ever moved, this is what would
+   * still keep the page empty for a stranger.
+   */
+  await requireAdminPage();
+
   return (
     <section className="flex min-w-0 flex-col gap-4">
       <Suspense fallback={<QueueSkeleton label={QUEUE_LIST_LABEL} />}>
