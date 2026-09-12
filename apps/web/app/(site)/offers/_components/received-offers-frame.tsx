@@ -23,6 +23,7 @@
  * `personal` and NFR18 allows them on none.
  */
 
+import { Separator } from "@repo/design-system/components/separator";
 import { Skeleton } from "@repo/design-system/components/skeleton";
 import { type ReactNode, Suspense } from "react";
 import type { LedgerView } from "../_lib/ledger";
@@ -53,14 +54,17 @@ function RowsSkeleton() {
   return (
     <div className="ruled-page" aria-hidden="true">
       {[0, 1, 2].map((row) => (
-        <div key={row} className="border-border flex flex-col gap-2 border-t py-5 first:border-t-0">
-          <div className="flex justify-between gap-3">
-            <Skeleton className="h-6 w-1/2" />
-            <Skeleton className="h-4 w-20" />
+        <div key={row}>
+          {row > 0 ? <Separator /> : null}
+          <div className="flex flex-col gap-2 py-5">
+            <div className="flex justify-between gap-3">
+              <Skeleton className="h-6 w-1/2" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-5 w-28" />
           </div>
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-5 w-28" />
         </div>
       ))}
     </div>

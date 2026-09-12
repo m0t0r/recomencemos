@@ -9,19 +9,22 @@
  *
  * The spec's **One Offer** cells, decided in this order before any row renders:
  *
- * 1. **A segment that is not an Offer id → 404, before the session is read.**
+ * 1. **A segment that is not an Offer id → not found, before the session is read.**
  *    The return path is built from it, so checking first means the only string
  *    that can reach `/sign-in?returnPath=` is thirty-six characters of hex and
  *    dashes — the same reason `/profile/[slug]` checks its slug first.
  * 2. **Signed out → `/sign-in` with a way back.**
- * 3. **Not the addressee → the same 404.** Her list is scoped by her ownership
+ * 3. **Not the addressee → the same not-found answer.** Her list is scoped by her ownership
  *    and carries no `LIMIT`, so an Offer absent from it is a missing id, one
  *    somebody else received, one not yet let through and one she Reported alike
  *    — "indistinguishable" is a property of one read rather than of several
  *    agreeing.
  *
  * **Every refusal is returned, never thrown** (C51). `notFound()` is a framework
- * interrupt of the same class as `redirect()`, and costs no Sentry event.
+ * interrupt of the same class as `redirect()`, and costs no Sentry event. **It
+ * fires inside the streamed ledger, after the shell has gone out**, so what
+ * reaches the browser is the not-found page under the shell's `200` rather than a
+ * `404` status — the shape story 8's page had too.
  */
 
 import { OFFER_ID_PATTERN } from "@repo/domain/offers";
@@ -72,7 +75,7 @@ async function readOpenLedger(params: Params, searchParams: SearchParams): Promi
 
   const { answered } = await searchParams;
 
-  return { ...ledger, openId: id, arrival: arrivalFor(answered) };
+  return { ...ledger, open: { id, arrival: arrivalFor(answered) } };
 }
 
 export default function ReceivedOfferPage({

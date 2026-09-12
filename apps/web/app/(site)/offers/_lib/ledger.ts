@@ -13,20 +13,22 @@
  * read, so a prerender never reaches it.
  */
 
-import type { ReceivedOffer } from "@repo/domain/offers";
-import { offers } from "@repo/domain/offers";
+import { offers, type ReceivedOffer } from "@repo/domain/offers";
 import { profiles } from "@repo/domain/profiles";
 import { requireAccountPage } from "@/lib/account";
+
+/** The row a link named: rendered open, with the sentence an answer to it landed with. */
+export interface OpenRow {
+  readonly id: string;
+  readonly arrival?: string | undefined;
+}
 
 export interface LedgerView {
   readonly offers: readonly ReceivedOffer[];
   /** Only decides which empty state she meets: an Offer is addressed to a profile. */
   readonly hasProfile: boolean;
   readonly now: Date;
-  /** The Offer a link named, rendered open. */
-  readonly openId?: string | undefined;
-  /** The sentence an answer landed with, rendered inside the open row. */
-  readonly arrival?: string | undefined;
+  readonly open?: OpenRow | undefined;
 }
 
 /** Signed out → `/sign-in`, with `returnPath` as the way back. */

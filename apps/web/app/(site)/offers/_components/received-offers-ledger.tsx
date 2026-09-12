@@ -30,7 +30,7 @@ import {
 } from "../_lib/messages";
 import { LedgerRow } from "./ledger-row";
 
-export function ReceivedOffersLedger({ offers, hasProfile, now, openId, arrival }: LedgerView) {
+export function ReceivedOffersLedger({ offers, hasProfile, now, open }: LedgerView) {
   if (offers.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3">
@@ -58,19 +58,15 @@ export function ReceivedOffersLedger({ offers, hasProfile, now, openId, arrival 
       <CountAnnouncement count={offers.length} label={receivedOffersCount(offers.length)} />
       {/* `DESIGN.md` → Layout: every list is a ruled page, rows divided by the ruling. */}
       <ul className="ruled-page">
-        {offers.map((offer) => {
-          const open = offer.id === openId;
-
-          return (
-            <LedgerRow
-              key={offer.id}
-              offer={offer}
-              now={now}
-              open={open}
-              arrival={open ? arrival : undefined}
-            />
-          );
-        })}
+        {offers.map((offer, index) => (
+          <LedgerRow
+            key={offer.id}
+            offer={offer}
+            now={now}
+            separated={index > 0}
+            opened={offer.id === open?.id ? open : undefined}
+          />
+        ))}
       </ul>
     </>
   );
