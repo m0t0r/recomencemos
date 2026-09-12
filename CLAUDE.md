@@ -44,12 +44,9 @@ is why, `docs/policy/build.md`'s `worktree-required` is the policy, and
 `docs/agents/issue-tracker.md` → "Working in a worktree" is the procedure, including the stacked-PR
 case the harness tool cannot serve and the cleanup after a merge.
 
-**A hook that reads repo state reads it through the payload, never through `CLAUDE_PROJECT_DIR`.**
-That variable names the directory the session **launched** from and goes on naming the main checkout
-inside a worktree — measured, not assumed. Two hooks read the wrong tree because of it: the stop gate
-verified a clean main checkout and reported a pass having run nothing, and the Design gate judged
-`/to-tickets` against the specs on the default branch. `tree_for()` in `.claude/hooks/gate-lib.sh` is
-the fix and the record; use it in any new hook that touches the repository.
+**A hook reads repo state through its payload, never through `CLAUDE_PROJECT_DIR`** — that
+variable names the main checkout even inside a worktree. `.claude/hooks/CLAUDE.md` has why, and the
+helper to use.
 
 ## Commands
 
@@ -95,13 +92,6 @@ The proxy is installed once per machine by a human, because binding 443 needs pr
 not have: [`docs/runbooks/portless-setup.md`](docs/runbooks/portless-setup.md). If `pnpm dev` reports
 no running proxy, that runbook is the fix — not a `--port` flag added back to the script.
 
-Scope to one workspace with a filter (the workspace name, not the directory):
-
-```sh
-pnpm exec turbo dev --filter=web
-pnpm exec turbo check-types --filter=@repo/design-system
-```
-
 **`pnpm page-weight` is how NFR3's byte budget is checked, and it is the only way it may be quoted.**
 `scripts/first-load-bytes.mjs` reads a production build — run `pnpm build` first — and prints, per
 route, every `<script src>` the prerendered document requests, each chunk compressed on its own and
@@ -134,41 +124,9 @@ The repo requires the **active Node LTS** (24.x) and **pnpm 12**, and it enforce
 - `pnpm-workspace.yaml` is in oxfmt's `ignorePatterns` because pnpm writes those generated entries single-quoted and oxfmt rewrites them double-quoted, so the two tools would flip the file back and forth on every install. pnpm owns that file; do not remove the ignore.
 - `docs/efforts/*/advisories/` is ignored for the same shape of reason: a committed advisory is **verbatim** and `.claude/hooks/build-guard.sh` refuses to edit one, so a formatter rewriting it would make `pnpm format` and the Build gate contradict each other. `/spec-review` diffs the spec against those files; reformatting them is editing them.
 
-**What else pnpm 12 shipped, and what this repo took from it** (#213). Each candidate was measured
-against this repository rather than read off the changelog, and the refusals are written down so the
-next session does not re-propose one. **None of what was adopted is a decision a machine makes about
-this repository, so none of it has a script under `scripts/` or a file under `.claude/hooks/tests/`**
-— [ADR-0020](docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md)'s own
-words are that a root `package.json` script is wiring, and wiring holds no branching. A test would
-also have to reach the registry from inside `pnpm test`, which `gate-test.sh` is deliberately free of.
-
-- **`pnpm deps:outdated`** is `pnpm outdated --include-github-actions`. pnpm 12's `outdated` reads
-  GitHub Actions as well as npm packages, which gives the SHA pin in `.github/actions/setup/action.yml`
-  a **second reader** beside Dependabot's `directories:` glob — whose failure mode is silence.
-  Measured: it reads `.github/workflows/*` and **follows** a `uses: ./.github/actions/<name>` into the
-  composite file; it resolves a SHA pin without reading the trailing `# vX.Y.Z` comment, so a comment
-  that has drifted does not fool it; and it does **not** read an `action.yml` no workflow references, which is why that second
-  `directories:` entry is still not redundant. It exits `1` when anything is behind, and it is a
-  command a person runs rather than a check: an upstream release makes it red the day it lands, which
-  is `docs/policy/security.md` C7's argument against a gate red on arrival. `.github/dependabot.yml`
-  is where it is pointed at, because reviewing that SHA pin is the occasion to run it.
-- **`pnpm peers`** replaces the removed `--resolution-only` and is how an unmet peer gets read. An
-  unmet peer makes it red, and there is one in this tree, which is the same reason it is not a gate —
-  the pair is named in the pull request that adopted it rather than here, because which peer is unmet
-  changes and this sentence would not.
-- **`pnpm sbom` is a policy answer rather than a job.** `docs/policy/security.md` → `sbom`: generated
-  on demand from the committed lockfile, never stored, and it covers the npm graph and not the base
-  image under it.
-- **Refused: `pnpm ci`, `audit.ignorePrune`, `pnpm runtime` and `pnpm shim`.** `pnpm ci` is `clean`
-  then a frozen install, and CI has no `node_modules` to clean — `actions/setup-node`'s `cache: pnpm`
-  restores the **store** — so it swaps one line for one line and adds a footgun, since a `clean` script
-  in `package.json` silently overrides the builtin. `audit.ignorePrune` drops spent entries from
-  `audit.ignoreGhsas`, and this repo keeps no such list: a dismissal here is a **closed issue** keyed
-  by `scripts/audit-report.mjs`'s fingerprint, which is a person's act with a paper trail that expires
-  itself when the advisory set changes. `pnpm runtime` reads `devEngines.runtime` and `pnpm shim`
-  serves binaries that are not installed locally — a fourth selector for a question `.nvmrc`,
-  `engines.node` and `engineStrict` already answer once, and a shim for a `node_modules` every binary
-  here already comes out of through `pnpm exec` or turbo.
+**What else pnpm 12 shipped, which of it this repo adopted and which it refused, is in the
+`ci-and-dependencies` skill** — read it before proposing `pnpm ci`, `pnpm runtime`, `pnpm shim`
+or `audit.ignorePrune` here.
 
 **Docker is required for `pnpm dev`, and for nothing else.** `docs/policy/data.md` → `local-database`
 puts the development database in `docker-compose.yaml` at the repo root: `postgres:18-alpine` on
@@ -201,54 +159,9 @@ test or to CI — the moment either needs one, seam 2's argument has been lost.
 - `@repo/notifications:test` — `vitest run`, Node environment, `@repo/errors`' config plus `.tsx` in the include glob and **no React plugin**: that plugin exists for Fast Refresh and a DOM, and a template here is rendered to a _string_ in Node by `@react-email/render`. Vite's esbuild transform reads `jsx: "react-jsx"` out of the tsconfig, which is all a `.tsx` file needs. A template test that reached for happy-dom would be asserting against a DOM no email client has.
 - `web:test` — `vitest run`, **happy-dom**, the design system's config plus `vitest.setup.ts` and one setting of its own: **`pool: "vmThreads"`, which no other suite here has**. A DOM environment is built per test file, and on `forks` the reporter attributes ~37% of this suite's time to `environment`; the vm pool keeps per-file isolation and builds one per _worker_ instead, which drops that share to ~27%. Four runs of each on one machine: 1.8-1.9s against 2.6-3.6s. The ratio is the finding and the seconds are illustrative — both moved ~20% between a quiet machine and a busy one. **The saving is per-file, so it needs files to amortise over, and that is the thing to measure before copying the line into a seventh suite**: `@repo/design-system` spends the same ~50% on its environment but across three files, and came out marginally _slower_; `@repo/domain` reuses a module graph but is 90%+ its own test time, so the gain vanished into noise on a second measurement. The other three are Node-environment suites with no environment to amortise. All five stay on the default `forks`. It covers what a running server cannot show, starting with the proof that `@repo/domain`'s `exports` map withholds what ADR-0010 says it withholds. Route handlers, Server Components and Server Actions verify at seam 3 instead, against a running `next dev`. Its setup file registers **`toMatchSchema`** from `apps/web/testing/matchers.ts` — a custom matcher taking a **Standard Schema** rather than a Zod schema, so nothing in a test has an opinion about the validation library. Reach for a matcher over a helper when the assertion's failure message is the thing worth owning: `expect(x).toBe(true)` on a `safeParse` result reports `false is not true` and names neither the rule nor the value.
 - `//#test:gates` — `gate-test.sh`, the cases that drive the repo's own gates. About a quarter are the stage hooks; the rest drive the gates that are not hooks at all, which are the same kind of thing — repo logic deciding whether work may proceed, so a test suite and not a script to remember to run. Its `inputs` cover `.claude/hooks/**`, every script it drives, and the lint configuration `lint.sh` exercises (every `.oxlintrc.json`, `package.json` for the pinned versions, `pnpm-lock.yaml`), which is the part to keep in step: a script added here and not there is one whose change a cache hit replays a pass for.
-  - **`gate-test.sh` is the runner and holds no case.** The cases live one file per thing under test in `.claude/hooks/tests/` — `hooks.sh` for rules A–J, `worktree.sh` for rule K, one file named for each script under `scripts/`, and `lint.sh` for the one piece of lint configuration that is a gate — and `tests/lib.sh` holds the two assertions they are written with: `expect_decision` for a hook payload and `expect_run` for a command's exit code and output. A gate-specific runner is a one-line adapter over one of those, never its own bookkeeping; twelve copies of the same ten lines is what that rule replaced. Each file runs in its own subshell with its own fixture root. `pnpm test:gates migrations` runs one file, `-v` enumerates every case, and a name that is not a file is refused rather than skipped.
-  - **Four of the scripts it drives are not gates**, and the reason is worth knowing before adding more: `scripts/ui-proof.mjs` publishes recorded proof, `scripts/first-load-bytes.mjs` measures, `scripts/dev-origin.mjs` answers where this tree's dev server is, and `scripts/coverage-merge.mjs` folds six workspaces' coverage reports into the one a pull request comment is built from — none of them decides whether work may proceed. They are driven here anyway because they are repo logic living in `scripts/`, and the alternative was a second test runner for one file. Taking `ui-proof.mjs` as the worked example, fifty-five cases: most of them run `--dry-run`, which is offline by construction — no pull request, no markdown renderer, no credential — so what is under test there is the part that decides _what would be published_: the naming rule, the grouping into comparisons, and the two prefixes that carry the two lifetimes. The call that writes to the object store lives in `scripts/ui-proof-store.mjs` and is a dynamic import, so a dry run never loads it.
-
-    **Twenty-four of the fifty-five drive the real publish, and still offline** (#165): a fake `gh` earlier on `PATH` answering the four calls the publisher makes, and a stub HTTP server as the endpoint, which records every request and can be told to answer 500. That is the only place the object-store call, the subprocesses and the body edit are exercised, and it is worth its weight because **both defects this path has shipped were invisible to every dry-run case** — a bucket asked for as a hostname, and a subprocess handed its input through an option that does not exist. What no stub can check is that the signature is _valid_; that stays §5 of `docs/runbooks/ui-proof-artifacts.md`, checked once by a human, because a container in this suite is what the Docker paragraph above refuses on the same grounds.
-
-    **A publish runs under a deadline of its own, and the whole tree is killed at it** — `timeout(1)` is GNU coreutils and is not on a stock macOS, and `kill` reaches one process while the publisher's `gh` and the `cat` inside it are two levels down. The failure mode here is a subprocess that blocks, and a case that hangs is worse than no case: a red suite tells you something and a suite that never returns tells you nothing while costing a CI job its whole timeout. Two things follow for anyone copying the shape. A **`trap … EXIT` must be guarded on the shell that set it**, because bash 4.0 and later run it when a command substitution's subshell exits too, and this file reads exit codes out of those — unguarded, it kills the stub before the first upload, on CI and not on the macOS bash 3.2 it was written on. And the timeout is reported **as the deadline rather than as an exit code**, because a hang and a refusal are different findings.
-
-  - The **dependency audit** (`scripts/audit-direct.mjs`), thirteen cases. Five exist because the way that gate fails is by **failing open**: an unread `pnpm-workspace.yaml` would leave only the root manifest counting as direct, and a `high` in a workspace dependency would print as transitive and exit 0.
-  - The **dependency report** (`scripts/audit-report.mjs`), sixteen cases, over the same fixtures as the audit above — deliberately, because the two share `audit-lib.mjs` and a disagreement between them about which dependency is direct would have to show up in both sets at once. Four are the **fingerprint**, which is what stops the daily workflow either commenting every day on an unchanged finding or staying silent about a new one: the same advisories in the other order must hash alike, and a changed severity or package must not. That inequality is asserted by comparing two values rather than by a pattern, because `grep -E` is POSIX ERE and has no negative lookahead.
-  - **Migration integrity** (`scripts/migration-integrity.mjs`), fifty-seven cases across NFR30's four counts — an append-only journal, immutable shipped migrations, destructive statements travelling alone under a `contract` marker, and a marked migration never sharing a pull request with `@repo/domain`'s query modules. Its fixtures are real git repositories, because the gate's whole frame is `git merge-base <base branch> HEAD` and there is nothing left to mock that would still be the thing under test. Ten of the fifty-seven are a section of their own — holes `/code-review` found in the first draft, four of which passed green while checking nothing. Read them before touching the SQL scan: an escaped quote that swallowed the rest of the file, and an `ALTER TABLE` whose comma-separated actions hid a `DROP` beside an `ADD`. **`run_mig` unsets `GITHUB_BASE_REF` for every case**, and that is load-bearing: CI sets it on a `pull_request` event, the gate reads it ahead of `origin/HEAD`, and a fixture is a different repository with no such ref — thirty-five cases went red on the first CI run for exactly that.
-
-  All three exit `2` rather than `0` or `1` when they cannot reach an answer, so a broken gate cannot be read as a clean one.
-
-  **One carve-out in rule 3, added by #17 and worth reading before widening it.** A `DROP CONSTRAINT
-"x"` on table `t` is not counted destructive when the same migration adds an `ADD CONSTRAINT "x"
-CHECK` back **on `t`**, and an earlier migration already declared `t`.`x` a `CHECK` — so it is a
-  re-creation rather than a removal. DD2 makes every enum-shaped column a `TEXT` with a `CHECK`
-  _"precisely so that widening the set is a constraint change"_, and Postgres offers exactly one way
-  to widen one; before the carve-out, rule 3 refused the pair and rule 4 kept the marked migration
-  out of any PR touching a query module, which made every widening unsatisfiable. The gate's own
-  reason — _"the drop has already destroyed the data"_ — does not reach a `CHECK`.
-
-  **Both of the qualifications above are patched bypasses, not caution, and they are why this is
-  worth reading before touching it.** `DROP CONSTRAINT` does not say what _kind_ of constraint it
-  removes, so matching the re-add alone let a `UNIQUE` be dropped and a `CHECK (true)` put back under
-  its name — that is what the history condition closed. And a constraint name is unique **per table**
-  in Postgres rather than per schema, so a decoy `CREATE TABLE "decoy" (…, CONSTRAINT
-"user_email_unique" CHECK (true))` in one migration used to vouch for dropping the real uniqueness in
-  the next — that is what keying on `table.name` closed (review of #93). It fails closed on every
-  axis: an unknown name, an unreadable table, an unusual spelling all refuse. It is otherwise
-  deliberately narrow — a bare drop, a re-add under another name, a re-add on another table, and a
-  re-add as `UNIQUE` all still refuse, and twenty `gate-test.sh` cases say so.
-
-  The **spec-identifier gate** (`scripts/spec-identifiers.mjs`), seventy-two cases. It is the one
-  gate here that has to read a language rather than a file format, and every case that is not a
-  citation is about that: comments are the record and are never read, so a continuation line of a
-  block comment and a `{/* … */}` in JSX both pass, while a closing JSX tag, an apostrophe in JSX
-  text and a regular expression holding a quote are three of the ways a naive reader would skip past
-  the strings that follow and report a clean tree. Its refusals are its own section, because a check
-  that cannot reach an answer must not be read as one that found nothing.
-
-  **Four of the seventy-two are `=>`, and they are the ones to read before touching the reader.**
-  Its rule is that an unrecognised context before a `/` reads as division, because that is the
-  cheaper mistake — but cheaper is not free: a real pattern read as division has its body tokenised
-  as code, and `/[/*]/` in an arrow function then opens a block comment that runs to the end of the
-  file. The gate reported that file clean, and `/code-review` found it. `<` and a bare `>` are still
-  absent from the set, because every closing JSX tag is `<` then `/` and every opening one ends in
-  `>`; `=>` is the one operator read as two characters, since no JSX `>` is preceded by an `=`.
+  - Each gate's case-level notes — the runner's layout, what the ui-proof, audit, migration and
+    spec-identifier suites cover, the rule-3 carve-out and the holes `/code-review` found — are in
+    `scripts/CLAUDE.md`, which loads when you work in `scripts/`. Read it before touching a gate.
 
 - `//#spec-identifiers` — that same gate, run against **this** repository rather than a fixture,
   which is the `migrations:check` split below for the same reason. It is not `cache: false`: unlike
@@ -324,21 +237,9 @@ to it — and a plugin release can change what the two rules flag.
 `.claude/hooks/tests/lint.sh` lints fixtures through each real config and goes red if the refusal
 goes quiet; raise the pin in a change that runs it.
 
-**The DOM environment is happy-dom, not the jsdom Next's docs prescribe.** That is a deliberate deviation from the framework's documented path, so it was measured rather than preferred. Three axes, all favouring happy-dom:
-
-|                           | jsdom 30                               | happy-dom 20          |
-| ------------------------- | -------------------------------------- | --------------------- |
-| `engines.node`            | `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0` | `>=20.0.0`            |
-| transitive packages       | 39                                     | 10                    |
-| vitest `environment` cost | ~330 ms per test file                  | ~135 ms per test file |
-
-The engines line is the one that forced the decision: with `engineStrict` on, jsdom raises this repo's floor from any 24.x to 24.15+, which is a narrower runtime than anyone working here should have to hold for a test dependency. The environment cost is paid **per test file**, so it scales with the suite rather than being a one-off.
-
-**The correctness axis went the other way from the folklore.** A probe of eighteen DOM APIs found nine differences and every one favoured happy-dom: `matchMedia`, `ResizeObserver`, `IntersectionObserver`, `scrollIntoView`, `dialog.showModal`, `inert`, `checkVisibility`, `elementFromPoint`, and `Range.getClientRects` are all missing or throwing under jsdom and present under happy-dom. Nothing was present under jsdom and missing under happy-dom. That matters concretely here: `next-themes` reads `matchMedia` and Base UI reaches for `ResizeObserver`, so the jsdom route needs a setup file full of mocks before the first component test runs.
-
-Be honest about what that probe shows, though: it tested **presence, not fidelity**. jsdom's stated philosophy is to omit what it cannot implement correctly, so a happy-dom API that exists but never fires would be worse than an absent one you knowingly mocked. `src/components/dialog.test.tsx` is the guard against that — a portal plus a real `user-event` click is where a DOM environment actually breaks, and it is the case a real surface hits long before it hits Button. If it ever fails, reconsider the environment rather than the test.
-
-`apps/web` **gained its `test` script with the change that first put real code in the app**, which is exactly the condition this file used to name while the app was still `create-next-app` scaffolding: a suite there before then would have been vacuously green (`--passWithNoTests` tells `/implement` a lie) or test code destined for deletion. The config began as `packages/design-system/vitest.config.mts` copied, happy-dom and all, and has since gained a `pool` of its own — the two are expected to differ now rather than to be kept in step.
+**The DOM environment is happy-dom, not the jsdom Next's docs prescribe, and that was measured rather
+than preferred.** The measurements and the guard test are in `packages/design-system/CLAUDE.md`; if
+`src/components/dialog.test.tsx` ever fails, reconsider the environment rather than the test.
 
 **What that script may not be used for is unchanged, and it is the important half.** Vitest **cannot test `async` Server Components**, and an imported Server Action is not the compiled POST endpoint an attacker reaches — so a green test there would assert authorization on a code path nobody attacks. Both verify at seam 3, against a running `next dev` through the `next-dev-loop` skill, and `docs/policy/build.md`'s definition of done requires that leg for any change touching `apps/web`. What belongs in `web:test` is what a running server cannot show: module resolution, Client Components, and table-driven assertions over a route list.
 
@@ -348,170 +249,24 @@ Before reporting a change complete, run `pnpm lint && pnpm format && pnpm check-
 
 **CI runs exactly these commands, on every pull request.** `.github/workflows/ci.yml` is six jobs — `lint`, `format`, `check-types`, `test`, `build`, `audit` — one per entry in `docs/policy/build.md`'s `required-checks`, named so that a human can require each by name as a status check (`docs/runbooks/recomencemos-go-live.md` §8). Each job runs the **root script**, never a `turbo run` restated in YAML, so the two cannot drift; the Node and pnpm versions are read from `.nvmrc` and `packageManager` for the same reason. The last job is `pnpm audit:direct`, which is `scripts/audit-direct.mjs`: `high` or above in a **direct** dependency fails the run, and a transitive advisory is printed but never blocking (`docs/policy/security.md` → `dependency-policy`). Do not reach for `pnpm audit --audit-level=high` instead: it is red on any repository carrying one transitive advisory, and a gate red on arrival is bypassed within a week — which is the reasoning C7 records for direct-only, not an observation about today's tree.
 
-**Coverage is measured on every pull request, reported on it, and gates nothing.**
-`.github/workflows/coverage.yml` runs `pnpm test:coverage` — `turbo run test:coverage` followed by
-`scripts/coverage-merge.mjs` — and posts one comment through
-`davelosert/vitest-coverage-report-action`, updated in place on each push. Four things about it are
-decisions rather than defaults:
-
-- **It is not a job in `ci.yml`, and it is not in `required-checks`.** Those six jobs are one per
-  entry so a human can require each by name; coverage is deliberately not one a human should require.
-  `ci.yml` is also `workflow_call`ed by `deploy.yml`, which grants `contents: read` — a job there
-  asking for `pull-requests: write` would exceed the caller's grant and fail every deploy.
-- **`coverage-floor` is `none`, and that is an answer rather than a gap.** A route handler, a Server
-  Action and an `async` Server Component all verify at seam 3 against a running `next dev`, which a
-  line-coverage number cannot see — so a large part of `apps/web` is uncovered by design, and a floor
-  would apply pressure to close it with exactly the wiring tests this repo cuts. The full argument is
-  in `docs/policy/build.md` under **Why `coverage-floor` is `none`**. Raising it into a gate needs an
-  ADR.
-- **No Vitest config carries a `thresholds` key**, because a threshold fails the run and would be the
-  same gate by another route.
-- **The merge exists because six workspaces would otherwise be six comments.** The reporting action
-  keys its sticky comment on the report name, so `scripts/coverage-merge.mjs` folds the six
-  `coverage-summary.json`/`coverage-final.json` pairs into one at the repo root first. It reads its
-  workspace list from `pnpm-workspace.yaml` through `audit-lib.mjs`'s `workspaceGlobs` so a seventh
-  workspace cannot go silently unmeasured, and it exits `2` rather than publishing a partial merge —
-  a total that looks like the repository and is not is the failure it is arranged against.
-
-**The transitive half is not unwatched, and `audit:direct` is deliberately only one of the two
-answers.** `pnpm audit:report` (`scripts/audit-report.mjs`) reports every advisory at `moderate` or
-above wherever it sits, blocks nothing, and is run daily by
-`.github/workflows/security-audit.yml`, which routes the finding to a `needs-triage` issue and
-closes it again when a later run comes back clean. The threshold is
-`docs/policy/security.md` → `audit-report-threshold`, not a number chosen in the script.
-
-**The routing is `scripts/findings.mjs`, and the workflow is one line calling it**
-([ADR-0020](docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md)). Its
-`audit` subcommand runs the report and performs the lifecycle — file, edit in place when the set
-changes, close when clean, honour a closed issue as a dismissal of that exact fingerprint — and its
-`breach` subcommand is what `needs-triage.yml` calls with a control-band payload. Both are driven
-by `.claude/hooks/tests/findings.sh` with `gh` stubbed on `PATH` and its call log asserted, which is
-the rule that ADR sets for every gate and automation here: **the decision is a script with a test
-file named for it; a workflow `run:` line and a `settings.json` entry are wiring and hold no
-branching.** The script imports nothing outside Node's standard library because
-`needs-triage.yml` runs it with no `pnpm install`.
-
-Two things make that workflow load-bearing rather than belt-and-braces, and both were measured:
-six advisories — four of them `high` — sat on the default branch while every pull request went
-green, and **Dependabot opened no pull request for any of them** even with security updates enabled,
-because dependabot-core does not support updating transitive dependencies for the pnpm ecosystem.
-Every one was transitive, and each was fixed by a scoped `overrides` entry in `pnpm-workspace.yaml`,
-which is a manifest edit no version bump produces. The workflow reads `pnpm audit` rather than the
-Dependabot alerts API because the default `GITHUB_TOKEN` can never hold that permission; the two were
-checked against each other and agreed on all six.
-
-Both scripts read the manifests and the audit payload through `scripts/audit-lib.mjs`, for the reason
-`.claude/hooks/gate-lib.sh` exists — two gates that disagreed about which dependency is direct would
-be worse than either one alone.
-
-**Dependabot is the other half of the audit job, and it has one coupling worth knowing.**
-`.github/dependabot.yml` covers npm (one entry — Dependabot expands `pnpm-workspace.yaml`'s globs
-itself), `github-actions`, and `docker-compose` — the last for the two image digests in
-`docker-compose.yaml`, whose whole failure mode is that an exact pin never moves. That ecosystem is
-**version updates only**, with no security-update channel, which is acceptable only because those
-containers are loopback-bound development ones in no deployment path. Its `cooldown` is set against **`minimumReleaseAge` in
-`pnpm-workspace.yaml`**, which is 1440 minutes: a package published inside that window does not
-resolve locally at all, so a PR raised sooner is one nobody could install. Dependabot's own default
-is already stricter, so the two cannot currently disagree — it is pinned anyway because the number
-that matters is the relationship between the two files. The `github-actions` entry names
-`/.github/actions/*` as well as `/`, without which the SHA pin in the composite setup action would
-never be updated. Its commit messages are prefixed to stay inside Conventional Commits.
-
-**It also ignores `@types/node` majors, and that is the one hole `engineStrict` cannot cover.** The
-repo requires the active LTS and enforces it by reading each package's `engines` field —
-`@types/node` has none, because it is types rather than code, so a `@types/node@26` installs clean on
-Node 24 and then teaches `check-types` an API surface the runtime does not have. Green CI is the
-symptom, not the reassurance. Majors are ignored rather than a `versions:` range spelled out because
-`.nvmrc`, `engines.node` and this dependency move together in one deliberate edit; that edit is where
-the types package is raised by hand. `ignore` is blunt enough to suppress security advisories too,
-which is tolerable only because the package ships no runtime code — do not copy the rule onto one
-that does.
+**Coverage (reported on every pull request, gating nothing), the daily transitive-advisory report
+and its issue lifecycle, Dependabot and its coupling to `minimumReleaseAge`, and why `@types/node`
+majors are ignored are in the `ci-and-dependencies` skill.** Load it before touching `.github/`,
+a dependency override or an audit script. The rule it applies is
+[ADR-0020](docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md): the
+decision is a script with a test file named for it, and a workflow `run:` line holds no branching.
 
 `pnpm lint` is stricter than it looks. The root `.oxlintrc.json` puts oxlint's `correctness` category at `error` but `suspicious` and `perf` at `warn`; the `--max-warnings 0` flag in the root `lint` script is the only thing that turns those warnings into a failing exit code. Never relax that flag to make lint pass, and don't silence a rule repo-wide when a scoped `overrides` entry or an `// oxlint-disable-next-line` with a reason would do.
 
 ## Architecture
 
-Workspaces are declared in `pnpm-workspace.yaml` (`apps/*`, `packages/*`) and referenced across packages as `workspace:*`. Guidance for `packages/design-system` — including the single Tailwind v4 stylesheet it owns, whose `@source` globs a new app workspace must be added to — lives in `packages/design-system/CLAUDE.md`; `apps/web`'s Cache Components rules live in `apps/web/AGENTS.md`.
+Workspaces are declared in `pnpm-workspace.yaml` (`apps/*`, `packages/*`) and referenced across packages as `workspace:*`. Guidance for `packages/design-system` — including the single Tailwind v4 stylesheet it owns, whose `@source` globs a new app workspace must be added to — lives in `packages/design-system/CLAUDE.md`; `apps/web`'s Cache Components rules live in `apps/web/AGENTS.md`. Four more nested files load only where they apply: `packages/CLAUDE.md` (package boundaries), `packages/observability/CLAUDE.md` (the log line's own behaviour), `scripts/CLAUDE.md` (the gates, case by case) and `.claude/hooks/CLAUDE.md` (writing a hook).
 
-**A surface under `app/` is a folder, not a pile of files.** A route directory holds `page.tsx` and
-`actions.ts` — the two things the framework and the network reach — and everything else sits in a
-Next **private folder** (`_`-prefixed, so it is excluded from routing):
-
-```
-app/(site)/(auth)/sign-in/
-  page.tsx                        # the route, and nothing else
-  actions.ts                      # "use server"; one file, however many actions
-  _components/{sign-in-form,google-mark}.tsx
-  _lib/{schema,messages,use-sign-in}.ts
-```
-
-Route groups (`(auth)`) carry no URL segment and exist to group surfaces that share a shape. The
-split is by **role**, not by kind: `_lib` holds what the surface knows (its schema, its Spanish, its
-client machine) and `_components` holds what it renders. The flat twelve-file `app/sign-in/` this
-replaced is the shape to avoid, and it is why `/code-review` should flag a route directory growing
-past its two files plus two folders.
-
-**Three groups sit at the top level, and they exist to separate audiences rather than shapes** (#17,
-#103). `app/(site)/` is the public product — the Wall, `/sign-in`, `/account` — and its layout
-renders `SiteHeader`. `app/(admin)/` is the moderation queue and its door, and its layout renders
-none of that chrome: the session menu, the signed-in identity and _salir_ are built for a Worker on a
-phone, and two of their parts would be actively wrong above `/admin`. The **root** layout is
-therefore `<html>`, the fonts and one `<Toaster />`, and nothing else — a nested layout cannot remove
-a parent's chrome, so the only way for `/admin` to have a shell of its own was for the root to stop
-having one. No group adds a URL segment.
-
-**`app/(token)/` is the third, and it exists because that same sentence applies one level down.** It
-holds the routes under `/admin` that are reached with a **token and no session** — today
-`/admin/enrol/[token]`. They cannot sit in `(admin)`: `AdminHeader` answers "am I signed in, as
-whom, how do I leave", and on a page where no session exists yet all three are meaningless. Worse,
-it renders a wordmark linking to the queue, which tells the holder of a setup link that a queue is
-there and then walks them into a 403 — on a surface whose brief refuses to name `/admin` at all. That
-was observed running, not predicted. A nested layout cannot remove a parent's chrome, so the route
-moved out of the group rather than the group growing a conditional.
-
-**`/admin/*` refuses with a real 403, and the mechanism is worth knowing before changing it.** NFR14
-asks for _"403, returned, not a redirect and not a thrown error"_, and the three callers answer it
-differently:
-
-- A **page** calls `requireAdminPage()` from `lib/admin.ts`, which calls `forbidden()` —
-  `experimental.authInterrupts` is on for this and nothing else. It is a framework interrupt of the
-  same class as `redirect()`, so it costs no Sentry event, and it is the only way an App Router page
-  can set a status code.
-- A **Server Action** is built from `adminActionClient`, whose `use()` middleware returns a 403
-  `ClientError` **before** the boundary parse. Written as a first line in each action body it ran
-  _after_ validation, which seam 3 caught.
-- **`/admin` is `export const instant = false`.** That is `[block]` from Cache Components' own menu,
-  chosen because a streamed shell is a **200** already on the wire by the time the gate answers. The
-  queue's sources still stream inside the page.
-
-**Every route under `(admin)` calls the gate, and there is no allowlist to keep in agreement with
-that.** `/admin/sign-in` was the one exemption and it was an exemption _by omission_ — a page that
-simply did not make the call. It is deleted, and the shape it demonstrated is the one to keep: the
-gate is a function each surface invokes, not a `proxy.ts` matching `/admin/:path*` with a carve-out,
-because a carve-out is a second place the boundary is described and the first place a later route
-falls on the wrong side of. `app/(token)/` is how a token-reached route stays outside the group
-rather than becoming a hole inside it.
-
-**Every Server Action is built from `apps/web/lib/safe-action.ts`.** That module holds
-`actionClient`, the `handleServerError` bridge from `AppError` to the client envelope,
-`returnActionError` for an expected refusal, and `rateLimit` — NFR26's ceilings as `useValidated`
-middleware an action opts into by naming its principals. Three rules, all in
-[ADR-0015](docs/adr/0015-both-doors-are-server-actions-and-the-browser-holds-no-auth-client.md):
-
-- **`.stateAction()` + React's `useActionState`.** Never next-safe-action's `useStateAction` or
-  `useAction` — the vendor's own form guide marks both as not working without JavaScript, which
-  would put NFR4 out of reach.
-- **`returnActionError` for an expected refusal; `throw` for the unexpected.** That is "thrown is
-  reported; returned is logged" made structural — a thrown error reaches `handleServerError` and
-  costs a Sentry event, a returned one bypasses it and costs one `warn` line.
-- **Values that travel with a submit but are not typed into it are bound arguments**, not hidden
-  inputs. `action.bind(null, returnPath, sharedDevice)` with `bindArgsSchemas` is typed, validated on
-  arrival, encoded by React, and survives with JavaScript unavailable. A hidden `<input>` mirroring a
-  piece of client state is the shape to replace.
+**`apps/web`'s own architecture — a surface as a folder, the three route groups, the real `/admin`
+403, the rules every Server Action is built under, and the `@/` import alias — is in
+`apps/web/AGENTS.md`**, which loads whenever you work there.
 
 **`@repo/errors` has no `dependencies` key, and that absence is the design.** It is isomorphic — importable from a Server Component, a Client Component, a Route Handler, a Server Action, or either instrumentation entry point — and the empty dependency list is what _enforces_ that rather than documenting it: a stray `import pino` there fails to resolve under pnpm's isolated store, where a semantic subpath in a single package would only fail a `.next/static` grep after the fact. Never add a runtime dependency to it. Anything needing one belongs in a server-only package instead — which is what `@repo/observability` is.
-
-**Where a server value has to reach it, the value crosses and the module does not** ([ADR-0016](docs/adr/0016-one-request-id-per-request-adopted-not-minted-per-error.md)). `AppError.requestId` is the current request's id, adopted through the `globalThis` slot in `packages/errors/src/ambient-request-id.ts`, which `@repo/observability`'s `request-context.ts` is the only thing that writes to. It is per-**request**, not per-error: two failures in one request quote one reference number, and the error line joins the completion line. The mitigation is unchanged — there is still no constructor option, so nothing an inbound header carries can reach it — and every way the reader can misbehave costs the adoption rather than the error. Copy the shape only for a value; a _module_ @repo/errors needs is still the signal that the code belongs somewhere else.
 
 **`@repo/observability` is the other half of that split, and it is server-only.** It depends on `pino`, `pino-pretty`, their stream packages, and `@sentry/nextjs` — which is what makes it the home of the report seam and the trace-context reader — so it may not be imported from a Client Component, from `instrumentation-client.ts`, or from anything on a `"use client"` path. What actually keeps it out of the browser is its `exports` map: **every entry carries a `browser` condition pointing at `src/browser-refusal.ts`**, so a `"use client"` import fails to resolve at build and `pino` never enters the client graph at all — mechanism 1 in the table below, in its strongest form, with the observed Turbopack error recorded in that file. `assertServerOnly()` is the backstop, not the mechanism. A browser module that needs an error type imports `@repo/errors`, which is isomorphic by construction.
 
@@ -519,70 +274,18 @@ middleware an action opts into by naming its principals. Three rules, all in
 
 **Two connections, and they are not interchangeable.** The **pooled** one (`DATABASE_URL`, PgBouncer on 6432 locally, PlanetScale's pooler in production) is what every request path uses; the **direct** one (`DIRECT_DATABASE_URL`, 5432) is what migrations run on. Transaction-pooling mode removes `LISTEN`/`NOTIFY`, session advisory locks, temp tables and cross-transaction prepared statements, so DDL in a long transaction cannot cross it (spec 0002, DD2). Neither variable appears in **any** `turbo.json` task and neither may be added to one — NFR24 names both as runtime credentials, and `.env*` is a `build` input. `turbo build --dry` is how you check.
 
-**Server-only is enforced by three mechanisms, and a new server-only package answers all three in order** ([ADR-0013](docs/adr/0013-a-server-only-package-declares-which-guards-it-has.md)). They are not alternatives — they fail at different moments, and a package may hold more than one:
+**How a server-only package is guarded — three mechanisms, which package carries which, and what
+the boundary tests assert — how `@repo/domain` imports internally, and when a dynamic `import()` is
+allowed are in `packages/CLAUDE.md`.** A new server-only package reads that first
+([ADR-0013](docs/adr/0013-a-server-only-package-declares-which-guards-it-has.md)).
 
-| #   | Mechanism                                                                                                   | Fails at                                            | Apply it when                                                                                                                                                            |
-| --- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **The `exports` map** — withhold the subpath, or point it at a refusal module under the `browser` condition | Module resolution, so **build**                     | Always. Withholding costs nothing; the `browser` condition costs one file and is what keeps the dependency out of the client graph rather than throwing once it is there |
-| 2   | **`import "server-only"`**                                                                                  | Build, but **only inside the `react-server` layer** | The module is Next-only. It resolves to an empty module under the `react-server` condition and to a bare `throw` under every other                                       |
-| 3   | **`assertServerOnly()`** from the package's own `#server-only`                                              | Runtime, at import                                  | Always, as a backstop. Never as the plan                                                                                                                                 |
-
-**The dividing line for 2 is verified rather than assumed: plain `node` sets no `react-server` condition, so `server-only` throws there** — and plain `node` is what `packages/domain/src/migrate/cli.ts` is in a Fly `release_command`, what the `email dev` preview server is, and what every Node-environment Vitest file is. That is why `@repo/domain` carries the marker on `connection.ts` and `health.ts` and nowhere else, and why `@repo/observability` and `@repo/notifications` carry it nowhere at all. Route Handlers **are** inside the `react-server` layer (checked: `pnpm build` compiles and `GET /api/health` answers 200 with the marker in place). The root `.oxlintrc.json` allows `server-only` in `import/no-unassigned-import` for this, the same way it already allows `**/*.css` — that is the rule's own escape hatch, not a relaxation of `--max-warnings 0`.
-
-**`@repo/notifications` holds mechanism 1 in both its forms too, and that closes ADR-0013's one named gap.** It publishes `./send` and `./templates/*` and withholds everything else, and each published entry points at `src/browser-refusal.ts` under the `browser` condition. Before that it had only the runtime backstop, which is why it was the package with the weakest guard and the strongest credential. What the fix measured, rather than predicted: a `"use client"` page calling the send seam used to **compile successfully** and put 152 occurrences of `resend`, the live `api.resend.com` endpoint and `RESEND_API_KEY` into `.next/static`; it now fails to resolve, and a server-path import leaves the client bundle with none of them. The counts and the verbatim Turbopack error are in that file.
-
-**Mechanism 3 is duplicated in all three packages on purpose.** The shared part is the `globalThis.window` check; the part that matters is the package name, the thing it holds, and what to import instead — `pino` and its streams, a Node TCP client and the database credentials, `RESEND_API_KEY` and the one irreversible act in this system. A backstop that fires with the wrong name and the wrong remedy is worse than ten duplicated lines. ADR-0013 answers a review comment proposing to share it; do not re-argue it.
-
-**Mechanism 1 is the mechanism, and it is the only one of the three with a test.** `apps/web/domain-boundary.test.ts` and `notifications-boundary.test.ts` assert it against **Node's own resolver**, which is the one `next build` uses.
-
-**Inside `apps/web`, a cross-directory import is `@/`-prefixed.** `apps/web/tsconfig.json` maps `"@/*"` to `"./*"`, so `import { auth } from "@/lib/auth"` replaces `"../../../lib/auth"` — a specifier that changed every time a route moved, which is exactly what the `app/(auth)/sign-in/` folder move did to it. Next reads tsconfig `paths` natively and `apps/web/vitest.config.mts` already sets `resolve.tsconfigPaths`, so `tsc`, Turbopack and Vitest all resolve it with nothing further configured.
-
-**It is tsconfig `paths` here and the `imports` field in `@repo/domain`, and the difference is not an inconsistency to tidy up.** The paragraph below is why the package uses `#`: it must resolve under plain `node`, which tsconfig `paths` cannot do. `apps/web` has the opposite constraint — it never runs outside the bundler, and **Turbopack does not resolve a package's own `imports` subpaths**. Measured, not assumed: `#lib/auth` type-checks and passes Vitest, then fails `next build` with `Module not found: Can't resolve '#lib/auth'`. Each side uses the one mechanism its own runtime supports.
-
-**Inside `@repo/domain`, internal imports are `#`-prefixed** — `#config`, `#schema`, `#connection` — declared in the package's `imports` field. This is not style. The package withholds most of its own modules, so a self-reference through `@repo/domain/...` fails for exactly the reason it is supposed to; and a relative `./config.js` specifier resolves under Vite but **not** under plain `node`, which is what `packages/domain/src/migrate/cli.ts` runs as in a Fly `release_command`. The `imports` field is the one form Node, Vite and `tsc` all resolve identically, and a `#` specifier is private to the package that declares it, so it is not a second door into the domain.
-
-**A dynamic import carries a comment naming the module it keeps out of which graph, or it is a static
-import** (#243). `await import(...)` inside a function reads as a decision, so it gets copied as one:
-twenty-nine `@repo/domain` facade methods opened by importing `#connection`, each arguing at length
-that a static import would make its module unimportable at seam 1 and seam 2 — and six further sites
-took the shape where no marker existed at all. **That argument was about the test runner, and one
-line answers it**: a `resolve.alias` mapping `server-only` to an empty module, which both
-`packages/domain/vitest.config.mts` and `apps/web/vitest.config.mts` now carry with its measurement
-beside it. `db()` was already lazy, so a static import opens no pool. An `apps/web` test that loads a
-server module also declares `@vitest-environment node`, because the runtime backstop fires on a
-`window` and an alias does not touch that.
-
-**One of the twenty-nine survived, and it is the shape of reason the rule is asking for.**
-`rate-limit.ts` is reached by `#auth/config`, which `admin/enrol-cli.ts` imports — so it sits on the
-graph of a command that runs as plain `node`, which sets no `react-server` condition and cannot load
-`#connection` at all. Made static, `pnpm admin:enrol` dies before printing its usage line. Its
-comment says that, and says which graph the deferral keeps `#connection` off. The other two survivors
-are `@repo/storage` deferring the AWS SDK so `missingConfig()` answers without loading it, and Next's
-own late binding in `instrumentation*.ts`. A site with no such sentence is a static import.
-
-**An Admin comes into existence from a shell and nowhere else** (#17, #103, runbook §6). No form
-creates one; `isAdmin` is declared `input: false`, so no request body sets the grant on any Better
-Auth route, and neither command below is in `@repo/domain`'s `exports` map. Both run over the
-**direct** connection.
-
-**`pnpm admin:enrol <email>` is the one to use, and the grant is its last step.** It mints a
-single-use setup link and prints it; opening the link shows the TOTP QR, the manual-entry secret and
-the ten backup codes **once**; the six digits from the authenticator are typed back into the prompt,
-which verifies them and only then sets `isAdmin`. That ordering is the security property — an Account
-cannot hold Admin authority until a working authenticator has proved itself, so a half-enrolled Admin
-is unrepresentable and a link opened and abandoned leaves no Admin behind. Running it again is both
-the second-Admin recovery path and the break-glass: it replaces the factor rather than adding one.
+**An Admin comes into existence from a shell — `pnpm admin:enrol <email>` — and nowhere else.** No
+form creates one. The enrolment's ordering, and why that ordering is the security property, are in
+`packages/CLAUDE.md`.
 
 **There is more than one Admin, and no code or copy may assume otherwise.** Enrol at least two — the
 recovery path that costs nobody a printed backup code is another Admin who can still sign in — and
 write every string and comment for "an Admin" rather than "the Admin".
-
-**`pnpm admin:grant` was what it replaced, and it is gone.** It set the grant **first** and left the
-second factor to a later sign-in at `/admin/sign-in` — the window `admin:enrol` closes — so its
-successful path produced an Account holding Admin authority with nothing in front of it. It stood for
-one slice as a command that printed a refusal and exited `2`, and the file, the script, the route,
-the `emailAndPassword` configuration and the `twoFactor` plugin went together in the contract half of
-DD5. There is one way to make an Admin, and it is the paragraph above.
 
 **Migrations are generated, never hand-written.** `pnpm db:generate` writes them from `packages/domain/src/schema.ts`; `pnpm db:migrate` applies them on the direct connection. `.claude/hooks/build-guard.sh` rule J refuses a `Write` or `Edit` to a migration the journal already names — `drizzle-kit` writes through `Bash`, which is exactly the split that rule intends. `packages/domain/drizzle/` is oxfmt-ignored for the `pnpm-workspace.yaml` reason: `drizzle-kit` owns those files and rewrites them in its own style on every generate.
 
@@ -591,8 +294,6 @@ DD5. There is one way to make an Admin, and it is the paragraph above.
 **Lint config is nested, not packaged.** oxlint discovers `.oxlintrc.json` files automatically and applies the nearest one to each file, so the root config holds the repo-wide baseline and each workspace's `.oxlintrc.json` `extends` it and adds what only that workspace needs.
 
 `plugins` **overwrites** rather than merges, so a workspace config must relist the inherited plugins alongside its own. Put a rule everyone should follow in the root config; put a framework-specific one in the workspace that has that framework.
-
-**Turborepo task graph.** `build`, `lint`, and `check-types` all declare `dependsOn: ["^build"]`/`["^lint"]`/`["^check-types"]`, so a topological order is enforced across workspaces. `dev` is `cache: false` and `persistent: true`. `build` inputs include `.env*`, so env files invalidate the cache.
 
 **A task-specific entry `replaces` the base task; it does not merge with it.** `web#build` restates
 `dependsOn`, `inputs`, `outputs`, and `env` verbatim from `build` and adds one thing of its own —
@@ -642,14 +343,8 @@ and never handing the value itself to a serializer is what stops the rest of it 
 cross-boundary value whole to anything that serialises is the move that defeats the rule while looking
 like compliance.
 
-**A stack on a log line is trimmed by value, and names generated code.**
-[ADR-0004](docs/adr/0004-stack-frames-are-trimmed-by-value.md) fixes both halves. Runs of vendor
-frames collapse to one counted marker, so the budget buys application frames — measured at 79% of a
-Next.js request stack spent on `.pnpm` paths before it. And the logger resolves **no** source maps:
-mapped frames in development are `node --enable-source-maps`, a process flag rather than a logging
-feature, and in production the maps are deleted after upload. So a **thrown** error's mapped stack
-lives in the reporting platform, and a **handled** one has none. That last gap is real, and named
-there rather than closed.
+How a stack is trimmed on a line, and why an unrouted success emits no completion line, are
+`@repo/observability` behaviour and live in `packages/observability/CLAUDE.md`.
 
 **`context` carries identifiers and shapes** — ids, counts, enum values, truncated inputs. Never
 credentials, tokens, whole request bodies, or raw personal data; a secret never enters it. This is
@@ -669,16 +364,6 @@ question this product still has to answer, and the go-live runbook's §10 is how
 the answer is yes. Do not read the exception as licence: it exists because the logger cannot know the
 classification of a value it writes on the caller's behalf, which is never true of a `context` a caller
 builds.
-
-**The completion line counts what the app routed, and that is a measurement rule rather than a volume
-one.** The subscription hears every HTTP server in the process, so an unfiltered line put Turbopack
-chunks and HMR in the same population as the app's own requests — about 30:1 on one dev page load. p95
-then sat on chunk 304s permanently, the error rate it exists to be the denominator of was diluted by
-the same factor, and `route: "unknown"` became one bucket holding 96% of traffic. So an **unrouted**
-request emits a line only when `status >= 400`, and the cut is `routeOf`'s own answer rather than a
-`/_next/` prefix match — a path denylist would be [ADR-0006](docs/adr/0006-name-the-exposure-rather-than-ship-a-heuristic.md)'s
-heuristic shipped into the field a drain groups by. A 404 is unaffected; it carries `/_not-found` and
-is routed. Restoring a line for unrouted success is not a bug fix, it is reverting #81.
 
 **Thrown is reported; returned is logged.** An error that escapes a request reaches `onRequestError`
 and costs one event plus one `error` line carrying that event's id. An error handled and returned
@@ -742,16 +427,7 @@ line and the string. What it cannot judge is whether the sentence that replaced 
 substance or merely got shorter — and it never reads a comment, so it is equally silent about one
 stripped from there.
 
-**Shell is read by a tokeniser of its own**, because its quoting is not JavaScript's: `'…'` takes no
-escapes, `$'…'` is a third quoting form, a `#` opens a comment only at a word boundary — so `$#` and
-`foo#bar` are text, not comments — and a heredoc body is data at a delimiter the script names, skipped
-whole the way `gate-lib.sh`'s `strip_heredocs` skips it for the neighbouring problem. A
-`${MSG:-a default}` is not skipped: that word is text the shell prints, and this repo already
-writes one into the middle of a refusal a person reads. `"$NFR8 holds"`
-names a variable and carries no citation, exactly as `${NFR8}` does in a template literal. The walk
-still skips `.agents/` and `.claude/`, and for shell that skip earns a second reason:
-`gate-test.sh` drives this gate and its fixtures are the citations it refuses, so it cannot be subject
-to itself — which is why that suite runs the gate over the other hooks, `build-guard.sh` included.
+How it reads shell, and why its walk skips `.agents/` and `.claude/`, is in `scripts/CLAUDE.md`.
 
 ## Things to get right
 
@@ -763,9 +439,7 @@ to itself — which is why that suite runs the gate over the other hooks, `build
   `AuthHandler.getSession`. `sign-in-form.test.tsx` asserts the first half over the surface's source.
 - **Spanish is the interface; English is the code** ([ADR-0012](docs/adr/0012-spanish-is-the-interface-english-is-the-code.md)). `es-CO` is the product's only language and it governs **only what a person reads**. Every identifier you type is English: route segments, file and directory names, database tables and columns, enum values, query parameters, API field names, log `event` names, test names, branch names. The line is **identifier versus value** — `Skill.labelEs` is an English column holding a Spanish string. So the route is `/offers`, the table is `offer`, the entity is `Offer`, and the page says _Propuesta_. This is written down because effort 0002's spec routed the entire product in Spanish — `/perfiles`, `/publicar`, `app/mi-perfil/page.tsx` — through the API contract and the deep dives before a human caught it. `CONTEXT.md`'s glossary gives every term both names; use the English one everywhere except the rendered string.
 - `apps/web/app/layout.tsx` carries the product's metadata and `lang="es-CO"`. The `lang` attribute is not decoration: every string below it is Spanish, and a wrong `lang` has a screen reader announce Spanish with English phonemes.
-- `apps/web/app/page.tsx` is a **holding page**, not the Wall. Story 4 ([#21](https://github.com/m0t0r/recomencemos/issues/21)) replaces it. It deliberately makes no claim about verification or money — those are story 11's two standing notices ([#22](https://github.com/m0t0r/recomencemos/issues/22)), and a half-version anywhere else gives them a second source.
 - **Before writing any presentational element, read `packages/design-system/src/components/`.** A component the registry lacks is added with `pnpm dlx shadcn@latest add <component> -c packages/design-system`; hand-roll only what has no registry equivalent. `REVIEW.md`'s registry-equivalents pass blocks a merge on a hand-rolled equivalent — PR #77 hand-rolled three the registry already exported (#79 row 8).
-- The React version is 19 and Next is 16 (App Router). Server Components are the default; the registry marks the components that need `"use client"` (anything with state, effects, or handlers). New interactive components need the same directive.
 - `apps/web/next.config.ts` is TypeScript, and it is listed in `apps/web/tsconfig.json`'s `include`. If you rename it, update that entry too.
 - oxfmt runs on the tool's defaults except for `ignorePatterns` (`.agents/`, `.claude/`, `docs/efforts/*/advisories/`, `pnpm-workspace.yaml`, `packages/domain/drizzle/`) — note `printWidth` is **100**, not Prettier's 80. Run `pnpm format:fix` rather than hand-formatting. It reads `.gitignore`, so ignored files are skipped automatically.
 - **oxlint ignores `.agents/` and `.claude/` too.** Vendored skills ship real JavaScript (impeccable alone is ~40 scripts) and it is not ours to fix — hand edits there are clobbered by the installer. Do not narrow those two patterns to make a vendored file lint; app and package code is still fully covered.
@@ -821,12 +495,9 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
   `agent-browser`'s `--scope worktree` session id lines up with it.
 
 - `next-partial-prefetching-adoption` — moves an app onto Partial Prefetching (one shared App Shell). **This app is already on it**: `partialPrefetching: true` landed with #228, and the comment on that key in `apps/web/next.config.ts` carries what it bought and what it cost. The skill's step 1 — auditing `<Link prefetch={true}>` calls — still finds nothing here, and its remaining steps are about the deeper `'use cache'` half that ADR-0011 refuses for this app's session-shaped reads. This is a workflow, not a lookup.
-- `turborepo` — task graph, caching, and filtering reference.
 - `implement` — the Build session. Vendored **thin on purpose**: it delegates to `/tdd` and `/code-review` and knows nothing of the frontier query, the ticket claim, or the PR. That is this repo's, and it lives in `docs/agents/issue-tracker.md`. Do not fork the skill to add it.
 - `tdd` — red/green, and "no test is written at an unconfirmed seam". The seams were already confirmed at Design, so read the spec's `## Testing Decisions` section rather than re-interviewing the user.
 - `code-review` — two axes, in parallel subagents: **Standards** (repo conventions plus a Fowler smell baseline) and **Spec** (does the diff do what was asked). It reads the plan comment `/implement` posted on the ticket. `REVIEW.md` is where a project adds its own passes and severity thresholds.
-- `codebase-design` — the deep-module vocabulary `tdd` cites when the shape of an interface is itself the question. A reference, not a session.
-- `resolving-merge-conflicts` — the tax on stacked PRs: a review fix low in a stack rebases everything above it.
 - `diagnosing-bugs` — the Maintain-stage loop that produces what `/triage` promotes. Its reproduction
   **is** the "before" capture for a bug-fix ticket; take it there rather than staging it again later.
 - `show-me` — explanation, not evidence: pseudocode, call trees, component trees, mermaid, and
@@ -838,22 +509,8 @@ Prefer those bundled docs over recall when writing Next.js code. They match the 
 - `ui-proof` — **this repo's**, not vendored. Captures the seam-3 leg as video, a before/after still
   pair, or an accessibility-tree diff, and carries the `ffmpeg` preflight, the determinism pinning
   that keeps a pair comparable, and the list of what may never be in frame.
-- `wizard` — generates a bash wizard that walks a human through steps only they can perform:
-  provisioning, credentials, a third-party dashboard, a one-off cutover. `scripts/go-live.sh` and
-  `scripts/ui-proof-setup.sh` (`pnpm ui-proof:setup`, the artifact store) are its two committed
-  products here, and they are the shape to copy: the library above the `STAGES` marker is generated
-  and never hand-edited — byte-identical in both, and a `diff` against `template.sh` is how that is
-  checked — and the stages below it are authored through `/wizard`. The
-  other one, `scripts/setup.sh`, was deleted with the template framing — it walked a human through
-  claiming a fresh clone, which is not a procedure this repository has any more.
-
-  **The two differ on where a captured secret goes, and the difference is the rule rather than an
-  inconsistency.** `go-live.sh` writes no env file at all, because its secrets belong to a deploy and
-  `fly secrets` is where a deploy reads them. `ui-proof-setup.sh` writes `apps/web/.env.local`,
-  because its five values are read by a script running on one operator's own machine — which is the
-  case `.env.example` already sanctions for `RESEND_API_KEY` and `GOOGLE_CLIENT_SECRET`. A wizard
-  that captures a secret answers "which process reads this, and where does that process run", and
-  the answer decides the destination.
+- `wizard` — generates a bash wizard for steps only a human can perform. Its two committed products,
+  and the rule for where a captured secret goes, are in `scripts/CLAUDE.md`.
 
 - `impeccable` — interface design at depth: `shape` (brief before code), `critique`/`audit`, `polish`/`harden`, `live`. It owns `PRODUCT.md`, `DESIGN.md`, and the surface briefs under `.impeccable/briefs/`. The Design stage's `ux-design` routes into it rather than restating it.
 
@@ -921,34 +578,9 @@ A folder under `docs/efforts/` means a human decided something is work. Findings
 
 ### The Design stage
 
-`/to-spec` runs three phases, and the ordering is not stylistic: the interview is a pipeline, so the
-API depends on the entities and an advisor spawned before the API exists is guessing.
-
-1. **Draft** — the architect alone, in interview order: user stories (prioritized `Must`/`Should`/`Could`) → non-functional requirements (with numbers) → core entities → API contract → high-level design. Seams checked with the user.
-2. **Consult** — `security-advisor`, `data-advisor`, `operability-advisor`, `simplicity-advisor` fan out in isolated contexts and return **advisories**, committed to `docs/efforts/<NNNN>-<slug>/advisories/`. The UX lens runs in the main session because one of its cases interviews the user.
-3. **Synthesize** — the architect writes the deep dives, records every override in **Further Notes**, and proposes ADRs where a deep dive sets durable precedent.
-
-**Each non-functional requirement names the user stories it binds.** That `Binds:` line is the whole coupling to Build: `/to-tickets` cuts one ticket per story and copies the spec's criteria onto it, so a bound NFR becomes an acceptance criterion without `/to-tickets` needing to know anything new — the coupling lives in the artifact we own, not in a skill we vendored. An NFR binding no story is a finding.
-
-**A spec whose answers end in steps only a human can take carries a `## Runbook obligations` section, and that section is a ticket.** It is the same coupling seen from the other side, and it exists because a runbook step is not a tracer-bullet vertical slice — provisioning a bucket, printing backup codes, filing a DPA — so `/to-tickets`' default reading treats it as prose and drops it. The section's rows become the ticket's acceptance criteria and the runbook file is what the ticket works through; `docs/agents/issue-tracker.md` carries the mechanics, and `/to-tickets` is **not** forked for it. A spec that names a human-only step and produces no ticket has moved that work nowhere.
-
-**Advisors advise; the architect writes.** An advisory that arrives as a finished section is read
-for its analysis and rewritten — five authors produce five documents stapled together and bury the
-conflicts the Flagged concerns list exists to surface.
-
-**Deep dives are selected by which NFR the high-level design does not already satisfy.** That is
-where infrastructure enters: as the answer to a number, never as a section called "infra".
-
-`ux-design` is a **router**, not a rulebook — `impeccable` already owns interface craft at depth, and
-`DESIGN.md` owns the visual system. Do not restate either one in a spec.
-
-`/spec-review` is a **fidelity check** by default: one agent comparing the committed advisories
-against the finished spec for anything dropped or diluted. `--adversarial` re-runs all four lenses
-against the finished document, and costs four more spawns.
-
-Prototypes at Design are the one exception to "no code yet": throwaway branch, never promoted, and
-proposed rather than auto-run. `/prototype` LOGIC answers a state-model or API-shape question;
-`/prototype` UI answers "which alternative wins" and needs an existing page to sit against.
+Read [`docs/agents/sdlc-stages.md`](docs/agents/sdlc-stages.md) before a `/to-spec`, `/spec-review`
+or `/prototype` session: the three phases and why they are ordered, what an advisor may write, the
+`Binds:` and `## Runbook obligations` couplings to Build, and how deep dives are chosen.
 
 ### The Build stage
 
@@ -972,36 +604,11 @@ running dev server — Vitest cannot test `async` Server Components, so a green 
 verification. Every acceptance criterion gets ticked with the evidence that proves it; a criterion
 ticked with no evidence is a claim.
 
-**And where the change alters what a person sees, that second leg is recorded rather than narrated**
-([ADR-0019](docs/adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md)). Every other row of
-an Evidence table names something a reviewer can re-run — a test file and a test name, or a command.
-The seam-3 row named a narrative, which made the leg carrying the most product risk the only one that
-could not be checked. `ui-proof` is the method, `ui-evidence-*` in `docs/policy/build.md` holds the
-keys, `pnpm ui-proof publish --pr <n>` is the command, and `REVIEW.md`'s **Recorded proof for a
-visible change** pass is what blocks a merge on it. Three things are worth knowing before you reach
-for it:
-
-- **The before is taken first**, right after the worktree opens and before the first edit. The tree is
-  already at `origin/<default>` at that moment and never again — reconstructed at PR time it costs a
-  second checkout and a second dev server against a shared database.
-- **The medium is decided by what changed, not by ticket size** — a change in _time_ is video, a
-  change in _space_ is a before/after still pair, and a change the accessibility tree alone can see is
-  `diff snapshot` output pasted as text. Size is a proxy a session can argue itself out of. **The
-  skill owns that table**, deliberately: which artifact a change owes is craft rather than an answer
-  only this organization can give, so it is not a policy key and this summary is not its source.
-- **`ffmpeg` fails at `record stop`, not at `record start`.** `agent-browser` shells out to it for
-  video and not for screenshots, so without it a session drives an entire flow, sees
-  `✓ Recording started`, and loses all of it one command later. Preflight it.
-
-**The prose stays in the PR body and the artifact is a media viewer.** The structural half of "what
-changed" is a `show-me` diff sketch or a mermaid diagram written in the body, which renders natively,
-stays in git, and is reviewable against the diff. A hosted page holding the architectural narrative is
-a `plan.md` with better CSS — the second source of truth this repo already refused once when it made
-the plan a comment.
-
-**What is never recorded is in `docs/policy/security.md`**, and it is not a matter of care: a
-recording captures the address bar, `/admin/enrol/[token]` carries a live credential in a path
-segment, and an artifact is fetched by whoever holds the link, later.
+**A change that alters what a person sees carries recorded proof, not a narrative**
+([ADR-0019](docs/adr/0019-ui-change-carries-recorded-proof-not-asserted-proof.md)). `ui-proof` is the
+method and `REVIEW.md` blocks a merge on it. Take the before capture right after the worktree
+opens, and read the recorded-proof section of [`docs/agents/sdlc-stages.md`](docs/agents/sdlc-stages.md)
+before the first capture.
 
 **Stacked PRs are opt-in**, through `stacked-prs` in `docs/policy/build.md`. The mechanism is already
 in the data: a chain of blocking edges _is_ a stack. But a stack is a path and the ticket graph is a
@@ -1029,8 +636,3 @@ Rule H's test is **`skills-lock.json`**, not a hand-kept path list: a skill name
 `skills update` will overwrite. This repo's own skills sit in the same directory and are absent from
 the lock, which is exactly what forking one means. The guard watches `Write` and `Edit` only, so the
 installers keep working through `Bash`.
-
-**These gates refuse false positives loudly, so keep them honest.** Heredoc bodies are data — a
-commit message naming `gh pr merge` is prose, and `gate-lib.sh`'s `strip_heredocs` plus the
-`CMD_START` anchor are what stop the gate refusing the commit that documents it. Four false refusals
-were found by `gate-test.sh` while these were written; every new rule needs its prose case.

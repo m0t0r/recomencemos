@@ -109,3 +109,85 @@ The default is 8 KB in development **and** production, deliberately — local st
 reading because it predicts what a drain will receive. A missing, non-numeric, or below-floor value
 falls back to that default rather than failing the boot. See
 [#48](https://github.com/m0t0r/ai-native-project/issues/48).
+
+## Architecture of `app/`
+
+Moved from the root `CLAUDE.md`; it binds only code under `apps/web`.
+
+**A surface under `app/` is a folder, not a pile of files.** A route directory holds `page.tsx` and
+`actions.ts` — the two things the framework and the network reach — and everything else sits in a
+Next **private folder** (`_`-prefixed, so it is excluded from routing):
+
+```
+app/(site)/(auth)/sign-in/
+  page.tsx                        # the route, and nothing else
+  actions.ts                      # "use server"; one file, however many actions
+  _components/{sign-in-form,google-mark}.tsx
+  _lib/{schema,messages,use-sign-in}.ts
+```
+
+Route groups (`(auth)`) carry no URL segment and exist to group surfaces that share a shape. The
+split is by **role**, not by kind: `_lib` holds what the surface knows (its schema, its Spanish, its
+client machine) and `_components` holds what it renders. The flat twelve-file `app/sign-in/` this
+replaced is the shape to avoid, and it is why `/code-review` should flag a route directory growing
+past its two files plus two folders.
+
+**Three groups sit at the top level, and they exist to separate audiences rather than shapes** (#17,
+#103). `app/(site)/` is the public product — the Wall, `/sign-in`, `/account` — and its layout
+renders `SiteHeader`. `app/(admin)/` is the moderation queue and its door, and its layout renders
+none of that chrome: the session menu, the signed-in identity and _salir_ are built for a Worker on a
+phone, and two of their parts would be actively wrong above `/admin`. The **root** layout is
+therefore `<html>`, the fonts and one `<Toaster />`, and nothing else — a nested layout cannot remove
+a parent's chrome, so the only way for `/admin` to have a shell of its own was for the root to stop
+having one. No group adds a URL segment.
+
+**`app/(token)/` is the third, and it exists because that same sentence applies one level down.** It
+holds the routes under `/admin` that are reached with a **token and no session** — today
+`/admin/enrol/[token]`. They cannot sit in `(admin)`: `AdminHeader` answers "am I signed in, as
+whom, how do I leave", and on a page where no session exists yet all three are meaningless. Worse,
+it renders a wordmark linking to the queue, which tells the holder of a setup link that a queue is
+there and then walks them into a 403 — on a surface whose brief refuses to name `/admin` at all. That
+was observed running, not predicted. A nested layout cannot remove a parent's chrome, so the route
+moved out of the group rather than the group growing a conditional.
+
+**`/admin/*` refuses with a real 403, and the mechanism is worth knowing before changing it.** NFR14
+asks for _"403, returned, not a redirect and not a thrown error"_, and the three callers answer it
+differently:
+
+- A **page** calls `requireAdminPage()` from `lib/admin.ts`, which calls `forbidden()` —
+  `experimental.authInterrupts` is on for this and nothing else. It is a framework interrupt of the
+  same class as `redirect()`, so it costs no Sentry event, and it is the only way an App Router page
+  can set a status code.
+- A **Server Action** is built from `adminActionClient`, whose `use()` middleware returns a 403
+  `ClientError` **before** the boundary parse. Written as a first line in each action body it ran
+  _after_ validation, which seam 3 caught.
+- **`/admin` is `export const instant = false`.** That is `[block]` from Cache Components' own menu,
+  chosen because a streamed shell is a **200** already on the wire by the time the gate answers. The
+  queue's sources still stream inside the page.
+
+**Every route under `(admin)` calls the gate, and there is no allowlist to keep in agreement with
+that.** `/admin/sign-in` was the one exemption and it was an exemption _by omission_ — a page that
+simply did not make the call. It is deleted, and the shape it demonstrated is the one to keep: the
+gate is a function each surface invokes, not a `proxy.ts` matching `/admin/:path*` with a carve-out,
+because a carve-out is a second place the boundary is described and the first place a later route
+falls on the wrong side of. `app/(token)/` is how a token-reached route stays outside the group
+rather than becoming a hole inside it.
+
+**Every Server Action is built from `apps/web/lib/safe-action.ts`.** That module holds
+`actionClient`, the `handleServerError` bridge from `AppError` to the client envelope,
+`returnActionError` for an expected refusal, and `rateLimit` — NFR26's ceilings as `useValidated`
+middleware an action opts into by naming its principals. Three rules, all in
+[ADR-0015](../../docs/adr/0015-both-doors-are-server-actions-and-the-browser-holds-no-auth-client.md):
+
+- **`.stateAction()` + React's `useActionState`.** Never next-safe-action's `useStateAction` or
+  `useAction` — the vendor's own form guide marks both as not working without JavaScript, which
+  would put NFR4 out of reach.
+- **`returnActionError` for an expected refusal; `throw` for the unexpected.** That is "thrown is
+  reported; returned is logged" made structural — a thrown error reaches `handleServerError` and
+  costs a Sentry event, a returned one bypasses it and costs one `warn` line.
+- **Values that travel with a submit but are not typed into it are bound arguments**, not hidden
+  inputs. `action.bind(null, returnPath, sharedDevice)` with `bindArgsSchemas` is typed, validated on
+  arrival, encoded by React, and survives with JavaScript unavailable. A hidden `<input>` mirroring a
+  piece of client state is the shape to replace.
+
+**Inside `apps/web`, a cross-directory import is `@/`-prefixed.** `apps/web/tsconfig.json` maps `"@/*"` to `"./*"`, so `import { auth } from "@/lib/auth"` replaces `"../../../lib/auth"` — a specifier that changed every time a route moved, which is exactly what the `app/(auth)/sign-in/` folder move did to it. Next reads tsconfig `paths` natively and `apps/web/vitest.config.mts` already sets `resolve.tsconfigPaths`, so `tsc`, Turbopack and Vitest all resolve it with nothing further configured.
