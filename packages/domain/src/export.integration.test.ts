@@ -266,6 +266,9 @@ const EXPORTED_BY_COLUMN: Record<string, string> = {
   "capability_profile.photoState": "photoState",
   "capability_profile.photoAttachedAt": "photoAttachedAt",
   "capability_profile.state": "state",
+  // Her Pause: a decision she took about her own visibility, which she has
+  // every reason to be able to read back — and `personal`, like its neighbours.
+  "capability_profile.pausedAt": "pausedAt",
   "capability_profile.publishedAt": "publishedAt",
   "capability_profile.deliveredOfferCount": "deliveredOfferCount",
   // The position is the order of the array, and the text is its items.

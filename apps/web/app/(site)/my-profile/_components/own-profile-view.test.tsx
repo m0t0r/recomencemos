@@ -36,6 +36,8 @@ const profile: OwnProfile = {
   fullName: `Ana María Restrepo ${PAYLOAD}`,
   phone: "+573001234567",
   email: "ana@example.co",
+  pausedAt: null,
+  takenDown: false,
 };
 
 describe("the view", () => {

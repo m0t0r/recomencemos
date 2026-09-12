@@ -336,6 +336,20 @@ export const offerSentOnQueue = (at: Date) =>
   `Enviada el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
 
 /**
+ * **Her Pause, where an Admin sees her** (story 25). The queue is not changed by
+ * a pause — an Offer sent before it is still read and delivered — but the Admin
+ * delivering it should know she is not on the site right now, so the row carries
+ * one more field, present only while she is paused.
+ *
+ * _En pausa_ is `CONTEXT.md`'s word for her state and the one her own page
+ * uses. Never _oculto_ and never _retirado_, which reads as a takedown — the one
+ * thing an Admin must not mistake her own choice for.
+ */
+export const OFFER_WORKER_PROFILE_FIELD = "Su perfil";
+export const workerPausedSince = (at: Date) =>
+  `En pausa desde el ${at.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}`;
+
+/**
  * The section's two actions, and what each does said in the verb.
  *
  * *Entregar* rather than *Aprobar*: an Admin is not approving a person or her

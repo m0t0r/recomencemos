@@ -81,6 +81,12 @@ describe("CEILINGS", () => {
 
   // The two profile write paths do not share an allowance: a Worker who has
   // published once must not find her first correction already charged.
+  it("bounds the Pause switch at ten a day per Account, over both directions", () => {
+    // One row for two actions: pausing and resuming spend the same ten. No IP
+    // bound, because a shared connection would let one Worker spend another's.
+    expect(CEILINGS.profilePause).toEqual({ account: { max: 10, windowSeconds: 24 * 60 * 60 } });
+  });
+
   it("counts publishing and editing as two actions", () => {
     expect(CEILINGS.publishProfile).not.toBe(CEILINGS.updateProfile);
     expect(CEILINGS.publishProfile.account?.max).not.toBe(CEILINGS.updateProfile.account.max);
