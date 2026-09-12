@@ -75,7 +75,10 @@ async function readOpenLedger(params: Params, searchParams: SearchParams): Promi
 
   const { answered } = await searchParams;
 
-  return { ...ledger, open: { id, arrival: arrivalFor(answered) } };
+  return {
+    ...ledger,
+    open: { id, arrival: arrivalFor(answered), justAccepted: answered === "accepted" },
+  };
 }
 
 export default function ReceivedOfferPage({

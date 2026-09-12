@@ -13,6 +13,7 @@
  * read, so a prerender never reaches it.
  */
 
+import { type ContactExchange, exchanges } from "@repo/domain/exchange";
 import { offers, type ReceivedOffer } from "@repo/domain/offers";
 import { profiles } from "@repo/domain/profiles";
 import { requireAccountPage } from "@/lib/account";
@@ -21,10 +22,18 @@ import { requireAccountPage } from "@/lib/account";
 export interface OpenRow {
   readonly id: string;
   readonly arrival?: string | undefined;
+  /** This render followed her acceptance: the Contact Exchange takes focus, not the sentence. */
+  readonly justAccepted?: boolean;
 }
 
 export interface LedgerView {
   readonly offers: readonly ReceivedOffer[];
+  /**
+   * The Contact Exchanges on her accepted rows, as she reads them. **Only her
+   * side's**: an Account that is also a Hirer is party to exchanges this page
+   * has no row for, and they are left to `/sent-offers`.
+   */
+  readonly exchanges: readonly ContactExchange[];
   /** Only decides which empty state she meets: an Offer is addressed to a profile. */
   readonly hasProfile: boolean;
   readonly now: Date;
@@ -35,10 +44,16 @@ export interface LedgerView {
 export async function readLedger(returnPath: string): Promise<LedgerView> {
   const session = await requireAccountPage(returnPath);
 
-  const [received, hasProfile] = await Promise.all([
+  const [received, hasProfile, exchanged] = await Promise.all([
     offers.listReceived(session.accountId),
     profiles.has(session.accountId),
+    exchanges.listForParty(session.accountId),
   ]);
 
-  return { offers: received, hasProfile, now: new Date() };
+  return {
+    offers: received,
+    exchanges: exchanged.filter((exchange) => exchange.side === "worker"),
+    hasProfile,
+    now: new Date(),
+  };
 }

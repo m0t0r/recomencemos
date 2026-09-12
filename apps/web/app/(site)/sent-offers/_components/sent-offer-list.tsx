@@ -10,6 +10,7 @@
  * component.
  */
 
+import type { ContactExchange } from "@repo/domain/exchange";
 import type { SentOffer } from "@repo/domain/offers";
 import { buttonVariants } from "@repo/design-system/components/button-variants";
 import Link from "next/link";
@@ -22,7 +23,14 @@ import {
 } from "../_lib/messages";
 import { SentOfferRow } from "./sent-offer-row";
 
-export function SentOfferList({ offers }: { readonly offers: readonly SentOffer[] }) {
+export function SentOfferList({
+  offers,
+  exchanges,
+}: {
+  readonly offers: readonly SentOffer[];
+  /** The exchanges on his accepted rows, as he reads them. */
+  readonly exchanges: readonly ContactExchange[];
+}) {
   if (offers.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3">
@@ -45,7 +53,11 @@ export function SentOfferList({ offers }: { readonly offers: readonly SentOffer[
       <CountAnnouncement count={offers.length} label={sentOffersCount(offers.length)} />
       <ul className="flex flex-col">
         {offers.map((offer) => (
-          <SentOfferRow key={offer.id} offer={offer} />
+          <SentOfferRow
+            key={offer.id}
+            offer={offer}
+            exchange={exchanges.find((exchange) => exchange.offerId === offer.id)}
+          />
         ))}
       </ul>
     </>
