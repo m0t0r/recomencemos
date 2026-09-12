@@ -196,6 +196,7 @@ describe("the queue's branch", () => {
       requestId: String(request?.id),
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
     });
 
     expect(await readPendingSkillRequests(database.db, 20)).toMatchObject({
@@ -227,6 +228,7 @@ describe("an Admin promotes a request", () => {
       requestId,
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
     });
 
     expect(outcome).toMatchObject({ ok: true });
@@ -243,6 +245,7 @@ describe("an Admin promotes a request", () => {
       requestId,
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
     });
 
     const [audited] = await database.db.select().from(schema.adminAction);
@@ -261,6 +264,7 @@ describe("an Admin promotes a request", () => {
       requestId,
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
     });
 
     const [row] = await everyRequest(database);
@@ -281,6 +285,7 @@ describe("an Admin promotes a request", () => {
       requestId,
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
     });
 
     const [entry] = await database.db
@@ -298,6 +303,7 @@ describe("an Admin promotes a request", () => {
       requestId,
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
       cuocCode: "72330",
     });
 
@@ -307,6 +313,29 @@ describe("an Admin promotes a request", () => {
       .where(eq(schema.skill.slug, "sewing-machine-repair"));
 
     expect(entry?.cuocCode).toBe("72330");
+  });
+
+  /**
+   * **The group is the Admin's choice, and it is kept.** Every entry belongs to
+   * exactly one, and a promoted entry reaches the Hirer's index only through the
+   * one chosen here.
+   */
+  test("files the entry under the group the Admin chose", async ({ database }) => {
+    const requestId = await pending(database);
+
+    await runAdminAction(database.db, actor, "promoteSkill", {
+      requestId,
+      slug: "sewing-machine-repair",
+      labelEs: "Arreglo máquinas de coser",
+      group: "furniture_and_textiles",
+    });
+
+    const [entry] = await database.db
+      .select({ group: schema.skill.group })
+      .from(schema.skill)
+      .where(eq(schema.skill.slug, "sewing-machine-repair"));
+
+    expect(entry?.group).toBe("furniture_and_textiles");
   });
 
   /**
@@ -326,6 +355,7 @@ describe("an Admin promotes a request", () => {
       requestId,
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs" as const,
     };
 
     await runAdminAction(database.db, actor, "promoteSkill", input);
@@ -351,6 +381,7 @@ describe("an Admin promotes a request", () => {
       requestId: "4242",
       slug: "sewing-machine-repair",
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
     });
 
     expect(outcome.ok).toBe(false);
@@ -372,6 +403,7 @@ describe("an Admin promotes a request", () => {
       requestId,
       slug: String(taken?.slug),
       labelEs: "Arreglo máquinas de coser",
+      group: "repairs",
     });
 
     expect(outcome.ok).toBe(false);

@@ -43,6 +43,13 @@ One entry from the platform's fixed vocabulary of human capabilities, chosen by 
 their CapabilityProfile. Spanish UI: _Capacidad_.
 _Avoid_: Tag, category, competency, service
 
+**SkillGroup**:
+One of a closed list of kinds of work that every Skill belongs to exactly one of — _Cocina y
+comida_, _Reparaciones_ — so a Hirer can find someone by the kind of work before he knows the exact
+word for it. Chosen by an Admin when a Skill is promoted; never by a Worker, and never added from a
+form. Spanish UI: _Grupo_.
+_Avoid_: Category, sector, industry, trade
+
 **Offer**:
 A concrete, immutable proposal of paid work sent by one Hirer to one named Worker, which the
 Worker either accepts or rejects. Spanish UI: _Propuesta_.
