@@ -1,7 +1,8 @@
 "use server";
 
 /**
- * `/offers/[id]`'s two actions: accepting and declining.
+ * The ledger's two answers, accepting and declining — posted from an open row
+ * at `/offers` and at `/offers/[id]` alike.
  *
  * **Each authorizes independently** — `accountActionClient` refuses a caller with
  * no session before the boundary parse, because Next compiles each to a directly
@@ -17,10 +18,11 @@
  * **`.stateAction()`, so the form stays a real server action reference** — see
  * `lib/safe-action.ts`.
  *
- * **Success is a redirect back to the Offer**, which then shows its new state on
- * this visit and every later one. An Offer answered already — two tabs, a double
- * tap that beat the lock's loser — redirects the same way with its own sentence,
- * because the true answer is on that page. **Anything else is one returned 404**:
+ * **Success is a redirect to `/offers/<id>`** — the ledger with that row open
+ * and the result announced inside it — which then shows the new state on this
+ * visit and every later one. An Offer answered already — two tabs, a double tap
+ * that beat the lock's loser — redirects the same way with its own sentence,
+ * because the true answer is in that row. **Anything else is one returned 404**:
  * a missing id, an Offer somebody else received, one not let through, one she
  * Reported. One `warn` line, no Sentry event (C51).
  */
@@ -31,7 +33,7 @@ import { logRequestError } from "@repo/observability/log-request-error";
 import { redirect } from "next/navigation";
 import { accountActionClient } from "@/lib/account";
 import { returnActionError } from "@/lib/safe-action";
-import { OFFER_GONE } from "../_lib/messages";
+import { OFFER_GONE } from "./_lib/messages";
 import { acceptInputSchema, answerOfferIdArg, declineInputSchema } from "./_lib/answer-schema";
 
 const OFFER_NOT_ANSWERABLE_CODE = "offer_not_answerable";

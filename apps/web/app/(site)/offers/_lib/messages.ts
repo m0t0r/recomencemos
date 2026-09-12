@@ -1,5 +1,6 @@
 /**
- * Every `es-CO` string `/offers` and `/offers/[id]` render, in one module under
+ * Every `es-CO` string the ledger renders — at `/offers`, and at `/offers/[id]`,
+ * which is the same ledger with one row open — in one module under
  * `docs/policy/voice.md`.
  *
  * Tone is the voice guide's **Reading an Offer (Worker)** row, unchanged:
@@ -24,6 +25,17 @@ export const RECEIVED_OFFERS_LEAD =
   "Una persona lee cada propuesta antes de que te llegue. Tu teléfono no sale de aquí hasta que aceptes una.";
 
 /**
+ * How many still wait on her, under the heading (#271). A count in words and
+ * nothing more — no colour, no badge, no word that means hurry — which is the
+ * voice guide's row for reading an Offer applied to a number.
+ */
+export function waitingCount(count: number): string {
+  if (count === 0) return "Ninguna espera tu respuesta.";
+
+  return count === 1 ? "1 espera tu respuesta." : `${count} esperan tu respuesta.`;
+}
+
+/**
  * Nothing has reached her. **What makes one arrive, and that a person reads it
  * first** — the spec's own `empty` cell, both clauses. A good state rather than
  * an error: nobody has failed at anything.
@@ -46,7 +58,6 @@ export const RECEIVED_OFFERS_NO_PROFILE_LINK = "Publica lo que sabes hacer";
 export const RECEIVED_OFFERS_FAILED_TITLE = "No pudimos cargar tus propuestas";
 export const RECEIVED_OFFERS_FAILED_EXPLANATION =
   "Falló la carga. Nada de lo que respondiste cambió. Vuelve a intentarlo.";
-export const RECEIVED_OFFER_FAILED_TITLE = "No pudimos cargar esta propuesta";
 export const OFFERS_FAILED_RETRY = "Volver a cargar";
 export const OFFERS_FAILED_RETRYING = "Cargando…";
 
@@ -93,32 +104,48 @@ export function offerSentOn(sentAt: Date): string {
   return `Enviada el ${date}`;
 }
 
-/** A row's link. It names its destination — never _aquí_. */
-export const OPEN_OFFER_LINK = "Leer la propuesta";
+const HOUR_MS = 60 * 60 * 1000;
+const RELATIVE = new Intl.RelativeTimeFormat("es-CO", { numeric: "always" });
 
 /**
- * Who claims to be asking. **The absence leads** (Do 2): nothing here verifies
- * anybody, and that sentence is said before the name rather than after it — and
- * whether or not there is a name to say it about.
+ * How long ago he sent it, on the row's first line — the moment `offerSentOn`
+ * names in full once the row is open. The projection carries no delivery time,
+ * and adding one would be a domain change this surface does not need.
+ *
+ * **Elapsed hours, then elapsed days, and never _ayer_.** Thirty hours ago can be
+ * the day before yesterday on the calendar, and a word she can check against her
+ * own memory should be true. A clock running ahead of the server's reads as just
+ * arrived rather than as a negative count.
+ */
+export function sentAgo(sentAt: Date, now: Date): string {
+  const hours = Math.floor(Math.max(0, now.getTime() - sentAt.getTime()) / HOUR_MS);
+
+  if (hours < 1) return "hace menos de una hora";
+  if (hours < 24) return RELATIVE.format(-hours, "hour");
+
+  return RELATIVE.format(-Math.floor(hours / 24), "day");
+}
+
+/**
+ * The name a row leads with, **said as a signature rather than an identity**.
+ * _Firma como_ is true of a person and of a business, and it says the name is
+ * what they signed with rather than what we checked; an Offer with no name says
+ * so rather than rendering a blank. No full stop: it is the row's heading.
+ */
+export function rowSignature(hirerName: string | null): string {
+  return hirerName === null ? "Firma sin nombre" : `Firma como ${hirerName}`;
+}
+
+/**
+ * Who claims to be asking, inside an open row. **The absence leads** (Do 2):
+ * nothing here verifies anybody, and that sentence is said before the name
+ * rather than after it — and whether or not there is a name to say it about.
  */
 export const SENDER_LABEL = "Quien la envía";
 export const SENDER_ABSENCE = "Aquí no verificamos a nadie.";
 export const SENDER_NAMED_NOTE = "Este nombre lo escribió quien envía la propuesta.";
 /** An Offer written before the platform asked senders to name themselves (C4). */
 export const SENDER_UNNAMED = "Quien envía esta propuesta no escribió su nombre.";
-
-/**
- * The name on a row, **said as a claim**. _Firma como_ rather than _se llama_:
- * it is true of a person and of a business, and it says the name is what they
- * signed with rather than what we checked.
- */
-export function senderClaim(hirerName: string | null): string {
-  return hirerName === null ? SENDER_UNNAMED : `Firma como ${hirerName}.`;
-}
-
-export const RECEIVED_OFFER_TITLE = "Propuesta";
-export const RECEIVED_OFFER_HEADING = "Una propuesta de trabajo";
-export const BACK_TO_OFFERS = "Volver a tus propuestas";
 
 /** The answer region's heading, and the two first-step controls — same words, same weight. */
 export const ANSWER_HEADING = "Tu respuesta";
@@ -128,7 +155,7 @@ export const CANCEL = "Volver";
 
 /**
  * **The second step of accepting — voice guide pair 4, and the sentence this
- * whole page is arranged around.** It names the person, the three fields each
+ * whole surface is arranged around.** It names the person, the three fields each
  * way, and the asymmetry: _once he has them, he has them_ is the irreversibility
  * said as a fact about people rather than as a UI constraint.
  *
@@ -152,15 +179,15 @@ export const ACCEPTING = "Aceptando…";
 export const DECLINING = "Guardando tu respuesta…";
 
 /**
- * What she lands on after answering. **Declined stays confirmed rather than
- * vanishing** — the state line says it again on every later visit; this is the
- * sentence announced at the moment it happens.
+ * What she lands on after answering, inside the row she answered. **Declined
+ * stays confirmed rather than vanishing** — the row's state line says it again
+ * on every later visit; this is the sentence announced at the moment it happens.
  */
 export const JUST_ACCEPTED = "Aceptaste esta propuesta.";
 export const JUST_DECLINED =
   "No aceptaste esta propuesta. Quien la envió no recibió ninguno de tus datos.";
 
-/** Two tabs, or a double tap: the page below already shows the answer she gave. */
+/** Two tabs, or a double tap: the row below already shows the answer she gave. */
 export const ALREADY_ANSWERED = "Ya respondiste esta propuesta. Esto es lo que respondiste.";
 
 /**

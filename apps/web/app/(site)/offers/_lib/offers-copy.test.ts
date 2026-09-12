@@ -1,10 +1,11 @@
 /**
- * `/offers` and `/offers/[id]`'s copy, against `docs/policy/voice.md`.
+ * `/offers`' copy, against `docs/policy/voice.md`.
  *
- * Beyond the shared rules `describeSurfaceCopy` holds, these surfaces owe three
+ * Beyond the shared rules `describeSurfaceCopy` holds, this surface owes four
  * things nowhere else does: the confirmation names every field that crosses and
  * that it cannot be undone, the absence of verification is said before the
- * Hirer's name, and nothing on either page nudges her towards an answer.
+ * Hirer's name, a row's name is said as his claim, and nothing on the page
+ * nudges her towards an answer.
  */
 
 import { describeSurfaceCopy } from "@/testing/surface-copy";
@@ -16,7 +17,6 @@ import {
   ACCEPTING,
   ALREADY_ANSWERED,
   ANSWER_HEADING,
-  BACK_TO_OFFERS,
   CANCEL,
   DECLINE,
   DECLINING,
@@ -29,10 +29,6 @@ import {
   offerSentOn,
   OFFERS_FAILED_RETRY,
   OFFERS_FAILED_RETRYING,
-  OPEN_OFFER_LINK,
-  RECEIVED_OFFER_FAILED_TITLE,
-  RECEIVED_OFFER_HEADING,
-  RECEIVED_OFFER_TITLE,
   RECEIVED_OFFERS_EMPTY_BODY,
   RECEIVED_OFFERS_EMPTY_HEADING,
   RECEIVED_OFFERS_EMPTY_LINK,
@@ -45,19 +41,33 @@ import {
   RECEIVED_OFFERS_TITLE,
   RECEIVED_STATE_LABELS,
   RECEIVED_STATE_SENTENCES,
+  sentAgo,
   receivedOffersCount,
+  rowSignature,
   SENDER_ABSENCE,
   SENDER_LABEL,
   SENDER_NAMED_NOTE,
   SENDER_UNNAMED,
-  senderClaim,
+  waitingCount,
 } from "./messages";
+
+const NOW = new Date("2026-09-12T12:00:00Z");
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+function ago(elapsed: number): string {
+  return sentAgo(new Date(NOW.getTime() - elapsed), NOW);
+}
 
 describeSurfaceCopy({
   copy: [
     ["RECEIVED_OFFERS_TITLE", RECEIVED_OFFERS_TITLE],
     ["RECEIVED_OFFERS_HEADING", RECEIVED_OFFERS_HEADING],
     ["RECEIVED_OFFERS_LEAD", RECEIVED_OFFERS_LEAD],
+    ["waitingCount(0)", waitingCount(0)],
+    ["waitingCount(1)", waitingCount(1)],
+    ["waitingCount(4)", waitingCount(4)],
     ["RECEIVED_OFFERS_EMPTY_HEADING", RECEIVED_OFFERS_EMPTY_HEADING],
     ["RECEIVED_OFFERS_EMPTY_BODY", RECEIVED_OFFERS_EMPTY_BODY],
     ["RECEIVED_OFFERS_EMPTY_LINK", RECEIVED_OFFERS_EMPTY_LINK],
@@ -65,24 +75,23 @@ describeSurfaceCopy({
     ["RECEIVED_OFFERS_NO_PROFILE_LINK", RECEIVED_OFFERS_NO_PROFILE_LINK],
     ["RECEIVED_OFFERS_FAILED_TITLE", RECEIVED_OFFERS_FAILED_TITLE],
     ["RECEIVED_OFFERS_FAILED_EXPLANATION", RECEIVED_OFFERS_FAILED_EXPLANATION],
-    ["RECEIVED_OFFER_FAILED_TITLE", RECEIVED_OFFER_FAILED_TITLE],
     ["OFFERS_FAILED_RETRY", OFFERS_FAILED_RETRY],
     ["OFFERS_FAILED_RETRYING", OFFERS_FAILED_RETRYING],
     ["receivedOffersCount(1)", receivedOffersCount(1)],
     ["receivedOffersCount(5)", receivedOffersCount(5)],
+    ["rowSignature(name)", rowSignature("Carlos Restrepo")],
+    ["rowSignature(null)", rowSignature(null)],
+    ["sentAgo(minutes)", ago(20 * MINUTE)],
+    ["sentAgo(hours)", ago(5 * HOUR)],
+    ["sentAgo(days)", ago(9 * DAY)],
     ["OFFER_WORK_LABEL", OFFER_WORK_LABEL],
     ["OFFER_PAY_LABEL", OFFER_PAY_LABEL],
     ["OFFER_WHEN_LABEL", OFFER_WHEN_LABEL],
     ["offerSentOn", offerSentOn(new Date("2026-09-10T12:00:00Z"))],
-    ["OPEN_OFFER_LINK", OPEN_OFFER_LINK],
     ["SENDER_LABEL", SENDER_LABEL],
     ["SENDER_ABSENCE", SENDER_ABSENCE],
     ["SENDER_NAMED_NOTE", SENDER_NAMED_NOTE],
     ["SENDER_UNNAMED", SENDER_UNNAMED],
-    ["senderClaim(name)", senderClaim("Carlos Restrepo")],
-    ["RECEIVED_OFFER_TITLE", RECEIVED_OFFER_TITLE],
-    ["RECEIVED_OFFER_HEADING", RECEIVED_OFFER_HEADING],
-    ["BACK_TO_OFFERS", BACK_TO_OFFERS],
     ["ANSWER_HEADING", ANSWER_HEADING],
     ["ACCEPT", ACCEPT],
     ["DECLINE", DECLINE],
@@ -112,8 +121,6 @@ describeSurfaceCopy({
     ["OFFER_WORK_LABEL", OFFER_WORK_LABEL],
     ["OFFER_PAY_LABEL", OFFER_PAY_LABEL],
     ["OFFER_WHEN_LABEL", OFFER_WHEN_LABEL],
-    ["OPEN_OFFER_LINK", OPEN_OFFER_LINK],
-    ["BACK_TO_OFFERS", BACK_TO_OFFERS],
     ["ACCEPT", ACCEPT],
     ["DECLINE", DECLINE],
     ["CANCEL", CANCEL],
@@ -161,18 +168,55 @@ describe("who claims to be asking", () => {
     expect(SENDER_ABSENCE).toBe("Aquí no verificamos a nadie.");
   });
 
-  it("says a name is a claim rather than a fact", () => {
-    expect(senderClaim("Panadería La Treinta")).toBe("Firma como Panadería La Treinta.");
-    expect(senderClaim(null)).toBe(SENDER_UNNAMED);
+  /**
+   * A row leads with the name, so the name is said as what he signed with —
+   * and an Offer with no name says so rather than rendering a blank.
+   */
+  it("says a row's name is his signature rather than a fact", () => {
+    expect(rowSignature("Panadería La Treinta")).toBe("Firma como Panadería La Treinta");
+    expect(rowSignature(null)).toBe("Firma sin nombre");
   });
 });
 
-describe("what these pages never do", () => {
-  /** Nothing nudges: no exclamation mark on either surface, success included. */
+describe("how long ago an Offer arrived", () => {
+  it("says under an hour rather than a count of minutes", () => {
+    expect(ago(20 * MINUTE)).toBe("hace menos de una hora");
+  });
+
+  it("counts hours within the first day", () => {
+    expect(ago(HOUR)).toBe("hace 1 hora");
+    expect(ago(5 * HOUR)).toBe("hace 5 horas");
+  });
+
+  /**
+   * Whole days elapsed, and never _ayer_: thirty hours ago can be the day before
+   * yesterday on the calendar, and a word she can check should be true.
+   */
+  it("counts whole days after that, never a calendar word", () => {
+    expect(ago(30 * HOUR)).toBe("hace 1 día");
+    expect(ago(9 * DAY)).toBe("hace 9 días");
+  });
+
+  it("reads a sent time ahead of the server's clock as just arrived", () => {
+    expect(ago(-5 * MINUTE)).toBe("hace menos de una hora");
+  });
+});
+
+describe("the count still waiting on her", () => {
+  it("agrees in number, and says none plainly", () => {
+    expect(waitingCount(0)).toBe("Ninguna espera tu respuesta.");
+    expect(waitingCount(1)).toBe("1 espera tu respuesta.");
+    expect(waitingCount(4)).toBe("4 esperan tu respuesta.");
+  });
+});
+
+describe("what this page never does", () => {
+  /** Nothing nudges: no exclamation mark anywhere, success included. */
   it("carries no exclamation mark", () => {
     const every = [
       RECEIVED_OFFERS_LEAD,
       RECEIVED_OFFERS_EMPTY_HEADING,
+      waitingCount(3),
       JUST_ACCEPTED,
       JUST_DECLINED,
       ...Object.values(RECEIVED_STATE_LABELS),

@@ -1,10 +1,11 @@
 /**
- * The list itself: every Offer that has reached her, newest first, or the empty
- * state.
+ * Every Offer that has reached her, newest first, as ruled rows in one
+ * notebook — or the empty state (#271, the UX lab's variant A, _El cuaderno_).
  *
- * **One list, not a waiting pile above an answered one** (`/prototype`, variant
- * A, picked 2026-09-10). Each row says where it stands in words, so sorting them
- * into sections would only be the platform deciding which of her Offers matter.
+ * **One list, not a waiting pile above an answered one.** Each row says where it
+ * stands in words, so sorting them into sections would only be the platform
+ * deciding which of her Offers matter. An answered row stays, saying what she
+ * answered: a decision she made is one she can come back and read.
  *
  * **The empty state says what makes an Offer arrive and that a person reads each
  * one first** — both clauses of the spec's cell — and routes to the thing an
@@ -16,9 +17,9 @@
  */
 
 import { buttonVariants } from "@repo/design-system/components/button-variants";
-import type { ReceivedOffer } from "@repo/domain/offers";
 import Link from "next/link";
 import { CountAnnouncement } from "@/app/(site)/_components/profile-list/count-announcement";
+import type { LedgerView } from "../_lib/ledger";
 import {
   RECEIVED_OFFERS_EMPTY_BODY,
   RECEIVED_OFFERS_EMPTY_HEADING,
@@ -27,15 +28,9 @@ import {
   RECEIVED_OFFERS_NO_PROFILE_LINK,
   receivedOffersCount,
 } from "../_lib/messages";
-import { ReceivedOfferRow } from "./received-offer-row";
+import { LedgerRow } from "./ledger-row";
 
-export function ReceivedOfferList({
-  offers,
-  hasProfile,
-}: {
-  readonly offers: readonly ReceivedOffer[];
-  readonly hasProfile: boolean;
-}) {
+export function ReceivedOffersLedger({ offers, hasProfile, now, openId, arrival }: LedgerView) {
   if (offers.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3">
@@ -61,10 +56,21 @@ export function ReceivedOfferList({
         Component and a function cannot cross that boundary.
       */}
       <CountAnnouncement count={offers.length} label={receivedOffersCount(offers.length)} />
-      <ul className="flex flex-col">
-        {offers.map((offer) => (
-          <ReceivedOfferRow key={offer.id} offer={offer} />
-        ))}
+      {/* `DESIGN.md` → Layout: every list is a ruled page, rows divided by the ruling. */}
+      <ul className="ruled-page">
+        {offers.map((offer) => {
+          const open = offer.id === openId;
+
+          return (
+            <LedgerRow
+              key={offer.id}
+              offer={offer}
+              now={now}
+              open={open}
+              arrival={open ? arrival : undefined}
+            />
+          );
+        })}
       </ul>
     </>
   );
