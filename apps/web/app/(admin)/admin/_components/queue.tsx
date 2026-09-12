@@ -88,9 +88,8 @@ export function QueueEmpty() {
  * A source that failed, **named**.
  *
  * _"A source failed: say which, because a silently missing source is an unreviewed
- * Offer."_ The name is the requirement. In one list it matters more than it did
- * with a route per source: the rows that did arrive fill the screen, and nothing
- * else says a branch is missing from among them.
+ * Offer."_ The name is the requirement: in one list the rows that did arrive
+ * fill the screen, and nothing else says a branch is missing from among them.
  *
  * **`Alert` from the registry**, which is also where its `role="alert"` comes
  * from — and here that role is kept rather than overridden, unlike every other

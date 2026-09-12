@@ -20,8 +20,8 @@
  *
  * **Focus follows `use-queue-row.ts`, like every other row's.** A decision that
  * lands hands the keyboard to the next row still waiting; a refusal, or the last
- * row, keeps it on the outcome. This row carried its own copy of that effect
- * until the one table (#277) needed every row to hand on the same way.
+ * row, keeps it on the outcome. Focus handed *to* this row lands on the line
+ * saying how long it has waited — text an Admin reads, never a control.
  */
 
 import { Button } from "@repo/design-system/components/button";
@@ -137,7 +137,18 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
         />
       ) : null}
 
-      <FieldDescription>{item.summary}</FieldDescription>
+      {/*
+        **Where focus lands when the table hands the keyboard to this row** —
+        the one line of text the row has, so the keyboard arrives on something to
+        read rather than one press away from publishing or deleting a photo.
+      */}
+      <FieldDescription
+        tabIndex={-1}
+        data-queue-anchor=""
+        className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
+      >
+        {item.summary}
+      </FieldDescription>
 
       {/*
         **Said before it is pressed, not after.** Rejecting deletes the object

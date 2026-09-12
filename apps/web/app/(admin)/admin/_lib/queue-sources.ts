@@ -2,11 +2,11 @@
  * The queue's five sources, as a registry the one list is merged from and each
  * source ticket plugs into.
  *
- * **One list, oldest first, across every source** — the shape the UX lab chose
- * in #277, replacing #96's sidebar with a route per concern. What the registry
- * still buys is that a source is independently buildable: the page already knows
- * how to count a branch, age it, mark it late, merge it and say it is missing, so
- * a source arrives by gaining a `load` and nothing else.
+ * **One list, oldest first, across every source** (#277), so nothing old waits
+ * behind a source nobody opened. What the registry buys is that a source is
+ * independently buildable: the page already knows how to count a branch, age it,
+ * mark it late, merge it and say it is missing, so a source arrives by gaining a
+ * `load` and nothing else.
  *
  * **No `import "server-only"`, and that is ADR-0013's table applied rather than
  * skipped.** Mechanism 2 is for a module that is Next-only; this one holds types,
@@ -148,19 +148,19 @@ export interface QueueSource {
    */
   readonly label: string;
   /**
-   * The hours this section's oldest item may reach before it is late, or `null`
+   * The hours an item from this source may wait before it is late, or `null`
    * where nothing states one.
    *
    * **Only Offers have a band, and inventing one for the other four would be a
    * spec amendment.** NFR7 states a single number and states it per Offer;
    * `.impeccable/briefs/admin-queue.md` says the rest of it in as many words —
-   * _"a Report or a Skill request has no equivalent clock"_. A section with no
+   * _"a Report or a Skill request has no equivalent clock"_. A source with no
    * band is never marked late, which is the honest answer rather than a lenient
    * one.
    */
   readonly bandHours: number | null;
   /**
-   * How this section reads its branch, or **absent** while the story that
+   * How this source reads its branch, or **absent** while the story that
    * creates its table has not landed. Absence is rendered as absence; see the
    * class comment.
    */
@@ -170,11 +170,10 @@ export interface QueueSource {
 /**
  * The five, in the order the filter offers them.
  *
- * **This order no longer decides what an Admin sees first** — the list is
- * ordered by arrival across all five, so an old photo sits above a new Offer
- * rather than behind a section nobody opened. Offers still lead the filter,
- * because they are the only branch with a deadline attached: NFR7's band is per
- * Offer.
+ * **This order is not what an Admin sees first** — the list is ordered by
+ * arrival across all five, so an old photo sits above a new Offer. This is only
+ * the filter's order, and Offers lead it because they are the only branch with a
+ * deadline attached: NFR7's band is per Offer.
  *
  * A sixth source is a spec amendment, not a ticket — the same rule the four
  * signals are held to.
@@ -307,14 +306,33 @@ export const QUEUE_SOURCES: readonly QueueSource[] = [
  * `server-only` and the merge below is pure — the arithmetic is tested at
  * `web:test`, where a `server-only` import would throw.
  */
-export type SectionState =
+export type SourceState =
   | { readonly status: "absent" }
   | { readonly status: "loaded"; readonly branch: QueueBranch }
   | { readonly status: "failed" };
 
+/** One source and what it answered — what every figure on the page is computed from. */
+export interface SettledSource {
+  readonly source: QueueSource;
+  readonly state: SourceState;
+}
+
 /** The branches that answered, for the figures computed across all of them. */
-export function branchesThatLoaded(states: readonly SectionState[]): readonly QueueBranch[] {
-  return states.filter((state) => state.status === "loaded").map((state) => state.branch);
+function branchesThatLoaded(sources: readonly SettledSource[]): readonly QueueBranch[] {
+  return sources.flatMap(({ state }) => (state.status === "loaded" ? [state.branch] : []));
+}
+
+/**
+ * Whether an item of this age has reached its source's band.
+ *
+ * **`false` where there is no band** — nothing is late against a clock nobody
+ * set, which is why the marker cannot appear on a source whose band nothing
+ * states. The comparison is `>=` on whole hours: an item that has reached the
+ * band has reached it, and a detector that waited for the twenty-fifth hour would
+ * report green for the whole of the hour the requirement is about.
+ */
+export function isLate(ageHours: number, bandHours: number | null): boolean {
+  return bandHours !== null && ageHours >= bandHours;
 }
 
 /**
@@ -343,9 +361,9 @@ export interface QueueRow {
 }
 
 /**
- * Every source that answered, as one list, **oldest first** — the whole of what
- * the owner chose in the UX lab (#277, variant A): nothing old hides behind a
- * section nobody opened, because there are no sections to open.
+ * Every source that answered, as one list, **oldest first** (#277): nothing old
+ * hides behind a source nobody opened, because nothing has to be opened to see
+ * it.
  *
  * **Each branch is still capped for display (C55)**, so the merge is of the
  * oldest few of each rather than of everything waiting. That is honest about
@@ -359,11 +377,8 @@ export interface QueueRow {
  * Ties break on the key, so two items that arrived in the same millisecond render
  * in the same order on every load rather than trading places under the cursor.
  */
-export function queueRows(
-  sections: readonly { readonly source: QueueSource; readonly state: SectionState }[],
-  now: Date,
-): readonly QueueRow[] {
-  return sections
+export function queueRows(sources: readonly SettledSource[], now: Date): readonly QueueRow[] {
+  return sources
     .flatMap(({ source, state }) =>
       state.status === "loaded"
         ? state.branch.items.map((item) => {
@@ -374,9 +389,7 @@ export function queueRows(
               sourceKey: source.key,
               sourceLabel: source.label,
               ageHours,
-              // `>=` for `isPastBand`'s reason: an item that has reached the band
-              // has reached it.
-              late: source.bandHours !== null && ageHours >= source.bandHours,
+              late: isLate(ageHours, source.bandHours),
               item,
             };
           })
@@ -398,12 +411,57 @@ export function waitingAcross(branches: readonly QueueBranch[]): number {
   return branches.reduce((sum, branch) => sum + branch.total, 0);
 }
 
+/** One option of the source filter: the whole branch's count (C55), not the rows shown. */
+export interface QueueFilter {
+  readonly key: string;
+  readonly label: string;
+  readonly total: number;
+}
+
+/** Everything the page and its shell show about the queue. */
+export interface QueueView {
+  readonly rows: readonly QueueRow[];
+  /** Over every whole branch that answered (C55). */
+  readonly waiting: number;
+  /** NFR7's number, over every whole branch that answered. */
+  readonly oldestHours: number;
+  /** The sources that failed, each to be named. */
+  readonly failed: readonly QueueSource[];
+  /** The sources with something waiting, in filter order. */
+  readonly filters: readonly QueueFilter[];
+}
+
+/**
+ * The queue, computed once from what every source answered and one clock
+ * reading — so the shell's headline, the page's "shown of waiting" line and the
+ * list cannot disagree about either.
+ *
+ * **Every figure is over whole branches**, never over the rows that render (C55).
+ * A source with no resolver is in none of them and is named by the coverage line;
+ * a source that failed is in none of them and is named here, for its own card.
+ */
+export function queueView(sources: readonly SettledSource[], now: Date): QueueView {
+  const branches = branchesThatLoaded(sources);
+
+  return {
+    rows: queueRows(sources, now),
+    waiting: waitingAcross(branches),
+    oldestHours: oldestAgeInHours(branches, now),
+    failed: sources.flatMap(({ source, state }) => (state.status === "failed" ? [source] : [])),
+    filters: sources.flatMap(({ source, state }) =>
+      state.status === "loaded" && state.branch.total > 0
+        ? [{ key: source.key, label: source.label, total: state.branch.total }]
+        : [],
+    ),
+  };
+}
+
 /** The sources that have a resolver, in filter order. */
 export function liveSources(): readonly QueueSource[] {
   return QUEUE_SOURCES.filter((source) => source.load !== undefined);
 }
 
-/** The sections that do not, in nav order. */
+/** The sources that do not, in filter order. */
 export function pendingSources(): readonly QueueSource[] {
   return QUEUE_SOURCES.filter((source) => source.load === undefined);
 }
@@ -484,23 +542,4 @@ export function oldestAgeInHours(branches: readonly QueueBranch[], now: Date): n
   if (!oldest) return 0;
 
   return ageInHours(oldest, now);
-}
-
-/**
- * Whether this section's oldest item has passed the band it is held to.
- *
- * **`false` where there is no band and `false` where there is nothing waiting**,
- * and the two are the same answer for different reasons — nothing is late against
- * a clock nobody set, and an empty branch has nothing to be late. Only a section
- * with both a band and an item can be marked, which is why the marker cannot
- * appear on the four sections whose stories have not landed.
- *
- * The comparison is `>=` on whole hours: an item that has reached the band has
- * reached it, and a detector that waited for the twenty-fifth hour would report
- * green for the whole of the hour the requirement is about.
- */
-export function isPastBand(branch: QueueBranch, bandHours: number | null, now: Date): boolean {
-  if (bandHours === null || branch.oldestArrivedAt === null) return false;
-
-  return ageInHours(branch.oldestArrivedAt, now) >= bandHours;
 }

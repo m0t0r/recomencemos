@@ -87,10 +87,10 @@ describe("the empty queue", () => {
    * The empty state states the age as zero, which the acceptance criterion asks
    * for outright: _"a real and good state, saying the oldest-item age is zero"_.
    *
-   * **The not-live sentence this used to be paired with left with the sections**
-   * (#277). A source with no resolver has no section to stand in any more; the
-   * coverage line above is what says it is not counting, and it states no figure
-   * for it — which is the case above that keeps a zero from being added.
+   * **A source with no resolver is not the empty state**, and it has no card of
+   * its own: the coverage line above says it is not counting and states no figure
+   * for it, which is what keeps a zero from being reported for a branch nobody
+   * asked.
    */
   it("states the age as zero when nothing is waiting", () => {
     expect(QUEUE_EMPTY_BODY).toContain("0 h");

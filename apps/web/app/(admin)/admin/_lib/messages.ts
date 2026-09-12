@@ -132,11 +132,10 @@ export const KEYS_SCOPE = "Funcionan con el foco en la lista, nunca mientras esc
 export const KEYS_NOT_FOR_SKILLS = "Las capacidades pedidas se deciden con su formulario.";
 
 /**
- * The filter that replaced the five routes.
+ * The source filter.
  *
- * **It opens on everything**, and narrowing is a choice the Admin makes and
- * can see in the control — the opposite of a route per source, where the
- * narrowing was the default and the rest of the queue was a click away.
+ * **It opens on everything**, and narrowing is a choice the Admin makes and can
+ * see in the control; the headline beside it always measures the whole queue.
  */
 export const FILTER_LABEL = "Mostrar";
 export const FILTER_ALL = "Todo";

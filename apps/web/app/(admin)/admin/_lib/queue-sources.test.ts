@@ -15,7 +15,7 @@
 
 import { OFFER_WORKER_PROFILE_FIELD, workerPausedSince } from "./messages";
 import {
-  isPastBand,
+  isLate,
   liveSources,
   oldestAgeInHours,
   pendingSources,
@@ -24,7 +24,8 @@ import {
   type QueueItem,
   queueRows,
   type QueueSource,
-  type SectionState,
+  queueView,
+  type SourceState,
   waitingAcross,
 } from "./queue-sources";
 
@@ -60,7 +61,7 @@ const aSource = (key: string, bandHours: number | null = null): QueueSource => (
   bandHours,
 });
 
-const loaded = (items: readonly QueueItem[], total = items.length): SectionState => ({
+const loaded = (items: readonly QueueItem[], total = items.length): SourceState => ({
   status: "loaded",
   branch: {
     items,
@@ -132,7 +133,7 @@ describe("queueRows", () => {
 
   /**
    * **Late is the row's own source's band, and only Offers have one.** A photo
-   * four hundred hours old is not marked, for the reason `isPastBand` records:
+   * four hundred hours old is not marked, for the reason `isLate` records:
    * nothing is late against a clock nobody set.
    */
   it("marks a row late against its own source's band", () => {
@@ -149,6 +150,32 @@ describe("queueRows", () => {
       late: true,
       fine: false,
     });
+  });
+});
+
+describe("queueView", () => {
+  /**
+   * **One computation for the headline, the failure cards and the filter**, over
+   * whole branches (C55): an Offer branch capped to one rendered row still counts
+   * all 412, a failed source is named rather than counted, a source nobody can
+   * ask contributes nothing, and a branch with nothing waiting offers no filter.
+   */
+  it("measures whole branches and names what failed", () => {
+    const view = queueView(
+      [
+        { source: aSource("offers", 24), state: loaded([anItem("o1", 30)], 412) },
+        { source: aSource("photos"), state: { status: "failed" } },
+        { source: aSource("reports"), state: { status: "absent" } },
+        { source: aSource("skillRequests"), state: loaded([], 0) },
+      ],
+      NOW,
+    );
+
+    expect(view.waiting).toBe(412);
+    expect(view.oldestHours).toBe(30);
+    expect(view.rows.map((row) => row.item.id)).toEqual(["o1"]);
+    expect(view.failed.map((source) => source.key)).toEqual(["photos"]);
+    expect(view.filters).toEqual([{ key: "offers", label: "Fuente offers", total: 412 }]);
   });
 });
 
@@ -223,17 +250,15 @@ describe("oldestAgeInHours", () => {
 });
 
 describe("the band", () => {
-  const late = (hours: number): QueueBranch => branch(new Date(NOW.getTime() - hours * 3_600_000));
-
   /**
    * **Only Offers have a band, and inventing one for the other four would be a
    * spec amendment.** NFR7 states one number and states it per Offer; the surface
    * brief says the rest of it — a Report or a Skill request has no equivalent
-   * clock. A section with no band is never marked, which is the honest answer
+   * clock. An item held to no band is never marked, which is the honest answer
    * rather than a lenient one.
    */
-  it("never marks a section that is held to no band", () => {
-    expect(isPastBand(late(400), null, NOW)).toBe(false);
+  it("never marks an item held to no band", () => {
+    expect(isLate(400, null)).toBe(false);
   });
 
   /**
@@ -241,15 +266,10 @@ describe("the band", () => {
    * detector that waited for the twenty-fifth hour would report green for the
    * whole of the hour the requirement is about.
    */
-  it("marks a section whose oldest item has reached the band", () => {
-    expect(isPastBand(late(24), 24, NOW)).toBe(true);
-    expect(isPastBand(late(23), 24, NOW)).toBe(false);
-    expect(isPastBand(late(48), 24, NOW)).toBe(true);
-  });
-
-  /** Nothing is late when nothing is waiting. */
-  it("never marks a section with nothing in it", () => {
-    expect(isPastBand(branch(null, 0), 24, NOW)).toBe(false);
+  it("marks an item that has reached the band", () => {
+    expect(isLate(24, 24)).toBe(true);
+    expect(isLate(23, 24)).toBe(false);
+    expect(isLate(48, 24)).toBe(true);
   });
 });
 

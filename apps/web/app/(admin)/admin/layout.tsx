@@ -2,12 +2,9 @@
  * The Admin queue's shell: the gate, the one figure that says how today is
  * going, and the two notices that are about the queue rather than about a row.
  *
- * **There is no sidebar any more, and the reason is the list rather than the
- * chrome** (#277). #96 put five sections behind a nav with a count on each, which
- * the brief itself called load-bearing: with five routes, the oldest item could
- * hide behind a section nobody opened. The UX lab compared that against one list,
- * oldest first, and the list won — so there is nothing left to navigate between,
- * and the counts collapse into the one headline below.
+ * **No nav, because there is nothing to navigate between.** The queue is one list
+ * across every source (#277), so the counts a nav would carry are the one
+ * headline below, and the one tool is a link in the header.
  *
  * **The gate is here, and it is also in front of every read.** NFR14 asks for one
  * answer for every caller that is not an authenticated Admin, enforced once and
@@ -31,8 +28,8 @@ import { requireAdminPage } from "@/lib/admin";
 import { QueueHeadline, QueueHeadlineSkeleton } from "./_components/queue";
 import { Coverage, PublishRateSignal } from "./_components/shell-notices";
 import { ADMIN_TITLE, SESSIONS_HEADING } from "./_lib/messages";
-import { settleEverySection } from "./_lib/queue-data";
-import { branchesThatLoaded, oldestAgeInHours, waitingAcross } from "./_lib/queue-sources";
+import { requestNow, settleEverySource } from "./_lib/queue-data";
+import { queueView } from "./_lib/queue-sources";
 
 /**
  * **`[block]` from Cache Components' own menu, and the right third of that menu
@@ -70,21 +67,15 @@ export const instant = false;
  * says whether today is an ordinary day, and it is a minimum and a sum over every
  * branch, so it cannot stream per source.
  *
- * **Both are computed over whole branches (C55)**, never over the rows the list
- * renders — `loadSection` is `cache`d per request, so this and the page's list are
- * one query per source between them.
- *
- * A source that failed or has no resolver is absent from the arithmetic — the
- * failure card and the coverage line are what say so out loud, and a figure
- * computed over the sources that answered is more use than no figure at all.
+ * **Computed by the same `queueView` from the same reads and the same clock as
+ * the page's list** — `loadSource` and `requestNow` are both `cache`d per request
+ * — so the headline and the rows beneath it cannot disagree, and both figures are
+ * over whole branches (C55), never over the rows the list renders.
  */
-async function Headline({ now }: { now: Date }) {
-  const settled = await settleEverySection();
-  const branches = branchesThatLoaded(settled.map(({ state }) => state));
+async function Headline() {
+  const view = queueView(await settleEverySource(), requestNow());
 
-  return (
-    <QueueHeadline hours={oldestAgeInHours(branches, now)} waiting={waitingAcross(branches)} />
-  );
+  return <QueueHeadline hours={view.oldestHours} waiting={view.waiting} />;
 }
 
 export default async function AdminQueueLayout({
@@ -100,13 +91,6 @@ export default async function AdminQueueLayout({
    */
   await requireAdminPage();
 
-  /**
-   * **One clock reading for the shell.** Reading it here is safe because
-   * `requireAdminPage` has already made this render dynamic; a clock read on a
-   * prerendered path fails the build with `blocking-prerender-current-time`.
-   */
-  const now = new Date();
-
   return (
     <div className="flex min-w-0 flex-col">
       <div className="border-border bg-background border-b">
@@ -116,9 +100,9 @@ export default async function AdminQueueLayout({
           </h1>
 
           {/*
-            **The one tool, reached from the header now that there is no nav to
-            hold it.** It is a tool rather than a backlog, so it is never a row in
-            the list — a control sitting inside an instrument.
+            **The one tool, in the header.** It is a tool rather than a backlog —
+            nothing accumulates there — so it is never a row in the list, where it
+            would be a control sitting inside an instrument.
           */}
           <Link
             href="/admin/sessions"
@@ -135,7 +119,7 @@ export default async function AdminQueueLayout({
           */}
           <div className="ml-auto">
             <Suspense fallback={<QueueHeadlineSkeleton />}>
-              <Headline now={now} />
+              <Headline />
             </Suspense>
           </div>
         </div>
@@ -148,9 +132,12 @@ export default async function AdminQueueLayout({
           No fallback: this renders one notice or nothing, and a skeleton for
           "possibly nothing" is a shape that would appear and vanish on every
           load where the rate is ordinary — which is every ordinary day.
+
+          The clock is read here, after the gate, so the read is on the request
+          path rather than a prerendered one.
         */}
         <Suspense fallback={null}>
-          <PublishRateSignal now={now} />
+          <PublishRateSignal now={requestNow()} />
         </Suspense>
 
         {children}
