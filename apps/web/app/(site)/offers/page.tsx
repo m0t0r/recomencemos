@@ -14,17 +14,53 @@
  */
 
 import type { Metadata } from "next";
+import * as React from "react";
 import { StandingNotices } from "@/app/_components/notices/standing-notices";
 import { ReceivedOffersFrame } from "./_components/received-offers-frame";
 import { readLedger } from "./_lib/ledger";
 import { RECEIVED_OFFERS_TITLE } from "./_lib/messages";
+import { MailboxLab, VARIANTS } from "./_prototype/lab";
+import { readMailbox } from "./_prototype/mailbox-data";
+import { pickVariant } from "./_prototype/variant";
 
 export const metadata: Metadata = {
   title: RECEIVED_OFFERS_TITLE,
   robots: { index: false, follow: false },
 };
 
-export default function ReceivedOffersPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+/** PROTOTYPE — `?variant=` swaps in the merged-mailbox lab; no parameter is production. */
+async function PrototypeGate({ searchParams }: { readonly searchParams: SearchParams }) {
+  const params = await searchParams;
+  const variant = pickVariant(params.variant, VARIANTS);
+  if (!variant) return <ProductionPage />;
+
+  return (
+    <MailboxLab
+      variant={variant}
+      mailbox={await readMailbox()}
+      params={{ box: one(params.box), open: one(params.open) }}
+      notices={<StandingNotices treatment="disclosure" />}
+    />
+  );
+}
+
+export default function ReceivedOffersPage({
+  searchParams,
+}: {
+  readonly searchParams: SearchParams;
+}) {
+  return (
+    <React.Suspense fallback={null}>
+      <PrototypeGate searchParams={searchParams} />
+    </React.Suspense>
+  );
+}
+
+function ProductionPage() {
   return (
     <ReceivedOffersFrame
       // Not awaited: both boundaries in the frame resolve this one read.
