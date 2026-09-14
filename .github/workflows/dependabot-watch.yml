@@ -1,0 +1,76 @@
+# The watch on Dependabot, because Dependabot does not report its own failures.
+#
+# An update job that fails opens no pull request and notifies nobody: it is a
+# red run under the `dynamic` event in the Actions tab, which nobody reads
+# unprompted. After the move to pnpm 12 every npm job failed that way for a
+# week, and what surfaced it was a person noticing that no pull request had
+# arrived. `.github/dependabot.yml` records why those jobs fail; this is what
+# makes the next failure an issue on the day it happens instead.
+#
+# **It routes a failure the way every machine finding here is routed** -- a
+# `needs-triage` issue (`docs/adr/0001-findings-enter-through-triage.md`),
+# edited in place while the set of failing ecosystems changes, closed by the
+# first run that finds every ecosystem healthy, and never re-filed over a
+# person's dismissal of the same episode. That lifecycle and the reading of the
+# runs are `scripts/findings.mjs dependabot`, driven case by case in
+# `.claude/hooks/tests/findings.sh` with `gh` stubbed; this file is the wiring
+# (`docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md`).
+#
+# **It reads the runs, not the Dependabot API.** The default `GITHUB_TOKEN` can
+# never read Dependabot alerts or its update-job logs, but Dependabot's jobs are
+# ordinary workflow runs, and `actions: read` lists those. So this needs no
+# stored credential -- the reason `security-audit.yml` reads `pnpm audit`
+# rather than the alerts API is the same one.
+#
+# **A scheduled workflow is disabled after 60 days with no commits**, the one
+# way `security-audit.yml` can die quietly too. A repository with Dependabot
+# proposing weekly updates will not go that long, but a watch that has itself
+# gone quiet is worth checking first if Dependabot seems silent again.
+name: dependabot-watch
+
+on:
+  # Daily, though Dependabot runs weekly: a job re-run by hand, or one triggered
+  # by an edit to `dependabot.yml`, lands on any day, and a daily read closes
+  # the issue the day a fix works rather than up to a week later. A healthy run
+  # opens nothing and comments nothing.
+  #
+  # 11:30 UTC is 06:30 in America/Bogota -- half an hour after Dependabot's own
+  # Monday 06:00, so a Monday failure is read the same morning. Colombia keeps no
+  # daylight saving, so this does not drift.
+  schedule:
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+
+# Read the runs, write an issue, and nothing else.
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+# Two overlapping runs could each read "no open issue" and each file one.
+concurrency:
+  group: dependabot-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      # The checkout is for the script and for `.github/dependabot.yml`, which is
+      # where the watched ecosystems are read from.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # No `pnpm install`: the script imports nothing outside Node's standard
+      # library and shells out to `gh`, which the runner already has.
+      - name: Read Dependabot's jobs and route a failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/findings.mjs dependabot
