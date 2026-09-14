@@ -48,7 +48,7 @@ The development database is separate, because it is the one thing here that need
 
 ```sh
 cp apps/web/.env.example apps/web/.env.local   # once
-pnpm db:up        # postgres on :5432, pgbouncer on :6432, waits for both to be healthy
+pnpm db:up        # postgres :5432, pgbouncer :6432, minio :9000; waits, then creates the buckets
 pnpm db:down      # stop; the data volume survives
 pnpm db:reset     # stop and discard the volume
 pnpm db:migrate   # apply the committed migrations on the direct connection

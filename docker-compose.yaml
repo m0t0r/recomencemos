@@ -177,6 +177,21 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    # **Behind a profile, so `docker compose up --wait` never starts it.**
+    # `--wait` reports any container that stops as a failure, exit code 0
+    # included, unless another service depends on it with
+    # `service_completed_successfully` — and nothing does, because nothing in
+    # this file is the app. Measured on Compose v5.5.1: every `pnpm db:up`
+    # exited 1 with `container recomencemos-minio-init-1 exited (0)` while all
+    # three servers were healthy and both buckets were set. `pnpm db:up` runs
+    # this with `docker compose run --rm minio-init` instead, which targets the
+    # service by name (so the profile needs no `--profile`) and returns the
+    # container's own exit code. A bare `docker compose up` therefore creates no
+    # buckets — use `pnpm db:up`. `pnpm db:down` and `db:reset` pass
+    # `--profile init` for the other direction: `down` skips a service whose
+    # profile is inactive, so a `minio-init-1` left by an earlier `up` would
+    # outlive it and hold the network open.
+    profiles: ["init"]
     # `--ignore-existing` and `anonymous set` are both idempotent, so this is
     # safe to re-run on every `pnpm db:up` rather than only on a fresh volume.
     #
