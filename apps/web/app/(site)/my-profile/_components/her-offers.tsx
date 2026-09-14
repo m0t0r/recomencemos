@@ -93,7 +93,8 @@ export function HerOffers({ offers }: { readonly offers: readonly ReceivedOffer[
 
         {/* One link for the section: a row is text, so the keyboard is not made to walk every row. */}
         <Link
-          href="/offers"
+          // Her received folder: the summary is the received half, so its link is too.
+          href="/offers?box=received"
           className={buttonVariants({
             variant: waiting.length > 0 ? "default" : "outline",
             size: "sm",

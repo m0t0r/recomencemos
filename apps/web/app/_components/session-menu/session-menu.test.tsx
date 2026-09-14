@@ -39,7 +39,7 @@ const { signOut, signOutAdmin } = vi.hoisted(() => ({
 vi.mock("./actions", () => ({ signOut, signOutAdmin }));
 
 import { SessionMenu } from "./session-menu";
-import { ACCOUNT, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
+import { ACCOUNT, OFFERS, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
 import { SIGN_OUT_FORM_ID } from "./slots";
 
 const EMAIL = "maria.restrepo@gmail.com";
@@ -123,6 +123,23 @@ describe("the signed-in trigger", () => {
     await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
 
     expect(screen.getByRole("menuitem", { name: label })).toHaveAttribute("href", href);
+  });
+
+  /**
+   * **One row for every Offer, both directions**, so a person who both receives
+   * and sends has one place to look. The count is the assertion, and the `href`
+   * is what rots.
+   */
+  it("carries one Offers row, pointing at /offers", async () => {
+    const user = userEvent.setup();
+    render(<SessionMenu {...SITE_PROPS} offersHref="/offers" />);
+
+    await user.click(screen.getByRole("button", { name: sessionMenuLabel(EMAIL) }));
+
+    const rows = screen.getAllByRole("menuitem", { name: /propuestas/iu });
+
+    expect(rows).toHaveLength(1);
+    expect(screen.getByRole("menuitem", { name: OFFERS })).toHaveAttribute("href", "/offers");
   });
 
   it("omits the profile row when none is given", async () => {

@@ -44,18 +44,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@repo/design-system/components/dropdown-menu";
-import { IdCardIcon, InboxIcon, LogOutIcon, SendIcon, UserRoundIcon } from "lucide-react";
+import { IdCardIcon, InboxIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 import type { signOut } from "./actions";
-import {
-  ACCOUNT,
-  RECEIVED_OFFERS,
-  SENT_OFFERS,
-  SIGN_OUT,
-  SIGNED_IN_AS,
-  sessionMenuLabel,
-} from "./messages";
+import { ACCOUNT, OFFERS, SIGN_OUT, SIGNED_IN_AS, sessionMenuLabel } from "./messages";
 import { SESSION_MENU_FALLBACK_SLOT, SESSION_MENU_SLOT, SIGN_OUT_FORM_ID } from "./slots";
 
 /**
@@ -110,26 +103,20 @@ export interface SessionMenuProps {
    */
   readonly accountHref?: string;
   /**
-   * Where "Propuestas que enviaste" goes, or **absent to omit the row**.
+   * Where "Tus propuestas" goes, or **absent to omit the row**.
    *
    * A prop for `accountHref`'s reason rather than a second component: the row is
    * `(site)`'s and not `(admin)`'s, because these are the Offers this Account
-   * sent and the queue is where somebody reads everybody's.
+   * received and sent, and the queue is where somebody reads everybody's.
    *
-   * **It is offered whether or not he has sent one**, deliberately. The page's
-   * empty state says what an Offer is for and routes into `/profiles`, which is
-   * a better answer than a row that is missing until it is not — a menu whose
+   * **One row for both directions** (#304): a person who both receives and
+   * sends has one place to look. **It is offered whether or not there is
+   * anything on either side**:
+   * the page's empty state says what arrives there and routes onward, which is a
+   * better answer than a row that is missing until it is not — a menu whose
    * shape changes under a person is a menu they stop trusting.
    */
-  readonly sentOffersHref?: string;
-  /**
-   * Where "Propuestas que recibiste" goes, or absent to omit the row — the same
-   * shape and the same reason as `sentOffersHref`. Offered whether or not she
-   * holds a profile: the page's empty state says what makes an Offer arrive and
-   * routes to publishing one, which is a better answer than a row that appears
-   * later.
-   */
-  readonly receivedOffersHref?: string;
+  readonly offersHref?: string;
   /**
    * Her profile row, or absent to omit it — the same shape as `accountHref`,
    * for the same reason: `(site)`'s shell has one, `(admin)`'s does not. The
@@ -151,14 +138,7 @@ function initialOf(email: string): string {
   return [...email][0]?.toLocaleUpperCase("es-CO") ?? "";
 }
 
-export function SessionMenu({
-  email,
-  action,
-  accountHref,
-  sentOffersHref,
-  receivedOffersHref,
-  profile,
-}: SessionMenuProps) {
+export function SessionMenu({ email, action, accountHref, offersHref, profile }: SessionMenuProps) {
   const [result, formAction, pending] = React.useActionState(action, INITIAL);
 
   /**
@@ -278,36 +258,21 @@ export function SessionMenu({
               painted and has no reason to be fetched again.
             */}
             {/*
-              **The Offers he has sent.** It sits under her profile row and above
-              `/account`, which is the order of how often each is wanted: the
-              thing he did, then the thing he did before that, then the settings.
+              **Every Offer she is party to, both directions, in one row**,
+              directly under her profile: an Offer is addressed to that profile,
+              so the two rows are one thought — what she published, and what it
+              brought — and what she sent sits in the same place.
 
               The icon is decorative and `aria-hidden`, like the two beside it —
               a leading icon is what makes a list of rows scannable, which is what
               this menu became once it held more than one.
             */}
-            {/*
-              **The Offers that have reached her**, directly under her profile:
-              an Offer is addressed to that profile, so the two rows are one
-              thought — what she published, and what it brought.
-            */}
-            {receivedOffersHref ? (
+            {offersHref ? (
               <DropdownMenuItem
                 render={
-                  <Link href={receivedOffersHref}>
+                  <Link href={offersHref}>
                     <InboxIcon aria-hidden="true" />
-                    {RECEIVED_OFFERS}
-                  </Link>
-                }
-              />
-            ) : null}
-
-            {sentOffersHref ? (
-              <DropdownMenuItem
-                render={
-                  <Link href={sentOffersHref}>
-                    <SendIcon aria-hidden="true" />
-                    {SENT_OFFERS}
+                    {OFFERS}
                   </Link>
                 }
               />

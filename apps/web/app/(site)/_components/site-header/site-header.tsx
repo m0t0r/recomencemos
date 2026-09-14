@@ -10,8 +10,8 @@
  * Shaped at `.impeccable/briefs/site-header.md`; ticket
  * [#80](https://github.com/m0t0r/recomencemos/issues/80).
  *
- * **It links only pages that exist**, as #80 asked: her profile, the Offers
- * that reached her, the Offers she sent, and `/account`.
+ * **It links only pages that exist**, as #80 asked: her profile, her Offers in
+ * both directions, and `/account`.
  */
 
 import { AppHeader } from "@/app/_components/app-header/app-header";
@@ -32,16 +32,12 @@ export function SiteHeader() {
       /* Her own Account — the only navigation this shell offers. */
       accountHref="/account"
       /*
-        The Offers he has sent. Offered whether or not he has sent one: the page's
-        empty state says what an Offer is for and routes into `/profiles`, which
-        is a better answer than a row that appears once he has used the product.
+        Every Offer she received and every one she sent, on one page (#304).
+        Offered whether or not there is anything on either side: the page's
+        empty state says what arrives there, which is a better answer than a row
+        that appears once she has used the product.
       */
-      sentOffersHref="/sent-offers"
-      /*
-        The Offers that have reached her. Offered whether or not she holds a
-        profile, for the same reason: the empty state says what makes one arrive.
-      */
-      receivedOffersHref="/offers"
+      offersHref="/offers"
       /*
         The row she came for. One read per page for a signed-in session; a
         profile she holds points at it, and until then the row is the way to

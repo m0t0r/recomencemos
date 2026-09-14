@@ -273,7 +273,10 @@ describe("the Offers that reached her", () => {
 
     expect(screen.getByText(waitingCount(2))).toBeInTheDocument();
     expect(screen.getByText("Carlos Restrepo")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: OFFERS_LINK })).toHaveAttribute("href", "/offers");
+    expect(screen.getByRole("link", { name: OFFERS_LINK })).toHaveAttribute(
+      "href",
+      "/offers?box=received",
+    );
   });
 
   it("says plainly when none is waiting", () => {
