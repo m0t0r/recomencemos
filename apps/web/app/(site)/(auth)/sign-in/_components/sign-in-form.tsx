@@ -399,7 +399,7 @@ function FeedbackRegion({ machine }: { machine: ReturnType<typeof useSignIn> }) 
       */
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="status"
-      className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
+      className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-3"
     >
       {feedback ? (
         <div className="border-border mb-6 grid grid-cols-[1.25rem_1fr] gap-x-3 border-b pb-6">

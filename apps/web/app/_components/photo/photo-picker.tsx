@@ -171,7 +171,9 @@ export function usePhotoPicker({
         ? commitment.message
         : null;
   const asPicture = Boolean(shown) || placeholder !== undefined;
-  const circle = { sm: "size-16", md: "size-24", lg: "size-32" }[size];
+  // A conditional over literals rather than a lookup, so the linter can read every class the
+  // Avatar may receive.
+  const circle = size === "sm" ? "size-16" : size === "md" ? "size-24" : "size-32";
 
   const announcement =
     upload.state.step === "preparing"

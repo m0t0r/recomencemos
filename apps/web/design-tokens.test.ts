@@ -389,9 +389,10 @@ describe("the stylesheet's semantic pairs against WCAG 2.2 AA", () => {
  * The type ramp, on the two surfaces that cannot read the stylesheet.
  *
  * The same argument as the palette, one axis over. `DESIGN.md` states the scale;
- * the email templates and the root error boundary each hold literal sizes,
- * because email cannot resolve `rem` (`pixelBasedPreset` forces px) and the
- * boundary has no stylesheet mounted at all.
+ * the root error boundary holds literal sizes, because it has no stylesheet
+ * mounted at all, and the email templates hold Tailwind's size names, which
+ * `pixelBasedPreset` renders in px because email cannot resolve `rem`. Each name
+ * is read here as the px the preset gives it.
  *
  * **This case exists because the ramp had a hole.** The frontmatter named three
  * roles — `display`, `body`, `mono` — so the email `<h1>` at 24px was off-ramp,
@@ -435,18 +436,38 @@ describe("literal font sizes against DESIGN.md's ramp", () => {
   const surfaces = [
     "packages/notifications/src/templates/base.tsx",
     "packages/notifications/src/templates/magic-link.tsx",
+    "packages/notifications/src/templates/offer-delivered.tsx",
+    "packages/notifications/src/templates/contact-exchange.tsx",
     "apps/web/app/global-error.tsx",
   ];
+
+  /**
+   * `pixelBasedPreset`'s font sizes, as `@react-email/tailwind` 2.0.7 defines
+   * them. Copied rather than imported because `apps/web` does not depend on React
+   * Email; a name missing here is reported as off the ramp rather than skipped.
+   */
+  const presetPx: Record<string, number> = {
+    xs: 12,
+    sm: 14,
+    base: 16,
+    lg: 18,
+    xl: 20,
+    "2xl": 24,
+    "3xl": 30,
+    "4xl": 36,
+  };
 
   const sizes = surfaces.flatMap((path) => {
     const source = read(path);
 
     return [
-      ...[...source.matchAll(/\btext-\[([\d.]+)px\]/g)].map(([, px]) => ({
-        path,
-        written: `${px}px`,
-        px: Number(px),
-      })),
+      ...[...source.matchAll(/\btext-(xs|sm|base|lg|[1-9]?xl)(?![\w-])/g)].map(
+        ([written, name]) => ({
+          path,
+          written,
+          px: presetPx[name ?? ""] ?? Number.NaN,
+        }),
+      ),
       ...[...source.matchAll(/font-size:\s*([\d.]+)(rem|px)\s*;/g)].map(([, size, unit]) => ({
         path,
         written: `${size}${unit}`,

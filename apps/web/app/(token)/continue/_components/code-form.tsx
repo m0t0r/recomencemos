@@ -283,7 +283,7 @@ function FeedbackRegion({
       role="status"
       variant="destructive"
       className={cn(
-        "focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]",
+        "focus-visible:ring-ring/50 outline-none focus-visible:ring-3",
         feedback ? undefined : "sr-only",
       )}
     >

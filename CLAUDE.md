@@ -242,15 +242,33 @@ to it — and a plugin release can change what the two rules flag.
 `.claude/hooks/tests/lint.sh` lints fixtures through each real config and goes red if the refusal
 goes quiet; raise the pin in a change that runs it.
 
-**`@shadcn/lint` is registered in the root `jsPlugins` with no rule turned on, and that is setup
-rather than an oversight.** Which classes a page may put on a design-system component, and whether
-an off-scale value is refused, is design-system policy nobody has decided yet — the README's "Still
-to replace" row owns it. A rule goes in the root `.oxlintrc.json`, with an `overrides` entry turning
-`shadcn/no-restyle` off for `packages/design-system/src/components/**`, whose files are the
-components rather than callers of them; the plugin's
-[rules](https://github.com/shadcn-ui/lint/blob/main/README.md#rules) and
+**`@shadcn/lint` enforces five rules at `error`, and `no-restyle` is deliberately off** (#296).
+`no-raw-colors`, `no-arbitrary-values` (with `layout` allowed), `no-inline-styles`,
+`require-static-classes` and `no-unknown-classes` sit in the root `.oxlintrc.json`, so every
+workspace inherits them. `no-restyle` decides which classes a page may put on a design-system
+component, which is component policy with a ticket of its own; the README's "Still to replace" row
+owns it, and it is absent rather than `"off"` so that ticket adds it with its options. Two things
+follow from that:
+
+- **An off-scale value becomes a name, and a name lives in `globals.css`.** The display role's
+  tracking and leading are `tracking-display` and `leading-display`, and holding the drift is the
+  `animation-paused` utility. An arbitrary value in a page is what the rule refuses. A genuine
+  exception is an `oxlint-disable` naming the rule and why, and there are three: `google-mark.tsx`
+  (Google's palette), `global-error.tsx` (no stylesheet loads there) and `qr-code.tsx` (its
+  modules are a literal black, because forced-colours mode re-points `currentColor`).
+- **A per-directory entry goes in that workspace's own config, not the root's.** A root `overrides`
+  glob did not reach `packages/design-system` once that workspace's config extended the root, which
+  was measured rather than assumed. So `packages/design-system/.oxlintrc.json` turns
+  `no-arbitrary-values` and `require-static-classes` off for `src/components/**`, whose files are
+  registry output rather than callers, and `no-restyle`'s component override belongs there too.
+  `packages/notifications/.oxlintrc.json` allows the two tracking names `BaseEmail`'s Tailwind
+  config declares, because the linter reads a theme stylesheet and cannot see a config passed as
+  a prop.
+
+The plugin's [rules](https://github.com/shadcn-ui/lint/blob/main/README.md#rules) and
 [configuration examples](https://github.com/shadcn-ui/lint/blob/main/docs/design-systems.md) are
-where to start. It is pinned exactly for the reason in the paragraph above.
+where to start. It is pinned exactly for the reason in the paragraph above, and `lint.sh` goes red
+if a `shadcn/*` rule stops firing through any workspace's config.
 
 **`apps/web/components.json` exists for that linter, and deleting it as redundant breaks it
 silently.** The plugin finds an app's theme through a `components.json` or a stylesheet inside the

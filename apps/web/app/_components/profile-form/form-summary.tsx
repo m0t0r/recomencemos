@@ -39,7 +39,7 @@ export function FormSummary({ summary, feedback, summaryRef, idFor, label }: For
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="alert"
       aria-label={label}
-      className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
+      className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-3"
     >
       {feedback ? (
         <Alert variant="destructive">

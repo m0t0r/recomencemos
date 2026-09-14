@@ -27,7 +27,7 @@ export function PublishedConfirmation({ children }: { children: React.ReactNode 
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- `<output>` takes phrasing content only; this holds a title, a paragraph and a button
       role="status"
       tabIndex={-1}
-      className="focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]"
+      className="focus-visible:ring-ring/50 outline-none focus-visible:ring-3"
     >
       {children}
     </Alert>

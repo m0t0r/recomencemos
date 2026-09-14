@@ -90,7 +90,7 @@ export function ProfileRow({
             <h2 className="font-heading text-foreground text-2xl leading-7 font-medium text-pretty">
               <Link
                 href={`/profile/${profile.slug}`}
-                className="hover:text-primary focus-visible:ring-ring/50 rounded-xs outline-none focus-visible:ring-[3px]"
+                className="hover:text-primary focus-visible:ring-ring/50 rounded-xs outline-none focus-visible:ring-3"
               >
                 {profile.headline}
               </Link>

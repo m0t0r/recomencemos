@@ -52,7 +52,7 @@ export function OfferSummaryRegion({
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="alert"
       aria-label={OFFER_SUMMARY_LABEL}
-      className="focus-visible:ring-ring/50 rounded-md outline-none empty:hidden focus-visible:ring-[3px]"
+      className="focus-visible:ring-ring/50 rounded-md outline-none empty:hidden focus-visible:ring-3"
     >
       {feedback ? (
         <Alert variant="destructive">

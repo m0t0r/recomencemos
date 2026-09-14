@@ -28,7 +28,7 @@ export function ArrivalStatus({ children }: { readonly children: React.ReactNode
     <output
       ref={ref}
       tabIndex={-1}
-      className="border-border text-foreground focus-visible:ring-ring/50 border-l-2 pl-4 font-medium outline-none focus-visible:ring-[3px]"
+      className="border-border text-foreground focus-visible:ring-ring/50 border-l-2 pl-4 font-medium outline-none focus-visible:ring-3"
     >
       {children}
     </output>

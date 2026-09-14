@@ -145,7 +145,7 @@ export function PhotoRow({ item }: { readonly item: QueueItem }) {
       <FieldDescription
         tabIndex={-1}
         data-queue-anchor=""
-        className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
+        className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-3"
       >
         {item.summary}
       </FieldDescription>

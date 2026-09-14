@@ -42,7 +42,7 @@ import * as React from "react";
  * focusable by this mechanism* rather than of either surface.
  */
 export const QUEUE_FOCUSABLE_LINE =
-  "focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]";
+  "focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-3";
 
 /**
  * The shape of a `useActionState` result, read for one bit: did anything come

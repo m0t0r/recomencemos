@@ -119,7 +119,7 @@ export function SessionsPanel() {
         // and the rule's suggestion would be right in general and wrong here.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="status"
-        className="focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-[3px]"
+        className="focus-visible:ring-ring/50 text-foreground rounded-md text-sm leading-5 outline-none focus-visible:ring-3"
       >
         {announcement}
       </p>
