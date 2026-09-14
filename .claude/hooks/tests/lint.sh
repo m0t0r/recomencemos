@@ -10,8 +10,9 @@
 # configs, and the failure mode below -- a `jsPlugins` entry that quietly stops loading -- is
 # shared by all three.
 #
-# The third is `@shadcn/lint`'s rules, whose cases pin only that they still fire through every
-# workspace's config: which classes they refuse is the plugin's behaviour, not branching of ours.
+# The third is `@shadcn/lint`'s rules, whose cases pin that they still fire through every
+# workspace's config, and that `apps/web` still reaches the design system's theme: which classes
+# they refuse is the plugin's behaviour, not branching of ours.
 #
 # That is worth a suite because of how it can fail. The two rules come from
 # `eslint-plugin-testing-library` through oxlint's `jsPlugins`, which oxlint's own
@@ -255,3 +256,25 @@ lint_fixture "design-system inherits the rule" packages/design-system/.oxlintrc.
   'shadcn\(no-inline-styles\)' "$LINT/shadcn-inline-style.tsx"
 lint_fixture "notifications inherits the rule" packages/notifications/.oxlintrc.json 1 \
   'shadcn\(no-inline-styles\)' "$LINT/shadcn-inline-style.tsx"
+
+# The other four rules need a theme, and a plugin that cannot find one checks less and says so only
+# on stderr. It finds `apps/web`'s theme by walking up from the linted file to
+# `apps/web/components.json`, so this fixture has to sit inside `apps/web` -- under
+# `node_modules/.cache`, which neither git nor `pnpm lint` reads. A design-system `@utility` lints
+# clean there only while the app still reaches `globals.css`. Deleting that file, or pointing its
+# `tailwind.css` anywhere else, makes the utility an unknown class, and the second case shows the
+# rule is on rather than the fixture unread.
+THEME="$REPO/apps/web/node_modules/.cache/lint-sh-theme"
+mkdir -p "$THEME"
+cat > "$THEME/utility.tsx" <<'EOF'
+export const Heading = () => <h1 className="page-heading">x</h1>;
+EOF
+cat > "$THEME/unknown.tsx" <<'EOF'
+export const Heading = () => <h1 className="rounded-huge">x</h1>;
+EOF
+
+section "shadcn theme (apps/web)"
+lint_clean "a design-system utility is a known class" apps/web/.oxlintrc.json "$THEME/utility.tsx"
+lint_fixture "a class the theme does not declare is refused" apps/web/.oxlintrc.json 1 \
+  'shadcn\(no-unknown-classes\)' "$THEME/unknown.tsx"
+rm -rf "$THEME"

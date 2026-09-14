@@ -114,7 +114,7 @@ const NO_PHONE = "No dejó un teléfono.";
 
 function Detail({ label, value }: { readonly label: string; readonly value: string }) {
   return (
-    <Text className="m-0 mb-[12px] text-base text-foreground">
+    <Text className="m-0 mb-3 text-base text-foreground">
       <span className="text-sm leading-6 text-mutedForeground">{label}</span>
       <br />
       <span className="font-semibold">{value}</span>
@@ -132,31 +132,28 @@ export function ContactExchangeEmail({
 
   return (
     <BaseEmail title={CONTACT_EXCHANGE_SUBJECTS[recipientSide]} preview={copy.preview}>
-      <Heading
-        as="h1"
-        className="m-0 mb-[16px] text-2xl font-semibold tracking-heading text-foreground"
-      >
+      <Heading as="h1" className="m-0 mb-4 text-2xl font-semibold tracking-heading text-foreground">
         {copy.heading}
       </Heading>
 
-      <Text className="m-0 mb-[24px] text-base text-foreground">{copy.lead}</Text>
+      <Text className="m-0 mb-6 text-base text-foreground">{copy.lead}</Text>
 
       {/*
         The three details, each as plain text under its label. Bordered off so
         they are the first thing an eye lands on, and never a link: a detail is
         what a stranger typed.
       */}
-      <Section className="mb-[24px] rounded-lg border border-solid border-border px-4 pt-4 pb-1">
+      <Section className="mb-6 rounded-lg border border-solid border-border px-4 pt-4 pb-1">
         <Detail label={copy.nameLabel} value={counterpart.fullName ?? NO_NAME} />
         <Detail label="Teléfono" value={counterpart.phone ?? NO_PHONE} />
         <Detail label="Correo" value={counterpart.email} />
       </Section>
 
-      <Text className="m-0 mb-[16px] text-base text-foreground">{copy.claim}</Text>
-      <Text className="m-0 mb-[16px] text-base text-foreground">{copy.theirs}</Text>
-      <Text className="m-0 mb-[24px] text-base text-foreground">{copy.money}</Text>
+      <Text className="m-0 mb-4 text-base text-foreground">{copy.claim}</Text>
+      <Text className="m-0 mb-4 text-base text-foreground">{copy.theirs}</Text>
+      <Text className="m-0 mb-6 text-base text-foreground">{copy.money}</Text>
 
-      <Section className="mb-[24px]">
+      <Section className="mb-6">
         <Button
           href={href}
           className="box-border rounded-lg bg-primary px-6 py-3 text-base leading-none font-semibold text-primaryForeground no-underline"

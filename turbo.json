@@ -68,6 +68,8 @@
         "scripts/**",
         ".oxlintrc.json",
         "**/.oxlintrc.json",
+        "apps/web/components.json",
+        "packages/design-system/src/styles/globals.css",
         "package.json",
         "pnpm-lock.yaml"
       ],

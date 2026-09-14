@@ -65,22 +65,19 @@ export function OfferDeliveredEmail({ firstName, url }: OfferDeliveredEmailProps
       title={OFFER_DELIVERED_SUBJECT}
       preview="Alguien te escribió por un trabajo. Puedes leerla cuando quieras."
     >
-      <Heading
-        as="h1"
-        className="m-0 mb-[16px] text-2xl font-semibold tracking-heading text-foreground"
-      >
+      <Heading as="h1" className="m-0 mb-4 text-2xl font-semibold tracking-heading text-foreground">
         Te llegó una propuesta
       </Heading>
 
-      <Text className="m-0 mb-[24px] text-base text-foreground">
+      <Text className="m-0 mb-6 text-base text-foreground">
         Hola {firstName}. Alguien te escribió por un trabajo.
       </Text>
 
-      <Text className="m-0 mb-[24px] text-base text-foreground">
+      <Text className="m-0 mb-6 text-base text-foreground">
         Una persona la leyó antes de que te llegara. Dice qué es el trabajo, cuánto pagan y cuándo.
       </Text>
 
-      <Section className="mb-[24px]">
+      <Section className="mb-6">
         <Button
           href={href}
           className="box-border rounded-lg bg-primary px-6 py-3 text-base leading-none font-semibold text-primaryForeground no-underline"
@@ -89,7 +86,7 @@ export function OfferDeliveredEmail({ firstName, url }: OfferDeliveredEmailProps
         </Button>
       </Section>
 
-      <Text className="m-0 mb-[16px] text-base text-foreground">
+      <Text className="m-0 mb-4 text-base text-foreground">
         Si el botón no abre, usa esta dirección:{" "}
         <Link href={href} className="text-primary underline">
           {href}

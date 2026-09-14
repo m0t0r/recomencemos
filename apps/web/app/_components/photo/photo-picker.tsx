@@ -171,10 +171,11 @@ export function usePhotoPicker({
         ? commitment.message
         : null;
   const asPicture = Boolean(shown) || placeholder !== undefined;
-  // A conditional over literals rather than a lookup, so the linter can read every class the
-  // Avatar may receive.
+  // A conditional over literals, not a lookup: the linter reads a literal on its way to `<Avatar>`
+  // and cannot follow a computed key. The `satisfies` is the exhaustiveness a lookup's `Record`
+  // would give — a new size is a type error here rather than a silent fall-through to the largest.
+  size satisfies "sm" | "md" | "lg";
   const circle = size === "sm" ? "size-16" : size === "md" ? "size-24" : "size-32";
-
   const announcement =
     upload.state.step === "preparing"
       ? PHOTO_PREPARING
