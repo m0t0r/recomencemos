@@ -83,8 +83,11 @@ closes it again when a later run comes back clean. The threshold is
 **The routing is `scripts/findings.mjs`, and the workflow is one line calling it**
 ([ADR-0020](../../../docs/adr/0020-gate-logic-is-a-script-with-a-suite-and-the-wiring-stays-thin.md)). Its
 `audit` subcommand runs the report and performs the lifecycle — file, edit in place when the set
-changes, close when clean, honour a closed issue as a dismissal of that exact fingerprint — and its
-`breach` subcommand is what `needs-triage.yml` calls with a control-band payload. Both are driven
+changes, close when clean, honour a closed issue as a dismissal of that exact fingerprint — its
+`dependabot` subcommand runs the same lifecycle over Dependabot's own jobs (below), and its
+`breach` subcommand is what `needs-triage.yml` calls with a control-band payload. The two scheduled
+ones share one `route()` and each keys on a marker of its own, so neither can close the other's
+issue. All three are driven
 by `.claude/hooks/tests/findings.sh` with `gh` stubbed on `PATH` and its call log asserted, which is
 the rule that ADR sets for every gate and automation here: **the decision is a script with a test
 file named for it; a workflow `run:` line and a `settings.json` entry are wiring and hold no
@@ -106,8 +109,10 @@ be worse than either one alone.
 
 **Dependabot is the other half of the audit job, and it has one coupling worth knowing.**
 `.github/dependabot.yml` covers npm (one entry — Dependabot expands `pnpm-workspace.yaml`'s globs
-itself), `github-actions`, and `docker-compose` — the last for the two image digests in
-`docker-compose.yaml`, whose whole failure mode is that an exact pin never moves. That ecosystem is
+itself), `github-actions`, `docker-compose` — for the four image digests in `docker-compose.yaml`,
+whose whole failure mode is that an exact pin never moves — and `docker`, for the `node:24-slim`
+digest the `Dockerfile` pins, which is the one image a deployment runs and which ignores Node majors
+for the `@types/node` reason below. `docker-compose` is
 **version updates only**, with no security-update channel, which is acceptable only because those
 containers are loopback-bound development ones in no deployment path. Its `cooldown` is set against **`minimumReleaseAge` in
 `pnpm-workspace.yaml`**, which is 1440 minutes: a package published inside that window does not
@@ -116,6 +121,27 @@ is already stricter, so the two cannot currently disagree — it is pinned anywa
 that matters is the relationship between the two files. The `github-actions` entry names
 `/.github/actions/*` as well as `/`, without which the SHA pin in the composite setup action would
 never be updated. Its commit messages are prefixed to stay inside Conventional Commits.
+
+**Dependabot fails silently, so `.github/workflows/dependabot-watch.yml` watches it.** A failed
+update job opens nothing and notifies nobody — it is a red run under the `dynamic` event — and every
+npm job failed that way from 2026-09-07 to 2026-09-14 before a person noticed that no pull request
+had arrived. The watch reads the latest **scheduled** job per ecosystem (a `… for <dependency>` run
+is a security or refresh job and is ignored, since a transitive pnpm advisory fails that job every
+time and the audit already routes advisories), and files a `needs-triage` + `dependabot-watch`
+issue when one failed or has not run for eight days. The fingerprint keys on each ecosystem's
+**failure episode** — the first failure since the last success — so the same outage stays one issue,
+and a relapse after a recovery is a fresh one rather than hiding behind an old dismissal. It reads
+the ecosystem list from `dependabot.yml` and refuses one it has no run name for, so an entry added
+there without a mapping in `findings.mjs` goes red rather than unwatched. It needs only
+`actions: read`: Dependabot's jobs are ordinary workflow runs, which the default token can list.
+
+**Two failures this caught on the day it was written, both worth knowing before trusting a green
+Dependabot tab.** The npm jobs fail at the lockfile *write*, not the read: `pmOnFail: ignore` keeps
+the lockfile one document so Dependabot parses the graph and finds the updates, and then pnpm 12's
+launcher downloads its native binary with a bare `fetch()` that ignores the job's proxy
+(dependabot-core#16170, open). No setting here reaches it. And the `docker-compose` job failed once
+Docker Hub removed the `minio` namespace; the images now come from `quay.io` at the same digests,
+and replacing MinIO is #299.
 
 **It also ignores `@types/node` majors, and that is the one hole `engineStrict` cannot cover.** The
 repo requires the active LTS and enforces it by reading each package's `engines` field —
