@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
-  "jsPlugins": ["eslint-plugin-testing-library", "./scripts/oxlint-plugin.mjs"],
+  "jsPlugins": ["eslint-plugin-testing-library", "@shadcn/lint", "./scripts/oxlint-plugin.mjs"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn",

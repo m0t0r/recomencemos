@@ -220,3 +220,6 @@ overrides:
   # `moderate` and above, transitive included, which is wide enough to catch
   # both. Re-adding a line here is that finding's fix, not a precaution to take
   # in advance.
+
+minimumReleaseAgeExclude:
+  - '@shadcn/lint@0.1.0'
