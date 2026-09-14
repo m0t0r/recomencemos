@@ -62,13 +62,11 @@ export const SEND_OFFER_BUTTON = "Enviar la propuesta";
 export const SEND_OFFER_PENDING = "Enviando…";
 
 /*
-  **The confirmation is not here, and its absence is the fix.** Four constants
-  sat in this module — a heading, the review sentence, the immutability sentence
-  and a link — written for a confirmation this surface never renders: the send
-  redirects, so what a person actually reads afterwards is `/sent-offers`. They
-  were copy-tested and rendered nowhere, which is the worst of both, and the
-  review of this change is what found them. The three clauses now live in that
-  route's own messages module, beside the page that says them.
+  **The confirmation is not here, on purpose.** The send redirects, so what a
+  person reads afterwards is `/offers`' _Enviadas_ folder, and its three clauses
+  live in `offers/_lib/sent-messages.ts`, beside the page that says them. A
+  constant here would be copy-tested and rendered nowhere, which is the worst of
+  both.
 */
 
 /** The form-level summary, where focus lands on a failed submit. */

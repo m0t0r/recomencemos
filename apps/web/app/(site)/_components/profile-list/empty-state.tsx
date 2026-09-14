@@ -33,12 +33,18 @@ export function ListEmptyState({
   actionHref,
   actionLabel,
   actionVariant = "default",
+  secondary,
 }: {
   readonly title: string;
   readonly body: string;
   readonly actionHref: string;
   readonly actionLabel: string;
   readonly actionVariant?: "default" | "outline";
+  /**
+   * A second way out, outlined beneath the first, for a state with two honest
+   * next steps — `/offers` with nothing either way: publish, or write to someone.
+   */
+  readonly secondary?: { readonly href: string; readonly label: string } | undefined;
 }) {
   return (
     <Empty className="border">
@@ -50,6 +56,11 @@ export function ListEmptyState({
         <Link href={actionHref} className={buttonVariants({ variant: actionVariant })}>
           {actionLabel}
         </Link>
+        {secondary ? (
+          <Link href={secondary.href} className={buttonVariants({ variant: "outline" })}>
+            {secondary.label}
+          </Link>
+        ) : null}
       </EmptyContent>
     </Empty>
   );

@@ -34,12 +34,13 @@ import { logger } from "@repo/observability/logger";
 import { logRequestError } from "@repo/observability/log-request-error";
 
 /**
- * Where each side's copy points: the row that shows the same details. Both are
- * route constants plus a server-minted id, so no part of either URL is anything
- * a person typed (DD14).
+ * Where each side's copy points: the Offer that shows the same details for her,
+ * and the _Enviadas_ folder for him — his copy's button says _Ver tus
+ * propuestas enviadas_, so that is where it goes. Both are route constants plus a
+ * server-minted id, so no part of either URL is anything a person typed (DD14).
  */
-function siteRowFor(side: ExchangeSide, offerId: string): string {
-  const path = side === "worker" ? `/offers/${offerId}` : "/sent-offers";
+function siteLinkFor(side: ExchangeSide, offerId: string): string {
+  const path = side === "worker" ? `/offers/${offerId}` : "/offers?box=sent";
 
   return new URL(path, authBaseUrl(process.env)).toString();
 }
@@ -64,7 +65,7 @@ async function sendCopy(exchange: ExchangeDelivery, side: ExchangeSide): Promise
         <ContactExchangeEmail
           recipientSide={side}
           counterpart={counterpart.contact}
-          url={siteRowFor(side, exchange.offerId)}
+          url={siteLinkFor(side, exchange.offerId)}
         />
       ),
     });

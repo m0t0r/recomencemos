@@ -1,13 +1,12 @@
 /**
- * `/sent-offers`' copy, against `docs/policy/voice.md`.
+ * The sent side of `/offers`' copy, against `docs/policy/voice.md`.
  *
- * Beyond the shared rules `describeSurfaceCopy` holds, this surface owes two
- * things nowhere else does: the normal window stated **before** it is exceeded,
- * and the delayed sentence said plainly rather than through a colour or a badge.
+ * Beyond the shared rules `describeSurfaceCopy` holds, this side owes two things
+ * nowhere else does: the normal window stated **before** it is exceeded, and the
+ * delayed sentence said plainly rather than through a colour or a badge.
  */
 
 import { OFFER_STATES } from "@repo/domain/policy";
-import { offerBadge } from "./state-badge";
 import { describeSurfaceCopy } from "@/testing/surface-copy";
 import {
   OFFER_JUST_SENT_HEADING,
@@ -22,31 +21,15 @@ import {
   OFFER_WORK_LABEL,
   offerRecipient,
   offerSentOn,
-  SENT_OFFERS_EMPTY_BODY,
-  SENT_OFFERS_EMPTY_HEADING,
-  SENT_OFFERS_EMPTY_LINK,
   SENT_OFFERS_FAILED_EXPLANATION,
-  SENT_OFFERS_FAILED_RETRY,
-  SENT_OFFERS_FAILED_RETRYING,
-  SENT_OFFERS_FAILED_TITLE,
-  SENT_OFFERS_HEADING,
   SENT_OFFERS_LEAD,
-  SENT_OFFERS_TITLE,
-  sentOffersCount,
-} from "./messages";
+} from "./sent-messages";
+import { offerBadge } from "./sent-state-badge";
 
 describeSurfaceCopy({
   copy: [
-    ["SENT_OFFERS_TITLE", SENT_OFFERS_TITLE],
-    ["SENT_OFFERS_HEADING", SENT_OFFERS_HEADING],
     ["SENT_OFFERS_LEAD", SENT_OFFERS_LEAD],
-    ["SENT_OFFERS_EMPTY_HEADING", SENT_OFFERS_EMPTY_HEADING],
-    ["SENT_OFFERS_EMPTY_BODY", SENT_OFFERS_EMPTY_BODY],
-    ["SENT_OFFERS_EMPTY_LINK", SENT_OFFERS_EMPTY_LINK],
-    ["SENT_OFFERS_FAILED_TITLE", SENT_OFFERS_FAILED_TITLE],
     ["SENT_OFFERS_FAILED_EXPLANATION", SENT_OFFERS_FAILED_EXPLANATION],
-    ["SENT_OFFERS_FAILED_RETRY", SENT_OFFERS_FAILED_RETRY],
-    ["SENT_OFFERS_FAILED_RETRYING", SENT_OFFERS_FAILED_RETRYING],
     ["OFFER_JUST_SENT_HEADING", OFFER_JUST_SENT_HEADING],
     ["OFFER_JUST_SENT_REVIEW", OFFER_JUST_SENT_REVIEW],
     ["OFFER_JUST_SENT_IMMUTABLE", OFFER_JUST_SENT_IMMUTABLE],
@@ -57,16 +40,11 @@ describeSurfaceCopy({
     ["OFFER_WHEN_LABEL", OFFER_WHEN_LABEL],
     ["OFFER_PROFILE_LINK", OFFER_PROFILE_LINK],
     ["offerRecipient", offerRecipient("Ana María", "R")],
-    ["sentOffersCount(1)", sentOffersCount(1)],
-    ["sentOffersCount(3)", sentOffersCount(3)],
     ...Object.entries(OFFER_STATE_SENTENCES).map(
       ([state, sentence]) => [`OFFER_STATE_SENTENCES.${state}`, sentence] as const,
     ),
   ],
   labels: [
-    ["SENT_OFFERS_EMPTY_LINK", SENT_OFFERS_EMPTY_LINK],
-    ["SENT_OFFERS_FAILED_RETRY", SENT_OFFERS_FAILED_RETRY],
-    ["SENT_OFFERS_FAILED_RETRYING", SENT_OFFERS_FAILED_RETRYING],
     ["OFFER_PROFILE_LINK", OFFER_PROFILE_LINK],
     ["OFFER_TERMS_LABEL", OFFER_TERMS_LABEL],
     ["OFFER_WORK_LABEL", OFFER_WORK_LABEL],
@@ -145,6 +123,11 @@ describe("what a row never says", () => {
 
     expect(sentence).not.toMatch(/lo siento|lamentab|desafortunad|porque/);
   });
+
+  /** Direction is a word, and it is the first one (WCAG 1.4.1). */
+  it("says who it went to before anything else", () => {
+    expect(offerRecipient("Ana María", "R")).toBe("Para Ana María R.");
+  });
 });
 
 describe("the badge on a row", () => {
@@ -218,17 +201,10 @@ describe("the confirmation, after he sends", () => {
   });
 });
 
-describe("the empty state", () => {
-  /** It routes into the list; it does not read as an error or as an absence. */
-  it("says what an Offer is for and where to write one", () => {
-    expect(SENT_OFFERS_EMPTY_BODY).toContain("qué trabajo necesitas");
-    expect(SENT_OFFERS_EMPTY_LINK.toLowerCase()).toContain("perfiles");
-  });
-
-  it("does not read as something having gone wrong", () => {
-    const both = `${SENT_OFFERS_EMPTY_HEADING} ${SENT_OFFERS_EMPTY_BODY}`.toLowerCase();
-
-    expect(both).not.toMatch(/error|no encontramos|vac[íi]o/);
+describe("a failed read", () => {
+  /** A failed read is not a failed send, and he may have sent one five seconds ago. */
+  it("says the send did not fail", () => {
+    expect(SENT_OFFERS_FAILED_EXPLANATION).toContain("no el envío");
   });
 });
 
@@ -243,12 +219,5 @@ describe("the date on a row", () => {
 
   it("carries no slashes", () => {
     expect(offerSentOn(new Date("2026-09-08T12:00:00Z"))).not.toContain("/");
-  });
-});
-
-describe("the count", () => {
-  it("counts one in the singular", () => {
-    expect(sentOffersCount(1)).toBe("1 propuesta");
-    expect(sentOffersCount(3)).toBe("3 propuestas");
   });
 });

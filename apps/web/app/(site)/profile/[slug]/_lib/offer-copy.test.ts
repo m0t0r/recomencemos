@@ -125,9 +125,9 @@ describe("the two facts he is told before he writes", () => {
 
   /*
     The confirmation says all three again, and its copy is asserted where it
-    lives: `/sent-offers`, which is the page the send redirects to. It used to be
-    asserted here against constants this surface rendered nowhere — a copy test
-    passing over dead strings, which is how the criterion came to look satisfied.
+    lives: `/offers`' sent side, which is where the send redirects. Asserting it
+    here would be a copy test over strings this surface renders nowhere, which is
+    how a criterion comes to look satisfied.
   */
 });
 
