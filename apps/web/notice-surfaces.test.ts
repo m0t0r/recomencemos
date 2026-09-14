@@ -107,17 +107,15 @@ describe("the standing notices reach every surface that owes them", () => {
     expect(required.map((surface) => surface.route).toSorted()).toEqual([
       "/",
       "/my-profile",
-      // Added by story 8. She is reading what a stranger wrote to her about paid
-      // work, and deciding whether to give him her number — the moment "we verify
-      // nobody" and "we never handle the money" have to be on screen.
+      // Added by story 8, and since #304 the sent side too. She is reading what a
+      // stranger wrote to her about paid work, and deciding whether to give him
+      // her number; he is waiting on an answer about work he offered to pay for.
+      // Both are the moment "we verify nobody" and "we never handle the money"
+      // have to be on screen.
       "/offers",
       "/offers/[id]",
       "/profile/[slug]",
       "/profiles",
-      // Added by story 6. The no-money notice is doing real work here: he is
-      // waiting on an answer about work he offered to pay for, and this platform
-      // holds none of that money.
-      "/sent-offers",
     ]);
   });
 

@@ -124,6 +124,18 @@ const nextConfig: NextConfig = {
   },
 
   /**
+   * **`/sent-offers` became `/offers`' _Enviadas_ folder** (#304), and the old
+   * address still arrives: from a bookmark, from history, and from every
+   * Contact Exchange copy mailed before the change. A redirect in config rather
+   * than a page, because it is a real `308` before any render — no shell, no
+   * stream, nothing to prerender — and Next passes the query through, so
+   * `?sent=1` still lands on the confirmation.
+   */
+  async redirects() {
+    return [{ source: "/sent-offers", destination: "/offers?box=sent", permanent: true }];
+  },
+
+  /**
    * `X-Powered-By: Next.js` is off, and it belongs with the header set rather
    * than on its own: this is the one header the app was sending that it had no
    * reason to. It names the framework to anyone scanning, with no version and

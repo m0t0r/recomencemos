@@ -224,9 +224,10 @@ export const sendOffer = accountActionClient
       /**
        * `redirect` throws a framework interrupt that next-safe-action re-throws
        * rather than routing through `handleServerError` — a navigation, not a
-       * swallowed failure. `/sent-offers` renders the confirmation, which is
-       * also the page that answers the question the confirmation raises.
+       * swallowed failure. `/offers`' _Enviadas_ folder renders the
+       * confirmation, which is also the list that answers the question the
+       * confirmation raises.
        */
-      redirect("/sent-offers?sent=1");
+      redirect("/offers?box=sent&sent=1");
     },
   );

@@ -1,10 +1,11 @@
 /**
- * Every `es-CO` string `/sent-offers` renders, in one module under
- * `docs/policy/voice.md`.
+ * Every `es-CO` string the sent side of `/offers` renders, in one module under
+ * `docs/policy/voice.md` — the words #24 settled for what he sent, which the
+ * _Enviadas_ folder says unchanged (#304).
  *
- * **This is the only surface where the platform's own delay is visible to the
- * person waiting on it**, which is what the copy here is for: a state per row,
- * the normal window said before it is exceeded, and — past it — a plain sentence
+ * **This is the only place the platform's own delay is visible to the person
+ * waiting on it**, which is what the copy here is for: a state per Offer, the
+ * normal window said before it is exceeded, and — past it — a plain sentence
  * rather than a colour or a badge. He cannot act on our queue depth, so an alarm
  * aimed at him would be pressure rather than information.
  *
@@ -12,18 +13,9 @@
  * exclamation mark anywhere but the one success line, and not even there.
  */
 
-export const SENT_OFFERS_TITLE = "Propuestas que enviaste";
-export const SENT_OFFERS_HEADING = "Propuestas que enviaste";
-
-/** The one-line explanation under the heading: what this page is for. */
+/** The lead with only what he sent in view: what happens before it arrives. */
 export const SENT_OFFERS_LEAD =
   "Una persona lee cada propuesta antes de que le llegue a quien se la escribiste.";
-
-/** He has sent none. Say what sending one is for, and route into the list. */
-export const SENT_OFFERS_EMPTY_HEADING = "Todavía no has enviado ninguna propuesta";
-export const SENT_OFFERS_EMPTY_BODY =
-  "Una propuesta dice qué trabajo necesitas, cuánto pagas y cuándo. Escríbele a alguien de la lista.";
-export const SENT_OFFERS_EMPTY_LINK = "Ver todos los perfiles";
 
 /**
  * The confirmation, when he has just sent one — **all three of the story's
@@ -52,11 +44,8 @@ export const OFFER_JUST_SENT_IMMUTABLE =
  * and a page that only said "we could not load this" would leave him wondering
  * whether the Offer he wrote five seconds ago exists.
  */
-export const SENT_OFFERS_FAILED_TITLE = "No pudimos cargar tus propuestas";
 export const SENT_OFFERS_FAILED_EXPLANATION =
   "Falló la carga, no el envío: las propuestas que enviaste siguen su curso. Vuelve a intentarlo.";
-export const SENT_OFFERS_FAILED_RETRY = "Volver a cargar";
-export const SENT_OFFERS_FAILED_RETRYING = "Cargando…";
 
 /** What a row says about where its Offer is. One sentence per state. */
 export const OFFER_STATE_SENTENCES = {
@@ -110,9 +99,4 @@ export function offerSentOn(sentAt: Date): string {
     month: "long",
     year: "numeric",
   }).format(sentAt);
-}
-
-/** Announced once when the list resolves, rather than per row. */
-export function sentOffersCount(count: number): string {
-  return count === 1 ? "1 propuesta" : `${count} propuestas`;
 }

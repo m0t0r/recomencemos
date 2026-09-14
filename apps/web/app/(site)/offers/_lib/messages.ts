@@ -1,7 +1,8 @@
 /**
- * Every `es-CO` string the ledger renders — at `/offers`, and at `/offers/[id]`,
- * which is the same ledger with one row open — in one module under
- * `docs/policy/voice.md`.
+ * Every `es-CO` string `/offers` renders — at `/offers`, and at `/offers/[id]`,
+ * which is the same page with one Offer open — in one module under
+ * `docs/policy/voice.md`. What only the sent side says is in `sent-messages.ts`,
+ * the words #24 settled, kept whole.
  *
  * Tone is the voice guide's **Reading an Offer (Worker)** row, unchanged:
  * everything in front of her, nothing nudging. No _¡Nueva propuesta!_, no
@@ -10,17 +11,85 @@
  * **Contact Exchange** row reaches back into this page: the confirmation names
  * exactly which fields cross and that it cannot be undone.
  *
+ * **Mail's shape, none of mail's words** (#304): no _Bandeja de entrada_, no
+ * _Redactar_, no _Responder_. The folders are _Todas_, _Recibidas_ and
+ * _Enviadas_, and direction is said in words at the front of every row.
+ *
  * **The product does not name her**, and it does not gender him: the Hirer is
  * _quien envía la propuesta_ wherever a pronoun would otherwise have to guess
  * (voice.md, "Grammatical gender is handled by rephrasing").
  */
 
 import type { ReceivedOfferState } from "@repo/domain/offers";
+import type { Box, MailboxView } from "./mailbox-view";
 
-export const RECEIVED_OFFERS_TITLE = "Propuestas que recibiste";
-export const RECEIVED_OFFERS_HEADING = "Propuestas que recibiste";
+/** The page's name, and the one session-menu row that leads to it. */
+export const OFFERS_TITLE = "Tus propuestas";
+export const OFFERS_HEADING = "Tus propuestas";
 
-/** The lead: the human review, and the one fact about her number, before any row. */
+/** The lead with both sides in view: the human review, and the one fact about her number. */
+export const OFFERS_LEAD =
+  "Una persona lee cada propuesta antes de que llegue. Tu teléfono no sale de aquí hasta que aceptes una.";
+
+/** The folders, and the name the list takes from the one shown. */
+export const FOLDERS_LABEL = "Qué propuestas ver";
+export const FOLDER_LABELS: Readonly<Record<Box, string>> = {
+  all: "Todas",
+  received: "Recibidas",
+  sent: "Enviadas",
+};
+
+/**
+ * The phone's way back from an opened Offer to its list. With no folders there
+ * is no folder to name, so it names the page.
+ */
+export function backTo(view: Pick<MailboxView, "folders" | "box">): string {
+  return view.folders ? `Volver a ${FOLDER_LABELS[view.box]}` : "Volver a tus propuestas";
+}
+
+/**
+ * Who a received Offer is from, **direction first, in words** — the name as he
+ * gave it, and an Offer with no name says so rather than rendering a blank.
+ */
+export function fromLine(hirerName: string | null): string {
+  return hirerName === null ? "De alguien sin nombre" : `De ${hirerName}`;
+}
+
+/** On a shut accepted row: the thing she comes back for is inside. */
+export const CONTACT_INSIDE = "Adentro están los datos de contacto.";
+
+/** From `lg` up, beside the list, before an Offer is opened. */
+export const PANE_PLACEHOLDER = "Elige una propuesta de la lista para leerla.";
+
+const EXCERPT_LENGTH = 90;
+
+/**
+ * The first words of the work, for a row. **Cut on a word and marked as cut**,
+ * so a row's accessible name is a line rather than the whole description, and
+ * the Offer itself holds the rest.
+ */
+export function excerpt(text: string): string {
+  const flat = text.replace(/\s+/gu, " ").trim();
+  if (flat.length <= EXCERPT_LENGTH) return flat;
+
+  const cut = flat.slice(0, EXCERPT_LENGTH);
+  const lastSpace = cut.lastIndexOf(" ");
+  const whole = lastSpace > EXCERPT_LENGTH / 2 ? cut.slice(0, lastSpace) : cut;
+
+  return `${whole.replace(/[\s,;:.]+$/u, "")}…`;
+}
+
+/**
+ * Nothing either way: what arrives here and what is sent from here, and that a
+ * person reads each one first. An Account in this state holds no profile — one
+ * that did would have a received side — so the way out is the list of people.
+ */
+export const OFFERS_EMPTY_HEADING = "Todavía no hay propuestas";
+export const OFFERS_EMPTY_BODY =
+  "Aquí verás las propuestas que envíes, y las que te lleguen cuando publiques tu perfil. Una persona lee cada una antes de que llegue.";
+export const OFFERS_EMPTY_LINK = "Ver todos los perfiles";
+
+/** The lead with only what reached her in view: the human review, and her number. */
 export const RECEIVED_OFFERS_LEAD =
   "Una persona lee cada propuesta antes de que te llegue. Tu teléfono no sale de aquí hasta que aceptes una.";
 
@@ -51,18 +120,26 @@ export const RECEIVED_OFFERS_NO_PROFILE_BODY =
 export const RECEIVED_OFFERS_NO_PROFILE_LINK = "Publica lo que sabes hacer";
 
 /**
- * The `error` cell. **The middle clause is the point**: a failed read is not a
- * lost decision, and a Worker who answered one a minute ago needs to know which
- * of the two just happened.
+ * The `error` cell, one sentence per side. **What a failed read is not is the
+ * point**: not a lost answer for her, who may have answered one a minute ago,
+ * and not a failed send for him, who may have sent one five seconds ago. The
+ * sent side's sentence is in `sent-messages.ts`, with the rest of his words.
+ *
+ * **The third claims neither**, for when the address names no folder — _Todas_,
+ * or an Account on one side reached from the menu or an email. The boundary
+ * cannot read the data that just failed, so a sentence about an answer or a
+ * send could be about something this person never did.
  */
-export const RECEIVED_OFFERS_FAILED_TITLE = "No pudimos cargar tus propuestas";
+export const OFFERS_FAILED_TITLE = "No pudimos cargar tus propuestas";
 export const RECEIVED_OFFERS_FAILED_EXPLANATION =
   "Falló la carga. Nada de lo que respondiste cambió. Vuelve a intentarlo.";
+export const OFFERS_FAILED_EXPLANATION =
+  "Falló la carga, no tus propuestas: siguen como estaban. Vuelve a intentarlo.";
 export const OFFERS_FAILED_RETRY = "Volver a cargar";
 export const OFFERS_FAILED_RETRYING = "Cargando…";
 
 /** Announced once when the list resolves, rather than per row. */
-export function receivedOffersCount(count: number): string {
+export function offersCount(count: number): string {
   return count === 1 ? "1 propuesta" : `${count} propuestas`;
 }
 

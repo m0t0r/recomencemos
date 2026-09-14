@@ -33,16 +33,28 @@ import {
   RECEIVED_OFFERS_EMPTY_HEADING,
   RECEIVED_OFFERS_EMPTY_LINK,
   RECEIVED_OFFERS_FAILED_EXPLANATION,
-  RECEIVED_OFFERS_FAILED_TITLE,
-  RECEIVED_OFFERS_HEADING,
   RECEIVED_OFFERS_LEAD,
   RECEIVED_OFFERS_NO_PROFILE_BODY,
   RECEIVED_OFFERS_NO_PROFILE_LINK,
-  RECEIVED_OFFERS_TITLE,
   RECEIVED_STATE_LABELS,
   RECEIVED_STATE_SENTENCES,
   sentAgo,
-  receivedOffersCount,
+  backTo,
+  CONTACT_INSIDE,
+  excerpt,
+  FOLDER_LABELS,
+  FOLDERS_LABEL,
+  fromLine,
+  OFFERS_EMPTY_BODY,
+  OFFERS_EMPTY_HEADING,
+  OFFERS_EMPTY_LINK,
+  OFFERS_FAILED_EXPLANATION,
+  OFFERS_FAILED_TITLE,
+  OFFERS_HEADING,
+  OFFERS_LEAD,
+  OFFERS_TITLE,
+  offersCount,
+  PANE_PLACEHOLDER,
   rowSignature,
   SENDER_ABSENCE,
   SENDER_LABEL,
@@ -62,8 +74,26 @@ function ago(elapsed: number): string {
 
 describeSurfaceCopy({
   copy: [
-    ["RECEIVED_OFFERS_TITLE", RECEIVED_OFFERS_TITLE],
-    ["RECEIVED_OFFERS_HEADING", RECEIVED_OFFERS_HEADING],
+    ["OFFERS_TITLE", OFFERS_TITLE],
+    ["OFFERS_HEADING", OFFERS_HEADING],
+    ["OFFERS_LEAD", OFFERS_LEAD],
+    ["FOLDERS_LABEL", FOLDERS_LABEL],
+    ...Object.entries(FOLDER_LABELS).map(
+      ([box, label]) => [`FOLDER_LABELS.${box}`, label] as const,
+    ),
+    ["backTo(folder)", backTo({ folders: true, box: "sent" })],
+    ["backTo(no folders)", backTo({ folders: false, box: "received" })],
+    ["fromLine(name)", fromLine("Carlos Restrepo")],
+    ["fromLine(null)", fromLine(null)],
+    ["CONTACT_INSIDE", CONTACT_INSIDE],
+    ["PANE_PLACEHOLDER", PANE_PLACEHOLDER],
+    ["OFFERS_EMPTY_HEADING", OFFERS_EMPTY_HEADING],
+    ["OFFERS_EMPTY_BODY", OFFERS_EMPTY_BODY],
+    ["OFFERS_EMPTY_LINK", OFFERS_EMPTY_LINK],
+    ["OFFERS_FAILED_TITLE", OFFERS_FAILED_TITLE],
+    ["OFFERS_FAILED_EXPLANATION", OFFERS_FAILED_EXPLANATION],
+    ["offersCount(1)", offersCount(1)],
+    ["offersCount(5)", offersCount(5)],
     ["RECEIVED_OFFERS_LEAD", RECEIVED_OFFERS_LEAD],
     ["waitingCount(0)", waitingCount(0)],
     ["waitingCount(1)", waitingCount(1)],
@@ -73,12 +103,9 @@ describeSurfaceCopy({
     ["RECEIVED_OFFERS_EMPTY_LINK", RECEIVED_OFFERS_EMPTY_LINK],
     ["RECEIVED_OFFERS_NO_PROFILE_BODY", RECEIVED_OFFERS_NO_PROFILE_BODY],
     ["RECEIVED_OFFERS_NO_PROFILE_LINK", RECEIVED_OFFERS_NO_PROFILE_LINK],
-    ["RECEIVED_OFFERS_FAILED_TITLE", RECEIVED_OFFERS_FAILED_TITLE],
     ["RECEIVED_OFFERS_FAILED_EXPLANATION", RECEIVED_OFFERS_FAILED_EXPLANATION],
     ["OFFERS_FAILED_RETRY", OFFERS_FAILED_RETRY],
     ["OFFERS_FAILED_RETRYING", OFFERS_FAILED_RETRYING],
-    ["receivedOffersCount(1)", receivedOffersCount(1)],
-    ["receivedOffersCount(5)", receivedOffersCount(5)],
     ["rowSignature(name)", rowSignature("Carlos Restrepo")],
     ["rowSignature(null)", rowSignature(null)],
     ["sentAgo(minutes)", ago(20 * MINUTE)],
@@ -114,6 +141,12 @@ describeSurfaceCopy({
     ),
   ],
   labels: [
+    ...Object.entries(FOLDER_LABELS).map(
+      ([box, label]) => [`FOLDER_LABELS.${box}`, label] as const,
+    ),
+    ["backTo(folder)", backTo({ folders: true, box: "received" })],
+    ["backTo(no folders)", backTo({ folders: false, box: "sent" })],
+    ["OFFERS_EMPTY_LINK", OFFERS_EMPTY_LINK],
     ["RECEIVED_OFFERS_EMPTY_LINK", RECEIVED_OFFERS_EMPTY_LINK],
     ["RECEIVED_OFFERS_NO_PROFILE_LINK", RECEIVED_OFFERS_NO_PROFILE_LINK],
     ["OFFERS_FAILED_RETRY", OFFERS_FAILED_RETRY],
@@ -241,5 +274,73 @@ describe("what this page never does", () => {
   /** A refusal says what she can do next (Do 3), and never blames her. */
   it("gives a refusal somewhere to go", () => {
     expect(OFFER_GONE).toContain("Las demás siguen");
+  });
+});
+
+describe("mail's shape without mail's words", () => {
+  /**
+   * The folders and the list are a mail client's structure; its vocabulary and
+   * its signals are what this product refuses — no inbox, no compose, no reply,
+   * no archive, no star, no unread.
+   */
+  it("says none of mail's words", () => {
+    const every = [
+      OFFERS_TITLE,
+      OFFERS_LEAD,
+      FOLDERS_LABEL,
+      ...Object.values(FOLDER_LABELS),
+      backTo({ folders: true, box: "all" }),
+      PANE_PLACEHOLDER,
+      CONTACT_INSIDE,
+      OFFERS_EMPTY_HEADING,
+      OFFERS_EMPTY_BODY,
+    ].join(" ");
+
+    expect(every.toLowerCase()).not.toMatch(
+      /bandeja|redactar|responder|reenviar|archiv|destacad|no le[íi]d/u,
+    );
+  });
+
+  /** Direction is a word, and it is the first one (WCAG 1.4.1). */
+  it("says which way an Offer went before anything else", () => {
+    expect(fromLine("Carlos Restrepo")).toBe("De Carlos Restrepo");
+    expect(fromLine(null)).toMatch(/^De /u);
+  });
+});
+
+describe("a row's excerpt of the work", () => {
+  it("keeps a short description whole", () => {
+    expect(excerpt("Pintar una habitación")).toBe("Pintar una habitación");
+  });
+
+  /** A row's accessible name is a line, not the whole description. */
+  it("cuts a long one on a word and marks the cut", () => {
+    const long = `${"Cocinar el almuerzo de treinta personas, ".repeat(10)}fin`;
+    const cut = excerpt(long);
+
+    expect(cut.length).toBeLessThanOrEqual(91);
+    expect(cut.endsWith("…")).toBe(true);
+    expect(long.startsWith(cut.slice(0, -1))).toBe(true);
+    expect(cut).not.toMatch(/[\s,]…$/u);
+  });
+
+  it("reads the line breaks he typed as spaces", () => {
+    expect(excerpt("Sancocho\n\ny arroz")).toBe("Sancocho y arroz");
+  });
+});
+
+describe("a failed read", () => {
+  it("tells her an answer did not fail", () => {
+    expect(RECEIVED_OFFERS_FAILED_EXPLANATION).toContain("Nada de lo que respondiste cambió");
+  });
+
+  /**
+   * With no folder in the address the boundary cannot know which side was being
+   * read, so it claims neither an answer nor a send — either could be about
+   * something this person never did.
+   */
+  it("claims neither side's act when the address names no folder", () => {
+    expect(OFFERS_FAILED_EXPLANATION).toContain("no tus propuestas");
+    expect(OFFERS_FAILED_EXPLANATION).not.toMatch(/respondiste|enviaste|env[ií]o/u);
   });
 });

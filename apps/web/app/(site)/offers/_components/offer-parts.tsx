@@ -1,6 +1,6 @@
 /**
- * The pieces `/offers` and `/offers/[id]` both render: the state label and one
- * term of the Offer. Server Components, and nothing here is interactive.
+ * The pieces both sides of `/offers` render: the state label and the Offer's
+ * terms. Server Components, and nothing here is interactive.
  *
  * **The state is a text label**, as `/sent-offers` settled: readable with the
  * stylesheet off, announced by a screen reader, and never `destructive` — no
@@ -10,7 +10,12 @@
 
 import { Badge } from "@repo/design-system/components/badge";
 import type { ReceivedOfferState } from "@repo/domain/offers";
-import { RECEIVED_STATE_LABELS } from "../_lib/messages";
+import {
+  OFFER_PAY_LABEL,
+  OFFER_WHEN_LABEL,
+  OFFER_WORK_LABEL,
+  RECEIVED_STATE_LABELS,
+} from "../_lib/messages";
 
 export function OfferStateBadge({
   state,
@@ -31,11 +36,33 @@ export function OfferStateBadge({
  * he typed is part of what he wrote — and React escapes the text, so a break is
  * the only formatting that survives.
  */
-export function OfferTerm({ label, value }: { readonly label: string; readonly value: string }) {
+function OfferTerm({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <div>
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="whitespace-pre-line">{value}</dd>
     </div>
+  );
+}
+
+/**
+ * The three terms, under the same labels on both sides: what she agrees to is
+ * what he wrote, and one component is what keeps the two from drifting apart.
+ */
+export function OfferTerms({
+  offer,
+}: {
+  readonly offer: {
+    readonly workDescription: string;
+    readonly payTerms: string;
+    readonly whenText: string;
+  };
+}) {
+  return (
+    <dl className="flex flex-col gap-4">
+      <OfferTerm label={OFFER_WORK_LABEL} value={offer.workDescription} />
+      <OfferTerm label={OFFER_PAY_LABEL} value={offer.payTerms} />
+      <OfferTerm label={OFFER_WHEN_LABEL} value={offer.whenText} />
+    </dl>
   );
 }

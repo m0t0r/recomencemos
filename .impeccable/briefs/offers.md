@@ -61,8 +61,9 @@ signals.**
 **`[settled]`:**
 
 - **Folders are links, not tabs.** Each has an address (`?box=all|received|sent`) and works without
-  JavaScript. The registry `Tabs` is Base UI and needs a script, so the folders take
-  `buttonVariants` styling on `next/link` instead.
+  JavaScript. The registry `Tabs` is Base UI and needs a script, so the folders are `next/link`s
+  wearing the Tabs styling (`default` variant: a grey track, the current folder raised), through
+  `tabs-variants`, and carry no `role="tab"`.
 - **Every row is a link, and the opened Offer is server-rendered.** `/offers/<id>` is a real path,
   not a fragment, so the delivery email lands on it and a browser without JavaScript opens it.
 - **The phone is list, then detail; side by side only at `lg`.** Material's list-detail pattern,
@@ -96,7 +97,7 @@ a registry or existing product component is the send confirmation, carried uncha
 
 | Part of D               | Built from                                                                                                                                                        |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Folder links            | `buttonVariants` (`secondary` when current, `ghost` otherwise) on `next/link`                                                                                     |
+| Folder links            | `tabsListVariants` (`default`) and `tabsTriggerVariants` from `tabs-variants` on `next/link`, with Base UI's attributes; `data-active` on the current one         |
 | The list                | A `<ul>` of `Item`s — `ItemGroup` is a `div` with `role="list"`, whose rows would need `role="listitem"`, which the lint refuses for the element that means it    |
 | A row                   | `Item` with `render={<Link />}`, `ItemHeader`, `ItemTitle`, `ItemContent`, `ItemDescription`                                                                      |
 | State                   | `Badge` through `OfferStateBadge` and `offerBadge`                                                                                                                |
