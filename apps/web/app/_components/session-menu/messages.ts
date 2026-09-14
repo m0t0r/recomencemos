@@ -38,26 +38,19 @@ export const SIGN_OUT = "Salir";
 export const ACCOUNT = "Tu cuenta";
 
 /**
- * The way to `/offers` — the Offers that have reached her.
- *
- * The page's own title, for `SENT_OFFERS`' reason below: a person who presses
- * this lands on a page calling itself what the link called it. The two rows
- * differ by one verb, which is exactly the difference between them.
- */
-export const RECEIVED_OFFERS = "Propuestas que recibiste";
-
-/**
- * The way to `/sent-offers`.
+ * The way to `/offers` — every Offer this Account received and every one it
+ * sent, on one page (#304).
  *
  * The same words the page titles itself with, because link text names its
  * destination (`docs/policy/voice.md`) and a person who presses this should land
- * on a page that calls itself what the link called it.
+ * on a page that calls itself what the link called it. One row covers both
+ * directions, so the menu never asks her which way an Offer went.
  *
- * **Absent from `/admin`'s shell**, for `ACCOUNT`'s reason: these are the
- * Offers *this Account* sent, and from a moderation queue the row navigates out
- * of the surface being worked.
+ * **Absent from `/admin`'s shell**, for `ACCOUNT`'s reason: these are *this
+ * Account's* Offers, and from a moderation queue the row navigates out of the
+ * surface being worked.
  */
-export const SENT_OFFERS = "Propuestas que enviaste";
+export const OFFERS = "Tus propuestas";
 
 /**
  * The accessible name of the control that opens the session menu.

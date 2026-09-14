@@ -169,8 +169,11 @@ export const PHOTO_ATTACH_FAILED = "No pudimos guardar tu foto. Vuelve a elegirl
 /**
  * **The Offers that reached her, as a summary** (#275). The count is good news
  * and is said as a sentence, never a badge. The link names the act it leads to.
+ *
+ * **The heading says it is the received half** (#304): what she sent is on
+ * `/offers` beside these, and a heading naming no direction reads as all of them.
  */
-export const OFFERS_HEADING = "Propuestas";
+export const OFFERS_HEADING = "Propuestas que recibiste";
 export function waitingCount(count: number): string {
   return count === 1
     ? "Una propuesta espera tu respuesta."
