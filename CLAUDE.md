@@ -114,7 +114,7 @@ The repo requires the **active Node LTS** (24.x) and **pnpm 12**, and it enforce
 - **TypeScript is 7.x** (pinned exactly, same version in the root and every workspace). TS 7 is the native compiler, and it ships **only a `tsc` binary** — there is no `tsserver`, and the JavaScript compiler API is gone (`node_modules/typescript` exports just the version string plus `./unstable/*` entry points). Two things follow:
   - `next build` type-checks by shelling out to the project-local `tsc` CLI, which is the Next 16 default. Do **not** set `experimental.useTypeScriptCli: false` — that switches Next back to the JS compiler API, which TS 7 does not provide, and the build exits. Diagnostics come out as plain `tsc` output without Next's code frames.
   - The `plugins: [{ "name": "next" }]` entry in the tsconfigs is a **tsserver** plugin, so it does nothing while an editor is pointed at the workspace TypeScript. It is kept because it costs nothing and is what Next's docs prescribe; "Use Workspace Version" in VS Code is not available under TS 7.
-- pnpm applies a **supply-chain cooldown** (`minimumReleaseAge`, 1440 minutes, its default since v11) to new releases. Installing a package published inside that window appends pinned entries to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml` — that list is a record of deliberately-accepted fresh releases, not cruft. Prune entries when the versions they name are no longer the ones installed; the list is **currently empty and the key absent**, which is its steady state rather than an omission.
+- pnpm applies a **supply-chain cooldown** (`minimumReleaseAge`, 1440 minutes, its default since v11) to new releases. Installing a package published inside that window appends pinned entries to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml` — that list is a record of deliberately-accepted fresh releases, not cruft. Prune entries when the versions they name are no longer the ones installed. Its steady state is empty with the key absent; it **currently holds `@shadcn/lint@0.1.0`**, accepted on 2026-09-14 hours after that package's first release, and the entry goes with the next bump of it.
   **pnpm 12 is a Rust rewrite, and one line in `pnpm-workspace.yaml` is what keeps Dependabot able to read this repo.** Left to its default, pnpm 12 manages its own version and records that in a **second YAML document** at the head of `pnpm-lock.yaml`; dependabot-core reads only the first document, so it reports **zero dependencies and closes existing alerts without performing an update** (dependabot/dependabot-core#15904, open — pnpm 12 is unsupported there). `pmOnFail: ignore` suppresses that document, and `error` and `warn` do **not** — both still emit it. Three consequences worth holding:
 
 - **`grep -c '^---$' pnpm-lock.yaml` must be `0`.** That is the whole check, and it is the acceptance criterion the migration was held to. A non-zero answer means Dependabot has gone blind.
@@ -236,6 +236,24 @@ JS plugins alpha and outside semver, so a minor release could stop loading the p
 to it — and a plugin release can change what the two rules flag.
 `.claude/hooks/tests/lint.sh` lints fixtures through each real config and goes red if the refusal
 goes quiet; raise the pin in a change that runs it.
+
+**`@shadcn/lint` is registered in the root `jsPlugins` with no rule turned on, and that is setup
+rather than an oversight.** Which classes a page may put on a design-system component, and whether
+an off-scale value is refused, is design-system policy nobody has decided yet — the README's "Still
+to replace" row owns it. A rule goes in the root `.oxlintrc.json`, with an `overrides` entry turning
+`shadcn/no-restyle` off for `packages/design-system/src/components/**`, whose files are the
+components rather than callers of them; the plugin's
+[rules](https://github.com/shadcn-ui/lint/blob/main/README.md#rules) and
+[configuration examples](https://github.com/shadcn-ui/lint/blob/main/docs/design-systems.md) are
+where to start. It is pinned exactly for the reason in the paragraph above.
+
+**`apps/web/components.json` exists for that linter, and deleting it as redundant breaks it
+silently.** The plugin finds an app's theme through a `components.json` or a stylesheet inside the
+app, and `apps/web` has neither — it imports `@repo/design-system/globals.css` from `layout.tsx`,
+which the linter does not follow. Without the file, every `@utility` in the design system reads as
+an unknown class and `no-restyle` sees a fraction of the component usages (21 findings against 119,
+all six rules at `warn`, 2026-09-14). Its aliases all name `@repo/design-system`, so it cannot
+become a second component directory, and components are still added with `-c packages/design-system`.
 
 **The DOM environment is happy-dom, not the jsdom Next's docs prescribe, and that was measured rather
 than preferred.** The measurements and the guard test are in `packages/design-system/CLAUDE.md`; if
