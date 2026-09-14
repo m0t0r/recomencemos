@@ -5,8 +5,16 @@
 # Neither is much use alone — a gate with nothing behind it is a gate somebody
 # eventually bypasses, which is the failure mode C7 was answered to avoid.
 #
-# Three ecosystems, and no `target-branch`: the default branch is `dev`, which is
+# Four ecosystems, and no `target-branch`: the default branch is `dev`, which is
 # where Dependabot opens against unless told otherwise.
+#
+# **Dependabot fails quietly, so something else watches it.** A failed update
+# job opens nothing and notifies nobody — it is a red run under the "dynamic"
+# event in the Actions tab, which is how every npm job from 2026-09-07 to
+# 2026-09-14 failed with no one knowing. `.github/workflows/dependabot-watch.yml`
+# reads the latest run of each ecosystem below every day and routes a failure to
+# a `needs-triage` issue, closing it when the runs recover. An ecosystem added
+# here needs nothing added there; it is read from the run names.
 version: 2
 
 updates:
@@ -34,10 +42,26 @@ updates:
   # `high` — that sat on the default branch while every pull request went green.
   #
   # `pmOnFail: ignore` in `pnpm-workspace.yaml` is what holds the lockfile to a
-  # single document, so Dependabot reads this repo exactly as it did under pnpm
-  # 11. The reasoning, and what it gives up, is written beside that setting. If
+  # single document, so Dependabot still *reads* this repo as it did under pnpm
+  # 11: the dependency graph, the alerts, and which versions are behind. The
+  # reasoning, and what it gives up, is written beside that setting. If
   # Dependabot ever reports this repository as having no dependencies, check that
   # line before anything else: `grep -c '^---$' pnpm-lock.yaml` must be 0.
+  #
+  # **Reading is not writing, and the write is broken upstream.** Every update
+  # job on this entry has failed since the move to pnpm 12 (#212) — version
+  # updates and security updates alike — while finding the updates correctly.
+  # To rewrite the lockfile Dependabot runs pnpm, and pnpm 12's npm package is a
+  # launcher that downloads its native `@pnpm/exe.<platform>` binary with a bare
+  # `fetch()`. That ignores the job's `HTTPS_PROXY`, the job's container can
+  # reach nothing except through the proxy, and every dependency fails with
+  # `Could not download the pnpm 12.x binary … fetch failed`, which Dependabot
+  # reports as `unknown_error`. No setting here reaches it: the fix is
+  # `NODE_USE_ENV_PROXY=1` in Dependabot's own image (dependabot-core#16170,
+  # open on 2026-09-14). Until it merges, npm updates are a person running
+  # `pnpm deps:outdated`, and `dependabot-watch.yml` keeps the failure in front
+  # of someone as an open issue. That issue closing itself is the signal this
+  # entry works again.
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -172,8 +196,8 @@ updates:
 
   # -------------------------------------------------------- docker-compose
   #
-  # `docker-compose.yaml` is the local development database
-  # (`docs/policy/data.md` -> `local-database`), and both of its images are
+  # `docker-compose.yaml` is the local development database and object store
+  # (`docs/policy/data.md` -> `local-database`), and all four of its images are
   # pinned by tag **and** digest. A digest is the right pin and the wrong thing
   # to leave alone: it is exact, and it therefore freezes at whatever was
   # current the day somebody typed it. This entry is what makes moving it a
@@ -186,6 +210,11 @@ updates:
   # containers listen on loopback on a developer's machine, hold
   # development-tier data, and are in no deployment path. Nothing production
   # depends on this entry.
+  #
+  # The two MinIO images come from `quay.io` since Docker Hub removed the
+  # `minio` namespace, and upstream has stopped publishing them, so this entry
+  # will never move those two again. `docker-compose.yaml` says why, and the
+  # replacement is its own finding.
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:
@@ -204,4 +233,37 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  # ------------------------------------------------------------------ docker
+  #
+  # **The production base image, which is the one image here a deployment
+  # runs.** The `Dockerfile` pins `node:24-slim` by tag and digest, so that two
+  # builds of one commit ship one Node patch and a rollback rebuilds the image
+  # it rolled back to. This entry is what stops that pin freezing: when the tag
+  # moves — which is how a Node security release reaches `24-slim` — it
+  # proposes the new digest as a reviewed pull request.
+  #
+  # **Node majors are ignored, for the `@types/node` reason above.** The tag
+  # reads as version `24` with a `-slim` suffix, so without this Dependabot
+  # would offer `26-slim` the day it exists. Moving the runtime major is one
+  # deliberate edit that carries `.nvmrc`, `engines.node`, `@types/node` and
+  # this line together, and a bot proposing only the last of the four would
+  # make the image disagree with everything CI checked.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    commit-message:
+      prefix: chore
+      include: scope
+    # `semver-*-days` is npm-only; this ecosystem takes `default-days` alone.
+    cooldown:
+      default-days: 3
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 5

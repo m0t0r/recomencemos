@@ -18,8 +18,23 @@
 # Node 24 because `engines.node` is `>=24` and `engineStrict` makes that a
 # failure rather than a warning; `slim` rather than `alpine` because Next ships
 # per-platform SWC binaries and the glibc ones are the better-trodden path.
+#
+# **Pinned by tag and digest, and the digest is moved by Dependabot rather than
+# by the day of the build.** A bare `node:24-slim` meant the production base was
+# whatever the tag pointed at when a builder last pulled it — two deploys of one
+# commit could ship different Node patches, and a rollback could not reproduce
+# the image it rolled back to. The `docker` entry in `.github/dependabot.yml` is
+# what keeps the pin from freezing: it proposes the new digest when the tag
+# moves, so a Node security patch still arrives, as a reviewed pull request.
+# The tag stays beside the digest so that pull request reads as "24-slim moved"
+# and so the major is visible without resolving anything.
+#
+# Checked **2026-09-14**, read out of an image built from this digest rather
+# than off the tag: Node **24.21.0**, Corepack **0.36.0**. A locally cached
+# `node:24-slim` answered 24.20.0 the same day, which is the whole case for the
+# digest — the tag means whatever the machine last pulled.
 
-FROM node:24-slim AS base
+FROM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 # Corepack reads `packageManager` from package.json, so the pinned pnpm 12 is
@@ -30,10 +45,10 @@ ENV PATH=$PNPM_HOME:$PATH
 # `@pnpm/exe.*` packages, not the `bin/pnpm.cjs` script pnpm 11 shipped, and a
 # Corepack that predates that indirection dies with `MODULE_NOT_FOUND` on a path
 # ending `bin/pnpm.cjs`. Measured on both sides: Corepack 0.34.0 (Node 24.11.0)
-# fails, 0.35.0 (Node 24.20.0) downloads the binary and runs. `node:24-slim`
-# resolved to 24.20.0 when this was written, so the build is above the floor —
-# but the tag moves and the floor does not, and if this image is ever pinned to
-# an exact 24.x, that is the number to check first.
+# fails, 0.35.0 (Node 24.20.0) downloads the binary and runs. The digest above
+# is 24.20.0, so the build is above the floor. A digest bump can only move the
+# patch forward within 24-slim, which keeps it there; a hand edit that pins an
+# older 24.x is the one way back below it, and that is the number to check.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
 WORKDIR /app
