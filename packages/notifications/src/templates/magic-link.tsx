@@ -15,7 +15,7 @@
  * throws at render, before an inbox.
  */
 
-import { Button, Heading, Link, Section, Text } from "@react-email/components";
+import { Button, Heading, Link, Section, Text } from "react-email";
 import { AppError } from "@repo/errors/app-error";
 import { BaseEmail } from "#templates/base";
 import { SEND_FAILED } from "#user-messages";

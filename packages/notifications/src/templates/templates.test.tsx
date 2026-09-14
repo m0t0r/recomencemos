@@ -11,7 +11,7 @@
  * covers, and the row is one line.
  */
 
-import { render } from "@react-email/components";
+import { render } from "react-email";
 import { AppError } from "@repo/errors/app-error";
 import * as React from "react";
 import { BaseEmail } from "#templates/base";
@@ -85,13 +85,15 @@ describe.each(templates)("$name", (template) => {
     expect(html).not.toContain('lang="en"');
   });
 
-  // React Email's guidance says `<Preview>` emits one. At the version this
-  // repo resolves it does not, which is why the frame emits it — and why this
-  // asserts on the output rather than trusting the docs.
-  it("emits a <title>", async () => {
+  // Exactly one, because the count has moved under this repo's feet in both
+  // directions: `<Preview>` emitted none under `@react-email/components`, so the
+  // frame emits it, and emits one by default under `react-email` 6 — holding the
+  // preview line, which the frame turns off. This asserts on the output rather
+  // than on either version's docs.
+  it("emits exactly one <title>", async () => {
     const html = await render(template.render(benign()));
 
-    expect(html).toMatch(/<title>.+<\/title>/);
+    expect(html.match(/<title>.+?<\/title>/g)).toHaveLength(1);
   });
 
   it("renders a plain-text alternative", async () => {

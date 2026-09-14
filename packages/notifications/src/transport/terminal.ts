@@ -23,7 +23,7 @@
  * event JSON logger, which is the practical half of the same point.
  */
 
-import { render } from "@react-email/components";
+import { render } from "react-email";
 import { AppError } from "@repo/errors/app-error";
 import type { NotificationTransport, OutboundMessage, TransportReceipt } from "#send";
 import { assertServerOnly } from "#server-only";
