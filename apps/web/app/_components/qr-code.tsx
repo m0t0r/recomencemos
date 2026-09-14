@@ -85,7 +85,7 @@ export function QrCode({ value, label }: QrCodeProps) {
       className="h-auto w-full max-w-56 rounded-md bg-white p-3"
       shapeRendering="crispEdges"
     >
-      {/* oxlint-disable-next-line shadcn/no-raw-colors -- a literal rather than currentColor, which forced-colours mode re-points; the modules must stay black. */}
+      {/* oxlint-disable-next-line shadcn/no-raw-colors -- the modules are a literal black for the scan contrast the comment on the <svg> explains. */}
       <path d={d} fill="#000000" />
     </svg>
   );

@@ -86,14 +86,14 @@ export function BaseEmail({ title, preview, children }: BaseEmailProps) {
         </Head>
         <Body className="bg-muted font-sans">
           <Preview>{preview}</Preview>
-          <Container className="mx-auto my-[24px] w-full max-w-[560px] rounded-lg border border-solid border-border bg-background p-8">
-            <Text className="m-0 mb-[24px] text-sm leading-6 font-semibold tracking-display text-primary">
+          <Container className="mx-auto my-6 w-full max-w-[560px] rounded-lg border border-solid border-border bg-background p-8">
+            <Text className="m-0 mb-6 text-sm leading-6 font-semibold tracking-display text-primary">
               Recomencemos
             </Text>
 
             {children}
 
-            <Hr className="my-[24px] border-none border-t border-solid border-border" />
+            <Hr className="my-6 border-none border-t border-solid border-border" />
 
             <Section>
               {/*

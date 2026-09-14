@@ -249,29 +249,40 @@ follow from that:
   tracking and leading are `tracking-display` and `leading-display`, and holding the drift is the
   `animation-paused` utility. An arbitrary value in a page is what the rule refuses. A genuine
   exception is an `oxlint-disable` naming the rule and why, and there are three: `google-mark.tsx`
-  (Google's palette), `global-error.tsx` (no stylesheet loads there) and `qr-code.tsx` (its
-  modules are a literal black, because forced-colours mode re-points `currentColor`).
-- **A per-directory entry goes in that workspace's own config, not the root's.** A root `overrides`
-  glob did not reach `packages/design-system` once that workspace's config extended the root, which
-  was measured rather than assumed. So `packages/design-system/.oxlintrc.json` turns
-  `no-arbitrary-values` and `require-static-classes` off for `src/components/**`, whose files are
-  registry output rather than callers, and `no-restyle`'s component override belongs there too.
+  (Google's palette), `global-error.tsx` (no stylesheet loads there) and `qr-code.tsx` (a scanner
+  needs its modules at full contrast, whatever a theme token would resolve to).
+- **A per-directory entry goes in that workspace's own config, not the root's.** An `overrides`
+  glob in a config that another config `extends` is resolved against the _extending_ config's
+  directory. So a root entry written from the repository root —
+  `packages/design-system/src/components/**` — never matches inside that workspace, and one written
+  as `src/components/**` would match in every workspace that has such a folder. Both were measured.
+  The root's `**/*.test.tsx` override reaches every workspace for the same reason, and means to.
+  So `packages/design-system/.oxlintrc.json` turns `no-arbitrary-values` and
+  `require-static-classes` off for `src/components/**`, whose files are registry output rather than
+  callers, and `no-restyle`'s component override belongs there too.
   `packages/notifications/.oxlintrc.json` allows the two tracking names `BaseEmail`'s Tailwind
   config declares, because the linter reads a theme stylesheet and cannot see a config passed as
   a prop.
 
 The plugin's [rules](https://github.com/shadcn-ui/lint/blob/main/README.md#rules) and
 [configuration examples](https://github.com/shadcn-ui/lint/blob/main/docs/design-systems.md) are
-where to start. It is pinned exactly for the reason in the paragraph above, and `lint.sh` goes red
-if a `shadcn/*` rule stops firing through any workspace's config.
+where to start. It is pinned exactly for the reason in the paragraph above. `lint.sh` goes red if
+`no-inline-styles` stops firing through any workspace's config, which is the plugin failing to
+load, and if `apps/web` stops reaching the design system's theme, which is the other four rules
+quietly checking less.
 
-**`apps/web/components.json` exists for that linter, and deleting it as redundant breaks it
-silently.** The plugin finds an app's theme through a `components.json` or a stylesheet inside the
-app, and `apps/web` has neither — it imports `@repo/design-system/globals.css` from `layout.tsx`,
-which the linter does not follow. Without the file, every `@utility` in the design system reads as
-an unknown class and `no-restyle` sees a fraction of the component usages (21 findings against 119,
-all six rules at `warn`, 2026-09-14). Its aliases all name `@repo/design-system`, so it cannot
-become a second component directory, and components are still added with `-c packages/design-system`.
+**`apps/web/components.json` exists for that linter, and deleting it fails `pnpm lint`.** The
+plugin finds an app's theme by walking up from the linted file to a `components.json` or a
+stylesheet, and `apps/web` has neither of its own — it imports `@repo/design-system/globals.css`
+from `layout.tsx`, which the linter does not follow. Without the file, every `@utility` and theme
+token in the design system reads as an unknown class: 32 `no-unknown-classes` findings on
+2026-09-14, so the failure is loud. It is loud only because pages happen to use `page-heading` and
+`ruled-page`, though, so `lint.sh` pins it with a fixture of its own inside `apps/web`, which fails
+whether the file is deleted or its `tailwind.css` stops pointing at `globals.css`. For
+`no-restyle`'s ticket, the file is also why that rule sees every component usage rather than a
+fraction (21 findings against 119, all six rules at `warn`). Its aliases all name
+`@repo/design-system`, so it cannot become a second component directory, and components are still
+added with `-c packages/design-system`.
 
 **The DOM environment is happy-dom, not the jsdom Next's docs prescribe, and that was measured rather
 than preferred.** The measurements and the guard test are in `packages/design-system/CLAUDE.md`; if
