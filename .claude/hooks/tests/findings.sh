@@ -17,6 +17,7 @@ cat > "$BIN/gh" <<'STUB'
 #!/usr/bin/env bash
 printf 'gh %s\n' "$*" >> "$FIXTURE/gh.log"
 case "$1 $2" in
+  "api "*) cat "$FIXTURE/runs.json" ;;
   "issue list") cat "$FIXTURE/issues.json" ;;
   "issue create") cat > "$FIXTURE/body.txt"; echo "https://example.test/issues/99" ;;
   "issue edit") cat > "$FIXTURE/body.txt" ;;
@@ -149,3 +150,132 @@ F=$(fixture breach-short)
 expect_run "a missing field is refused"              2 "::error::incomplete breach payload, missing: surface" - -- env "PATH=$BIN:$PATH" FIXTURE="$F" REPO=o/r \
   BAND=b OBSERVED=o SURFACE= FIRST_CHECK=f node "$FINDINGS" breach
 no_call   "and nothing is filed"                     "$F" "issue create"
+
+# --- the Dependabot watch ------------------------------------------------------
+#
+# The runs listing is built relative to now, because staleness is a question
+# about the clock and a fixed date would turn every case stale the week after it
+# was written. Each argument is `ecosystem:conclusion:days-ago:id[:dependency]`;
+# the optional fifth field makes it a single-dependency run, which the watch
+# must ignore.
+runs_json() {
+  node -e '
+    const now = Date.now();
+    const workflow_runs = process.argv.slice(1).map((spec) => {
+      const [eco, conclusion, days, id, dep] = spec.split(":");
+      return {
+        id: Number(id),
+        name: `${eco} in /.${dep ? ` for ${dep}` : ""} - Update #${id}`,
+        status: "completed",
+        conclusion,
+        created_at: new Date(now - Number(days) * 864e5).toISOString(),
+        html_url: `https://run.test/${id}`,
+      };
+    });
+    process.stdout.write(JSON.stringify({ workflow_runs }));
+  ' "$@"
+}
+
+watch_fixture() { # name issues-json ecosystem... -- run-spec...
+  local d
+  d=$(fixture "$1" "$2"); shift 2
+  : > "$d/dependabot.yml"
+  while [ "$1" != "--" ]; do printf '  - package-ecosystem: %s\n' "$1" >> "$d/dependabot.yml"; shift; done
+  shift
+  runs_json "$@" > "$d/runs.json"
+  echo "$d"
+}
+
+run_watch() { # name expect-exit expect-grep fixture
+  expect_run "$1" "$2" "$3" -- env "PATH=$BIN:$PATH" FIXTURE="$4" REPO=o/r RUN_URL=https://run.test \
+    node "$FINDINGS" dependabot --config "$4/dependabot.yml"
+}
+
+wissue() { # number state fingerprint
+  jq -nc --argjson n "$1" --arg s "$2" --arg b "…<!-- dependabot-fingerprint: $3 -->" '{number:$n,state:$s,body:$b}'
+}
+
+# The fingerprint of one failing npm episode, read out of the body the watch
+# writes rather than restated, the way FP is read out of the report above.
+F=$(watch_fixture wfp "[]" npm -- npm_and_yarn:failure:1:300 npm_and_yarn:success:8:200)
+env "PATH=$BIN:$PATH" FIXTURE="$F" REPO=o/r node "$FINDINGS" dependabot --config "$F/dependabot.yml" >/dev/null 2>&1
+WFP=$(sed -n 's/.*dependabot-fingerprint: \([0-9a-f]*\).*/\1/p' "$F/body.txt")
+
+section "Findings: the Dependabot watch, healthy"
+F=$(watch_fixture healthy "[]" npm github-actions -- npm_and_yarn:success:1:300 github_actions:success:1:301)
+run_watch "every latest job succeeded"               0 "no open finding to close" "$F"
+no_call   "and nothing is filed"                     "$F" "issue create"
+calls     "the runs are read from the dynamic event" "$F" "^gh api repos/o/r/actions/runs\?event=dynamic"
+
+F=$(watch_fixture recovered "[$(wissue 7 OPEN "$WFP")]" npm -- npm_and_yarn:success:0:400 npm_and_yarn:failure:1:300)
+run_watch "a recovery closes the open watch issue"   0 "closed #7: every ecosystem is healthy" "$F"
+calls     "commented before it is closed"            "$F" "^gh issue comment 7 .*succeeded\. Closing\..*Run"
+calls     "and then closed"                          "$F" "^gh issue close 7 --repo o/r"
+
+F=$(watch_fixture audit-issue "[$(issue 8 OPEN "$FP")]" npm -- npm_and_yarn:success:1:300)
+run_watch "an open audit finding is not the watch's" 0 "no open finding to close" "$F"
+no_call   "so it is never closed from here"          "$F" "issue close"
+
+F=$(watch_fixture security-run "[]" npm -- npm_and_yarn:failure:0:301:qs npm_and_yarn:success:1:300)
+run_watch "a failed single-dependency job is ignored" 0 "no open finding to close" "$F"
+
+F=$(watch_fixture cancelled "[]" npm -- npm_and_yarn:cancelled:0:301 npm_and_yarn:success:1:300)
+run_watch "a cancelled job is no verdict"            0 "no open finding to close" "$F"
+
+section "Findings: the Dependabot watch, failing"
+F=$(watch_fixture failing "[]" npm docker-compose -- npm_and_yarn:failure:1:300 npm_and_yarn:success:8:200 docker_compose:success:1:301)
+run_watch "a failing ecosystem is filed"             0 "^filed https://example.test/issues/99" "$F"
+calls     "under both labels"                        "$F" "^gh issue create .*--label needs-triage --label dependabot-watch --title Dependabot update jobs are failing"
+expect_run "the body names the failing ecosystem"    0 - -- grep -q '| `npm_and_yarn` | failing | \[.*\](https://run.test/300)' "$F/body.txt"
+expect_run "and not the healthy one"                 1 - -- grep -q docker_compose "$F/body.txt"
+expect_run "and carries the fingerprint"             0 - -- grep -q "dependabot-fingerprint: $WFP" "$F/body.txt"
+
+F=$(watch_fixture same "[$(wissue 7 OPEN "$WFP")]" npm -- npm_and_yarn:failure:0:301 npm_and_yarn:failure:1:300 npm_and_yarn:success:8:200)
+run_watch "another failure in the same episode"      0 "#7 already describes this exact set" "$F"
+no_call   "is neither edited nor re-filed"           "$F" "issue (create|edit|comment)"
+
+F=$(watch_fixture older-episode "[$(wissue 7 OPEN "$WFP")]" npm -- npm_and_yarn:failure:1:300 npm_and_yarn:success:8:200 npm_and_yarn:failure:15:100)
+run_watch "a failure before the last recovery is not this episode" 0 "#7 already describes this exact set" "$F"
+
+F=$(watch_fixture spread "[$(wissue 7 OPEN "$WFP")]" npm github-actions -- npm_and_yarn:failure:1:300 npm_and_yarn:success:8:200 github_actions:failure:1:301)
+run_watch "a second ecosystem failing edits the issue" 0 "^updated #7" "$F"
+calls     "in place, saying so"                      "$F" "^gh issue comment 7 .*failing ecosystems changed"
+no_call   "and files nothing new"                    "$F" "issue create"
+
+F=$(watch_fixture dismissed "[$(wissue 5 CLOSED "$WFP")]" npm -- npm_and_yarn:failure:0:301 npm_and_yarn:failure:1:300 npm_and_yarn:success:8:200)
+run_watch "a closed issue for this episode is a dismissal" 0 "#5 carries this exact set and was closed" "$F"
+no_call   "so nothing is re-filed"                   "$F" "issue create"
+
+F=$(watch_fixture relapse "[$(wissue 5 CLOSED "$WFP")]" npm -- npm_and_yarn:failure:0:500 npm_and_yarn:success:1:400 npm_and_yarn:failure:2:300 npm_and_yarn:success:8:200)
+run_watch "a relapse after a recovery is filed afresh" 0 "^filed" "$F"
+
+F=$(watch_fixture stale "[]" npm -- npm_and_yarn:success:10:300)
+run_watch "a job that stopped running is filed"      0 "^filed" "$F"
+expect_run "and the body says for how long"          0 - -- grep -q 'no job for 10 days' "$F/body.txt"
+
+F=$(watch_fixture never "[]" npm docker -- npm_and_yarn:success:1:300)
+run_watch "an ecosystem with no job at all is filed" 0 "^filed" "$F"
+expect_run "and named"                               0 - -- grep -q '| `docker` | no completed job found' "$F/body.txt"
+
+section "Findings: the Dependabot watch must not fail open"
+F=$(watch_fixture unknown "[]" npm pip -- npm_and_yarn:success:1:300)
+run_watch "an ecosystem it cannot name is refused"   2 'no run name is known for the "pip" ecosystem' "$F"
+no_call   "before anything is read"                  "$F" "^gh"
+
+F=$(watch_fixture no-config "[]" npm -- npm_and_yarn:success:1:300)
+rm "$F/dependabot.yml"
+run_watch "a config it cannot read is refused"       2 "cannot read" "$F"
+
+F=$(watch_fixture empty-config "[]" -- npm_and_yarn:success:1:300)
+run_watch "a config with no ecosystem is refused"    2 "nothing to watch" "$F"
+
+F=$(watch_fixture no-runs-key "[]" npm --)
+printf '%s' '{"message":"Not Found"}' > "$F/runs.json"
+run_watch "a listing that is not one is refused"     2 "carried no workflow_runs" "$F"
+no_call   "and no issue is touched"                  "$F" "issue"
+
+F=$(watch_fixture api-down "[]" npm -- npm_and_yarn:success:1:300)
+touch "$F/gh-fails"
+run_watch "gh failing is a refusal, not a clean run" 2 "gh api .* failed" "$F"
+
+expect_run "an argument it does not know"            2 "usage: findings.mjs dependabot" -- env REPO=o/r node "$FINDINGS" dependabot --verbose
