@@ -31,7 +31,7 @@ export function Cover({ strip, profilesId }: { strip: React.ReactNode; profilesI
         <div className="flex max-w-3xl flex-col gap-5">
           <h1
             id="cover-heading"
-            className="font-heading text-4xl leading-[1.1] font-medium tracking-[-0.01em] text-balance sm:text-5xl lg:text-6xl"
+            className="font-heading text-4xl leading-display font-medium tracking-display text-balance sm:text-5xl lg:text-6xl"
           >
             {COVER_TITLE}
           </h1>

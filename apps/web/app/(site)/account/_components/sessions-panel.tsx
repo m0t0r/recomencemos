@@ -115,7 +115,7 @@ export function SessionsPanel({ otherCount }: SessionsPanelProps) {
         // Focusable programmatically but not in the tab order: a destination for
         // focus after an outcome, never a stop on the way to the button.
         tabIndex={-1}
-        className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-[3px]"
+        className="focus-visible:ring-ring/50 rounded-md outline-none focus-visible:ring-3"
       >
         {announcement ? (
           <div className="border-border grid grid-cols-[1.25rem_1fr] gap-x-3 border-t py-4">

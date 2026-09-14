@@ -27,6 +27,19 @@
       }
     },
     {
+      "files": ["src/components/**"],
+      "rules": {
+        "shadcn/no-arbitrary-values": "off",
+        "shadcn/require-static-classes": "off"
+      }
+    },
+    {
+      "files": ["src/components/sonner.tsx", "src/components/input-otp.tsx"],
+      "rules": {
+        "shadcn/no-unknown-classes": ["error", { "allow": ["toaster", "cn-input-otp"] }]
+      }
+    },
+    {
       "files": ["src/hooks/use-mobile.ts", "src/components/sidebar.tsx"],
       "rules": {
         "react/set-state-in-effect": "off",

@@ -19,6 +19,11 @@
       }
     ],
     "repo/react-namespace-import": "error",
+    "shadcn/no-raw-colors": "error",
+    "shadcn/no-arbitrary-values": ["error", { "allow": ["layout"] }],
+    "shadcn/no-inline-styles": "error",
+    "shadcn/require-static-classes": "error",
+    "shadcn/no-unknown-classes": "error",
     "import/no-unassigned-import": [
       "warn",
       {

@@ -205,6 +205,12 @@
   --text-3xl: 2rem;
   --text-3xl--line-height: 1.25;
 
+  /* `DESIGN.md`'s display role: Alegreya set a touch tight, on a short line. Named here so the
+   * cover, the page heading and the wordmark reach for one value rather than each spelling it as
+   * an arbitrary value that `shadcn/no-arbitrary-values` refuses. */
+  --tracking-display: -0.01em;
+  --leading-display: 1.1;
+
   /* The one authored motion in the product: the vocabulary strip on the landing drifts. It is
    * defined here rather than in the app so that a second surface reaches for the same keyframes
    * rather than a slightly different set. Stilled under reduced motion in the base layer. */
@@ -242,7 +248,14 @@
 }
 
 @utility page-heading {
-  @apply font-heading text-foreground text-3xl font-medium tracking-[-0.01em] text-balance;
+  @apply font-heading text-foreground text-3xl font-medium tracking-display text-balance;
+}
+
+/* Holds the drift where a pointer rests, so a chip can be read before it slides away. Tailwind has
+ * no utility for `animation-play-state`, and an arbitrary property in a page is what
+ * `shadcn/no-arbitrary-values` refuses. */
+@utility animation-paused {
+  animation-play-state: paused;
 }
 
 /* The chevron a native `<select>` stops drawing once `appearance: none` takes its chrome away.

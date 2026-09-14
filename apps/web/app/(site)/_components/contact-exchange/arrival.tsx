@@ -47,7 +47,7 @@ export function ExchangeHeading({
       ref={ref}
       id={id}
       tabIndex={-1}
-      className="font-heading text-foreground focus-visible:ring-ring/50 rounded-sm text-lg font-medium outline-none focus-visible:ring-[3px]"
+      className="font-heading text-foreground focus-visible:ring-ring/50 rounded-sm text-lg font-medium outline-none focus-visible:ring-3"
     >
       {children}
     </h3>

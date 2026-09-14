@@ -1,4 +1,4 @@
-# The lint configuration here that is a gate in its own right, and there are two pieces of it.
+# The lint configuration here that is a gate in its own right, and there are three pieces of it.
 #
 # The first: a component test finds what it asserts on through the accessibility tree, and raw DOM
 # access is refused (#261). It is oxlint configuration rather than a script, so there is no
@@ -8,7 +8,10 @@
 # branching, so its cases pin what it refuses and what its fix writes as well as that it loads.
 # They live here rather than in a file named for the script because they need the same real
 # configs, and the failure mode below -- a `jsPlugins` entry that quietly stops loading -- is
-# shared by both.
+# shared by all three.
+#
+# The third is `@shadcn/lint`'s rules, whose cases pin only that they still fire through every
+# workspace's config: which classes they refuse is the plugin's behaviour, not branching of ours.
 #
 # That is worth a suite because of how it can fail. The two rules come from
 # `eslint-plugin-testing-library` through oxlint's `jsPlugins`, which oxlint's own
@@ -179,6 +182,18 @@ for fixture in react-reexport-local.ts react-shadowed.ts; do
     "$LINT/$fixture" >/dev/null 2>&1
 done
 
+# `@shadcn/lint`, the third plugin through the same door: five of its rules are at `error` in the
+# root config (#296), and a plugin that stopped loading would leave `pnpm lint` green on a tree full
+# of raw colours and inline styles. `no-inline-styles` is the probe because it decides without a
+# theme, so a fixture outside the repository exercises it exactly as a page would.
+cat > "$LINT/shadcn-inline-style.tsx" <<'EOF'
+export const Box = () => <div style={{ padding: 13 }} />;
+EOF
+
+cat > "$LINT/shadcn-scale.tsx" <<'EOF'
+export const Box = () => <div className="p-4" />;
+EOF
+
 # A bare import pulls nothing out of React, so the rule has nothing to say about it.
 cat > "$LINT/react-bare.ts" <<'EOF'
 import "react";
@@ -229,3 +244,14 @@ lint_fixture "a shadowed React is still refused after a fix run" .oxlintrc.json 
 expect_run "a shadowed React is left for a person" 0 '^  return \[React, useState\];$' -- \
   cat "$LINT/react-shadowed.ts"
 lint_clean "a bare import passes" .oxlintrc.json "$LINT/react-bare.ts"
+
+section "shadcn rules"
+lint_fixture "an inline style is refused" .oxlintrc.json 1 \
+  'shadcn\(no-inline-styles\)' "$LINT/shadcn-inline-style.tsx"
+lint_clean "a scale class passes" .oxlintrc.json "$LINT/shadcn-scale.tsx"
+lint_fixture "apps/web inherits the rule" apps/web/.oxlintrc.json 1 \
+  'shadcn\(no-inline-styles\)' "$LINT/shadcn-inline-style.tsx"
+lint_fixture "design-system inherits the rule" packages/design-system/.oxlintrc.json 1 \
+  'shadcn\(no-inline-styles\)' "$LINT/shadcn-inline-style.tsx"
+lint_fixture "notifications inherits the rule" packages/notifications/.oxlintrc.json 1 \
+  'shadcn\(no-inline-styles\)' "$LINT/shadcn-inline-style.tsx"

@@ -104,7 +104,7 @@ export async function VocabularyStrip() {
 
   return (
     <div className="overflow-hidden">
-      <div className="animate-drift flex w-max hover:[animation-play-state:paused] motion-reduce:w-full">
+      <div className="animate-drift flex w-max hover:animation-paused motion-reduce:w-full">
         <Chips entries={entries} />
         <Chips entries={entries} hidden />
       </div>

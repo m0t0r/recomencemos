@@ -68,6 +68,15 @@ export function BaseEmail({ title, preview, children }: BaseEmailProps) {
             extend: {
               colors: palette,
               fontFamily: { sans: FONT_STACK.split(", ") },
+              /*
+                The two values the preset leaves in `rem` or does not name, so a
+                template reaches them by name rather than as arbitrary values.
+                `lg` is `DESIGN.md`'s `rounded.lg` in px; Tailwind's own is
+                `0.5rem`, which an email client does not read. `display` is the
+                display role's tracking, and `heading` is the email headline's.
+              */
+              borderRadius: { lg: "8px" },
+              letterSpacing: { display: "-0.01em", heading: "-0.02em" },
             },
           },
         }}
@@ -75,10 +84,10 @@ export function BaseEmail({ title, preview, children }: BaseEmailProps) {
         <Head>
           <title>{title}</title>
         </Head>
-        <Body className="bg-muted font-sans" style={{ fontFamily: FONT_STACK }}>
+        <Body className="bg-muted font-sans">
           <Preview>{preview}</Preview>
-          <Container className="mx-auto my-[24px] w-full max-w-[560px] rounded-[8px] border border-solid border-border bg-background p-[32px]">
-            <Text className="m-0 mb-[24px] text-[14px] font-semibold tracking-[-0.01em] text-primary">
+          <Container className="mx-auto my-[24px] w-full max-w-[560px] rounded-lg border border-solid border-border bg-background p-8">
+            <Text className="m-0 mb-[24px] text-sm leading-6 font-semibold tracking-display text-primary">
               Recomencemos
             </Text>
 
@@ -102,7 +111,7 @@ export function BaseEmail({ title, preview, children }: BaseEmailProps) {
                 back to her within seconds — which tells her more, sooner, than
                 any line here could.
               */}
-              <Text className="m-0 text-[14px] leading-[20px] text-mutedForeground">
+              <Text className="m-0 text-sm text-mutedForeground">
                 Te escribimos desde Recomencemos porque tienes una cuenta aquí.
               </Text>
             </Section>

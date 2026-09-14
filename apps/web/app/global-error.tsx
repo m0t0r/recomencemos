@@ -45,6 +45,10 @@
  * already makes for email keeping Inter alone.
  */
 
+/* oxlint-disable shadcn/no-inline-styles, shadcn/no-unknown-classes -- this boundary replaces the
+   root layout, so the design system's stylesheet is not loaded here; its rules and class names
+   are the ones in the style element below. */
+
 import {
   REFERENCE_TERM,
   ROOT_ERROR_EXPLANATION,

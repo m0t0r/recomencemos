@@ -20,6 +20,9 @@
  * `docs/policy/voice.md`'s rule that nothing may refer to meaning carried by
  * colour alone is satisfied by the label doing the work.
  */
+
+/* oxlint-disable shadcn/no-raw-colors -- Google's trademark palette, reproduced exactly; see above. */
+
 export function GoogleMark({ className }: { className?: string }) {
   return (
     <svg

@@ -113,25 +113,25 @@ export function MagicLinkEmail({ url, expiresInMinutes }: MagicLinkEmailProps) {
     <BaseEmail title={MAGIC_LINK_SUBJECT} preview={`El enlace dura ${expiresInMinutes} minutos.`}>
       <Heading
         as="h1"
-        className="m-0 mb-[16px] text-[24px] font-semibold leading-[32px] tracking-[-0.02em] text-foreground"
+        className="m-0 mb-[16px] text-2xl font-semibold tracking-heading text-foreground"
       >
         Tu enlace para entrar
       </Heading>
 
-      <Text className="m-0 mb-[24px] text-[16px] leading-[24px] text-foreground">
+      <Text className="m-0 mb-[24px] text-base text-foreground">
         Pediste un enlace para entrar a Recomencemos. Ábrelo desde este mismo teléfono.
       </Text>
 
       <Section className="mb-[24px]">
         <Button
           href={href}
-          className="box-border rounded-[8px] bg-primary px-[24px] py-[12px] text-[16px] font-semibold text-primaryForeground no-underline"
+          className="box-border rounded-lg bg-primary px-6 py-3 text-base leading-none font-semibold text-primaryForeground no-underline"
         >
           Entrar a Recomencemos
         </Button>
       </Section>
 
-      <Text className="m-0 mb-[16px] text-[16px] leading-[24px] text-foreground">
+      <Text className="m-0 mb-[16px] text-base text-foreground">
         El enlace sirve una sola vez y dura {expiresInMinutes} minutos. Si el botón no abre, usa
         esta dirección:{" "}
         <Link href={href} className="text-primary underline">
@@ -139,7 +139,7 @@ export function MagicLinkEmail({ url, expiresInMinutes }: MagicLinkEmailProps) {
         </Link>
       </Text>
 
-      <Text className="m-0 text-[16px] leading-[24px] text-foreground">
+      <Text className="m-0 text-base text-foreground">
         Si no pediste este enlace, no hagas nada. Sin abrirlo, nadie entra a tu cuenta.
       </Text>
     </BaseEmail>

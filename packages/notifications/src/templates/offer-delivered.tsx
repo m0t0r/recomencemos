@@ -67,36 +67,36 @@ export function OfferDeliveredEmail({ firstName, url }: OfferDeliveredEmailProps
     >
       <Heading
         as="h1"
-        className="m-0 mb-[16px] text-[24px] font-semibold leading-[32px] tracking-[-0.02em] text-foreground"
+        className="m-0 mb-[16px] text-2xl font-semibold tracking-heading text-foreground"
       >
         Te llegó una propuesta
       </Heading>
 
-      <Text className="m-0 mb-[24px] text-[16px] leading-[24px] text-foreground">
+      <Text className="m-0 mb-[24px] text-base text-foreground">
         Hola {firstName}. Alguien te escribió por un trabajo.
       </Text>
 
-      <Text className="m-0 mb-[24px] text-[16px] leading-[24px] text-foreground">
+      <Text className="m-0 mb-[24px] text-base text-foreground">
         Una persona la leyó antes de que te llegara. Dice qué es el trabajo, cuánto pagan y cuándo.
       </Text>
 
       <Section className="mb-[24px]">
         <Button
           href={href}
-          className="box-border rounded-[8px] bg-primary px-[24px] py-[12px] text-[16px] font-semibold text-primaryForeground no-underline"
+          className="box-border rounded-lg bg-primary px-6 py-3 text-base leading-none font-semibold text-primaryForeground no-underline"
         >
           Leer la propuesta
         </Button>
       </Section>
 
-      <Text className="m-0 mb-[16px] text-[16px] leading-[24px] text-foreground">
+      <Text className="m-0 mb-[16px] text-base text-foreground">
         Si el botón no abre, usa esta dirección:{" "}
         <Link href={href} className="text-primary underline">
           {href}
         </Link>
       </Text>
 
-      <Text className="m-0 text-[16px] leading-[24px] text-foreground">
+      <Text className="m-0 text-base text-foreground">
         Tu teléfono y tu correo siguen aquí. Solo salen si tú aceptas. Si no quieres responder, no
         tienes que hacer nada.
       </Text>
