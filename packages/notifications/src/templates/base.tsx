@@ -3,9 +3,13 @@
  *
  * Four things it fixes so no later template has to remember them:
  *
- * - **`lang="es"`.** React Email's `<Html>` defaults to `lang="en"`; `es-CO` is
- *   this product's only language, and a screen reader announcing Spanish with an
- *   English voice is NFR20's failure rather than a cosmetic one.
+ * - **`lang="es"`, on `<Html>` and on `<Body>`.** React Email's `<Html>`
+ *   defaults to `lang="en"`, and since `react-email` 6 so does `<Body>` — which
+ *   stamps it on both the `<body>` and the layout cell it wraps the content in,
+ *   so setting it on `<Html>` alone leaves every word of the message inside an
+ *   English-tagged element. `es-CO` is this product's only language, and a
+ *   screen reader announcing Spanish with an English voice is NFR20's failure
+ *   rather than a cosmetic one.
  * - **One footer line, and it is not an invitation to reply.** DD14 wanted a
  *   monitored reply-to here and this frame carried one; the sending subdomain is
  *   configured send-only, so there is no mailbox behind it and the invitation
@@ -33,7 +37,7 @@ import {
   Tailwind,
   Text,
   pixelBasedPreset,
-} from "@react-email/components";
+} from "react-email";
 import * as React from "react";
 import { FONT_STACK, palette } from "#palette";
 
@@ -42,11 +46,16 @@ export interface BaseEmailProps {
    * The document title, and it is the **subject line** rather than a third
    * string invented here.
    *
-   * React Email's own accessibility guidance says `<Preview>` emits a `<title>`;
-   * it does not at `@react-email/preview@0.0.14`, which is what
-   * `@react-email/components@1.0.12` resolves to — verified by rendering, not
-   * recalled. So the frame emits one. It matters for the web view an inbox opens
-   * a message in, where the title is the accessible name of the document.
+   * It matters for the web view an inbox opens a message in, where the title is
+   * the accessible name of the document.
+   *
+   * **`<Preview>` is told not to emit one, and that is the load-bearing half.**
+   * Under `@react-email/components` it emitted none, so the frame supplied it.
+   * `react-email` 6 changed that: `<Preview>` now renders a `<title>` holding the
+   * *preview line* by default, and React hoists it into `<head>` beside this one —
+   * two titles, one of them the wrong string. Verified by rendering, not
+   * recalled. `useTitleTag={false}` below keeps the document to one title, and it
+   * is the subject.
    */
   readonly title: string;
   /**
@@ -84,8 +93,8 @@ export function BaseEmail({ title, preview, children }: BaseEmailProps) {
         <Head>
           <title>{title}</title>
         </Head>
-        <Body className="bg-muted font-sans">
-          <Preview>{preview}</Preview>
+        <Body lang="es" dir="ltr" className="bg-muted font-sans">
+          <Preview useTitleTag={false}>{preview}</Preview>
           <Container className="mx-auto my-6 w-full max-w-[560px] rounded-lg border border-solid border-border bg-background p-8">
             <Text className="m-0 mb-6 text-sm leading-6 font-semibold tracking-display text-primary">
               Recomencemos

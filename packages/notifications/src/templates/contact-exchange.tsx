@@ -25,7 +25,7 @@
  * or to the notices is a change to this file too.
  */
 
-import { Button, Heading, Link, Section, Text } from "@react-email/components";
+import { Button, Heading, Link, Section, Text } from "react-email";
 import { BaseEmail } from "#templates/base";
 import { safeUrl } from "#templates/magic-link";
 

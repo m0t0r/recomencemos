@@ -20,7 +20,7 @@
  * the one injection an email template still admits (DD14, C48).
  */
 
-import { Button, Heading, Link, Section, Text } from "@react-email/components";
+import { Button, Heading, Link, Section, Text } from "react-email";
 import { safeUrl } from "#templates/magic-link";
 import { BaseEmail } from "#templates/base";
 
