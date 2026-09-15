@@ -29,7 +29,7 @@ import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins/magic-link";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import {
   ADMIN_CHALLENGE_TTL_SECONDS,
   SECOND_FACTOR_ROUTE,
@@ -476,7 +476,21 @@ export function authOptions({
        */
       accountLinking: { enabled: true, trustedProviders: [] },
 
-      /** The OAuth state row is a verification row, which is what carries the answer. */
+      /**
+       * **The OAuth state is a `verification` row**: one per start, ten minutes
+       * long, deleted by the callback that reads it or by the sweep in
+       * `databaseHooks.verification` below.
+       *
+       * **It does not carry the shared-device answer.** The Google door's answer
+       * travels in `SHARED_DEVICE_COOKIE`: `beforeSignIn` sets it on
+       * `/sign-in/social` and reads it back on `/callback/*`, which works because
+       * the provider returns to the same browser. The row that does carry the
+       * answer is the magic link's, whose round trip may end in another browser.
+       *
+       * `"cookie"` was considered in #323 and declined. The sweep is needed for
+       * magic-link rows either way, and the switch would touch the `Set-Cookie`
+       * handoff in `startGoogleSignIn` for little gain.
+       */
       storeStateStrategy: "database",
     },
 
@@ -640,6 +654,43 @@ export function authOptions({
                 signInAttemptId: attempt.signInAttemptId ?? null,
               },
             };
+          },
+
+          /**
+           * **The sweep: every write clears the rows that have expired** (#323).
+           *
+           * Nothing else deletes an expired row on the paths this product takes.
+           * Better Auth prunes the table inside `findVerificationValue`, and here
+           * only the OAuth callback reaches that; the magic link reads through
+           * `consumeVerificationValue`, which prunes nothing. So a link nobody
+           * opened — whose `value` holds the address it was sent to — stayed
+           * until somebody happened to finish a Google sign-in, and with Google
+           * unconfigured, forever.
+           *
+           * **On the write path rather than a schedule**, because a write is the
+           * one moment this table is guaranteed a caller paying attention, and
+           * writes are bounded by the ceilings on both doors, so the extra
+           * statement is bounded with them. Every row either door writes comes
+           * through `createVerificationValue`, so this one hook sees them all.
+           *
+           * **`after`, not `before`.** Better Auth runs this through
+           * `queueAfterTransactionHook`: once the insert has committed, and
+           * outside any transaction its adapter holds. So a delete over this
+           * package's own handle cannot contend with the insert it follows.
+           *
+           * **It never takes a row that is still live**, which would turn a link
+           * she is about to open, or a Google callback on its way back, into a
+           * failure. `<` against now matches only a row whose time is already
+           * up, and the row just written has a positive lifetime.
+           *
+           * **No index on `expires_at`.** Swept on every write, the table holds
+           * little more than the last fifteen minutes of sign-ins, and scanning
+           * that costs less than keeping an index current on every insert.
+           */
+          after: async () => {
+            await db
+              .delete(schema.verification)
+              .where(lt(schema.verification.expiresAt, new Date()));
           },
         },
       },
