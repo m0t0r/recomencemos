@@ -5,9 +5,10 @@
  *
  * **A version-matched generator does exist.** The CLI ships as the `auth`
  * package — `@better-auth/cli` is its former name and stopped at `1.4.21` — and
- * `auth@1.7.1` depends on `better-auth@1.7.1` exactly, the version this package
- * pins, so pnpm resolves both to one directory in the store. It was run against
- * this configuration and it emits these five tables with these column names.
+ * each `auth` release depends on the same `better-auth` version exactly
+ * (`auth@1.7.4` on `better-auth@1.7.4`, the version this package pins), so pnpm
+ * resolves both to one directory in the store. It was run against this
+ * configuration at 1.7.1 and emitted these five tables with these column names.
  * Availability is not the reason this file is hand-written.
  *
  * **The reason is that its pg type map cannot express what DD2 requires.** Every
@@ -372,9 +373,9 @@ export const account = pgTable(
   },
   (table) => [
     /**
-     * Better Auth 1.7.0–1.7.2's identity constraint, kept only until #312 drops
-     * it with `issuer`. It no longer holds anything: the library leaves `issuer`
-     * null, and a unique constraint treats nulls as distinct.
+     * Better Auth 1.7.0–1.7.2's identity constraint, kept until #312 drops it
+     * with `issuer`. It binds only rows written before 1.7.3: the library now
+     * leaves `issuer` null, and a unique constraint treats nulls as distinct.
      */
     unique("account_issuer_account_id_key").on(table.issuer, table.accountId),
 

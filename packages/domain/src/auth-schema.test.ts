@@ -118,10 +118,9 @@ const STRICTER_NOT_NULL = new Set<string>([
  * reason as `STRICTER_NOT_NULL`. An entry is a leftover somebody chose to keep
  * for one deploy, and a leftover that is not here fails the run.
  *
- * - `account.issuer` — Better Auth 1.7.0–1.7.2's identity column. 1.7.3 went
- *   back to the 1.6 account schema and never writes it, so #300 made it
- *   nullable and kept it. #312 drops it and its constraint in a `contract`
- *   migration a deploy later, and removes this entry with it.
+ * - `account.issuer` — unwritten by the installed library and nullable until
+ *   #312 drops it. The history is on the column in `auth-schema.ts`. #312
+ *   removes this entry with it.
  *
  * The entry is added to what the field test expects rather than subtracted from
  * what it finds, so the column vanishing while the entry stays is red too.
@@ -178,6 +177,20 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
     expect(drizzleFieldNames(TABLES[model])).toEqual(
       [...betterAuthFieldNames(model), ...retired].toSorted(),
     );
+  });
+
+  /**
+   * The nullability tests below walk Better Auth's fields, and a retired one is
+   * no longer among them. The library's insert leaves it out, so a `NOT NULL`
+   * with no default there refuses every row the adapter writes. That is the
+   * failure the retirement exists to avoid, and nothing else here would see it.
+   */
+  it.each([...RETIRED_FIELDS])("leaves %s writable by an insert that omits it", (entry) => {
+    const [model, field] = entry.split(".") as [Model, string];
+    const column = columnFor(model, field);
+
+    expect(column, `${entry} has no column`).toBeDefined();
+    expect(column?.notNull === false || column?.hasDefault === true).toBe(true);
   });
 
   /**
@@ -272,8 +285,8 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
    * index of its own there — triage on #300 chose to match the library. So
    * nothing in the database keeps one provider identity to one row, and this
    * test is not what would notice two; see `account` in `auth-schema.ts`. The
-   * (`issuer`, `account_id`) constraint still on that table is 1.7.0–1.7.2's,
-   * kept only until its removal ships, and nothing here reads it.
+   * (`issuer`, `account_id`) constraint still on that table is the old
+   * library's, and nothing here reads it.
    *
    * Matched on columns and uniqueness rather than on name: Better Auth names its
    * indexes in camelCase, this repository names its constraints in
