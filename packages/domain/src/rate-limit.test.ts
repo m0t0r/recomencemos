@@ -166,13 +166,7 @@ describe("principalKey", () => {
     );
   });
 
-  /**
-   * **The counter bounds mail to one inbox, so it counts the inbox.** A tag after
-   * `+` reaches the same mailbox at every provider that honours it, and a tag
-   * nobody honours costs nothing to fold: the worst case is two people sharing
-   * five links an hour, against the case this closes — unbounded mail to one
-   * person by changing the tag on each request.
-   */
+  // The counter bounds mail to one inbox, so it counts the inbox.
   it.each(["ana+1@example.com", "ANA+Trabajo@Example.com", " ana+x@example.com "])(
     "charges %o to the same counter as the bare address",
     (tagged) => {
@@ -226,16 +220,16 @@ describe("principalKey", () => {
 
   /**
    * **The fold is about email addresses and nothing else.** An IP or an Account
-   * id that happens to hold a `+` or a `.` is keyed exactly as it was before:
-   * trimmed, lower-cased, hashed. Comparing against the digest computed here —
-   * rather than against another call — is what makes this fail if the fold ever
-   * leaks into another scope.
+   * id that happens to hold a `+` or a `.` is trimmed, lower-cased and hashed,
+   * nothing more. Comparing against the digest computed here — rather than
+   * against another call — is what makes this fail if the fold ever leaks into
+   * another scope.
    */
   it.each([
     ["ip", "2001:DB8::1+x"],
     ["ip", " 190.0.2.10 "],
     ["account", "Ana+1.b@gmail.com"],
-  ] as const)("keys the %s scope's %o as it always has", (scope, id) => {
+  ] as const)("keys the %s scope's %o by trim and lower-case only", (scope, id) => {
     const digest = createHash("sha256").update(id.trim().toLowerCase()).digest("hex");
 
     expect(principalKey({ scope, id })).toBe(`${scope}:${digest}`);
