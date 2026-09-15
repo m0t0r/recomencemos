@@ -7,9 +7,10 @@
  * credentials and grants nothing: a link opened and abandoned leaves no Admin
  * behind.
  *
- * **It is one of two routes under `/admin` that does not call the gate**, and it
- * is an exemption by omission rather than by rule — `requireAdminPage` is a call,
- * and this page does not make it. There is no allowlist anywhere, because a
+ * **It is the only route under `/admin` that no gate reaches** — this page does
+ * not call `requireAdminPage`, and no layout above it does either, because it
+ * sits in `(token)` rather than `(admin)`. That is an exemption by omission
+ * rather than by rule. There is no allowlist anywhere, because a
  * carve-out is a second place the boundary is described and the first thing a
  * later route does is fall on the wrong side of it. What stands in for the gate
  * here is the token: unguessable, single-purpose, and short-lived.
