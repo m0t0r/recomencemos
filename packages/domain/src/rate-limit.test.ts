@@ -133,6 +133,16 @@ describe("CEILINGS", () => {
    * open at different instants, so nothing about the split is load-bearing at
    * any other hour.
    */
+  /**
+   * **Per IP and by nothing else, and the whole object is the assertion.** The
+   * Google door is started before the provider has said who is asking, so there
+   * is no address and no Account to charge — an `address` or `account` scope
+   * here would be a principal the action cannot know.
+   */
+  it("bounds startGoogleSignIn at twenty an hour per IP and by nothing else", () => {
+    expect(CEILINGS.startGoogleSignIn).toEqual({ ip: { max: 20, windowSeconds: 3600 } });
+  });
+
   it("puts the two windows on different rows at every other hour", () => {
     const midMorning = new Date("2026-09-08T09:17:04.000Z");
 

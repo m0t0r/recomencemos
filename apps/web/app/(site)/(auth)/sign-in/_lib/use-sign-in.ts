@@ -10,8 +10,10 @@
  * went.** This hook used to own a `better-auth/react` client, a `googlePending`
  * flag, a `googleFailed` flag, and the vendor's `{ error }`-rather-than-throw
  * hazard. All four are gone: the Google door is a Server Action now, its pending
- * state is `useFormStatus` inside its own form, and its failures arrive the same
- * way every other redirect does — as `?error=` on the URL.
+ * state is `useFormStatus` inside its own form, and a failure at the provider
+ * arrives the way every other redirect does — as `?error=` on the URL. The one
+ * answer that does not redirect is its ceiling's refusal (#323), which comes back
+ * as the action's result and is rendered like the email door's.
  */
 
 import * as React from "react";
@@ -57,12 +59,12 @@ export interface SignInMachine {
   /**
    * The Google door's `<form action>`.
    *
-   * It goes through `useActionState` for the same reason the email door does,
-   * even though nothing ever renders its result: that hook is what yields an
-   * action React can encode into the form for the no-JavaScript path, and it is
-   * what keeps both doors on one mechanism rather than two. A successful start
-   * redirects, so the state it holds is only ever the failure — which arrives
-   * back as `?error=` and is read from the URL instead.
+   * It goes through `useActionState` for the same reason the email door does:
+   * that hook is what yields an action React can encode into the form for the
+   * no-JavaScript path, and it is what keeps both doors on one mechanism rather
+   * than two. A successful start redirects, so the state it holds is only ever a
+   * refusal from its ceiling, which the live region renders. A failure at the
+   * provider comes back as `?error=` and is read from the URL instead.
    */
   readonly googleFormAction: (formData: FormData) => void;
   /** The email door alone is busy. The Google button stays usable. */
@@ -119,10 +121,51 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
     INITIAL,
   );
 
-  const [, googleFormAction] = React.useActionState(
+  const [googleResult, googleFormAction] = React.useActionState(
     startGoogleSignIn.bind(null, returnPath, sharedDevice),
     INITIAL_GOOGLE,
   );
+
+  /**
+   * **Which door answered last**, because the region speaks for one outcome and
+   * both doors keep theirs. A link sent after a Google refusal is the current
+   * truth, and so is a Google refusal after a link was sent. Neither may be
+   * hidden behind the other. So each result is compared by identity against the
+   * one last seen: `useActionState` hands back a fresh object per dispatch.
+   *
+   * Adjusted during render, React's own pattern for state that follows an
+   * input, rather than in an effect, which would render the stale outcome once
+   * first. The initial answer is Google's only when it arrived holding a refusal,
+   * which is what a no-JavaScript post of the Google form renders with.
+   */
+  const [answered, setAnswered] = React.useState(() => ({
+    email: result,
+    google: googleResult,
+    last: googleResult.serverError ? ("google" as const) : ("email" as const),
+  }));
+
+  const last =
+    answered.email !== result
+      ? "email"
+      : answered.google !== googleResult
+        ? "google"
+        : answered.last;
+
+  if (answered.email !== result || answered.google !== googleResult) {
+    setAnswered({ email: result, google: googleResult, last });
+  }
+
+  /**
+   * A Google start that is allowed redirects, so the only thing it ever answers
+   * is a refusal. That refusal is an `ActionError` exactly like the email
+   * door's, so it goes through `feedbackFor` rather than a second rule.
+   */
+  const current: SignInResult =
+    last === "email"
+      ? result
+      : googleResult.serverError
+        ? { serverError: googleResult.serverError }
+        : INITIAL;
 
   const announcementRef = React.useRef<HTMLDivElement>(null);
 
@@ -140,10 +183,10 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
     // a boolean stays `true` across a second failure, so focus would move on the
     // first outcome and never again. `result` is a fresh object per dispatch,
     // which is what makes "focus lands here on *every* outcome" true.
-    if (result.data ?? result.serverError ?? result.validationErrors) {
+    if (result.data ?? result.serverError ?? result.validationErrors ?? googleResult.serverError) {
       announcementRef.current?.focus();
     }
-  }, [result]);
+  }, [result, googleResult]);
 
   return {
     result,
@@ -153,7 +196,7 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
     emailRejected: Boolean(result.validationErrors),
     sharedDevice,
     setSharedDevice,
-    feedback: feedbackFor(result, {
+    feedback: feedbackFor(current, {
       consumedLink,
       googleFailed: arrivedWithGoogleError,
     }),
