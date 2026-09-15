@@ -1,0 +1,61 @@
+# SeaweedFS 4.47 as the development object store — a candidate measured by #299,
+# not the repository's store. Run through `../measure.sh seaweedfs`, which sets
+# the project name (`store-seaweedfs`) so this never meets the shared
+# `recomencemos` project or its ports.
+#
+# One container. `weed mini` runs master, volume, filer and the S3 gateway in a
+# single process; the Admin UI, WebDAV and the Iceberg catalog it would also
+# start are switched off, and only the S3 port is published.
+#
+# The credential pair is declared here rather than generated: `mini` seeds one
+# identity from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
+
+services:
+  object-store:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    command:
+      - mini
+      - -dir=/data
+      - -ip=object-store
+      - -ip.bind=0.0.0.0
+      - -s3.port=8333
+      - -admin.ui=false
+      - -webdav=false
+      - -s3.port.iceberg=0
+      # Off, because this is a laptop's dev loop and it reports home.
+      - -master.telemetry=false
+    environment:
+      AWS_ACCESS_KEY_ID: recomencemos
+      AWS_SECRET_ACCESS_KEY: recomencemos
+    ports:
+      - "127.0.0.1:29000:8333"
+    volumes:
+      - object-store-data:/data
+    healthcheck:
+      # The S3 gateway's own probe. busybox `wget` ships in the image.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 5s
+
+  # Runs once and exits. Same image, so no second registry pin.
+  init:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    profiles: ["init"]
+    depends_on:
+      object-store:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        weed shell -master=object-store:9333 <<'EOF'
+        s3.bucket.create -name recomencemos-photos
+        s3.bucket.create -name recomencemos-photos-quarantine
+        s3.anonymous.set -bucket recomencemos-photos -access Read
+        s3.anonymous.set -bucket recomencemos-photos-quarantine -access none
+        EOF
+
+volumes:
+  object-store-data:

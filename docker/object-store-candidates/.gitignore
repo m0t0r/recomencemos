@@ -1,0 +1,4 @@
+# Raw Vitest JSON from each `measure.sh` run. Rewritten on every run and
+# carrying this machine's absolute paths; the results comment on #299 is the
+# record.
+results/

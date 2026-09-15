@@ -1,0 +1,47 @@
+# Garage as the development object store — a #299 candidate, measured by
+# ../measure.sh under the Compose project `store-garage`. Not the dev stack.
+
+services:
+  garage:
+    # Docker Hub, multi-arch (amd64, arm64, 386, arm). AGPL-3.0.
+    image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    ports:
+      # The S3 API.
+      - "127.0.0.1:19000:3900"
+      # The web endpoint: anonymous reads of a bucket with website access on.
+      # Both loopbacks, because Node resolves `*.localhost` to ::1 only.
+      - "127.0.0.1:19002:3902"
+      - "[::1]:19002:3902"
+      # The admin API, for looking. The init reaches it over the compose network.
+      - "127.0.0.1:19003:3903"
+    healthcheck:
+      # The image is `FROM scratch` with one binary, so the check is that
+      # binary. `status` answers once the node's RPC is up; `health` would stay
+      # red until a layout exists, which only the init creates — after `--wait`.
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  init:
+    image: curlimages/curl:8.16.0@sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6
+    profiles: ["init"]
+    depends_on:
+      garage:
+        condition: service_healthy
+    environment:
+      GARAGE_ADMIN_TOKEN: recomencemos-garage-admin-dev-only
+      KEY_ID: GK7265636f6d656e63656d6f73
+      KEY_SECRET: 7265636f6d656e63656d6f732d6c6f63616c2d6465762d6f6e6c792d6b657921
+    volumes:
+      - ./init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+
+volumes:
+  garage-meta:
+  garage-data:

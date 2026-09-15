@@ -42,13 +42,16 @@ import {
   quarantinedEtag,
 } from "#photos";
 
+// The connection constants, overridable so one suite measures each candidate
+// store (#299). Unset, they are the MinIO values. Deliberately not `PHOTO_S3_*`,
+// so a shell carrying a real R2 credential cannot point this suite at R2.
 const ENV = {
-  PHOTO_S3_ENDPOINT: "http://127.0.0.1:9000",
+  PHOTO_S3_ENDPOINT: process.env.STORE_ENDPOINT ?? "http://127.0.0.1:9000",
   PHOTO_S3_BUCKET: "recomencemos-photos",
   PHOTO_S3_QUARANTINE_BUCKET: "recomencemos-photos-quarantine",
-  PHOTO_S3_ACCESS_KEY_ID: "recomencemos",
-  PHOTO_S3_SECRET_ACCESS_KEY: "recomencemos",
-  PHOTO_PUBLIC_BASE: "http://127.0.0.1:9000/recomencemos-photos",
+  PHOTO_S3_ACCESS_KEY_ID: process.env.STORE_ACCESS_KEY_ID ?? "recomencemos",
+  PHOTO_S3_SECRET_ACCESS_KEY: process.env.STORE_SECRET_ACCESS_KEY ?? "recomencemos",
+  PHOTO_PUBLIC_BASE: process.env.STORE_PUBLIC_BASE ?? "http://127.0.0.1:9000/recomencemos-photos",
   PHOTO_TRANSFORMATIONS: "off",
 } as const;
 

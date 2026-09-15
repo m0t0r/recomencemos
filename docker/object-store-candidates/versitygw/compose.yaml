@@ -1,0 +1,63 @@
+# Candidate: Versity S3 Gateway (#299). Measured by `../measure.sh versitygw`,
+# which runs this as Compose project `store-versitygw`. Nothing on this branch
+# merges; the swap ticket starts from here if this candidate is picked.
+#
+# One container serves the S3 API, and the same origin serves anonymous reads:
+# public access is a bucket policy, so there is no separate website endpoint.
+
+services:
+  versitygw:
+    image: versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+    # Arguments given, so the image's entrypoint execs the binary directly.
+    # `--region auto` because the product signs with `auto`, which is what R2
+    # specifies; the gateway checks the region in the signature's scope.
+    command:
+      - --port
+      - :7070
+      - --region
+      - auto
+      - --health
+      - /health
+      - --quiet
+      - posix
+      - /data
+    environment:
+      # Development-tier and loopback-bound, like MinIO's pair in the shared file.
+      ROOT_ACCESS_KEY_ID: recomencemos
+      ROOT_SECRET_ACCESS_KEY: recomencemos
+    ports:
+      - "127.0.0.1:39000:7070"
+    volumes:
+      # The posix backend keeps object metadata (ETag, content type) in extended
+      # attributes, so the volume's filesystem must support user xattrs.
+      - versitygw-data:/data
+    healthcheck:
+      # The image is Alpine, so busybox `wget` is there as shipped.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7070/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # Runs once and exits; behind a profile so `up --wait` never starts it, and
+  # run by name with `docker compose run --rm init`, like `minio-init`.
+  init:
+    # The gateway ships no client that sets a bucket policy (`versitygw admin`
+    # manages accounts), so a stock S3 client does it.
+    image: amazon/aws-cli:2.36.45@sha256:de71ba5460023cdafb0b163b8ba4553e221a5c23e4b851ab5543d29a85c98ef4
+    profiles: ["init"]
+    depends_on:
+      versitygw:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: recomencemos
+      AWS_SECRET_ACCESS_KEY: recomencemos
+      AWS_DEFAULT_REGION: auto
+      AWS_ENDPOINT_URL: http://versitygw:7070
+    volumes:
+      - ./init.sh:/init.sh:ro
+      - ./public-read.json:/public-read.json:ro
+    entrypoint: ["/bin/bash", "/init.sh"]
+
+volumes:
+  versitygw-data:
