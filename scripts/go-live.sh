@@ -350,6 +350,64 @@ fly_secret() {
   fi
 }
 
+# ask_database_url NAME "Prompt" is ask_secret for the two connection strings,
+# and it never hands back a string production would refuse to open.
+#
+# Production opens a database connection only over TLS with the server's
+# certificate verified, and refuses any other form the first time it resolves
+# one. A string staged here in another form is a release command that fails a
+# stage later. The check is database-url-form.mjs, which runs the domain's own
+# resolver rather than a copy of its rule in bash. The string reaches it on
+# stdin, so it is never an argument, and a refusal prints the reason and never
+# the value.
+#
+# Returns 1 when a refused string is given up on, so the caller does not stage
+# it. An empty answer returns 0 with the value empty, which fly_secret already
+# reports as nothing entered.
+ask_database_url() {
+  local name="$1" prompt="$2" status
+  while :; do
+    ask_secret "$name" "$prompt"
+    [[ -z "${!name}" ]] && return 0
+    if ! command -v node >/dev/null 2>&1; then
+      printf -v "$name" '%s' ""
+      SKIPPED+=("$name — node is not installed, so its form could not be checked. Nothing was staged")
+      warn "node is missing, so $name could not be checked and was not staged"
+      return 1
+    fi
+    set +e
+    printf '%s' "${!name}" | node "$(dirname "$0")/database-url-form.mjs" "$name"
+    status=$?
+    set -e
+    if (( status == 0 )); then
+      printf '  %s✓ checked%s %s verifies the server certificate\n' "$GREEN" "$RESET" "$name"
+      return 0
+    fi
+    printf -v "$name" '%s' ""
+    if (( status != 1 )); then
+      SKIPPED+=("$name — its form could not be checked. Nothing was staged")
+      warn "$name could not be checked, so it was not staged"
+      return 1
+    fi
+    warn "$name was not staged. Production would refuse to open it."
+    if ! confirm "Paste $name again?"; then
+      SKIPPED+=("$name — refused: it must carry sslmode=verify-full and no sslrootcert=system")
+      return 1
+    fi
+  done
+}
+
+# direct_psql ARGS... runs psql on the direct connection string, with libpq told
+# to check the server certificate against the operating system's trust store.
+#
+# The string carries sslmode=verify-full for node-pg, which verifies against
+# Node's bundled CAs. libpq has no such fallback: at verify-full it looks for
+# ~/.postgresql/root.crt and refuses to connect when that file is absent (seen
+# on psql 18.6). sslrootcert=system is libpq's name for the system's roots, but
+# node-pg would read that same value in the string as a file path, so it goes in
+# through the environment, which only libpq reads. It needs libpq 16 or later.
+direct_psql() { PGSSLROOTCERT=system psql "$DIRECT_DATABASE_URL" "$@"; }
+
 # require CMD "why" warns once about a missing tool rather than dying mid-run.
 require() {
   command -v "$1" >/dev/null 2>&1 && return 0
@@ -414,15 +472,17 @@ step "Copy the POOLED string first — that is the one the app runs on."
 step "Then the DIRECT string — migrations run on it, and so does Admin recovery."
 warn "The direct string has a higher blast radius than any other value here."
 note "Treat it as the most dangerous string in the list. Section 1 means that."
+step "Both must end in sslmode=verify-full. Do NOT add sslrootcert=system to either."
+note "Each is checked before it is staged, and neither is printed."
 open_url "https://app.planetscale.com"
 ask PS_DATABASE "Database name (for the record, not a secret):"
 [[ -n "$PS_DATABASE" ]] && write_env PS_DATABASE "$PS_DATABASE"
 DATABASE_URL=""
 DIRECT_DATABASE_URL=""
-ask_secret DATABASE_URL "Pooled connection string:"
-ask_secret DIRECT_DATABASE_URL "Direct connection string:"
-fly_secret DATABASE_URL "$DATABASE_URL"
-fly_secret DIRECT_DATABASE_URL "$DIRECT_DATABASE_URL"
+ask_database_url DATABASE_URL "Pooled connection string:" &&
+  fly_secret DATABASE_URL "$DATABASE_URL"
+ask_database_url DIRECT_DATABASE_URL "Direct connection string:" &&
+  fly_secret DIRECT_DATABASE_URL "$DIRECT_DATABASE_URL"
 
 # ── Stage 3: Resend, the key and the signing secret ───────────────────────
 stage "Resend: the sending key, and the secret that makes a bounce trustworthy"
@@ -560,13 +620,13 @@ stage "Postgres: the connection limit, against the pool cap the app opens"
 say "This is the one number nobody could verify before the account existed."
 note "It must sit ABOVE the pool cap of 10 connections per machine the app opens."
 if [[ -z "${DIRECT_DATABASE_URL:-}" ]]; then
-  ask_secret DIRECT_DATABASE_URL "Direct connection string (needed for section 2):"
+  ask_database_url DIRECT_DATABASE_URL "Direct connection string (needed for section 2):" || true
 fi
 if command -v psql >/dev/null 2>&1 && [[ -n "${DIRECT_DATABASE_URL:-}" ]]; then
-  run "psql \$DIRECT_DATABASE_URL -c 'SHOW max_connections'" -- \
-    psql "$DIRECT_DATABASE_URL" -c "SHOW max_connections"
-  run "psql \$DIRECT_DATABASE_URL -c 'SHOW superuser_reserved_connections'" -- \
-    psql "$DIRECT_DATABASE_URL" -c "SHOW superuser_reserved_connections"
+  run "PGSSLROOTCERT=system psql \$DIRECT_DATABASE_URL -c 'SHOW max_connections'" -- \
+    direct_psql -c "SHOW max_connections"
+  run "PGSSLROOTCERT=system psql \$DIRECT_DATABASE_URL -c 'SHOW superuser_reserved_connections'" -- \
+    direct_psql -c "SHOW superuser_reserved_connections"
 else
   defer "section 2 connection limit" "psql or the direct connection string was unavailable"
 fi
@@ -582,14 +642,14 @@ attest "The plan's limit sits above 10 per machine" ||
 stage "Postgres: citext and pg_trgm"
 say "Search that ignores accents, and the case-insensitive unique email, need these."
 if command -v psql >/dev/null 2>&1 && [[ -n "${DIRECT_DATABASE_URL:-}" ]]; then
-  run "psql \$DIRECT_DATABASE_URL -c 'CREATE EXTENSION IF NOT EXISTS citext'" -- \
-    psql "$DIRECT_DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS citext"
+  run "PGSSLROOTCERT=system psql \$DIRECT_DATABASE_URL -c 'CREATE EXTENSION IF NOT EXISTS citext'" -- \
+    direct_psql -c "CREATE EXTENSION IF NOT EXISTS citext"
   CITEXT_STATUS=$RUN_STATUS
-  run "psql \$DIRECT_DATABASE_URL -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm'" -- \
-    psql "$DIRECT_DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+  run "PGSSLROOTCERT=system psql \$DIRECT_DATABASE_URL -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm'" -- \
+    direct_psql -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
   TRGM_STATUS=$RUN_STATUS
-  run "psql \$DIRECT_DATABASE_URL -c 'SELECT extname, extversion FROM pg_extension'" -- \
-    psql "$DIRECT_DATABASE_URL" -c "SELECT extname, extversion FROM pg_extension ORDER BY extname"
+  run "PGSSLROOTCERT=system psql \$DIRECT_DATABASE_URL -c 'SELECT extname, extversion FROM pg_extension'" -- \
+    direct_psql -c "SELECT extname, extversion FROM pg_extension ORDER BY extname"
   say "Both must appear in the list above."
   if (( CITEXT_STATUS != 0 || TRGM_STATUS != 0 )); then
     warn "CREATE EXTENSION failed — find the dashboard toggle that makes it succeed."

@@ -39,8 +39,8 @@ the cache key and travels with the artifact under remote caching.
 
 | #   | Secret                                   | Issued from                         | Rotation                             | Notes                                                                                                                                                                      |
 | --- | ---------------------------------------- | ----------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | PlanetScale **app** connection string    | PlanetScale → database → Connect    | Rotate the password; redeploy        | The pooled connection the app runs on                                                                                                                                      |
-| 2   | PlanetScale **direct** connection string | Same                                | Same                                 | Migrations, and the C43 break-glass. Higher blast radius than #1 — treat as the most dangerous string in the list                                                          |
+| 1   | PlanetScale **app** connection string    | PlanetScale → database → Connect    | Rotate the password; redeploy        | The pooled connection the app runs on. Ends in `sslmode=verify-full` — see below                                                                                           |
+| 2   | PlanetScale **direct** connection string | Same                                | Same                                 | Migrations, and the C43 break-glass. Higher blast radius than #1 — treat as the most dangerous string in the list. Ends in `sslmode=verify-full` — see below               |
 | 3   | `RESEND_API_KEY`                         | Resend → API Keys                   | Create new, deploy, delete old       | Sending-scoped, not full access                                                                                                                                            |
 | 4   | Resend **webhook signing secret**        | Resend → Webhooks                   | Rotate at the endpoint               | Without it a forged bounce is an account-denial primitive                                                                                                                  |
 | 5   | R2 access key + secret                   | Cloudflare → R2 → Manage API tokens | Create new, deploy, delete old       | Scope to **both** photo buckets and nothing else — §3 splits reviewed from unreviewed across two, and one key reads and writes both                                        |
@@ -48,12 +48,30 @@ the cache key and travels with the artifact under remote caching.
 | 7   | `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`           | **See the warning below**            | 32+ chars. Better Auth rejects placeholders in production                                                                                                                  |
 | 8   | `JOB_SHARED_SECRET`                      | `openssl rand -base64 32`           | Rotate in both places at once        | The only thing Trigger.dev holds. Set identically as a Fly secret **and** as a Trigger.dev environment variable — rotating one without the other stops every scheduled job |
 
+**Both connection strings end in `sslmode=verify-full`, and neither carries `sslrootcert=system`**
+(#327). In production `@repo/domain` refuses any other form when it first resolves the string, so a
+weak one fails the release command rather than deploying, and the wizard checks the form before it
+stages either string, without printing it. Three facts decide the form, all checked against the
+installed client rather than recalled:
+
+- **`verify-full` is the one mode that encrypts and also checks whose certificate it is**, in `pg`
+  8, in `pg` 9 and in libpq. `require` verifies today only because `pg` 8 treats it as an alias and
+  prints a warning saying 9 will not. Dependabot will open that major, and CI has no TLS to notice.
+- **`sslrootcert=system` is PlanetScale's documented suffix and it breaks this app.** It is libpq's
+  name for the operating system's trust store, but `pg` reads every `sslrootcert` as a file path and
+  fails at connect with `ENOENT: open 'system'`. Node verifies against its bundled CAs without it.
+- **`psql` needs it anyway, so give it through the environment**:
+  `PGSSLROOTCERT=system psql "$DIRECT_DATABASE_URL"`. At `verify-full` with no root certificate,
+  libpq looks for `~/.postgresql/root.crt` and refuses to connect when it is absent. `system` needs
+  libpq 16 or later, and the wizard's own `psql` calls already set it this way.
+
 ```sh
-fly secrets set DATABASE_URL='…' RESEND_API_KEY='…'      # restarts the machine — a deploy-class act
+fly secrets set DATABASE_URL='postgresql://…?sslmode=verify-full' RESEND_API_KEY='…'   # restarts the machine — a deploy-class act
 fly secrets list                                          # names and digests only, never values
 ```
 
 - [ ] All eight set with `fly secrets` (#8 also in Trigger.dev's environment)
+- [ ] Both connection strings end in `sslmode=verify-full` and carry no `sslrootcert=system`
 - [ ] All eight mirrored into the password manager — a lost machine must not be a lost platform, and
       **#3 and #5 are not recoverable from Fly**, only replaceable
 - [ ] No `.env` file in the repo contains any of them (`git grep -nE '(RESEND|DATABASE_URL|BETTER_AUTH)'`)

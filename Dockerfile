@@ -168,7 +168,8 @@ COPY --chown=node:node packages ./packages
 
 # `--filter @repo/domain` and not `@repo/domain...`: the CLI's import graph is
 # `#migrate` → `drizzle-orm`, `pg`, `#config` → `@repo/errors` (which has no
-# dependencies at all, by design) → and nothing else. `@repo/observability` is a
+# dependencies at all, by design) and `pg-connection-string` (`pg`'s own parser,
+# which the production TLS check asks) → and nothing else. `@repo/observability` is a
 # declared dependency of the package but is unreachable from this entry point,
 # and deliberately so — its own docstring records that importing the logger here
 # fails at module load, because `@sentry/nextjs` is CommonJS and a release

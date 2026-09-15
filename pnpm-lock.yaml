@@ -250,6 +250,9 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      pg-connection-string:
+        specifier: ^2.14.0
+        version: 2.14.0
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
