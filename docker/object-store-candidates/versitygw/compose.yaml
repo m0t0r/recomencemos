@@ -5,8 +5,14 @@
 # One container serves the S3 API, and the same origin serves anonymous reads:
 # public access is a bucket policy, so there is no separate website endpoint.
 
+# Named here as well as by `measure.sh -p`, so a bare `docker compose up` in this
+# directory still cannot meet the shared `recomencemos` project.
+name: store-versitygw
+
 services:
   versitygw:
+    # Docker Hub, amd64 and arm64. Apache-2.0. Tag and digest checked 2026-09-15
+    # against the registry's manifest list.
     image: versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
     # Arguments given, so the image's entrypoint execs the binary directly.
     # `--region auto` because the product signs with `auto`, which is what R2
@@ -43,7 +49,8 @@ services:
   # run by name with `docker compose run --rm init`, like `minio-init`.
   init:
     # The gateway ships no client that sets a bucket policy (`versitygw admin`
-    # manages accounts), so a stock S3 client does it.
+    # manages accounts), so a stock S3 client does it. Tag and digest checked
+    # 2026-09-15.
     image: amazon/aws-cli:2.36.45@sha256:de71ba5460023cdafb0b163b8ba4553e221a5c23e4b851ab5543d29a85c98ef4
     profiles: ["init"]
     depends_on:

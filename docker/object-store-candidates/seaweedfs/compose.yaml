@@ -10,8 +10,14 @@
 # The credential pair is declared here rather than generated: `mini` seeds one
 # identity from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
 
+# Named here as well as by `measure.sh -p`, so a bare `docker compose up` in this
+# directory still cannot meet the shared `recomencemos` project.
+name: store-seaweedfs
+
 services:
   object-store:
+    # Docker Hub, amd64, arm64, arm/v7 and 386. Apache-2.0. Tag and digest
+    # checked 2026-09-15 against the registry's manifest list.
     image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
     command:
       - mini

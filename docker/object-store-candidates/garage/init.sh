@@ -4,7 +4,9 @@
 #
 # Runs in `curlimages/curl` against the admin API, because the Garage image
 # ships no shell. Every step reads before it writes, so a second run changes
-# nothing and exits 0 — `pnpm db:up` re-runs the init every time.
+# nothing and exits 0. That is a requirement rather than a nicety: as the dev
+# store, `pnpm db:up` would re-run the init on every call, and `measure.sh`
+# runs it twice to show it holds.
 
 set -eu
 

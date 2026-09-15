@@ -1,9 +1,14 @@
 # Garage as the development object store — a #299 candidate, measured by
 # ../measure.sh under the Compose project `store-garage`. Not the dev stack.
 
+# Named here as well as by `measure.sh -p`, so a bare `docker compose up` in this
+# directory still cannot meet the shared `recomencemos` project.
+name: store-garage
+
 services:
   garage:
-    # Docker Hub, multi-arch (amd64, arm64, 386, arm). AGPL-3.0.
+    # Docker Hub, multi-arch (amd64, arm64, 386, arm). AGPL-3.0. Tag and digest
+    # checked 2026-09-15 against the registry's manifest list.
     image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
@@ -28,7 +33,11 @@ services:
       retries: 12
       start_period: 5s
 
+  # Runs once and exits; behind a profile so `up --wait` never starts it, and
+  # run by name with `docker compose run --rm init`, like `minio-init`. A second
+  # image, because the Garage image ships no shell to run a script in.
   init:
+    # Tag and digest checked 2026-09-15.
     image: curlimages/curl:8.16.0@sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6
     profiles: ["init"]
     depends_on:

@@ -20,7 +20,8 @@ ensure_bucket recomencemos-photos-quarantine
 aws s3api put-bucket-policy --bucket recomencemos-photos --policy file:///public-read.json
 
 # The quarantine bucket carries no policy at all. Reasserted on every run, so a
-# policy set by hand is removed rather than surviving the next `db:up`.
+# policy set by hand is removed rather than surviving the next run — which, as
+# the dev store, would be every `pnpm db:up`.
 aws s3api delete-bucket-policy --bucket recomencemos-photos-quarantine
 
 aws s3api get-bucket-policy --bucket recomencemos-photos --query Policy --output text

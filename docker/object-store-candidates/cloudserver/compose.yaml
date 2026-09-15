@@ -7,8 +7,13 @@
 # an Apple Silicon laptop this runs under emulation. The Docker Hub repositories
 # (`zenko/cloudserver`, `scality/cloudserver`) stopped moving in 2022 and 2019.
 
+# Named here as well as by `measure.sh -p`, so a bare `docker compose up` in this
+# directory still cannot meet the shared `recomencemos` project.
+name: store-cloudserver
+
 services:
   cloudserver:
+    # Tag and digest checked 2026-09-15 against the registry's manifest list.
     image: ghcr.io/scality/cloudserver:9.4.3@sha256:a0e2d143fc7c2aa7c23e23aa6e80ad57de8c3ff74b6ac4d31b7381687bd9bb00
     platform: linux/amd64
     environment:
@@ -50,6 +55,7 @@ services:
   # profile for the reason `minio-init` is, and run by `measure.sh` with
   # `docker compose run --rm init`.
   init:
+    # Tag and digest checked 2026-09-15.
     image: amazon/aws-cli:2.36.45@sha256:de71ba5460023cdafb0b163b8ba4553e221a5c23e4b851ab5543d29a85c98ef4
     profiles: ["init"]
     depends_on:
@@ -58,16 +64,24 @@ services:
     environment:
       AWS_ACCESS_KEY_ID: recomencemos
       AWS_SECRET_ACCESS_KEY: recomencemos
+      # Any value would do: CloudServer's SigV4 never reads the region — its
+      # source says so, and the product's `auto` is accepted the same way.
       AWS_DEFAULT_REGION: us-east-1
       AWS_ENDPOINT_URL: http://cloudserver:8000
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
     volumes:
       - ./public-read-policy.json:/policy/public-read.json:ro
     # **Public read is a bucket policy on the whole photos bucket, granting
-    # `s3:GetObject` and nothing else**, and quarantine is set private with no
-    # policy at all. Per bucket, because that is the only place R2 can say it.
-    # Every step is idempotent: a bucket is created only when `head-bucket`
-    # says it is absent, and both remaining calls state an absolute value.
+    # `s3:GetObject` and nothing else**, and quarantine is set private and given
+    # no policy. Per bucket, because that is the only place R2 can say it.
+    #
+    # Unlike the Versity candidate's init, nothing here *removes* a policy that
+    # somebody set on quarantine by hand — so a re-run restores the photos
+    # bucket's policy and quarantine's ACL, not quarantine's lack of a policy.
+    # Measured as written; the swap ticket would add `delete-bucket-policy`.
+    #
+    # Idempotent: a bucket is created only when `head-bucket` says it is absent,
+    # and both remaining calls state an absolute value.
     entrypoint:
       - /bin/sh
       - -c
