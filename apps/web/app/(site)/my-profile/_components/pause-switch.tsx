@@ -14,12 +14,11 @@
  *
  * **The form's own `onSubmit` sends the action, and React's `<form action>`
  * never does once hydrated.** It cancels the submit and dispatches through
- * `React.startTransition`, which is how every other form in this app sends
- * one (`use-action-form.ts`, `/continue`'s code form). Left to React, the
- * re-issued submit sent nothing on React 19.3 under happy-dom: the page stayed
- * exactly as it was (#301). `action` stays on the `<form>` for the unhydrated
- * path. `own-profile-view.test.tsx` pins both halves: the submit button the
- * server sends, and one tap sending one action.
+ * `React.startTransition`, as `use-action-form.ts` and `/continue`'s code form
+ * do: on React 19.3 a submit re-issued by `requestSubmit()` sends nothing
+ * through React's own handling under happy-dom (#301). `action` stays on the
+ * `<form>` for the unhydrated path. `own-profile-view.test.tsx` pins both
+ * halves: the submit button the server sends, and one tap sending one action.
  *
  * **Controlled by the state the page rendered**, so the thumb never moves on a
  * tap: it moves when the redirect re-reads the row. That is also what makes a

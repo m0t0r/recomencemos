@@ -256,34 +256,57 @@ describe("her Pause", () => {
    * reaches the browser as the generic code with operator English, which is
    * exactly the message this surface must never render.
    */
-  const FAULT = {
-    serverError: { code: GENERIC_ERROR_CODE, message: "Something went wrong." },
-  };
+  describe("a hydrated tap", () => {
+    const FAULT = {
+      serverError: { code: GENERIC_ERROR_CODE, message: "Something went wrong." },
+    };
 
-  it("says a transport fault in its status region", async () => {
-    pauseProfile.mockResolvedValue(FAULT);
+    it("says a transport fault in its status region", async () => {
+      pauseProfile.mockResolvedValue(FAULT);
 
-    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
-    fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
+      render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+      fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
 
-    expect(await screen.findByText(PAUSE_FAULT)).toBeInTheDocument();
-    const saying = screen
-      .getAllByRole("status")
-      .filter((region) => within(region).queryByText(PAUSE_FAULT) !== null);
-    expect(saying).toHaveLength(1);
-    expect(screen.queryByText(FAULT.serverError.message)).toBeNull();
-  });
+      expect(await screen.findByText(PAUSE_FAULT)).toBeInTheDocument();
+      const saying = screen
+        .getAllByRole("status")
+        .filter((region) => within(region).queryByText(PAUSE_FAULT) !== null);
+      expect(saying).toHaveLength(1);
+      expect(screen.queryByText(FAULT.serverError.message)).toBeNull();
+    });
 
-  it("sends one action for one tap", async () => {
-    pauseProfile.mockResolvedValue(FAULT);
+    it("sends one action for one tap", async () => {
+      pauseProfile.mockResolvedValue(FAULT);
 
-    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
-    fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
+      render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+      fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
 
-    // Once the outcome has rendered, the action has settled.
-    await screen.findByText(PAUSE_FAULT);
-    expect(pauseProfile).toHaveBeenCalledTimes(1);
-    expect(resumeProfile).not.toHaveBeenCalled();
+      // Once the outcome has rendered, the action has settled.
+      await screen.findByText(PAUSE_FAULT);
+      expect(pauseProfile).toHaveBeenCalledTimes(1);
+      expect(resumeProfile).not.toHaveBeenCalled();
+    });
+
+    // A second tap while the first is still in flight is declined rather than
+    // queued, and the switch says it is busy while it waits.
+    it("declines a second tap while the first is in flight", async () => {
+      let settle: ((result: typeof FAULT) => void) | undefined;
+      pauseProfile.mockReturnValue(
+        new Promise<typeof FAULT>((resolve) => {
+          settle = resolve;
+        }),
+      );
+
+      render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+      const toggle = screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL });
+      fireEvent.click(toggle);
+      await vi.waitFor(() => expect(toggle).toHaveAttribute("aria-disabled", "true"));
+      fireEvent.click(toggle);
+
+      settle?.(FAULT);
+      await screen.findByText(PAUSE_FAULT);
+      expect(pauseProfile).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
