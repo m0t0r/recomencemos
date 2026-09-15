@@ -117,14 +117,22 @@ export const requestMagicLink = actionClient
  * this action writes them onto its own response. Skipping that produces a
  * `state_mismatch` at the provider's callback.
  *
- * **There is no ceiling on this door and that is deliberate**, not an omission:
- * NFR26 bounds `requestMagicLink` because it *sends mail on someone else's
- * behalf*. Starting an OAuth redirect sends nothing, creates nothing, and costs
- * this system one row-less round trip. The ceilings that do apply to Google land
- * with the session-creating callback, which is Better Auth's own limiter.
+ * **Every start writes a row, and NFR26's ceiling is what bounds them** (#323).
+ * Better Auth keeps the OAuth state in a `verification` row that lives ten
+ * minutes, one per call. Its own limiter does not reach this action: that limiter
+ * runs in the library's router, and this action calls `signInSocial` directly.
+ * So the bound is ours, charged below, and expired rows are swept on the next
+ * write to the table (see `databaseHooks.verification` in `@repo/domain`).
  */
 export const startGoogleSignIn = actionClient
   .bindArgsSchemas([returnPathArg, sharedDeviceArg])
+  /**
+   * **Per IP, before the body runs**, so a refused start never reaches
+   * `signInSocial` and writes no row. The connection is the only principal:
+   * nobody has said who they are until the provider answers. A refusal is
+   * returned, and `/sign-in` renders it where it renders a magic-link refusal.
+   */
+  .useValidated(rateLimit({ action: "startGoogleSignIn", principals: [{ scope: "ip" }] }))
   .stateAction(async ({ bindArgsParsedInputs: [returnPath, sharedDevice] }) => {
     const outcome = await auth().startGoogleSignIn({
       sharedDevice,

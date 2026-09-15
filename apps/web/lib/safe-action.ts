@@ -113,6 +113,11 @@ export const actionClient = createSafeActionClient({ handleServerError });
  * this is `useValidated` middleware and not `use`: the address principal does
  * not exist until the input has been parsed, and a malformed address should cost
  * the ceiling nothing.
+ *
+ * **An action with no input is served too.** The Google door takes only bound
+ * arguments, and next-safe-action still runs validated middleware for it, with
+ * `parsedInput` as `undefined`. It names only the `ip` scope, so nothing reads
+ * the input and none has to be invented for it.
  */
 export interface RateLimitOptions<Input, Ctx extends object = object> {
   readonly action: CeilingedAction;
@@ -141,7 +146,7 @@ export interface RateLimitOptions<Input, Ctx extends object = object> {
  * not charge the second, or the address bound would consume the IP bound's
  * budget on requests that never happened.
  */
-export function rateLimit<Input extends object, Ctx extends object = object>({
+export function rateLimit<Input = undefined, Ctx extends object = object>({
   action,
   principals,
 }: RateLimitOptions<Input, Ctx>) {

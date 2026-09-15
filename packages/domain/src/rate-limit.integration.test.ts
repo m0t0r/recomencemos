@@ -302,6 +302,68 @@ describe("what a refusal carries", () => {
   });
 });
 
+/**
+ * The Google door's ceiling (#323). Starting that door writes one `verification`
+ * row per call, and the connection is the only principal that exists before the
+ * provider answers — so this is the whole bound, and it has to hold here, against
+ * the engine's own `CHECK` on the action.
+ */
+describe("the Google door's ceiling", () => {
+  const at = new Date("2026-08-27T12:48:00.000Z");
+
+  async function startFrom(database: TestDatabase, connection: CeilingPrincipal, times: number) {
+    let outcome = await chargeCeiling(database.db, connection, "startGoogleSignIn", at);
+
+    for (let charge = 1; charge < times; charge += 1) {
+      // Sequential for chargeRepeatedly's reason: the count is the assertion.
+      // oxlint-disable-next-line no-await-in-loop
+      outcome = await chargeCeiling(database.db, connection, "startGoogleSignIn", at);
+    }
+
+    return outcome;
+  }
+
+  test("allows twenty starts from one connection in an hour and refuses the twenty-first", async ({
+    database,
+  }) => {
+    const max = CEILINGS.startGoogleSignIn.ip.max;
+
+    expect((await startFrom(database, sharedConnection, max)).allowed).toBe(true);
+
+    const refused = await chargeCeiling(database.db, sharedConnection, "startGoogleSignIn", at);
+
+    expect(refused.allowed).toBe(false);
+    if (refused.allowed) return;
+
+    expect(refused.retryAfter).toBe(12 * 60);
+    expect(refused.error.code).toBe("rate_limited");
+    expect(refused.error.userMessage).toContain("en 12 minutos");
+  });
+
+  test("leaves another connection's allowance untouched", async ({ database }) => {
+    await startFrom(database, sharedConnection, CEILINGS.startGoogleSignIn.ip.max + 1);
+
+    const elsewhere = await chargeCeiling(
+      database.db,
+      { scope: "ip", id: "190.0.2.10" },
+      "startGoogleSignIn",
+      at,
+    );
+
+    expect(elsewhere.allowed).toBe(true);
+  });
+
+  // One counter per door: a connection that has spent its links has not spent
+  // its Google starts, which is what lets each refusal name the other door.
+  test("counts apart from the magic link's per-IP allowance", async ({ database }) => {
+    await startFrom(database, sharedConnection, CEILINGS.startGoogleSignIn.ip.max + 1);
+
+    const link = await chargeCeiling(database.db, sharedConnection, "requestMagicLink", at);
+
+    expect(link.allowed).toBe(true);
+  });
+});
+
 describe("the CHECK the first ceiling put on rate_counter.action", () => {
   // DD2's rule for an enum-shaped column, and the database refusing what
   // `CEILINGS` does not know.

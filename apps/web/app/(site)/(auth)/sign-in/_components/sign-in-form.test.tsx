@@ -219,6 +219,90 @@ describe("what she is told on the way back", () => {
   });
 });
 
+/**
+ * **The Google door has a ceiling now, and its refusal is the one outcome that
+ * door ever returns** (#323). A start that is allowed redirects to the provider,
+ * so nothing else it answers is ever rendered — which is why this surface used to
+ * discard the result entirely, and why the refusal needs a test of its own.
+ */
+describe("when the Google door refuses", () => {
+  const REFUSAL =
+    "Se intentó entrar con Google muchas veces desde tu conexión. " +
+    "Puedes intentarlo otra vez en 12 minutos.";
+
+  const refused = {
+    serverError: {
+      code: "rate_limited",
+      message: REFUSAL,
+      requestId: "req_google_ceiling",
+      retryAfter: 720,
+    },
+  };
+
+  const sent = { data: { sent: true, message: "Te enviamos un enlace." } };
+
+  it("says so in the one live region, and moves focus there", async () => {
+    const user = userEvent.setup();
+    startGoogleSignIn.mockResolvedValue(refused);
+    renderForm();
+
+    await user.click(door(GOOGLE_BUTTON));
+
+    const region = screen.getByRole("status");
+    await waitFor(() => expect(region).toHaveTextContent(REFUSAL));
+    expect(region).toHaveFocus();
+  });
+
+  // The other door is the way through, so it must still be there to press.
+  it("leaves the email door usable", async () => {
+    const user = userEvent.setup();
+    startGoogleSignIn.mockResolvedValue(refused);
+    renderForm();
+
+    await user.click(door(GOOGLE_BUTTON));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(REFUSAL));
+
+    expect(door(SEND_LINK_BUTTON)).toBeEnabled();
+  });
+
+  // Whichever door answered last is what the region says: a link sent after
+  // the refusal is the current truth, and the refusal is not left beside it.
+  it("gives way to a link she sends afterwards", async () => {
+    const user = userEvent.setup();
+    startGoogleSignIn.mockResolvedValue(refused);
+    requestMagicLink.mockResolvedValue(sent);
+    renderForm();
+
+    await user.click(door(GOOGLE_BUTTON));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(REFUSAL));
+
+    await user.type(screen.getByRole("textbox"), "ana@example.co");
+    await user.click(door(SEND_LINK_BUTTON));
+
+    const region = screen.getByRole("status");
+    await waitFor(() => expect(region).toHaveTextContent("Te enviamos un enlace."));
+    expect(region).not.toHaveTextContent(REFUSAL);
+  });
+
+  // And the other way round: a refusal after a send is not hidden behind it.
+  it("is not hidden behind a link she sent before", async () => {
+    const user = userEvent.setup();
+    startGoogleSignIn.mockResolvedValue(refused);
+    requestMagicLink.mockResolvedValue(sent);
+    renderForm();
+
+    await user.type(screen.getByRole("textbox"), "ana@example.co");
+    await user.click(door(SEND_LINK_BUTTON));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Te enviamos un enlace."),
+    );
+
+    await user.click(door(GOOGLE_BUTTON));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(REFUSAL));
+  });
+});
+
 describe("client-side validation", () => {
   // The whole justification for the form layer: she learns about a typo without
   // spending a round trip on a connection that may be slow.

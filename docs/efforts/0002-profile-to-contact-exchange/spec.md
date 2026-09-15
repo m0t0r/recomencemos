@@ -501,7 +501,13 @@ concerns.
   hour, ≤ 300 per day**, with a higher per-IP bound above it. Per Account and per IP:
   `publishProfile` **≤ 3/day**, `updateProfile` **≤ 10/day**, `sendOffer` **≤ 10/day**, `reportOffer`
   **≤ 10/day**, `requestSkill` **≤ 5/day**, `createPhotoUpload` **≤ 10/day**, `changeEmail`
-  **≤ 3/day**, `requestMagicLink` **≤ 5/hour per address and ≤ 20/hour per IP**. _Amended
+  **≤ 3/day**, `requestMagicLink` **≤ 5/hour per address and ≤ 20/hour per IP**,
+  `startGoogleSignIn` **≤ 20/hour per IP**. _Amended 2026-09-15 with #323: `startGoogleSignIn`
+  added. Starting the Google door writes one `verification` row per call, holding the OAuth state
+  for ten minutes, and nothing bounded it — Better Auth's own limiter runs in its router, which the
+  Server Action calls around. Per IP and by nothing else, because no address or Account exists
+  before the provider answers; 20 is `requestMagicLink`'s per-IP number, for the same shared
+  connection._ _Amended
   2026-09-15 with #311: this list ended "Per Account: `pauseProfile` and `resumeProfile` **together
   ≤ 10/day**, one counter for both." Neither action carries a ceiling any more; the reason closes the
   #141 note below._
@@ -2168,6 +2174,7 @@ one renders the `userMessage` and the `retryAfter` in her terms:
 | Surface             | Ceiling                                                       | What she is told                                                                                                                                                                                                                                                                                                                          |
 | ------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Sign in**         | `requestMagicLink` ≤ 5/hour per address                       | Too many links requested; when she may ask again; the Google door is still there                                                                                                                                                                                                                                                          |
+| **Sign in**         | `startGoogleSignIn` ≤ 20/hour per IP (#323)                   | Many Google sign-ins were started from her connection, which may be shared — no count, since it is not hers; when she may try again; the email door is still there                                                                                                                                                                        |
 | **Admin door**      | `verifyAdminCode`, per **Account** (DD5)                      | That the Account is locked for now and when it reopens. Per-Account rather than per-IP is the whole point — a per-IP bound on six digits is no bound at all — so the copy names a wait rather than pretending the attempt was malformed                                                                                                   |
 | **Publish**         | `publishProfile` ≤ 3/day                                      | How many attempts today, when the window resets, and that nothing she typed was lost                                                                                                                                                                                                                                                      |
 | **Publish**         | `createPhotoUpload` ≤ 10/day                                  | Same, and that the profile is already live without the photo                                                                                                                                                                                                                                                                              |

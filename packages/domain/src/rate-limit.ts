@@ -246,6 +246,25 @@ export const CEILINGS = {
     account: { max: 10, windowSeconds: 24 * 60 * 60 },
     ip: { max: 10, windowSeconds: 24 * 60 * 60 },
   },
+
+  /**
+   * **The Google door, per IP and by nothing else** (#323).
+   *
+   * Starting it is not free: Better Auth keeps the OAuth state in a
+   * `verification` row that lives ten minutes, one per call, so an unbounded
+   * caller writes rows as fast as it can post. Better Auth's own limiter does
+   * not reach this door — it runs in the library's router, and the Server
+   * Action calls `signInSocial` directly.
+   *
+   * **The connection is the only principal there is.** Nobody has said who they
+   * are until the provider answers, so there is no address to charge as
+   * `requestMagicLink` does and no Account. Twenty an hour is `requestMagicLink`'s
+   * per-IP number, chosen for the same shared connection — a café or a school in
+   * Pereira where several people sign in over one address.
+   */
+  startGoogleSignIn: {
+    ip: { max: 20, windowSeconds: 60 * 60 },
+  },
 } as const satisfies Record<string, Partial<Record<CeilingScope, Ceiling>>>;
 
 export type CeilingedAction = keyof typeof CEILINGS;
@@ -683,6 +702,20 @@ export const CEILING_REFUSALS: Record<
       : `Intentaste poner una foto ${ceiling.max} veces hoy, que es el máximo. `) +
     `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
     "La foto es opcional y tu perfil no depende de ella.",
+
+  /**
+   * **The one refusal in this table with no person in it**, because the
+   * ceiling has none: it is charged against the connection alone, so the
+   * sentence is always the shared-connection one and never quotes a count.
+   *
+   * The third sentence mirrors `requestMagicLink`'s, which names Google: each
+   * door's refusal names the other, and the two count separately, so the
+   * sentence is true whichever of them she has used up.
+   */
+  startGoogleSignIn: (_ceiling, retryAfter) =>
+    `Se intentó entrar con Google muchas veces ${SHARED_CONNECTION}. ` +
+    `Puedes intentarlo otra vez ${retryPhrase(retryAfter)}. ` +
+    "Mientras tanto, puedes pedir un enlace a tu correo.",
 };
 
 /**
