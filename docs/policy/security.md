@@ -74,9 +74,9 @@ broken image at the moment she chooses one.
 **`upgrade-insecure-requests` is emitted only where the policy admits nothing plaintext.** A
 production build on a developer's machine reads the same `.env.local` a dev server does, so its
 policy admits `http://127.0.0.1:9000` — and the directive would then rewrite every presigned PUT to a
-scheme the development object store does not serve. A policy that admits an origin in one directive and orders every request
-to it upgraded in another contradicts itself, and the contradiction is settled in favour of the
-admission. Nothing is lost in the deployment this is for, where all three configured origins are
+scheme the development object store does not serve. A policy that admits an origin in one directive
+and orders every request to it upgraded in another contradicts itself, and the contradiction is
+settled in favour of the admission. Nothing is lost in the deployment this is for, where all three configured origins are
 HTTPS.
 
 **Development gets a different set, and the differences are the whole of it.** `'unsafe-eval'` is

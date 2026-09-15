@@ -213,8 +213,7 @@ updates:
   #
   # All four are on Docker Hub, which is what this entry reads without a
   # registry block. An image that moves to another registry needs one here, or
-  # the weekly job fails authenticating against a repository that is gone —
-  # which is how the object store before #316 was noticed.
+  # the weekly job fails authenticating against a repository that is gone.
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:
