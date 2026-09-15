@@ -63,7 +63,7 @@
     "@repo/errors": "workspace:*",
     "@repo/observability": "workspace:*",
     "@repo/storage": "workspace:*",
-    "better-auth": "1.7.2",
+    "better-auth": "1.7.4",
     "drizzle-orm": "^0.45.2",
     "nanoid": "^6.0.1",
     "pg": "^8.23.0",

@@ -113,6 +113,22 @@ const STRICTER_NOT_NULL = new Set<string>([
 ]);
 
 /**
+ * Columns these tables still carry that the installed Better Auth no longer
+ * declares: the expand half of an expand/contract, held as data for the same
+ * reason as `STRICTER_NOT_NULL`. An entry is a leftover somebody chose to keep
+ * for one deploy, and a leftover that is not here fails the run.
+ *
+ * - `account.issuer` — Better Auth 1.7.0–1.7.2's identity column. 1.7.3 went
+ *   back to the 1.6 account schema and never writes it, so #300 made it
+ *   nullable and kept it. #312 drops it and its constraint in a `contract`
+ *   migration a deploy later, and removes this entry with it.
+ *
+ * The entry is added to what the field test expects rather than subtracted from
+ * what it finds, so the column vanishing while the entry stays is red too.
+ */
+const RETIRED_FIELDS = new Set<string>(["account.issuer"]);
+
+/**
  * `getSchema` reports the fields Better Auth writes; `id` is implicit in its
  * model and explicit in every table here.
  */
@@ -155,7 +171,13 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
   });
 
   it.each(MODELS)("has exactly %s's fields", (model) => {
-    expect(drizzleFieldNames(TABLES[model])).toEqual(betterAuthFieldNames(model));
+    const retired = [...RETIRED_FIELDS]
+      .filter((entry) => entry.startsWith(`${model}.`))
+      .map((entry) => entry.slice(model.length + 1));
+
+    expect(drizzleFieldNames(TABLES[model])).toEqual(
+      [...betterAuthFieldNames(model), ...retired].toSorted(),
+    );
   });
 
   /**
@@ -245,13 +267,16 @@ describe("the Drizzle tables match the installed Better Auth's schema", () => {
   });
 
   /**
-   * The indexes the library declares. `account`'s identity constraint on
-   * (`issuer`, `account_id`) is the one that exists today, and it is what keeps
-   * one provider identity to one row — so its absence would not be a
-   * performance regression but a duplicate-account bug.
+   * The indexes the library declares. **Better Auth 1.7.3 and later declares
+   * none on `account`**, and this repository deliberately holds no identity
+   * index of its own there — triage on #300 chose to match the library. So
+   * nothing in the database keeps one provider identity to one row, and this
+   * test is not what would notice two; see `account` in `auth-schema.ts`. The
+   * (`issuer`, `account_id`) constraint still on that table is 1.7.0–1.7.2's,
+   * kept only until its removal ships, and nothing here reads it.
    *
-   * Matched on columns and uniqueness rather than on name: Better Auth names it
-   * `account_issuer_accountId_uidx`, this repository names its constraints in
+   * Matched on columns and uniqueness rather than on name: Better Auth names its
+   * indexes in camelCase, this repository names its constraints in
    * `snake_case`, and the name is the half nothing depends on. A `UNIQUE`
    * constraint satisfies a declared unique index — Postgres implements the one
    * with the other.
