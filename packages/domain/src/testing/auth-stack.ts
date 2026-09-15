@@ -19,7 +19,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import { betterAuth } from "better-auth";
 import { eq } from "drizzle-orm";
 import { completeAdminEnrolment, mintAdminEnrolment, readAdminEnrolment } from "#admin/enrolment";
-import { type AuthLogger, authOptions } from "#auth/config";
+import { type AuthEnv, type AuthLogger, authOptions } from "#auth/config";
 import * as schema from "#schema";
 import type { TestDatabase } from "#testing/database";
 
@@ -34,9 +34,10 @@ export interface AuthStack {
 /**
  * Build the stack.
  *
- * Google is left unconfigured: every test using this reaches its subject through
- * the magic-link door, and configuring a social provider would add an outbound
- * leg a test has no business having.
+ * Google is left unconfigured by default: almost every test using this reaches
+ * its subject through the magic-link door. The one that needs the Google door to
+ * *start* passes placeholder credentials through `env` — starting it builds an
+ * authorization URL and writes a state row, and reaches no network.
  */
 export function signInStack(
   database: TestDatabase,
@@ -46,6 +47,8 @@ export function signInStack(
    * line in the middle of it is noise.
    */
   logger: Partial<AuthLogger> = {},
+  /** Variables beside the two every stack needs, such as a Google client. */
+  env: AuthEnv = {},
 ): AuthStack {
   const links: { url: string }[] = [];
 
@@ -59,6 +62,7 @@ export function signInStack(
       env: {
         BETTER_AUTH_SECRET: "a-secret-long-enough-for-the-configuration-to-build",
         BETTER_AUTH_URL: BASE_URL,
+        ...env,
       },
     }),
   );
