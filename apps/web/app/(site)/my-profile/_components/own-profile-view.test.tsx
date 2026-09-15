@@ -232,8 +232,8 @@ describe("her Pause", () => {
 
   /**
    * **What a hydrated tap sends, and what it gets back.** Driven through a
-   * transport fault, the outcome the switch renders now that no ceiling refuses
-   * a tap (#311). A fault is thrown on the server and reaches the browser as the
+   * transport fault, the one failure an owner's tap can meet: no ceiling refuses
+   * it (#311). A fault is thrown on the server and reaches the browser as the
    * generic code with operator English, which is exactly the message this
    * surface must never render.
    */

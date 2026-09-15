@@ -160,9 +160,9 @@ describe("pausing and resuming", () => {
   });
 
   /**
-   * **As often as she likes** (#311). Eleven of each in one day is one past the
-   * ceiling the switch used to share. Nothing is counted either: the flips leave
-   * `rate_counter` exactly as they found it.
+   * **As often as she likes** (#311): no count bounds her flips in a day, and
+   * nothing counts them either — the flips leave `rate_counter` exactly as they
+   * found it.
    */
   test("pauses and resumes eleven times in a day, and every call succeeds", async ({
     database,
@@ -171,8 +171,8 @@ describe("pausing and resuming", () => {
     const countersBefore = await database.db.select().from(schema.rateCounter);
 
     for (let flip = 0; flip < 11; flip += 1) {
-      // Sequential on purpose: a ceiling counts flips in order, and a pause and
-      // a resume run together would race each other on one row.
+      // Sequential on purpose: each flip starts from the row the last one left,
+      // and a pause and a resume run together would race each other on it.
       // oxlint-disable-next-line no-await-in-loop
       expect(await pauseProfile(database.db, ana.accountId, PAUSED_AT)).toEqual({ ok: true });
       // oxlint-disable-next-line no-await-in-loop
