@@ -30,7 +30,7 @@ describe("authBaseUrl", () => {
       authBaseUrl({
         [BASE_URL_VARIABLE]: CONFIGURED,
         [PROXY_URL_VARIABLE]: PROXIED,
-        NODE_ENV: "production",
+        ENVIRONMENT: "production",
       }),
     ).toBe(CONFIGURED);
   });
@@ -46,7 +46,7 @@ describe("authBaseUrl", () => {
   });
 
   it("does not let the proxy stand in for a missing configured origin in production", () => {
-    expect(() => authBaseUrl({ [PROXY_URL_VARIABLE]: PROXIED, NODE_ENV: "production" })).toThrow(
+    expect(() => authBaseUrl({ [PROXY_URL_VARIABLE]: PROXIED, ENVIRONMENT: "production" })).toThrow(
       AppError,
     );
   });

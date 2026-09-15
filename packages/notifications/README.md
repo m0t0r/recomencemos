@@ -112,9 +112,9 @@ flowchart LR
     SEL -->|"resend"| T2["createResendTransport"]
     SEL -->|"unset or unknown"| X(["throw AppError"])
 
-    T1 --> G{"NODE_ENV"}
-    G -->|"development · test"| OK1["stdout<br/><i>the link, first, on its own line</i>"]
-    G -->|"anything else"| X2(["throw AppError<br/><i>refuses at construction</i>"])
+    T1 --> G{"ENVIRONMENT"}
+    G -->|"development · unset"| OK1["stdout<br/><i>the link, first, on its own line</i>"]
+    G -->|"production"| X2(["throw AppError<br/><i>refuses at construction</i>"])
 
     T2 --> N1["RESEND_API_KEY"]
     T2 --> N2["NOTIFICATIONS_FROM"]
@@ -126,7 +126,7 @@ flowchart LR
     class OK1,OK2 good
 ```
 
-`createTransport(env)` is the composition point, so a Server Action asks for a notifier rather than choosing a channel. A call site branching on `NODE_ENV` would have broken intent Q1's rule while looking like compliance.
+`createTransport(env)` is the composition point, so a Server Action asks for a notifier rather than choosing a channel. A call site branching on the environment would have broken intent Q1's rule while looking like compliance.
 
 **Each branch resolves only what it needs.** The `terminal` branch never _asks_ for `RESEND_API_KEY` — not "ignores it", never asks — which is what lets the whole sign-in loop run with no credential, no verified domain and no mailbox.
 
@@ -152,7 +152,7 @@ flowchart LR
 
 The link comes first, on a line of its own, deduplicated — copying it is a double-click rather than a hunt through a wrapped paragraph. It prints the **plain-text alternative**, so the development loop doubles as a standing check on the body NFR20 requires every template to ship.
 
-**It is available in development only, enforced twice.** `NOTIFICATIONS_TRANSPORT` has no default and an unset value throws — neither answer is safe in both places, since `resend` by default mails a stranger from an unwarmed domain on a first loop and `terminal` by default makes a real deploy send nothing at all. And the transport refuses to construct outside `NODE_ENV` `development`/`test`: an **allowlist**, not a `production` blocklist, because `staging`, `preview`, a typo and `undefined` would each otherwise read as permission to swallow mail. It refuses at construction, so the failure is a process that will not start rather than a request that quietly delivered nothing.
+**It is available in development only, enforced twice.** `NOTIFICATIONS_TRANSPORT` has no default and an unset value throws — neither answer is safe in both places, since `resend` by default mails a stranger from an unwarmed domain on a first loop and `terminal` by default makes a real deploy send nothing at all. And the transport refuses to construct unless `ENVIRONMENT` reads `development`, which the production image never does — it sets `ENVIRONMENT=production` in the `Dockerfile`. `staging`, `prod` and a typo cannot read as permission to swallow mail either: the one reader of that variable accepts `development` and `production` and stops the process on anything else. The check asks "is this development?" rather than "is this production?", so a value added to that set later is refused until someone decides otherwise. It refuses at construction, so the failure is a process that will not start rather than a request that quietly delivered nothing.
 
 ## Templates
 

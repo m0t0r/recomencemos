@@ -6,6 +6,7 @@
   "exports": {
     "./ambient-request-id": "./src/ambient-request-id.ts",
     "./app-error": "./src/app-error.ts",
+    "./environment": "./src/environment.ts",
     "./error-response": "./src/error-response.ts",
     "./redaction": "./src/redaction.ts"
   },

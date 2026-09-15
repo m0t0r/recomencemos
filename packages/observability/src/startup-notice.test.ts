@@ -28,7 +28,7 @@ describe("logStartupNotice", () => {
   it("emits exactly one line when there is no DSN", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "development" }, logger);
+    logStartupNotice({ ENVIRONMENT: "development" }, logger);
 
     expect(lines()).toHaveLength(1);
   });
@@ -36,7 +36,7 @@ describe("logStartupNotice", () => {
   it("emits it at warn, so it survives the production info floor", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "development" }, logger);
+    logStartupNotice({ ENVIRONMENT: "development" }, logger);
 
     expect(lines()[0]?.level).toBe("warn");
   });
@@ -44,7 +44,7 @@ describe("logStartupNotice", () => {
   it("names the variable to set, not only that something is unset", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "development" }, logger);
+    logStartupNotice({ ENVIRONMENT: "development" }, logger);
 
     expect(String(lines()[0]?.msg)).toContain("NEXT_PUBLIC_SENTRY_DSN");
   });
@@ -52,7 +52,7 @@ describe("logStartupNotice", () => {
   it("carries the gaps as a queryable field, not only as prose", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "development" }, logger);
+    logStartupNotice({ ENVIRONMENT: "development" }, logger);
 
     const context = lines()[0]?.context as Record<string, unknown> | undefined;
     expect(context?.gaps).toEqual(["reporting-inactive"]);
@@ -61,7 +61,7 @@ describe("logStartupNotice", () => {
   it("says nothing at all once a DSN is configured in development", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "development", NEXT_PUBLIC_SENTRY_DSN: DSN }, logger);
+    logStartupNotice({ ENVIRONMENT: "development", NEXT_PUBLIC_SENTRY_DSN: DSN }, logger);
 
     expect(lines()).toHaveLength(0);
   });
@@ -69,7 +69,7 @@ describe("logStartupNotice", () => {
   it("fires the same notice in production when the release variable is absent", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "production", NEXT_PUBLIC_SENTRY_DSN: DSN }, logger);
+    logStartupNotice({ ENVIRONMENT: "production", NEXT_PUBLIC_SENTRY_DSN: DSN }, logger);
 
     const context = lines()[0]?.context as Record<string, unknown> | undefined;
     expect(lines()).toHaveLength(1);
@@ -80,7 +80,7 @@ describe("logStartupNotice", () => {
   it("does not mention the release in development, where nothing populates it", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "development", NEXT_PUBLIC_SENTRY_DSN: DSN }, logger);
+    logStartupNotice({ ENVIRONMENT: "development", NEXT_PUBLIC_SENTRY_DSN: DSN }, logger);
 
     expect(lines()).toHaveLength(0);
   });
@@ -89,7 +89,7 @@ describe("logStartupNotice", () => {
   it("stays at one line when both gaps are open", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "production" }, logger);
+    logStartupNotice({ ENVIRONMENT: "production" }, logger);
 
     const context = lines()[0]?.context as Record<string, unknown> | undefined;
     expect(lines()).toHaveLength(1);
@@ -100,7 +100,7 @@ describe("logStartupNotice", () => {
     const { logger, lines } = harness();
 
     logStartupNotice(
-      { NODE_ENV: "production", NEXT_PUBLIC_SENTRY_DSN: DSN, NEXT_PUBLIC_RELEASE: "abc1234" },
+      { ENVIRONMENT: "production", NEXT_PUBLIC_SENTRY_DSN: DSN, NEXT_PUBLIC_RELEASE: "abc1234" },
       logger,
     );
 
@@ -110,7 +110,7 @@ describe("logStartupNotice", () => {
   it("treats an empty DSN as no DSN, which is how the off-switch is usually reached", () => {
     const { logger, lines } = harness();
 
-    logStartupNotice({ NODE_ENV: "development", NEXT_PUBLIC_SENTRY_DSN: "" }, logger);
+    logStartupNotice({ ENVIRONMENT: "development", NEXT_PUBLIC_SENTRY_DSN: "" }, logger);
 
     expect(lines()).toHaveLength(1);
   });
@@ -143,7 +143,7 @@ describe("isReportingConfigured", () => {
     for (const dsn of [undefined, "", "   "]) {
       const { logger, lines } = harness();
 
-      logStartupNotice({ NODE_ENV: "development", NEXT_PUBLIC_SENTRY_DSN: dsn }, logger);
+      logStartupNotice({ ENVIRONMENT: "development", NEXT_PUBLIC_SENTRY_DSN: dsn }, logger);
 
       expect(isReportingConfigured({ NEXT_PUBLIC_SENTRY_DSN: dsn })).toBe(false);
       expect((lines()[0]?.context as { gaps?: string[] })?.gaps).toEqual(["reporting-inactive"]);

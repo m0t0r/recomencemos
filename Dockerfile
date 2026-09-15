@@ -101,6 +101,15 @@ ENV SENTRY_PROJECT=$SENTRY_PROJECT
 ENV PHOTO_S3_ENDPOINT=$PHOTO_S3_ENDPOINT
 ENV PHOTO_PUBLIC_BASE=$PHOTO_PUBLIC_BASE
 
+# **Where this runs, named rather than inferred** (ADR-0022). `next build` sets
+# `NODE_ENV=production` for every build, a developer's included, so the build
+# mode cannot say "this is the deploy" — and unset reads as development. Set in
+# the build stage and not only the runner, because a page prerendered here and
+# the headers Next bakes into its routes manifest are decided here: without this
+# line the image would ship with no HSTS. A literal rather than a build argument,
+# because this image has one answer. `deploy-environment.test.ts` pins it.
+ENV ENVIRONMENT=production
+
 # **A secret, so a mount and not an `ARG`.** A build argument is recorded in the
 # image's own history and is readable by anyone who can pull it; this token is
 # write-scoped to a Sentry project. It is absent on a build that is not
@@ -129,6 +138,11 @@ RUN --mount=type=bind,from=store,source=/pnpm/store,target=/pnpm/store,rw \
 # ---------------------------------------------------------------------------
 FROM base AS runner
 ENV NODE_ENV=production
+# Again here, because a stage inherits nothing from `builder`: the log line's
+# `env`, Sentry's environment and sample rate, and the refusals of development
+# values are all decided at runtime (ADR-0022). `NODE_ENV` above stays for what
+# it actually means, the build mode.
+ENV ENVIRONMENT=production
 
 # **The release name travels in the image, not in the machine's environment.**
 #

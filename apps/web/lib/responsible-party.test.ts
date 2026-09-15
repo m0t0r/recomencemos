@@ -26,7 +26,7 @@ import {
 const REAL = { name: "Nombre De Prueba", email: "datos@ejemplo.test" };
 
 const production = (overrides: ResponsiblePartyEnv = {}): ResponsiblePartyEnv => ({
-  NODE_ENV: "production",
+  ENVIRONMENT: "production",
   RESPONSIBLE_PARTY_NAME: REAL.name,
   RESPONSIBLE_PARTY_EMAIL: REAL.email,
   ...overrides,
@@ -36,7 +36,7 @@ describe("in development", () => {
   // A fresh clone reads `/privacy` end to end without anyone's real name being in
   // git, which is the reason the placeholders are committed at all.
   it("falls back to the placeholders when neither variable is set", () => {
-    expect(responsibleParty({ NODE_ENV: "development" })).toEqual({
+    expect(responsibleParty({ ENVIRONMENT: "development" })).toEqual({
       name: RESPONSIBLE_PARTY_PLACEHOLDERS.name,
       email: RESPONSIBLE_PARTY_PLACEHOLDERS.email,
     });
@@ -45,11 +45,17 @@ describe("in development", () => {
   it("prefers a value a developer has set", () => {
     expect(
       responsibleParty({
-        NODE_ENV: "development",
+        ENVIRONMENT: "development",
         RESPONSIBLE_PARTY_NAME: REAL.name,
         RESPONSIBLE_PARTY_EMAIL: REAL.email,
       }),
     ).toEqual(REAL);
+  });
+
+  // A local `pnpm build && pnpm start` runs with the production build mode and
+  // the development `.env.local`, and it is not a deploy (ADR-0022).
+  it("serves the placeholders from a production build that was not told it is production", () => {
+    expect(responsibleParty({ NODE_ENV: "production" })).toEqual(RESPONSIBLE_PARTY_PLACEHOLDERS);
   });
 });
 

@@ -98,7 +98,7 @@ function harness(
 
 describe("base fields", () => {
   it("carries service, env, release, level, time and msg on every line", () => {
-    const { logger, lines } = harness({ NODE_ENV: "production", NEXT_PUBLIC_RELEASE: "abc123" });
+    const { logger, lines } = harness({ ENVIRONMENT: "production", NEXT_PUBLIC_RELEASE: "abc123" });
 
     logger.info("hello");
 
@@ -112,6 +112,16 @@ describe("base fields", () => {
     });
   });
 
+  // The field keeps its name, which drain queries bind to; its value is where
+  // the process runs, which a local `next start` is not (ADR-0022).
+  it("reads env from where the process runs, not from how it was built", () => {
+    const { logger, lines } = harness({ NODE_ENV: "production" });
+
+    logger.info("hello");
+
+    expect(lines()[0]?.env).toBe("development");
+  });
+
   it("replaces pino's process and host fields rather than carrying them", () => {
     const { logger, lines } = harness();
 
@@ -122,7 +132,7 @@ describe("base fields", () => {
   });
 
   it("still carries a release when the environment supplies none", () => {
-    const { logger, lines } = harness({ NODE_ENV: "production" });
+    const { logger, lines } = harness({ ENVIRONMENT: "production" });
 
     logger.info("hello");
 
@@ -142,11 +152,11 @@ describe("base fields", () => {
 // The floor is NFR8.
 describe("the level floor", () => {
   it("defaults to info in production", () => {
-    expect(createLoggerOptions({ NODE_ENV: "production" }).level).toBe("info");
+    expect(createLoggerOptions({ ENVIRONMENT: "production" }).level).toBe("info");
   });
 
   it("defaults to debug in development", () => {
-    expect(createLoggerOptions({ NODE_ENV: "development" }).level).toBe("debug");
+    expect(createLoggerOptions({ ENVIRONMENT: "development" }).level).toBe("debug");
   });
 
   it("defaults to debug when the environment says nothing", () => {
@@ -154,15 +164,19 @@ describe("the level floor", () => {
   });
 
   it("is overridden at runtime by LOG_LEVEL, with no rebuild", () => {
-    expect(createLoggerOptions({ NODE_ENV: "production", LOG_LEVEL: "trace" }).level).toBe("trace");
+    expect(createLoggerOptions({ ENVIRONMENT: "production", LOG_LEVEL: "trace" }).level).toBe(
+      "trace",
+    );
   });
 
   it("falls back to the default rather than letting a typo stop the server booting", () => {
-    expect(createLoggerOptions({ NODE_ENV: "production", LOG_LEVEL: "trce" }).level).toBe("info");
+    expect(createLoggerOptions({ ENVIRONMENT: "production", LOG_LEVEL: "trce" }).level).toBe(
+      "info",
+    );
   });
 
   it("drops a line below the floor and keeps one at it", () => {
-    const { logger, lines } = harness({ NODE_ENV: "production" });
+    const { logger, lines } = harness({ ENVIRONMENT: "production" });
 
     logger.debug("below");
     logger.info("at");
@@ -174,21 +188,21 @@ describe("the level floor", () => {
 // The switch is NFR9.
 describe("the format switch", () => {
   it("is pretty in development and JSON in production", () => {
-    expect(resolveLogFormat({ NODE_ENV: "development" })).toBe("pretty");
-    expect(resolveLogFormat({ NODE_ENV: "production" })).toBe("json");
+    expect(resolveLogFormat({ ENVIRONMENT: "development" })).toBe("pretty");
+    expect(resolveLogFormat({ ENVIRONMENT: "production" })).toBe("json");
   });
 
   it("is overridden either way by LOG_FORMAT", () => {
-    expect(resolveLogFormat({ NODE_ENV: "development", LOG_FORMAT: "json" })).toBe("json");
-    expect(resolveLogFormat({ NODE_ENV: "production", LOG_FORMAT: "pretty" })).toBe("pretty");
+    expect(resolveLogFormat({ ENVIRONMENT: "development", LOG_FORMAT: "json" })).toBe("json");
+    expect(resolveLogFormat({ ENVIRONMENT: "production", LOG_FORMAT: "pretty" })).toBe("pretty");
   });
 
   it("ignores an unrecognised LOG_FORMAT rather than inventing a third destination", () => {
-    expect(resolveLogFormat({ NODE_ENV: "production", LOG_FORMAT: "yaml" })).toBe("json");
+    expect(resolveLogFormat({ ENVIRONMENT: "production", LOG_FORMAT: "yaml" })).toBe("json");
   });
 
   it("makes every line the logger writes parse with a bare JSON.parse", () => {
-    const { logger, raw } = harness({ NODE_ENV: "development", LOG_FORMAT: "json" });
+    const { logger, raw } = harness({ ENVIRONMENT: "development", LOG_FORMAT: "json" });
 
     logger.info({ context: { orderId: "o_1" } }, "one");
     logger.error({ err: new AppError({ code: "boom", message: "operator detail" }) }, "two");
@@ -999,8 +1013,8 @@ describe("what a truncated line keeps of err", () => {
 describe("the bound's runtime override (LOG_MAX_LINE_BYTES)", () => {
   it("is the 8 KB default when unset, in development and production alike", () => {
     expect(resolveMaxLineBytes({})).toBe(MAX_LINE_BYTES);
-    expect(resolveMaxLineBytes({ NODE_ENV: "development" })).toBe(MAX_LINE_BYTES);
-    expect(resolveMaxLineBytes({ NODE_ENV: "production" })).toBe(MAX_LINE_BYTES);
+    expect(resolveMaxLineBytes({ ENVIRONMENT: "development" })).toBe(MAX_LINE_BYTES);
+    expect(resolveMaxLineBytes({ ENVIRONMENT: "production" })).toBe(MAX_LINE_BYTES);
   });
 
   it("takes a number above the default", () => {

@@ -114,10 +114,21 @@ NOBIN="$ROOT/origin/nobin"
 mkdir -p "$NOBIN"
 printf '{"name":"web","portless":{"name":"web.example"}}\n' > "$NOBIN/package.json"
 
-export NODE_ENV=production
+export ENVIRONMENT=production
 run_origin "production is answered with nothing"      0 EMPTY EMPTY "$LIVE"
 run_origin "and a machine with no client is quiet"    0 EMPTY EMPTY "$NOBIN"
+unset ENVIRONMENT
+
+# The build mode says how a process was built, not where it runs, so it moves
+# nothing here. A typo in the variable that does is refused rather than read as
+# either answer.
+export NODE_ENV=production
+run_origin "a production build mode is not a production shell" 0 '^https://web\.example\.localhost$' EMPTY "$LIVE"
 unset NODE_ENV
+
+export ENVIRONMENT=prod
+run_origin "an environment it does not know is refused" 2 EMPTY 'ENVIRONMENT' "$LIVE"
+unset ENVIRONMENT
 
 section "Dev origin: no answer is not the same as no route"
 NONE=$(origin_app none web.example 'https://web.example.localhost' 'No active routes.

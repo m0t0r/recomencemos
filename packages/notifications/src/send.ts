@@ -13,6 +13,7 @@
  */
 
 import { AppError } from "@repo/errors/app-error";
+import { readEnvironment } from "@repo/errors/environment";
 import * as React from "react";
 import {
   type NotificationsEnv,
@@ -307,7 +308,7 @@ export function createNotifier({
  * "which transport" is answered here, once, from configuration, and #12's
  * `requestMagicLink` never learns that a second one exists. That is intent Q1's
  * rule read literally: **a channel is added by implementing the seam, never by
- * editing a call site**, and a call site that branched on `NODE_ENV` would have
+ * editing a call site**, and a call site that branched on the environment would have
  * broken it while appearing to comply.
  *
  * Each branch resolves only the configuration it needs, which is what lets a
@@ -317,7 +318,7 @@ export function createNotifier({
  */
 export function createTransport(env: NotificationsEnv = process.env): NotificationTransport {
   if (transportName(env) === "terminal") {
-    return createTerminalTransport({ nodeEnv: env.NODE_ENV });
+    return createTerminalTransport({ environment: readEnvironment(env) });
   }
 
   const { from } = senderIdentity(env);

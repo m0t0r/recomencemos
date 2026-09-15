@@ -8,11 +8,11 @@ describe("the singleton", () => {
 
 describe("the destination (the format switch selects one, never a transport)", () => {
   it("is a writable stream in json mode", () => {
-    expect(typeof createDestination({ NODE_ENV: "production" }).write).toBe("function");
+    expect(typeof createDestination({ ENVIRONMENT: "production" }).write).toBe("function");
   });
 
   it("constructs the pretty printer as a stream, so no worker thread exists", () => {
-    const destination = createDestination({ NODE_ENV: "development" });
+    const destination = createDestination({ ENVIRONMENT: "development" });
 
     expect(typeof destination.write).toBe("function");
     // `thread-stream` — what `transport: { target }` would build — exposes the

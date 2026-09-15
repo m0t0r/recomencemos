@@ -25,6 +25,7 @@
 
 import { render } from "react-email";
 import { AppError } from "@repo/errors/app-error";
+import type { Environment } from "@repo/errors/environment";
 import type { NotificationTransport, OutboundMessage, TransportReceipt } from "#send";
 import { assertServerOnly } from "#server-only";
 import { SEND_FAILED } from "#user-messages";
@@ -52,46 +53,44 @@ export interface TerminalTransportOptions {
    * loud; this is the one that would not be, so it is refused at construction
    * rather than discovered from a support ticket.
    *
-   * **Required, and `undefined` is an answer rather than a request for the
-   * default.** Defaulting it to `process.env.NODE_ENV` was the first shape and
-   * it had a hole: {@link createTransport} passes `env.NODE_ENV` off the record
-   * it was given, so an environment record that simply lacks the key would
-   * silently fall back to the real process — and the case this guard exists for
-   * is precisely the one where those two disagree. With no default, an absent
-   * value reaches the check as absent and is refused.
+   * **Required, and already parsed.** Defaulting it from the process was the
+   * first shape and it had a hole: {@link createTransport} reads the record it
+   * was given, so a default would silently fall back to the real process — and
+   * the case this guard exists for is precisely the one where those two
+   * disagree. Taking the parsed {@link Environment} rather than a string moves
+   * the typo case to where it belongs: `readEnvironment` stops the process on
+   * anything outside the set, so `staging`, `prod` and a misspelling never
+   * reach this check at all.
+   *
+   * **An unset variable is now an answer, and it is development** (ADR-0022).
+   * This used to refuse the `undefined` a plain `node` process has; what keeps
+   * the transport off a deploy now is the image, which sets
+   * `ENVIRONMENT=production` in git where a test pins it.
    */
-  readonly nodeEnv: string | undefined;
+  readonly environment: Environment;
 }
-
-/**
- * The only two environments this transport may exist in.
- *
- * **An allowlist, not `!== "production"`.** Refusing production alone leaves
- * every other value — `staging`, `preview`, a typo, and `undefined`, which is
- * what a plain `node` process has — reading as permission to swallow mail. A
- * staging deploy that quietly delivers nothing is the same incident as a
- * production one, found later. `next dev` sets `development` and Vitest sets
- * `test`, so the two values that are genuinely a developer's machine are named
- * and everything else is refused.
- */
-const TERMINAL_ENVIRONMENTS: ReadonlySet<string> = new Set(["development", "test"]);
 
 export function createTerminalTransport({
   write = (chunk) => void process.stdout.write(chunk),
-  nodeEnv,
+  environment,
 }: TerminalTransportOptions): NotificationTransport {
-  if (!TERMINAL_ENVIRONMENTS.has(nodeEnv ?? "")) {
+  // "Is this development?" and not "is this production?". The two questions
+  // are the same while the set has two members; they part the day `staging`
+  // joins it, and a staging deploy that quietly delivers nothing is the same
+  // incident as a production one, found later. So the value it has never heard
+  // of is the one it refuses.
+  if (environment !== "development") {
     throw new AppError({
       code: "terminal_transport_outside_development",
       status: 500,
       message:
-        `The terminal transport was selected with NODE_ENV=${nodeEnv ?? "unset"}. It writes ` +
+        `The terminal transport was selected with ENVIRONMENT=${environment}. It writes ` +
         "notifications to stdout instead of delivering them, so anywhere but a developer's " +
         "machine this sends nothing at all — no bounce and no error, only people who never " +
-        "receive their magic link. It is available in development and test only. " +
+        "receive their magic link. It is available in development only. " +
         "Set NOTIFICATIONS_TRANSPORT=resend.",
       userMessage: SEND_FAILED,
-      context: { transport: "terminal", nodeEnv: nodeEnv ?? null },
+      context: { transport: "terminal", environment },
     });
   }
 

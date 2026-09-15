@@ -52,6 +52,11 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+// By path rather than by package name: the root manifest depends on no
+// workspace. Plain `node` strips the types, and already loads `@repo/errors`
+// for the migrate CLI. One reader, so this script and the app cannot disagree
+// about what "production" means (ADR-0022).
+import { readEnvironment } from "../packages/errors/src/environment.ts";
 
 // Anything that stops the script reaching an answer, as against an answer of
 // "there is no route".
@@ -173,7 +178,7 @@ function main() {
   // identical reason; this one exists because it is cheaper to refuse to look
   // than to look and be overruled, and because on a machine with no dev
   // dependencies looking at all writes a refusal the operator has to interpret.
-  if (process.env.NODE_ENV === "production") return;
+  if (readEnvironment(process.env) === "production") return;
 
   const url = ask(app, ["get", proxiedName(app)])
     .replace(ANSI, "")
