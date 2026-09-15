@@ -488,9 +488,11 @@ export function authOptions({
        * the provider returns to the same browser. The row that does carry the
        * answer is the magic link's, whose round trip may end in another browser.
        *
-       * `"cookie"` was considered in #323 and declined. The sweep is needed for
-       * magic-link rows either way, and the switch would touch the `Set-Cookie`
-       * handoff in `startGoogleSignIn` for little gain.
+       * **`"cookie"` would remove this row and not the sweep.** Magic-link rows
+       * need the sweep either way, and the cookie strategy would move the state
+       * into the `Set-Cookie` handoff `startGoogleSignIn` performs by hand — the
+       * one step of that door whose failure is a `state_mismatch` at the
+       * provider rather than a refusal here.
        */
       storeStateStrategy: "database",
     },
@@ -670,9 +672,18 @@ export function authOptions({
            *
            * **On the write path rather than a schedule**, because a write is the
            * one moment this table is guaranteed a caller paying attention, and
-           * writes are bounded by the ceilings on both doors, so the extra
-           * statement is bounded with them. Every row either door writes comes
+           * every path that writes here is rate-limited, so the extra statement
+           * is limited with it: the two Server Actions by `CEILINGS`, and the
+           * directly reachable `/api/auth/*` doors by Better Auth's own limiter —
+           * the `customRules` below for the magic link, its default `/sign-in*`
+           * rule for `/sign-in/social`. Every row either door writes comes
            * through `createVerificationValue`, so this one hook sees them all.
+           *
+           * **A delete that fails fails the request that triggered it**, as
+           * `chargeCeiling`'s sweep does. The row it followed is already written,
+           * so she retries into a table that is no worse; swallowing the error
+           * instead would leave a table that silently stops being swept, which
+           * is the defect this exists to close.
            *
            * **`after`, not `before`.** Better Auth runs this through
            * `queueAfterTransactionHook`: once the insert has committed, and

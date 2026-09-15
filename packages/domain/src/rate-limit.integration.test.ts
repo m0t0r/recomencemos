@@ -18,7 +18,7 @@
  */
 
 import { eq } from "drizzle-orm";
-import type { CeilingPrincipal } from "#rate-limit";
+import type { CeilingedAction, CeilingPrincipal } from "#rate-limit";
 import { CEILINGED_ACTIONS, chargeCeiling, CEILINGS, principalKey } from "#rate-limit";
 import { rateCounter } from "#schema";
 import { test, type TestDatabase } from "#testing/fixtures";
@@ -43,8 +43,9 @@ async function chargeRepeatedly(
   times: number,
   at: Date = noon,
   principalFor: (charge: number) => CeilingPrincipal = () => ana,
+  action: CeilingedAction = "requestMagicLink",
 ) {
-  let outcome = await chargeCeiling(database.db, principalFor(0), "requestMagicLink", at);
+  let outcome = await chargeCeiling(database.db, principalFor(0), action, at);
 
   for (let charge = 1; charge < times; charge += 1) {
     // Sequential on purpose, and not a missed `Promise.all`: this helper exists
@@ -53,7 +54,7 @@ async function chargeRepeatedly(
     // something else has its own case, "counts concurrent charges without
     // losing any".
     // oxlint-disable-next-line no-await-in-loop
-    outcome = await chargeCeiling(database.db, principalFor(charge), "requestMagicLink", at);
+    outcome = await chargeCeiling(database.db, principalFor(charge), action, at);
   }
 
   return outcome;
@@ -311,24 +312,15 @@ describe("what a refusal carries", () => {
 describe("the Google door's ceiling", () => {
   const at = new Date("2026-08-27T12:48:00.000Z");
 
-  async function startFrom(database: TestDatabase, connection: CeilingPrincipal, times: number) {
-    let outcome = await chargeCeiling(database.db, connection, "startGoogleSignIn", at);
-
-    for (let charge = 1; charge < times; charge += 1) {
-      // Sequential for chargeRepeatedly's reason: the count is the assertion.
-      // oxlint-disable-next-line no-await-in-loop
-      outcome = await chargeCeiling(database.db, connection, "startGoogleSignIn", at);
-    }
-
-    return outcome;
-  }
+  const startFrom = (database: TestDatabase, times: number) =>
+    chargeRepeatedly(database, times, at, () => sharedConnection, "startGoogleSignIn");
 
   test("allows twenty starts from one connection in an hour and refuses the twenty-first", async ({
     database,
   }) => {
     const max = CEILINGS.startGoogleSignIn.ip.max;
 
-    expect((await startFrom(database, sharedConnection, max)).allowed).toBe(true);
+    expect((await startFrom(database, max)).allowed).toBe(true);
 
     const refused = await chargeCeiling(database.db, sharedConnection, "startGoogleSignIn", at);
 
@@ -341,7 +333,7 @@ describe("the Google door's ceiling", () => {
   });
 
   test("leaves another connection's allowance untouched", async ({ database }) => {
-    await startFrom(database, sharedConnection, CEILINGS.startGoogleSignIn.ip.max + 1);
+    await startFrom(database, CEILINGS.startGoogleSignIn.ip.max + 1);
 
     const elsewhere = await chargeCeiling(
       database.db,
@@ -356,7 +348,7 @@ describe("the Google door's ceiling", () => {
   // One counter per door: a connection that has spent its links has not spent
   // its Google starts, which is what lets each refusal name the other door.
   test("counts apart from the magic link's per-IP allowance", async ({ database }) => {
-    await startFrom(database, sharedConnection, CEILINGS.startGoogleSignIn.ip.max + 1);
+    await startFrom(database, CEILINGS.startGoogleSignIn.ip.max + 1);
 
     const link = await chargeCeiling(database.db, sharedConnection, "requestMagicLink", at);
 

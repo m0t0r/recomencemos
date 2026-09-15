@@ -144,14 +144,11 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
     last: googleResult.serverError ? ("google" as const) : ("email" as const),
   }));
 
-  const last =
-    answered.email !== result
-      ? "email"
-      : answered.google !== googleResult
-        ? "google"
-        : answered.last;
+  const emailAnswered = answered.email !== result;
+  const googleAnswered = answered.google !== googleResult;
+  const last = emailAnswered ? "email" : googleAnswered ? "google" : answered.last;
 
-  if (answered.email !== result || answered.google !== googleResult) {
+  if (emailAnswered || googleAnswered) {
     setAnswered({ email: result, google: googleResult, last });
   }
 
@@ -179,10 +176,11 @@ export function useSignIn({ returnPath, error }: UseSignInOptions): SignInMachin
    * nobody is focused on is still announced.
    */
   React.useEffect(() => {
-    // Read from `result` inside the effect rather than from a derived boolean:
-    // a boolean stays `true` across a second failure, so focus would move on the
-    // first outcome and never again. `result` is a fresh object per dispatch,
-    // which is what makes "focus lands here on *every* outcome" true.
+    // Read from the two results inside the effect rather than from a derived
+    // boolean: a boolean stays `true` across a second failure, so focus would
+    // move on the first outcome and never again. Each result is a fresh object
+    // per dispatch of its own door, which is what makes "focus lands here on
+    // *every* outcome" true whichever door answered.
     if (result.data ?? result.serverError ?? result.validationErrors ?? googleResult.serverError) {
       announcementRef.current?.focus();
     }
