@@ -34,8 +34,8 @@ database without ever deciding one. #49 is where that was noticed and answered.
 
 `pnpm dev` connects to a **Docker Compose** stack: `postgres:18-alpine` on **5432**,
 **PgBouncer in `pool_mode = transaction`** in front of it on **6432**, and — since the photo path —
-**Versity S3 Gateway** on **9000**. The commands that start it are in the README, and the file that defines it is
-`docker-compose.yaml`; what belongs here is why it has more than one container.
+**Versity S3 Gateway** on **9000**. The commands that start it are in the README, and the file that
+defines it is `docker-compose.yaml`; what belongs here is why it has more than one container.
 
 **The pooler is the whole reason this is not one container.** DD2 fixes PlanetScale's pooler in
 transaction-pooling mode, which removes `LISTEN`/`NOTIFY`, session advisory locks, temp tables and
@@ -50,28 +50,31 @@ So **two URLs pointing at one unpooled Postgres would not satisfy this key.** Th
 nothing, which is the failure the key exists to prevent.
 
 **The object store is here on the same argument, one store over.** NFR6 — _"0 unmoderated photo
-objects are retrievable by any caller, by any URL, guessed or not"_ — is true because **the store**
-refuses, not because our code declines to hand the URL out. That is not a claim any mock can be asked
-about: a double that refuses on our behalf asserts our own belief about a configuration file. Versity
-S3 Gateway speaks the same S3 protocol Cloudflare R2 does, and `object-store-init` performs the same
-acts a human performs against R2 at runbook §3 — a bucket policy granting anonymous `s3:GetObject` on
-the whole photos bucket, and no policy at all on the quarantine one — so the presign code exercised in
-development is the production code path against something very close to the production
-configuration.
+objects are retrievable by any caller, by any URL, guessed or not"_ — is true because
+**the store** refuses, not because our code declines to hand the URL out. That is not a claim any
+mock can be asked about: a double that refuses on our behalf asserts our own belief about a
+configuration file. Versity S3 Gateway speaks the same S3 protocol Cloudflare R2 does, and
+`object-store-init` performs the acts a human performs against R2 at runbook §3 — a bucket policy
+granting anonymous `s3:GetObject` on the whole photos bucket, and no policy at all on the
+quarantine one — so the presign code exercised in development is the production code path against
+something very close to the production configuration. It performs one act runbook §3 does not: a
+CORS rule on quarantine, without which a browser's upload is refused at the preflight. Production's
+half of that is a row in the README's "Still to replace".
 
 **The grant is `s3:GetObject` and nothing else, and that is what makes it close rather than merely
 similar** ([#299](https://github.com/m0t0r/recomencemos/issues/299),
 [#316](https://github.com/m0t0r/recomencemos/issues/316)). An R2 public bucket serves objects and
-never a listing, and an anonymous `ListObjectsV2` on the development photos bucket answers 403 for the
-same reason. The store before #316 answered 200 there, because its per-bucket grant could not
+never a listing, and an anonymous `ListObjectsV2` on the development photos bucket answers 403 for
+the same reason. The store before #316 answered 200 there, because its per-bucket grant could not
 separate listing from reading. Versity was picked against three other stores in #299 because the
-storage suite passes against it unmodified and it showed no deviation from R2 in either direction.
+storage suite passes against it unmodified, and #299 measured no deviation from R2 in either
+direction.
 
-**That last sentence was not true until [#251](https://github.com/m0t0r/recomencemos/issues/251), and
+**"Very close" was not true until [#251](https://github.com/m0t0r/recomencemos/issues/251), and
 the way it was false is the reason `object-store-access` is now a key.** The pair used to be two
 prefixes in one bucket with anonymous access withheld from `quarantine/`, which an S3 bucket policy
-expresses happily and **R2 cannot**: public access on R2 is a single bucket-level switch, with no per-prefix ACL and no
-S3-style bucket policy underneath it. So the fixture was demonstrating a refusal production had no
+expresses happily and **R2 cannot**: public access on R2 is a single bucket-level switch, with no
+per-prefix ACL and no S3-style bucket policy underneath it. So the fixture was demonstrating a refusal production had no
 mechanism to perform, and `PHOTO_PUBLIC_BASE` is a bucket root — `${base}/quarantine/<key>` is a URL
 anybody can construct. Two buckets is the answer that both stores can state the same way.
 

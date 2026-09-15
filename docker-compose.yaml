@@ -36,8 +36,9 @@
 # cannot be wrong in the way a signature is wrong. Versity S3 Gateway speaks
 # the same S3 protocol Cloudflare R2 does, so the code presigning here is the
 # code presigning in production. It was picked from four candidates in #299:
-# the storage suite passes against it unmodified, and it showed no deviation
-# from R2 in either direction.
+# the storage suite passes against it unmodified, and #299's measurement found
+# no deviation from R2 in either direction. One thing here is not R2's: a
+# development-only CORS rule on quarantine, on `object-store-init` below.
 #
 # **`object-store-init` is what makes the negative test real.** It creates the
 # two buckets and makes exactly one of them anonymously readable — photos,
@@ -228,9 +229,8 @@ services:
     # **The grant is `s3:GetObject` and nothing else, so nothing lists.** An R2
     # public bucket serves objects and never a listing, and so does this one:
     # an anonymous `GET /recomencemos-photos?list-type=2` answers 403, measured
-    # 2026-09-15. The store before #316 answered 200, because its per-bucket
-    # grant could not separate listing from reading — the one infidelity #251
-    # left named, and closed here without going back to a prefix.
+    # 2026-09-15. Do not widen the grant to listing, and do not narrow it back
+    # to a prefix — #251 is why the second would be the worse infidelity.
     #
     # **Quarantine also answers the browser's CORS preflight**, from
     # `docker/object-store/cors.xml`: `PUT` with `content-type` and
@@ -240,8 +240,8 @@ services:
     # the storage suite stays 23/23 because Node sends no preflight. With it,
     # those origins get 200, and a look-alike origin, an unlisted header or a
     # `DELETE` still get 403. **Runbook §3 names no CORS rule for R2**, and an
-    # R2 bucket has none by default, so production's half of this is raised as
-    # its own finding rather than settled in a development file.
+    # R2 bucket has none by default, so production's half of this is a row in
+    # the README's "Still to replace" rather than settled in a development file.
     #
     # `docker/object-store/init.sh` is idempotent, so this is safe to re-run
     # on every `pnpm db:up` rather than only on a fresh volume.

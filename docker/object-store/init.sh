@@ -1,7 +1,8 @@
 #!/bin/sh
-# The two buckets, and the asymmetry between them — the same acts a human
-# performs against R2 at go-live runbook §3. `object-store-init` in
-# `docker-compose.yaml` runs this, and says why it is plain `curl`.
+# The two buckets, and the asymmetry between them — the acts a human performs
+# against R2 at go-live runbook §3, plus a CORS rule on quarantine that runbook
+# §3 does not carry. `object-store-init` in `docker-compose.yaml` runs this,
+# and says why it is plain `curl`.
 #
 # Safe to re-run, and `pnpm db:up` re-runs it every time: a bucket is created
 # only when absent, and both policy calls replace rather than add.
