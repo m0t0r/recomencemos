@@ -169,6 +169,13 @@
       "when": 1789255324059,
       "tag": "0023_skill_group_known",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789485797936,
+      "tag": "0024_relax_account_issuer",
+      "breakpoints": true
     }
   ]
 }

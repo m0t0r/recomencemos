@@ -325,14 +325,25 @@ export const session = pgTable(
  * `databaseHooks.account` pair strips them on create and on update; these columns
  * are the shape that discipline is enforced *against*, and
  * `auth-schema.test.ts` is where the emptiness is asserted.
+ *
+ * **Nothing in the database keeps one provider identity to one row, and that is
+ * deliberate.** Better Auth 1.7.3 and later declares no index and no uniqueness
+ * on this table, and triage on #300 chose to match it rather than hold a
+ * constraint of this repository's own — so one (`provider_id`, `account_id`)
+ * pair linked to two rows is a state this schema does not refuse.
  */
 export const account = pgTable(
   "account",
   {
     id: text("id").primaryKey(),
 
-    /** New in Better Auth 1.7 and part of the identity key below. */
-    issuer: text("issuer").notNull(),
+    /**
+     * Better Auth 1.7.0–1.7.2's identity column. 1.7.3 went back to the 1.6
+     * account schema and never writes it, so it is nullable for the rows the
+     * library now creates. It and the constraint below are dropped by a
+     * `contract` migration a deploy later (#312).
+     */
+    issuer: text("issuer"),
 
     /** The provider's own subject id — Google's `sub`. */
     accountId: text("account_id").notNull(),
@@ -361,9 +372,9 @@ export const account = pgTable(
   },
   (table) => [
     /**
-     * Better Auth's own identity constraint, named in this repository's
-     * convention rather than in the library's camelCase. The columns and the
-     * uniqueness are what the adapter relies on; the name is not.
+     * Better Auth 1.7.0–1.7.2's identity constraint, kept only until #312 drops
+     * it with `issuer`. It no longer holds anything: the library leaves `issuer`
+     * null, and a unique constraint treats nulls as distinct.
      */
     unique("account_issuer_account_id_key").on(table.issuer, table.accountId),
 
