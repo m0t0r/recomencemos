@@ -73,7 +73,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^24.13.3",
+    "@types/node": "^24.13.4",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^5.0.0",
     "drizzle-kit": "^0.31.10",
