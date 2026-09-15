@@ -17,6 +17,7 @@
 
 import { AppError } from "@repo/errors/app-error";
 import { readEnvironment } from "@repo/errors/environment";
+import { parse } from "pg-connection-string";
 import { SERVICE_UNAVAILABLE } from "#user-messages";
 
 /** What the application uses. PgBouncer locally, PlanetScale's pooler in production. */
@@ -144,43 +145,56 @@ function refuseUnverifiedTls(variable: string, value: string): void {
 /**
  * What is wrong with `value`, or nothing.
  *
- * **Every `sslmode` is read, not the first.** `URLSearchParams.get` returns the
- * first occurrence and `pg` keeps the last, so `?sslmode=verify-full&sslmode=disable`
- * would pass a `get` and connect in plaintext. A value this cannot parse as a
- * URL is refused rather than waved through, for the same reason.
+ * **`sslmode` is read by `pg`'s own parser, never by one written here.**
+ * `pg-connection-string` re-encodes a string holding a space or a malformed `%`
+ * escape before it parses, and `new URL()` does not — so a key spelt `ssl%6Dode`
+ * decodes to `sslmode` in one and not the other. A check that parsed for itself
+ * accepted strings `pg` then opened in plaintext (review of #327). Asking
+ * `parse` answers the only question that matters, what `pg` will do, and it
+ * keeps the last of a repeated `sslmode` because that is the one `pg` uses. The
+ * seam-1 agreement cases hold the two together across an upgrade of either.
+ *
+ * `sslrootcert=system` is asked first, because `parse` opens every
+ * `sslrootcert` as a file and would report this one as a missing file rather
+ * than as the mistake it is. Anything `parse` cannot read is refused.
  */
 function tlsWeakness(value: string): TlsWeakness | undefined {
-  let parameters: URLSearchParams;
-  try {
-    parameters = new URL(value).searchParams;
-  } catch {
-    return {
-      reason: "is not a URL, so whether it verifies the server cannot be read",
-      context: {},
-    };
-  }
-
-  const modes = parameters.getAll("sslmode");
-  if (modes.length === 0) {
-    return { reason: "carries no sslmode", context: { parameter: "sslmode" } };
-  }
-
-  const weakMode = modes.find((mode) => mode !== VERIFIED_SSLMODE);
-  if (weakMode !== undefined) {
-    return {
-      reason: "carries an sslmode that does not verify the server's certificate",
-      context: { parameter: "sslmode", value: weakMode.slice(0, MAX_QUOTED_LENGTH) },
-    };
-  }
-
-  if (parameters.getAll("sslrootcert").includes(SYSTEM_ROOT_CERT)) {
+  if (namesSystemRootCert(value)) {
     return {
       reason: `carries sslrootcert=${SYSTEM_ROOT_CERT}`,
       context: { parameter: "sslrootcert", value: SYSTEM_ROOT_CERT },
     };
   }
 
+  let sslmode: unknown;
+  try {
+    sslmode = parse(value).sslmode;
+  } catch {
+    // Not propagated: nothing has checked what the parser's own error quotes.
+    return { reason: "cannot be read by the Postgres client", context: {} };
+  }
+
+  if (sslmode === undefined) {
+    return { reason: "carries no sslmode", context: { parameter: "sslmode" } };
+  }
+
+  if (sslmode !== VERIFIED_SSLMODE) {
+    return {
+      reason: "carries an sslmode that does not verify the server's certificate",
+      context: { parameter: "sslmode", value: String(sslmode).slice(0, MAX_QUOTED_LENGTH) },
+    };
+  }
+
   return undefined;
+}
+
+/** Whether any `sslrootcert` in `value` is `system`. A value that is not a URL names none. */
+function namesSystemRootCert(value: string): boolean {
+  try {
+    return new URL(value).searchParams.getAll("sslrootcert").includes(SYSTEM_ROOT_CERT);
+  } catch {
+    return false;
+  }
 }
 
 /** The pooled connection: what every request path uses. */

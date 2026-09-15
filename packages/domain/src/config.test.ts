@@ -1,4 +1,4 @@
-import { isAppError } from "@repo/errors/app-error";
+import { type AppError, isAppError } from "@repo/errors/app-error";
 import { Client } from "pg";
 import {
   CONNECT_TIMEOUT_MS,
@@ -17,20 +17,13 @@ const POOLED = `postgres://user:${PASSWORD}@localhost:6432/db`;
 const DIRECT = `postgres://user:${PASSWORD}@localhost:5432/db`;
 const BOTH = { [POOLED_URL_VARIABLE]: POOLED, [DIRECT_URL_VARIABLE]: DIRECT };
 
-interface Failure {
-  code: string;
-  message: string;
-  userMessage: string;
-  context: Record<string, unknown>;
-}
-
-/** The error `resolve` throws. Fails the test when it throws nothing. */
-function thrown(resolve: () => unknown): Failure {
+/** The `AppError` `resolve` throws. Fails the test when it throws nothing, or anything else. */
+function thrown(resolve: () => unknown): AppError {
   try {
     resolve();
   } catch (error) {
-    expect(isAppError(error)).toBe(true);
-    return error as Failure;
+    if (isAppError(error)) return error;
+    throw error;
   }
   throw new Error("expected the connection string to be refused, and it was accepted");
 }
@@ -146,6 +139,14 @@ describe.each(CONNECTIONS)("in production, $name", ({ variable, base, resolve })
       `${base}?sslmode=verify-full&sslmode=disable`,
     ],
     [
+      "a percent-encoded sslmode that pg never decodes, beside a space",
+      `${base}?ssl%6Dode=verify-full&x=a b`,
+    ],
+    [
+      "a percent-encoded sslmode that pg never decodes, beside a malformed escape",
+      `${base}?ssl%6Dode=verify-full&x=%zz`,
+    ],
+    [
       "a value that is not a URL, so its form cannot be read",
       `host=localhost password=${PASSWORD} sslmode=verify-full`,
     ],
@@ -176,6 +177,68 @@ describe.each(CONNECTIONS)("in production, $name", ({ variable, base, resolve })
     const ssl = sslOptionsOf(resolve(production(`${base}?sslmode=verify-full`)));
     expect(ssl).toBeTypeOf("object");
     expect(ssl).not.toHaveProperty("rejectUnauthorized", false);
+  });
+});
+
+/** Whether `pg` would check the server's certificate for this string. */
+function pgVerifies(connectionString: string): boolean {
+  const ssl = sslOptionsOf(directConfig({ [DIRECT_URL_VARIABLE]: connectionString }));
+  return (
+    typeof ssl === "object" &&
+    ssl !== null &&
+    !("rejectUnauthorized" in ssl && ssl.rejectUnauthorized === false)
+  );
+}
+
+/** Whether the production check lets this string through. */
+function accepted(connectionString: string): boolean {
+  try {
+    directConfig({ ENVIRONMENT: "production", [DIRECT_URL_VARIABLE]: connectionString });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// The check exists to answer what the installed `pg` will do with a string, so
+// it is held against `pg` itself rather than against a restatement of its
+// parser. A `pg` major that parses differently from the parser the check asks
+// fails here, not in production.
+describe("the production check, against the installed pg", () => {
+  it("tells a string pg verifies from one it does not", () => {
+    expect(pgVerifies(`${DIRECT}?sslmode=verify-full`)).toBe(true);
+    expect(pgVerifies(`${DIRECT}?sslmode=no-verify`)).toBe(false);
+    expect(pgVerifies(`${DIRECT}?sslmode=disable`)).toBe(false);
+  });
+
+  it.each([
+    ["verify-full", `${DIRECT}?sslmode=verify-full`],
+    ["verify-full beside a space", `${DIRECT}?sslmode=verify-full&x=a b`],
+    ["a percent-encoded key beside a space", `${DIRECT}?ssl%6Dode=verify-full&x=a b`],
+    ["a percent-encoded key beside a malformed escape", `${DIRECT}?ssl%6Dode=verify-full&x=%zz`],
+    ["a weak sslmode after verify-full", `${DIRECT}?sslmode=verify-full&sslmode=disable`],
+    ["verify-full after a weak sslmode", `${DIRECT}?sslmode=disable&sslmode=verify-full`],
+    ["verify-full in capitals", `${DIRECT}?sslmode=VERIFY-FULL`],
+    ["verify-full beside ssl=0", `${DIRECT}?sslmode=verify-full&ssl=0`],
+    ["verify-full under libpq semantics", `${DIRECT}?uselibpqcompat=true&sslmode=verify-full`],
+    ["require under libpq semantics", `${DIRECT}?uselibpqcompat=true&sslmode=require`],
+    ["ssl=true and no sslmode", `${DIRECT}?ssl=true`],
+  ])("never accepts a string pg would open without verifying: %s", (_, value) => {
+    expect({ accepted: accepted(value), verifies: pgVerifies(value) }).not.toEqual({
+      accepted: true,
+      verifies: false,
+    });
+  });
+
+  it.each([
+    ["verify-full", `${DIRECT}?sslmode=verify-full`],
+    [
+      "verify-full after a weak sslmode, which is the one pg keeps",
+      `${DIRECT}?sslmode=disable&sslmode=verify-full`,
+    ],
+  ])("accepts %s, which pg verifies", (_, value) => {
+    expect(accepted(value)).toBe(true);
+    expect(pgVerifies(value)).toBe(true);
   });
 });
 

@@ -70,6 +70,8 @@
         "packages/errors/src/**",
         "packages/domain/src/config.ts",
         "packages/domain/src/user-messages.ts",
+        "packages/domain/package.json",
+        "packages/errors/package.json",
         ".oxlintrc.json",
         "**/.oxlintrc.json",
         "apps/web/components.json",

@@ -390,7 +390,6 @@ ask_database_url() {
       return 1
     fi
     warn "$name was not staged. Production would refuse to open it."
-    note "It must end in sslmode=verify-full, with no sslrootcert=system."
     if ! confirm "Paste $name again?"; then
       SKIPPED+=("$name — refused: it must carry sslmode=verify-full and no sslrootcert=system")
       return 1
