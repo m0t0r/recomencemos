@@ -33,34 +33,33 @@
 # **objects** are retrievable by an unauthenticated request"_ is a statement
 # about that bucket policy rather than about our routing. A development loop
 # with no bucket could only exercise it through a stand-in, and a stand-in
-# cannot be wrong in the way a signature is wrong. MinIO speaks the same S3
-# protocol Cloudflare R2 does, so the code presigning here is the code
-# presigning in production.
+# cannot be wrong in the way a signature is wrong. Versity S3 Gateway speaks
+# the same S3 protocol Cloudflare R2 does, so the code presigning here is the
+# code presigning in production. It was picked from four candidates in #299:
+# the storage suite passes against it unmodified, and it showed no deviation
+# from R2 in either direction.
 #
-# **`minio-init` is what makes the negative test real.** It creates the bucket
-# and then makes exactly one prefix anonymously readable — `photos/`, never
-# `quarantine/`. Fetching a quarantined object directly and being refused is
+# **`object-store-init` is what makes the negative test real.** It creates the
+# two buckets and makes exactly one of them anonymously readable — photos,
+# never quarantine. Fetching a quarantined object directly and being refused is
 # criterion 1 of #18, and it is only a test if something is actually refusing.
+#
+# **The store's services and volume are named for their role, not their
+# vendor** (#316), so the next swap is a change of image rather than a rename
+# through scripts, docs and volumes. `pnpm db:up` passes `--remove-orphans`
+# for the same reason: a container of a service this file no longer declares —
+# a previous store's, on a machine that ran one — is removed rather than left
+# holding port 9000.
 #
 # **Images are pinned by tag and digest, stamped at a date**, the way
 # `docs/runbooks/observability-go-live.md` pins a vendor figure. Checked
 # **2026-08-26**: `postgres:18-alpine` is PostgreSQL **18.6**, `edoburu/pgbouncer`
-# `v1.25.2-p0` is PgBouncer **1.25.2**. Checked **2026-09-08**: `minio/minio` is
-# `RELEASE.2025-09-07T16-13-09Z` and `minio/mc` is `RELEASE.2025-08-13T08-35-41Z`,
-# both the latest at that date. Read from the images, not recalled.
-# `.github/dependabot.yml` carries a `docker-compose` entry so the digests move
-# on their own rather than freezing at whatever was current today.
-#
-# **The two MinIO images come from `quay.io`, and Docker Hub is no longer an
-# option.** Docker Hub removed the `minio` namespace in September 2026, after
-# upstream archived the community edition: `minio/minio` and `minio/mc` answer
-# 404 there, so a machine without them cached could not run `pnpm db:up`, and
-# Dependabot's weekly `docker-compose` job failed authenticating against the
-# vanished repositories. Quay still serves both, and serves the **same digests**
-# pinned here — checked 2026-09-14 by pulling them — so this is a registry change
-# and not an image change. MinIO is frozen upstream, though, so these two pins
-# will never move again; replacing it is tracked as its own finding rather than
-# folded into a registry fix.
+# `v1.25.2-p0` is PgBouncer **1.25.2**. Checked **2026-09-15**:
+# `versity/versitygw` is `v1.8.0` and `curlimages/curl` is curl **8.22.0**,
+# both the latest on Docker Hub at that date. Read from the registry and the
+# images, not recalled. `.github/dependabot.yml` carries a `docker-compose`
+# entry so the digests move on their own rather than freezing at whatever was
+# current today.
 #
 # The engine version drifts three ways and it is worth knowing by how much:
 # PlanetScale runs 18.4, PGlite 0.5.7 is 18.3, this is 18.6. One major version,
@@ -152,89 +151,97 @@ services:
       start_period: 5s
 
   # The object store. Photos, in two buckets with two different lifetimes.
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    command: ["server", "/data", "--console-address", ":9001"]
+  object-store:
+    image: versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+    # Arguments given, so the image's entrypoint execs the gateway directly.
+    # `--region auto` because the product signs with `auto`, which is what R2
+    # specifies, and the gateway checks the region in a signature's scope.
+    # `--health` is what the healthcheck below reads. `posix` stores each object
+    # as a file on the volume.
+    command:
+      ["--port", ":9000", "--region", "auto", "--health", "/health", "--quiet", "posix", "/data"]
     environment:
       # Development-tier, loopback-bound, and in git for the reason the Postgres
       # password above is: `apps/web/.env.example` carries the same pair, and a
       # real R2 key in either file is the incident C13 names.
-      MINIO_ROOT_USER: recomencemos
-      MINIO_ROOT_PASSWORD: recomencemos
-      # Off, because this is a laptop's dev loop and the check phones home.
-      MINIO_UPDATE: "off"
+      ROOT_ACCESS_KEY_ID: recomencemos
+      ROOT_SECRET_ACCESS_KEY: recomencemos
     ports:
       # Loopback, for the reason written on the postgres service above — and
       # here it is doing more work than there: a bucket published to a café
       # network is a bucket a stranger can PUT into with a committed password.
       - "127.0.0.1:9000:9000"
-      # The console. Useful for looking at what a test actually wrote, and
-      # deliberately not something any code reads.
-      - "127.0.0.1:9001:9001"
     volumes:
-      - minio-data:/data
+      # The posix backend keeps an object's metadata — its ETag and content
+      # type — in extended attributes, so the volume's filesystem must support
+      # user xattrs. Docker Desktop's volumes do (#299).
+      - object-store-data:/data
     healthcheck:
-      # MinIO's own liveness endpoint. `mc ready` would need the client image;
-      # this needs nothing the server does not already have.
-      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      # The gateway's own endpoint. The image is Alpine, so busybox `wget` is
+      # there as shipped; a wrong path makes `up --wait` exit 1 (#299).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/health"]
       interval: 5s
       timeout: 3s
       retries: 12
       start_period: 5s
 
   # Runs once, exits, and is what makes the two buckets different.
-  minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+  object-store-init:
+    # **Plain `curl`, not an S3 CLI** (#316). The gateway ships no client that
+    # sets a bucket policy — `versitygw admin` manages accounts — and the stock
+    # one that does, `amazon/aws-cli`, is 490 MB for four calls. `curl
+    # --aws-sigv4` signs the same requests from a 26 MB image. Measured against
+    # this gateway on 2026-09-15 rather than assumed: a second run exits 0 and
+    # leaves the same state, a policy set on quarantine by hand is gone after
+    # the next run, and a wrong key exits 22 with the store's
+    # `SignatureDoesNotMatch` printed.
+    image: curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
     depends_on:
-      minio:
+      object-store:
         condition: service_healthy
     # **Behind a profile, so `docker compose up --wait` never starts it.**
     # `--wait` reports any container that stops as a failure, exit code 0
     # included, unless another service depends on it with
     # `service_completed_successfully` — and nothing does, because nothing in
-    # this file is the app. Measured on Compose v5.5.1: every `pnpm db:up`
-    # exited 1 with `container recomencemos-minio-init-1 exited (0)` while all
-    # three servers were healthy and both buckets were set. `pnpm db:up` runs
-    # this with `docker compose run --rm minio-init` instead, which targets the
-    # service by name (so the profile needs no `--profile`) and returns the
-    # container's own exit code. A bare `docker compose up` therefore creates no
-    # buckets — use `pnpm db:up`. `pnpm db:down` and `db:reset` pass
-    # `--profile init` for the other direction: `down` skips a service whose
-    # profile is inactive, so a `minio-init-1` left by an earlier `up` would
-    # outlive it and hold the network open.
+    # this file is the app. Measured on Compose v5.5.1, with the init service
+    # this one replaced: every `pnpm db:up` exited 1 reporting the init
+    # container `exited (0)` while all three servers were healthy and both
+    # buckets were set. `pnpm db:up` runs this with `docker compose run --rm
+    # object-store-init` instead, which targets the service by name (so the
+    # profile needs no `--profile`) and returns the container's own exit code.
+    # A bare `docker compose up` therefore creates no buckets — use `pnpm
+    # db:up`. `pnpm db:down` and `db:reset` pass `--profile init` for the other
+    # direction: `down` skips a service whose profile is inactive, so an
+    # `object-store-init-1` left by an earlier `up` would outlive it and hold
+    # the network open.
     profiles: ["init"]
-    # `--ignore-existing` and `anonymous set` are both idempotent, so this is
-    # safe to re-run on every `pnpm db:up` rather than only on a fresh volume.
+    # **A bucket policy granting anonymous `s3:GetObject` on the whole photos
+    # bucket, and no policy at all on the quarantine one.** That asymmetry is
+    # the point of this service, and it is stated at the *bucket* rather than
+    # at a prefix because that is the only place R2 can state it: public access
+    # there is one switch per bucket, with no per-prefix policy and no
+    # S3-style bucket policy behind it (#251). A prefix-scoped rule here would
+    # be a local capability production has no way to reproduce — which is the
+    # failure a fixture is supposed to prevent rather than commit. Runbook §3
+    # is these same acts performed by a human.
     #
-    # **`anonymous set download` on the whole photos bucket and nothing at all
-    # on the quarantine one.** That asymmetry is the point of this service, and
-    # it is stated at the *bucket* rather than at a prefix because that is the
-    # only place R2 can state it: public access there is one switch per bucket,
-    # with no per-prefix policy and no S3-style bucket policy behind it (#251).
-    # A prefix-scoped rule here would be a local capability production has no
-    # way to reproduce — which is the failure a fixture is supposed to prevent
-    # rather than commit. Runbook §3 is these same acts performed by a human.
+    # **The grant is `s3:GetObject` and nothing else, so nothing lists.** An R2
+    # public bucket serves objects and never a listing, and so does this one:
+    # an anonymous `GET /recomencemos-photos?list-type=2` answers 403, measured
+    # 2026-09-15. The store before #316 answered 200, because its per-bucket
+    # grant could not separate listing from reading — the one infidelity #251
+    # left named, and closed here without going back to a prefix.
     #
-    # **One direction of infidelity is left, and it is named rather than fixed.**
-    # MinIO's bucket-scope `download` policy also grants anonymous `ListBucket`
-    # — measured: `GET /recomencemos-photos/?list-type=2` answers 200 here,
-    # while the quarantine bucket answers 403 — and an R2 public bucket serves
-    # objects and never lists. So this fixture is *more* permissive than
-    # production on listing, which is the safe direction for a fixture to err
-    # in: nothing here can pass that production would refuse. It is harmless
-    # besides, since that bucket holds only photos the Wall already publishes.
-    # Do not close it by narrowing the policy back to the `photos` prefix —
-    # that trades a listing difference for the access-model difference #251 was
-    # about.
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        mc alias set local http://minio:9000 recomencemos recomencemos
-        mc mb --ignore-existing local/recomencemos-photos
-        mc mb --ignore-existing local/recomencemos-photos-quarantine
-        mc anonymous set download local/recomencemos-photos
-        mc anonymous set none local/recomencemos-photos-quarantine
+    # `docker/object-store/init.sh` is idempotent, so this is safe to re-run
+    # on every `pnpm db:up` rather than only on a fresh volume.
+    environment:
+      ENDPOINT: http://object-store:9000
+      ACCESS_KEY_ID: recomencemos
+      SECRET_ACCESS_KEY: recomencemos
+    volumes:
+      - ./docker/object-store/init.sh:/init.sh:ro
+      - ./docker/object-store/public-read.json:/public-read.json:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
 
 volumes:
   # Named, so `pnpm db:down` keeps the data and `pnpm db:reset` is the deliberate
@@ -243,4 +250,4 @@ volumes:
   # Same treatment, and it matters more here: a photo is bytes nothing else
   # holds a copy of, so a `down` that discarded them would lose whatever a
   # session had uploaded to look at.
-  minio-data:
+  object-store-data:

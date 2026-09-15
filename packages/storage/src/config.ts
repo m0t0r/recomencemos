@@ -34,7 +34,7 @@ export const BUCKET_VARIABLE = "PHOTO_S3_BUCKET";
  * **A second bucket rather than a second prefix, and the difference is what
  * NFR6 rests on** (#251). _"0 unmoderated photo objects are retrievable by an
  * unauthenticated request"_ used to be stated as a policy on the `quarantine/`
- * prefix — which MinIO can express and R2 cannot. Since `PHOTO_PUBLIC_BASE` is
+ * prefix — which an S3 bucket policy can express and R2 cannot. Since `PHOTO_PUBLIC_BASE` is
  * a bucket root and a key carries its own prefix, `${base}/quarantine/<key>`
  * was a URL anybody could construct, and whether it served bytes turned on a
  * per-prefix rule with no R2 mechanism under it. Keys still carry their

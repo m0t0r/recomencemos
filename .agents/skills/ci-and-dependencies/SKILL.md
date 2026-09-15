@@ -140,8 +140,8 @@ Dependabot tab.** The npm jobs fail at the lockfile *write*, not the read: `pmOn
 the lockfile one document so Dependabot parses the graph and finds the updates, and then pnpm 12's
 launcher downloads its native binary with a bare `fetch()` that ignores the job's proxy
 (dependabot-core#16170, open). No setting here reaches it. And the `docker-compose` job failed once
-Docker Hub removed the `minio` namespace; the images now come from `quay.io` at the same digests,
-and replacing MinIO is #299.
+Docker Hub removed the namespace of the object store this repository then ran; #316 replaced that
+store with Versity S3 Gateway, whose server and init images are both on Docker Hub.
 
 **It also ignores `@types/node` majors, and that is the one hole `engineStrict` cannot cover.** The
 repo requires the active LTS and enforces it by reading each package's `engines` field —

@@ -9,9 +9,10 @@
  * asks exactly that, so an unconfigured deploy refuses at the top of the action
  * rather than after the client has been constructed.
  *
- * **`forcePathStyle` is on.** R2 accepts both addressing styles, but MinIO —
- * which is what `docker-compose.yaml` runs in development — serves virtual-host
- * style only behind a wildcard DNS entry nobody has on a laptop. Path style
+ * **`forcePathStyle` is on.** R2 accepts both addressing styles, but Versity S3
+ * Gateway — which is what `docker-compose.yaml` runs in development — serves
+ * virtual-host style only when started with a `--virtual-domain`, and a base
+ * domain needs a wildcard DNS entry nobody has on a laptop. Path style
  * works against both, so it is one line here rather than a divergence between
  * what a developer exercises and what production runs.
  */
