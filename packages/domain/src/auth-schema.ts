@@ -74,7 +74,6 @@ import {
   pgTable,
   text,
   timestamp,
-  unique,
 } from "drizzle-orm/pg-core";
 import { citext, inList } from "#column-types";
 import { DEFAULT_OFFER_SENDING_STATE, OFFER_SENDING_STATES } from "#policy/account-states";
@@ -338,14 +337,6 @@ export const account = pgTable(
   {
     id: text("id").primaryKey(),
 
-    /**
-     * Better Auth 1.7.0–1.7.2's identity column. 1.7.3 went back to the 1.6
-     * account schema and never writes it, so it is nullable for the rows the
-     * library now creates. It and the constraint below are dropped by a
-     * `contract` migration a deploy later (#312).
-     */
-    issuer: text("issuer"),
-
     /** The provider's own subject id — Google's `sub`. */
     accountId: text("account_id").notNull(),
 
@@ -363,24 +354,16 @@ export const account = pgTable(
     scope: text("scope"),
 
     /**
-     * Better Auth's column for a credential account. No door in story 1 writes
-     * it; the Admin's password (story 7) is what fills it, for exactly one row.
+     * Better Auth's column for a credential account. Nothing writes it: there is
+     * no credential door, and `auth-schema.test.ts` asserts that absence. It
+     * stays because the library declares it.
      */
     password: text("password"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    /**
-     * Better Auth 1.7.0–1.7.2's identity constraint, kept until #312 drops it
-     * with `issuer`. It binds only rows written before 1.7.3: the library now
-     * leaves `issuer` null, and a unique constraint treats nulls as distinct.
-     */
-    unique("account_issuer_account_id_key").on(table.issuer, table.accountId),
-
-    index("account_user_id_idx").on(table.userId),
-  ],
+  (table) => [index("account_user_id_idx").on(table.userId)],
 );
 
 /**
