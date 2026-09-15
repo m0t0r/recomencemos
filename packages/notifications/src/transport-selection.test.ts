@@ -64,7 +64,7 @@ describe("createTransport", () => {
 
   it("builds the terminal transport when asked for one", () => {
     expect(
-      createTransport({ [TRANSPORT_VARIABLE]: "terminal", NODE_ENV: "development" }).name,
+      createTransport({ [TRANSPORT_VARIABLE]: "terminal", ENVIRONMENT: "development" }).name,
     ).toBe("terminal");
   });
 
@@ -74,7 +74,7 @@ describe("createTransport", () => {
    */
   it("needs no credential and no sender identity for the terminal branch", () => {
     expect(() =>
-      createTransport({ [TRANSPORT_VARIABLE]: "terminal", NODE_ENV: "development" }),
+      createTransport({ [TRANSPORT_VARIABLE]: "terminal", ENVIRONMENT: "development" }),
     ).not.toThrow();
   });
 
@@ -87,11 +87,11 @@ describe("createTransport", () => {
   });
 
   // The environment record is the only input, so the guard inside the terminal
-  // transport reads the same `NODE_ENV` the rest of the resolution does rather
-  // than reaching past it into the process.
-  it("refuses the terminal branch outside development and test", () => {
+  // transport reads the same `ENVIRONMENT` the rest of the resolution does
+  // rather than reaching past it into the process.
+  it("refuses the terminal branch outside development", () => {
     expect(() =>
-      createTransport({ [TRANSPORT_VARIABLE]: "terminal", NODE_ENV: "production" }),
+      createTransport({ [TRANSPORT_VARIABLE]: "terminal", ENVIRONMENT: "production" }),
     ).toThrow(AppError);
   });
 });

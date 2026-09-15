@@ -74,7 +74,8 @@ proxied hostname carries the branch, so it is not knowable when `.env.local` is 
 value can be right for every worktree at once. The proxy writes the origin it is actually serving
 into the child's environment; `authBaseUrl` reads that, and falls back to the configured variable.
 
-**It ignores the proxy when `NODE_ENV` is `production`.** A deployed environment sets no such
+**It ignores the proxy when `NODE_ENV` is `production`** — since
+[ADR-0022](0022-the-deployment-environment-is-named-not-inferred.md), when `ENVIRONMENT` is. A deployed environment sets no such
 variable, so the guard is redundant today — but "redundant today" is a claim about an environment
 rather than a property of this code, and the failure it would prevent is silent: `trustedOrigins` and
 every magic link pointing somewhere else, with nothing failing to make it visible. It is the same

@@ -27,11 +27,11 @@ const message: OutboundMessage = {
   idempotencyKey: "magic-link/mlr_01J4K",
 };
 
-function capturing(nodeEnv = "development") {
+function capturing() {
   const chunks: string[] = [];
   const transport = createTerminalTransport({
     write: (chunk) => void chunks.push(chunk),
-    nodeEnv,
+    environment: "development",
   });
   return { transport, output: () => chunks.join("") };
 }
@@ -111,25 +111,19 @@ describe("what a developer reads", () => {
 });
 
 describe("where it may exist", () => {
-  it.each(["development", "test"])("is available under NODE_ENV=%s", (nodeEnv) => {
-    expect(() => createTerminalTransport({ write: () => {}, nodeEnv })).not.toThrow();
+  it("is available in development", () => {
+    expect(() =>
+      createTerminalTransport({ write: () => {}, environment: "development" }),
+    ).not.toThrow();
   });
 
   /**
-   * An allowlist rather than a `production` blocklist, and this table is why:
-   * every one of these would otherwise read as permission to swallow mail. A
-   * staging deploy delivering nothing is the same incident as a production one,
-   * found later — and `undefined` is what a plain `node` process has.
+   * The one place it must never exist. `staging`, a typo and the rest of what
+   * this used to refuse one by one never arrive here now: the environment is a
+   * closed set, and its reader stops the process on anything outside it.
    */
-  it.each(["production", "staging", "preview", "prod", "developement", ""])(
-    "refuses NODE_ENV=%s",
-    (nodeEnv) => {
-      expect(() => createTerminalTransport({ write: () => {}, nodeEnv })).toThrow(AppError);
-    },
-  );
-
-  it("refuses an unset NODE_ENV", () => {
-    expect(() => createTerminalTransport({ write: () => {}, nodeEnv: undefined })).toThrow(
+  it("refuses production", () => {
+    expect(() => createTerminalTransport({ write: () => {}, environment: "production" })).toThrow(
       AppError,
     );
   });
@@ -139,7 +133,7 @@ describe("where it may exist", () => {
   it("refuses before anything is sent, and says what to set instead", () => {
     const error = (() => {
       try {
-        createTerminalTransport({ write: () => {}, nodeEnv: "production" });
+        createTerminalTransport({ write: () => {}, environment: "production" });
       } catch (caught) {
         return caught as AppError;
       }
@@ -148,6 +142,6 @@ describe("where it may exist", () => {
 
     expect(error?.code).toBe("terminal_transport_outside_development");
     expect(error?.message).toContain("NOTIFICATIONS_TRANSPORT=resend");
-    expect(error?.context).toMatchObject({ transport: "terminal", nodeEnv: "production" });
+    expect(error?.context).toMatchObject({ transport: "terminal", environment: "production" });
   });
 });

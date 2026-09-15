@@ -12,6 +12,7 @@
  * startup notice that a production floor filters out is a notice nobody reads.
  */
 
+import { readEnvironment } from "@repo/errors/environment";
 import { logger as defaultLogger } from "@repo/observability/logger";
 import { assertServerOnly } from "@repo/observability/server-only";
 import type { Logger } from "pino";
@@ -20,9 +21,11 @@ assertServerOnly("startup-notice");
 
 /** The environment this reads. Passed in rather than read, so the decision stays pure. */
 export interface StartupEnvironment {
-  NODE_ENV?: string | undefined;
+  ENVIRONMENT?: string | undefined;
   NEXT_PUBLIC_SENTRY_DSN?: string | undefined;
   NEXT_PUBLIC_RELEASE?: string | undefined;
+  /** For `process.env`, which declares none of the keys above — see `LoggerEnvironment`. */
+  [key: string]: string | undefined;
 }
 
 /**
@@ -83,7 +86,7 @@ function findGaps(env: StartupEnvironment): Gap[] {
   // Only in production. Nothing populates the release without CI, so warning
   // about it in development would fire on every `pnpm dev` anybody runs — which
   // is how a startup notice becomes something people learn to skip past.
-  if (env.NODE_ENV === "production" && isBlank(env.NEXT_PUBLIC_RELEASE)) {
+  if (readEnvironment(env) === "production" && isBlank(env.NEXT_PUBLIC_RELEASE)) {
     gaps.push("release-unknown");
   }
 

@@ -25,6 +25,7 @@
 
 import { createHash } from "node:crypto";
 import { AppError } from "@repo/errors/app-error";
+import { readEnvironment } from "@repo/errors/environment";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -187,7 +188,7 @@ function required(env: AuthEnv, variable: string): string {
 export function authSecret(env: AuthEnv = process.env): string {
   const secret = required(env, SECRET_VARIABLE);
 
-  if (secret === DEVELOPMENT_SECRET && env.NODE_ENV === "production") {
+  if (secret === DEVELOPMENT_SECRET && readEnvironment(env) === "production") {
     throw new AppError({
       code: "auth_secret_is_the_development_one",
       status: 503,
@@ -229,7 +230,7 @@ export function authSecret(env: AuthEnv = process.env): string {
  */
 export function authBaseUrl(env: AuthEnv): string {
   const proxied = env[PROXY_URL_VARIABLE]?.trim();
-  if (proxied && env.NODE_ENV !== "production") return proxied;
+  if (proxied && readEnvironment(env) !== "production") return proxied;
 
   return required(env, BASE_URL_VARIABLE);
 }

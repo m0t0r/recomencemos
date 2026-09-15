@@ -31,7 +31,7 @@ import { configuredHeaders } from "./testing/configured-headers";
  * one cannot exercise because one development store serves both.
  */
 const PRODUCTION: HeaderEnvironment = {
-  NODE_ENV: "production",
+  ENVIRONMENT: "production",
   PHOTO_PUBLIC_BASE: "https://photos.recomencemos.online/recomencemos-photos",
   PHOTO_S3_ENDPOINT: "https://abc123.r2.cloudflarestorage.com",
   NEXT_PUBLIC_SENTRY_DSN: "https://key@o4500.ingest.us.sentry.io/4501",
@@ -39,7 +39,7 @@ const PRODUCTION: HeaderEnvironment = {
 
 /** What `apps/web/.env.example` produces: one object-store origin serving both roles. */
 const DEVELOPMENT: HeaderEnvironment = {
-  NODE_ENV: "development",
+  ENVIRONMENT: "development",
   PHOTO_PUBLIC_BASE: "http://127.0.0.1:9000/recomencemos-photos",
   PHOTO_S3_ENDPOINT: "http://127.0.0.1:9000",
 };
@@ -49,7 +49,7 @@ const DEVELOPMENT: HeaderEnvironment = {
  * every optional origin is absent — the row that catches a header emitting the
  * string "undefined" as a source expression.
  */
-const CI_BUILD: HeaderEnvironment = { NODE_ENV: "production" };
+const CI_BUILD: HeaderEnvironment = { ENVIRONMENT: "production" };
 
 /** The CSP as `{ directive: sources }`, so a case can ask about one directive. */
 function directivesOf(environment: HeaderEnvironment): Record<string, string[]> {
@@ -144,9 +144,20 @@ describe("HTTPS enforcement is production-only", () => {
   });
 
   /** The ambiguous case has to fail towards the recoverable one — `isProduction`. */
-  it("treats an unset NODE_ENV as development rather than production", () => {
+  it("treats an unset ENVIRONMENT as development rather than production", () => {
     expect(keysOf({})).not.toContain("Strict-Transport-Security");
     expect(directivesOf({})).not.toHaveProperty("upgrade-insecure-requests");
+  });
+
+  /**
+   * A local `pnpm build && pnpm start`, and CI's build: Next sets the build mode
+   * to production for both, and neither is the deployed origin (ADR-0022).
+   */
+  it("sends no HSTS from a production build that was not told it is production", () => {
+    const localStart = { ...PRODUCTION, ENVIRONMENT: undefined, NODE_ENV: "production" };
+
+    expect(keysOf(localStart)).not.toContain("Strict-Transport-Security");
+    expect(directivesOf(localStart)).not.toHaveProperty("upgrade-insecure-requests");
   });
 
   it("upgrades insecure requests in production and not in development", () => {
@@ -154,9 +165,9 @@ describe("HTTPS enforcement is production-only", () => {
     expect(contentSecurityPolicy(DEVELOPMENT)).not.toContain("upgrade-insecure-requests");
   });
 
-  /** The case that made the directive conditional on more than `NODE_ENV`. */
+  /** The case that made the directive conditional on more than the environment. */
   it("does not upgrade requests to an origin the same policy admits in plaintext", () => {
-    const localProductionBuild = { ...DEVELOPMENT, NODE_ENV: "production" };
+    const localProductionBuild = { ...DEVELOPMENT, ENVIRONMENT: "production" };
 
     expect(directivesOf(localProductionBuild)["img-src"]).toContain("http://127.0.0.1:9000");
     expect(contentSecurityPolicy(localProductionBuild)).not.toContain("upgrade-insecure-requests");

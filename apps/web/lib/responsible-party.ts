@@ -18,27 +18,30 @@
  *
  * **What stops it reaching production unfilled is a mechanism rather than a
  * note.** `senderIdentity()` throws rather than invent a sender and `authSecret`
- * refuses its own development value under `NODE_ENV=production`; this does both.
- * A deploy with either variable unset, or still carrying the placeholder, fails
- * at the first render of `/privacy` — which is loud, and is the alternative to a
- * privacy notice that goes live naming nobody.
+ * refuses its own development value under `ENVIRONMENT=production`; this does
+ * both. A deploy with either variable unset, or still carrying the placeholder,
+ * fails at the first render of `/privacy` — which is loud, and is the
+ * alternative to a privacy notice that goes live naming nobody. Production is
+ * what the image's `ENVIRONMENT` says, not the build mode (ADR-0022): a local
+ * `pnpm build && pnpm start` reads the development `.env.local`, and it is
+ * served the placeholders rather than refused.
  *
- * **There is no `import "server-only"` here, and that is a decision.** The marker
- * is unresolvable outside a bundler, so it would take the production branch —
- * the one thing in this file worth guarding — out of reach of any test: seam 3
- * runs a `next dev`, where `NODE_ENV` is `development` by definition. What stands
- * in its place is stronger than a convention and weaker than a build error, and
- * it is worth naming precisely. Neither variable is `NEXT_PUBLIC_`, so Next
- * replaces both with `undefined` in a client bundle while inlining `NODE_ENV` as
- * `"production"` — so a Client Component that imported this would **throw on
- * render in production** rather than quietly render a placeholder. That is the
- * failure mode `server-only` exists to prevent, arriving one stage later.
+ * **`import "server-only"`, because the weaker guard stopped holding.** A Client
+ * Component that imported this used to throw on render in production, because
+ * Next inlines `NODE_ENV` into a client bundle. `ENVIRONMENT` is not inlined, so
+ * the same import would now read development and render the placeholders —
+ * quietly, which is the failure this file exists to prevent. The marker makes it
+ * a build error instead. It was once refused because it would have put the
+ * production branch out of a test's reach; `apps/web/vitest.config.mts` now
+ * aliases it, so it costs the tests nothing.
  *
  * The `env` parameter is `@repo/notifications/config.ts`'s idiom, and it is what
  * lets `responsible-party.test.ts` drive both branches without stubbing a global.
  */
 
+import "server-only";
 import { AppError } from "@repo/errors/app-error";
+import { readEnvironment } from "@repo/errors/environment";
 import { NOTICE_UNAVAILABLE } from "@/app/_lib/consent/messages";
 
 const NAME_VARIABLE = "RESPONSIBLE_PARTY_NAME";
@@ -62,14 +65,16 @@ export interface ResponsibleParty {
   readonly email: string;
 }
 
-/** Only the three keys this module reads, so a test hands it three strings. */
-export type ResponsiblePartyEnv = Partial<
-  Record<typeof NAME_VARIABLE | typeof EMAIL_VARIABLE | "NODE_ENV", string>
->;
+/**
+ * An environment record, so a test hands it three strings and the page hands it
+ * `process.env`. A type naming only the three keys this reads would share none
+ * of them with `process.env`, which declares none of them.
+ */
+export type ResponsiblePartyEnv = Readonly<Record<string, string | undefined>>;
 
 function read(env: ResponsiblePartyEnv, variable: string, placeholder: string): string {
-  const inProduction = env.NODE_ENV === "production";
-  const value = env[variable as keyof ResponsiblePartyEnv]?.trim();
+  const inProduction = readEnvironment(env) === "production";
+  const value = env[variable]?.trim();
 
   if (!value) {
     if (inProduction) throw unset(variable, "is unset or empty");

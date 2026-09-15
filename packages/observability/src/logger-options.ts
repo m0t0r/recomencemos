@@ -12,6 +12,7 @@
  */
 
 import { GENERIC_ERROR_CODE, isAppError } from "@repo/errors/app-error";
+import { readEnvironment } from "@repo/errors/environment";
 import { REDACTED, redactionPaths } from "@repo/errors/redaction";
 import { assertServerOnly } from "@repo/observability/server-only";
 import pino, { type LevelWithSilent, type LoggerOptions } from "pino";
@@ -60,7 +61,7 @@ const REDACTION_ROOTS = ["err", "context"] as const;
 /**
  * NFR16's bound, and the default `LOG_MAX_LINE_BYTES` falls back to.
  *
- * 8 KB **in every environment**. There is deliberately no `NODE_ENV` branch: the
+ * 8 KB **in every environment**. There is deliberately no environment branch: the
  * value of `LOG_FORMAT=json pnpm dev` is that local stdout predicts what a drain
  * will receive, and an environment-dependent default is precisely the behaviour
  * that stops being observable locally.
@@ -155,11 +156,17 @@ const PRESERVED_ON_TRUNCATION = [
 
 /** The environment this reads. Passed in rather than read, so the function stays pure. */
 export interface LoggerEnvironment {
-  NODE_ENV?: string | undefined;
+  ENVIRONMENT?: string | undefined;
   LOG_LEVEL?: string | undefined;
   LOG_FORMAT?: string | undefined;
   LOG_MAX_LINE_BYTES?: string | undefined;
   NEXT_PUBLIC_RELEASE?: string | undefined;
+  /**
+   * `process.env` declares none of the keys above, so without this it shares no
+   * property with them and is refused as a weak type. It is also what lets this
+   * record be handed to `readEnvironment` as it is.
+   */
+  [key: string]: string | undefined;
 }
 
 /**
@@ -191,7 +198,7 @@ function isLevelName(value: string): value is LevelWithSilent {
 export type LogFormat = "json" | "pretty";
 
 function isProduction(env: LoggerEnvironment): boolean {
-  return env.NODE_ENV === "production";
+  return readEnvironment(env) === "production";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -232,7 +239,7 @@ export function resolveLogFormat(env: LoggerEnvironment): LogFormat {
  * NFR16's bound, and the runtime override that needs no rebuild.
  *
  * The default is {@link MAX_LINE_BYTES} in every environment — see there for why
- * there is no `NODE_ENV` branch. The override exists for one case: a developer
+ * there is no environment branch. The override exists for one case: a developer
  * deliberately chasing a deep stack who wants the whole thing for one session.
  *
  * Resolution follows {@link resolveLevel}'s precedent exactly. A missing,
@@ -1185,7 +1192,7 @@ export function createLoggerOptions(
     // without failing anything here.
     base: {
       service: SERVICE_NAME,
-      env: env.NODE_ENV ?? "development",
+      env: readEnvironment(env),
       // Never absent, so the field is safe to filter on. A constant `release`
       // makes "did this start at the last deploy?" unanswerable, which is why
       // the startup notice says so out loud when it is missing in production.

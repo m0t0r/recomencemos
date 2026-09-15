@@ -404,7 +404,7 @@ registration does not apply** to a _persona natural_. International transmission
       _aviso de privacidad_ names the _responsable_ and the mailbox a _consulta_ or a _reclamo_
       reaches, and both are deployment configuration rather than committed copy — a legal identity
       does not belong in a public repository. `responsibleParty()` **refuses the development
-      placeholders under `NODE_ENV=production`**, so `/privacy` fails loudly rather than going live
+      placeholders under `ENVIRONMENT=production`**, which the image sets, so `/privacy` fails loudly rather than going live
       naming nobody. Verify by loading `/privacy` on the deploy and reading the first section
 - [ ] **A mailbox that actually answers.** The address above is the one Ley 1581 obliges a reply on,
       so it has to be one a person reads — the sending subdomain in §4 publishes no MX record and

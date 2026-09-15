@@ -311,3 +311,49 @@ describe("the production image does not hand an attacker more than it must", () 
     );
   });
 });
+
+/**
+ * ADR-0022. Unset reads as development, so production is production only
+ * because the image says so — in git, not in a `fly secret` somebody sets by
+ * hand. Deleting either line below builds and deploys cleanly and then serves
+ * no HSTS, which is why each is pinned.
+ */
+describe("the image names the environment it runs in", () => {
+  /** One `FROM … AS <name>` stage's lines. Throws rather than matching nothing. */
+  function stage(name: string): string {
+    const found = dockerfile
+      .split(/^(?=FROM )/m)
+      .find((chunk) => new RegExp(`^FROM \\S+ AS ${name}$`, "m").test(chunk.split("\n")[0] ?? ""));
+
+    if (!found) {
+      throw new Error(
+        `The Dockerfile has no \`${name}\` stage, so this test cannot tell a missing ` +
+          "line from a stage that was renamed. It refuses rather than reporting a pass.",
+      );
+    }
+
+    return found;
+  }
+
+  it.each(["builder", "runner"])("the %s stage sets ENVIRONMENT=production", (name) => {
+    expect(stage(name)).toMatch(/^ENV ENVIRONMENT=production$/m);
+  });
+
+  // A page prerendered during `next build` is decided then, and so are the
+  // headers Next bakes into its routes manifest.
+  it("the builder sets it before the build runs", () => {
+    const builder = stage("builder");
+
+    expect(builder.indexOf("ENV ENVIRONMENT=production")).toBeLessThan(
+      builder.indexOf("turbo run build"),
+    );
+  });
+
+  // Strict mode would otherwise filter it out of every task. Not on `build.env`:
+  // the image sets it where Turborepo's cache key is not in play.
+  it("ENVIRONMENT is passed through and hashed into no task", () => {
+    expect(declaredEnvKeys().filter(({ key }) => key === "ENVIRONMENT")).toEqual([
+      { key: "ENVIRONMENT", where: "globalPassThroughEnv" },
+    ]);
+  });
+});

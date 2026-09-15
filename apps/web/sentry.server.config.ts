@@ -11,8 +11,15 @@
  * server event describing the same deployment have to agree on `environment`,
  * `release` and what has been scrubbed out of them, and two files that drift are
  * how a redaction list ends up disagreeing with itself.
+ *
+ * **`environment` is the one place the two read different variables**, and on
+ * purpose (ADR-0022). This side reads `ENVIRONMENT`; the browser cannot, because
+ * the variable is not inlined into its bundle, so it stays on `NODE_ENV`. On Fly
+ * both answer "production", which is why they still agree — and the day a second
+ * deployed environment exists is the day the browser has to move.
  */
 
+import { readEnvironment } from "@repo/errors/environment";
 import { scrubOrDrop } from "@repo/errors/redaction";
 import * as Sentry from "@sentry/nextjs";
 
@@ -54,7 +61,7 @@ Sentry.init({
   // every category to stand still. Revisit when v11 removes the flag.
   sendDefaultPii: false,
 
-  environment: process.env.NODE_ENV,
+  environment: readEnvironment(process.env),
 
   // Only when it has a value: the SDK's defaults are spread *under* the options
   // object, so an explicit `undefined` would overwrite the release the build
@@ -65,7 +72,7 @@ Sentry.init({
   // it creates are what `readTraceContext` reads, so `tracesSampleRate: 0`
   // would take correlation down with it. 1 in development so every local
   // request correlates while someone is looking at it.
-  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1,
+  tracesSampleRate: readEnvironment(process.env) === "production" ? 0.1 : 1,
 
   /**
    * **The log drain (#9, DD11).** Logs currently go to stdout and nowhere else,
