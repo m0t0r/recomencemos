@@ -4,10 +4,11 @@
  * clause — the `javascript:` sentinel), and that it says who sees what.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReceivedOffer } from "@repo/domain/offers";
 import type { OwnProfile } from "@repo/domain/profiles";
+import { GENERIC_ERROR_CODE } from "@repo/errors/app-error";
 import { urlAttributesIn } from "@/testing/markup";
 import { OwnProfileView } from "./own-profile-view";
 import {
@@ -17,6 +18,7 @@ import {
   HELD_HEADING,
   NONE_WAITING,
   OFFERS_LINK,
+  PAUSE_FAULT,
   PAUSE_LIMITS,
   PAUSE_SWITCH_LABEL,
   PAUSED_CONFIRMATION,
@@ -245,6 +247,43 @@ describe("her Pause", () => {
 
     expect(await screen.findByText(refusal)).toBeInTheDocument();
     expect(screen.getByText(STILL_VISIBLE)).toBeInTheDocument();
+  });
+
+  /**
+   * **What a hydrated tap sends, and what it gets back.** Driven through a
+   * transport fault rather than the ceiling, because the fault is the outcome
+   * that outlives the ceiling (#311). A fault is thrown on the server and
+   * reaches the browser as the generic code with operator English, which is
+   * exactly the message this surface must never render.
+   */
+  const FAULT = {
+    serverError: { code: GENERIC_ERROR_CODE, message: "Something went wrong." },
+  };
+
+  it("says a transport fault in its status region", async () => {
+    pauseProfile.mockResolvedValue(FAULT);
+
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+    fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
+
+    expect(await screen.findByText(PAUSE_FAULT)).toBeInTheDocument();
+    const saying = screen
+      .getAllByRole("status")
+      .filter((region) => within(region).queryByText(PAUSE_FAULT) !== null);
+    expect(saying).toHaveLength(1);
+    expect(screen.queryByText(FAULT.serverError.message)).toBeNull();
+  });
+
+  it("sends one action for one tap", async () => {
+    pauseProfile.mockResolvedValue(FAULT);
+
+    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
+    fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
+
+    // Once the outcome has rendered, the action has settled.
+    await screen.findByText(PAUSE_FAULT);
+    expect(pauseProfile).toHaveBeenCalledTimes(1);
+    expect(resumeProfile).not.toHaveBeenCalled();
   });
 });
 

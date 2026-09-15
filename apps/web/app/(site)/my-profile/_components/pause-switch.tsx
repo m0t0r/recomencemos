@@ -10,10 +10,16 @@
  * `<button type="submit" role="switch">` inside this form, and unhydrated a tap
  * is a native post (NFR4). Once hydrated, the root's own click handler cancels
  * that native submit and toggles its hidden checkbox instead, so
- * `onCheckedChange` is where the post is re-issued, with `requestSubmit()`. Both
- * halves were measured in happy-dom rather than read off the source: zero
- * submits from a hydrated click without the handler, exactly one with it.
- * `own-profile-view.test.tsx` pins the unhydrated half.
+ * `onCheckedChange` is where the submit is re-issued, with `requestSubmit()`.
+ *
+ * **The form's own `onSubmit` sends the action, and React's `<form action>`
+ * never does once hydrated.** It cancels the submit and dispatches through
+ * `React.startTransition`, which is how every other form in this app sends
+ * one (`use-action-form.ts`, `/continue`'s code form). Left to React, the
+ * re-issued submit sent nothing on React 19.3 under happy-dom: the page stayed
+ * exactly as it was (#301). `action` stays on the `<form>` for the unhydrated
+ * path. `own-profile-view.test.tsx` pins both halves: the submit button the
+ * server sends, and one tap sending one action.
  *
  * **Controlled by the state the page rendered**, so the thumb never moves on a
  * tap: it moves when the redirect re-reads the row. That is also what makes a
@@ -56,11 +62,20 @@ export function PauseSwitch({ paused }: { readonly paused: boolean }) {
 
   const feedback = feedbackFor(paused ? resumeResult : pauseResult, PAUSE_FAULT);
   const working = pausing || resuming;
+  const action = paused ? resumeAction : pauseAction;
 
   return (
     <form
       ref={form}
-      action={paused ? resumeAction : pauseAction}
+      action={action}
+      onSubmit={(event) => {
+        event.preventDefault();
+        // While a post is in flight a second tap is declined here rather than
+        // queued, so one tap is one action.
+        if (working) return;
+        const formData = new FormData(event.currentTarget);
+        React.startTransition(() => action(formData));
+      }}
       className="flex flex-col items-start gap-2"
     >
       <Field orientation="horizontal" className="w-auto">
@@ -73,12 +88,9 @@ export function PauseSwitch({ paused }: { readonly paused: boolean }) {
           aria-describedby={limitsId}
           // `aria-disabled` rather than `disabled`, so focus stays on the control
           // while the post is in flight instead of falling to the page. The
-          // native submit is already cancelled once hydrated; this only declines
-          // to re-issue it.
+          // form's `onSubmit` is what declines the tap.
           aria-disabled={working || undefined}
-          onCheckedChange={() => {
-            if (!working) form.current?.requestSubmit();
-          }}
+          onCheckedChange={() => form.current?.requestSubmit()}
         />
         {/* `min-h-11`: the label is the tap target a thumb aims for (WCAG 2.5.8). */}
         <FieldLabel htmlFor={switchId} className="min-h-11 text-base">
