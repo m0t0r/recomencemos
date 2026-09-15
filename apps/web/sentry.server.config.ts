@@ -12,11 +12,8 @@
  * `release` and what has been scrubbed out of them, and two files that drift are
  * how a redaction list ends up disagreeing with itself.
  *
- * **`environment` is the one place the two read different variables**, and on
- * purpose (ADR-0022). This side reads `ENVIRONMENT`; the browser cannot, because
- * the variable is not inlined into its bundle, so it stays on `NODE_ENV`. On Fly
- * both answer "production", which is why they still agree — and the day a second
- * deployed environment exists is the day the browser has to move.
+ * `environment` is the exception: this side reads `ENVIRONMENT` and the browser
+ * reads `NODE_ENV`, which agree on Fly (ADR-0022).
  */
 
 import { readEnvironment } from "@repo/errors/environment";

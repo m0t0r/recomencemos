@@ -118,9 +118,8 @@ describe("where it may exist", () => {
   });
 
   /**
-   * The one place it must never exist. `staging`, a typo and the rest of what
-   * this used to refuse one by one never arrive here now: the environment is a
-   * closed set, and its reader stops the process on anything outside it.
+   * The one place it must never exist. Any other value is refused by
+   * `readEnvironment` before it can reach this transport.
    */
   it("refuses production", () => {
     expect(() => createTerminalTransport({ write: () => {}, environment: "production" })).toThrow(

@@ -132,14 +132,10 @@ async function loadSentry(): Promise<void> {
     // category to stand still. Revisit when v11 removes the flag.
     sendDefaultPii: false,
 
-    // **The browser's environment decisions stay on `NODE_ENV` — this one and
-    // the sample rate below — and deliberately so** (ADR-0022). The server
-    // reads `ENVIRONMENT`, but that variable is not
-    // inlined into a browser bundle, and passing a `NEXT_PUBLIC_` copy in as a
-    // build argument buys nothing while one deployed environment exists: on Fly
-    // both read "production", so a browser event and a log line still agree on
-    // one string rather than on Sentry's own default. The day a second deployed
-    // environment exists, the two stop agreeing and this line moves over.
+    // The browser's environment decisions — this one and the sample rate below —
+    // stay on `NODE_ENV`, because `ENVIRONMENT` is not inlined into a bundle
+    // (ADR-0022). On Fly both read "production", so a browser event and a log
+    // line agree on one string rather than on Sentry's own default.
     environment: process.env.NODE_ENV,
 
     // Only when it has a value: the SDK's defaults are spread *under* the

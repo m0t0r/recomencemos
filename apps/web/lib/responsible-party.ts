@@ -22,18 +22,13 @@
  * both. A deploy with either variable unset, or still carrying the placeholder,
  * fails at the first render of `/privacy` — which is loud, and is the
  * alternative to a privacy notice that goes live naming nobody. Production is
- * what the image's `ENVIRONMENT` says, not the build mode (ADR-0022): a local
- * `pnpm build && pnpm start` reads the development `.env.local`, and it is
- * served the placeholders rather than refused.
+ * the image's `ENVIRONMENT`, not the build mode (ADR-0022).
  *
- * **`import "server-only"`, because the weaker guard stopped holding.** A Client
- * Component that imported this used to throw on render in production, because
- * Next inlines `NODE_ENV` into a client bundle. `ENVIRONMENT` is not inlined, so
- * the same import would now read development and render the placeholders —
- * quietly, which is the failure this file exists to prevent. The marker makes it
- * a build error instead. It was once refused because it would have put the
- * production branch out of a test's reach; `apps/web/vitest.config.mts` now
- * aliases it, so it costs the tests nothing.
+ * **`import "server-only"`, because a client import would fail quietly.**
+ * `ENVIRONMENT` is not inlined into a client bundle, so there this would read
+ * development and render the placeholders — the failure this file exists to
+ * prevent. The marker makes it a build error, and `apps/web/vitest.config.mts`
+ * aliases it, so the tests still reach the production branch.
  *
  * The `env` parameter is `@repo/notifications/config.ts`'s idiom, and it is what
  * lets `responsible-party.test.ts` drive both branches without stubbing a global.
