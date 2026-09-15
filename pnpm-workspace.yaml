@@ -141,40 +141,6 @@ allowBuilds:
 overrides:
   "@esbuild-kit/core-utils>esbuild": "^0.25.0"
 
-  # **React is held at 19.2.8 across the whole tree, and a range in a manifest
-  # cannot do that on its own.** 19.3.0 turns one `apps/web` test red
-  # deterministically — the Pause switch's refusal never renders once its
-  # `useActionState` action is re-issued through `requestSubmit()` — and a
-  # bisect with everything else from the same refresh installed put it on React
-  # alone: #301 has the reproduction and what is still unknown about it.
-  #
-  # The manifests keep `^19.2.8`, and that is not enough, which is why this map
-  # holds it. Two packages receive React as an auto-installed peer rather than
-  # from a range they declare — `@repo/observability` through `@sentry/nextjs`,
-  # and `@repo/notifications`' `react-dom` through `@react-email/render` — and pnpm resolves
-  # those to the newest release it can, so without this the tree carried
-  # 19.2.8 for the app and 19.3.0 beside it, including a `react-dom@19.3.0`
-  # paired with `react@19.2.8`. Global rather than scoped because the thing
-  # held is "one React", and every scope would have to be listed.
-  #
-  # **A hold is a freeze against the security channel, and this one is bounded
-  # by the gate rather than by hope.** `react` and `react-dom` are direct
-  # dependencies, so an advisory against 19.2.8 at `high` or above turns
-  # `pnpm audit:direct` red on every pull request until something moves it,
-  # and the daily audit files it below that. What this line may never do is
-  # outlive such an advisory: a finding against React is the moment to lift it
-  # to the patched version — dropping it entirely is the preferred move if #301
-  # allows — not to add a dismissal. That is why README's zod decision refuses
-  # pins for page weight, and why this one is taken only for a regression
-  # reproduced and bisected.
-  #
-  # **Drop both lines when #301 closes** — either React is fixed or the test
-  # proved to be the thing wrong — and take 19.3 with `@types/react` and
-  # `@types/react-dom` in the same change, which are held at 19.2.x for the
-  # `@types/node` reason in `.github/dependabot.yml`.
-  react: "19.2.8"
-  react-dom: "19.2.8"
-
   # **`@react-email/ui>next` left this map on 2026-09-14, by the removal
   # condition it carried.** It pinned `next` to 16.3.4 under
   # `@react-email/ui@6.9.3`, which pinned it to the exact 16.3.0 behind

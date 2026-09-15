@@ -117,8 +117,9 @@ time, so the section shows the most recent few and links `/offers` for the rest 
 - **The switch is a real submit button inside a real form**, carrying `role="switch"` and
   `aria-checked`. It is the registry's `Switch` given `nativeButton` and
   `render={<button type="submit" />}`: unhydrated that HTML posts natively, and once hydrated Base UI
-  cancels the native submit, so `onCheckedChange` re-issues it with `requestSubmit()` — both measured,
-  which overturned the earlier assumption that the registry `Switch` could lend only its look. Which of
+  cancels the native submit, so `onCheckedChange` re-issues it with `requestSubmit()` and the form's
+  own `onSubmit` sends the action in a transition, as every other form here does (#301) — both
+  measured, which overturned the earlier assumption that the registry `Switch` could lend only its look. Which of
   the two endpoints the form posts to is decided by the current state, so a repeat tap is a no-op
   rather than an undo.
 - **Announcement:** the arrival region says the new state after the redirect; the rate-limited

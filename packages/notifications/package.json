@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@repo/errors": "workspace:*",
-    "react": "^19.2.8",
+    "react": "^19.3.0",
     "react-email": "^6.9.5",
     "resend": "^6.28.0"
   },
@@ -39,7 +39,7 @@
     "@react-email/ui": "6.9.5",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^24.13.3",
-    "@types/react": "19.2.18",
+    "@types/react": "19.3.0",
     "@vitest/coverage-v8": "^5.0.0",
     "typescript": "7.0.2",
     "vitest": "^5.0.0"
