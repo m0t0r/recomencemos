@@ -6,6 +6,7 @@
  * of a guard clause rather than on behaviour.
  */
 
+import { createHash } from "node:crypto";
 import type { Ceiling, CeilingedAction, CeilingScope } from "#rate-limit";
 import {
   CEILING_REFUSALS,
@@ -163,6 +164,81 @@ describe("principalKey", () => {
     expect(principalKey({ scope: "ip", id: "x" })).not.toBe(
       principalKey({ scope: "address", id: "x" }),
     );
+  });
+
+  /**
+   * **The counter bounds mail to one inbox, so it counts the inbox.** A tag after
+   * `+` reaches the same mailbox at every provider that honours it, and a tag
+   * nobody honours costs nothing to fold: the worst case is two people sharing
+   * five links an hour, against the case this closes — unbounded mail to one
+   * person by changing the tag on each request.
+   */
+  it.each(["ana+1@example.com", "ANA+Trabajo@Example.com", " ana+x@example.com "])(
+    "charges %o to the same counter as the bare address",
+    (tagged) => {
+      expect(principalKey({ scope: "address", id: tagged })).toBe(
+        principalKey({ scope: "address", id: "ana@example.com" }),
+      );
+    },
+  );
+
+  // Gmail ignores every dot in the local part and answers at both domains, so
+  // each of these is one inbox.
+  it.each(["a.n.a@gmail.com", "a.na+1@gmail.com", "ana@googlemail.com", "A.Na@GoogleMail.com"])(
+    "charges %o to the same counter as ana@gmail.com",
+    (spelling) => {
+      expect(principalKey({ scope: "address", id: spelling })).toBe(
+        principalKey({ scope: "address", id: "ana@gmail.com" }),
+      );
+    },
+  );
+
+  // Outside Gmail a dot may name a different person, and folding it would put
+  // two strangers on one allowance.
+  it("keeps dots significant at every other domain", () => {
+    expect(principalKey({ scope: "address", id: "a.na@example.com" })).not.toBe(
+      principalKey({ scope: "address", id: "ana@example.com" }),
+    );
+  });
+
+  it("keeps two different mailboxes on two counters", () => {
+    expect(principalKey({ scope: "address", id: "ana+1@example.com" })).not.toBe(
+      principalKey({ scope: "address", id: "beatriz+1@example.com" }),
+    );
+  });
+
+  // The direct HTTP door hands over the raw request body, so this sees whatever
+  // a caller sent. A key is still a key; a throw here would be a 500 on the
+  // sign-in path.
+  it.each(["+x@example.com", "no-at-sign", "a@b@example.com", "", "@", "ana@"])(
+    "keys %o without throwing",
+    (odd) => {
+      expect(principalKey({ scope: "address", id: odd })).toMatch(/^address:[0-9a-f]{64}$/);
+    },
+  );
+
+  // The domain cannot hold an `@`, so the last one is the separator.
+  it("splits at the last @", () => {
+    expect(principalKey({ scope: "address", id: "a@b+tag@example.com" })).toBe(
+      principalKey({ scope: "address", id: "a@b@example.com" }),
+    );
+  });
+
+  /**
+   * **The fold is about email addresses and nothing else.** An IP or an Account
+   * id that happens to hold a `+` or a `.` is keyed exactly as it was before:
+   * trimmed, lower-cased, hashed. Comparing against the digest computed here —
+   * rather than against another call — is what makes this fail if the fold ever
+   * leaks into another scope.
+   */
+  it.each([
+    ["ip", "2001:DB8::1+x"],
+    ["ip", " 190.0.2.10 "],
+    ["account", "Ana+1.b@gmail.com"],
+  ] as const)("keys the %s scope's %o as it always has", (scope, id) => {
+    const digest = createHash("sha256").update(id.trim().toLowerCase()).digest("hex");
+
+    expect(principalKey({ scope, id })).toBe(`${scope}:${digest}`);
   });
 });
 

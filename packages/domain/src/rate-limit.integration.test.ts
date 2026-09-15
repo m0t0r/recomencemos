@@ -98,14 +98,38 @@ describe("chargeCeiling, against the committed migrations", () => {
     expect(row?.count).toBe(5);
   });
 
-  test("does not store the address it is charging", async ({ database }) => {
-    await chargeCeiling(database.db, ana, "requestMagicLink", noon);
+  test.for([ana.id, "ana+trabajo@example.co"])(
+    "does not store the address it is charging, %o",
+    async (id, { database }) => {
+      await chargeCeiling(database.db, { scope: "address", id }, "requestMagicLink", noon);
 
-    const rows = await database.db.select().from(rateCounter);
+      const rows = await database.db.select().from(rateCounter);
 
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.principal).not.toContain("ana@example.co");
-    expect(rows[0]?.principal).toMatch(/^address:[0-9a-f]{64}$/);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.principal).not.toContain("ana");
+      expect(rows[0]?.principal).not.toContain("@");
+      expect(rows[0]?.principal).toMatch(/^address:[0-9a-f]{64}$/);
+    },
+  );
+
+  /**
+   * **The ceiling protects the person receiving the mail**, and the per-IP one
+   * does not: an attacker rotating connections is bounded only by this counter.
+   * So a new tag on each request must spend the same allowance, or changing the
+   * tag is a way round the only limit that protects her inbox.
+   */
+  test("spends one allowance however the address is tagged", async ({ database }) => {
+    for (let tag = 1; tag <= CEILINGS.requestMagicLink.address.max; tag += 1) {
+      const tagged = { scope: "address", id: `ana+${tag}@example.co` } as const;
+
+      // Sequential: the assertion is that each of the first five is allowed, in order.
+      // oxlint-disable-next-line no-await-in-loop
+      expect((await chargeCeiling(database.db, tagged, "requestMagicLink", noon)).allowed).toBe(
+        true,
+      );
+    }
+
+    expect((await chargeCeiling(database.db, ana, "requestMagicLink", noon)).allowed).toBe(false);
   });
 
   test("charges one counter however she capitalised her address", async ({ database }) => {
