@@ -54,7 +54,7 @@ Whether that trade is worth reversing is #253, which is blocked on a scan of the
 directive governs the redirect a form submission _follows_, and the Google door with JavaScript
 unavailable is a native form POST answered by a `303` to Google's authorization endpoint. Driven
 against a running dev server with `'self'` alone, the POST was made and the redirect was never
-followed — the door dies silently on exactly the path NFR4 exists for. Widened to
+followed — the door dies silently for anyone who taps it before the page's scripts have loaded. Widened to
 `https://accounts.google.com` rather than deleted: `accounts.google.com` and not `*.google.com`,
 because a wildcard would admit every Google-hosted origin including user content, and the directive
 still holds every other form on this site to this origin.

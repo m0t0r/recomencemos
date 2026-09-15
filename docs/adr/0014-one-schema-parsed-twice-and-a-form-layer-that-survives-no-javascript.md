@@ -86,6 +86,12 @@ profile."_ A form abstraction that only works hydrated would put NFR4 out of rea
 one ticket _after_ the one that chose it — which is the expensive moment to find out. `/sign-in` is
 not itself bound by NFR4; it is where the pattern is set, so it is bound by it anyway.
 
+**Amended 2026-09-15: NFR4 no longer requires this.** The maintainer retired the no-JavaScript
+guarantee (spec 0002, NFR4 and the section appended for it). The rule above stands as this
+repository's idiom, since a native `action` costs nothing on a form that already has one. It no
+longer rests on NFR4, though, so a form with a reason to let the library own submission states that
+reason in its ticket instead of being refused by this record.
+
 **Since [ADR-0015](0015-both-doors-are-server-actions-and-the-browser-holds-no-auth-client.md) this
 has a library-shaped form.** Actions are built with next-safe-action's `.stateAction()` and driven by
 React's own `useActionState`; the vendor's `useStateAction` and `useAction` are forbidden, because
@@ -108,7 +114,7 @@ summary that focus moves to (the spec's **Keyboard and announcement** section re
 is where hand-rolled form state stops being cheaper than a library.
 
 **A form library that owns submission** — the conventional `handleSubmit` + `fetch` shape. Rejected
-for NFR4, above.
+for NFR4, above. _That reason was retired on 2026-09-15; see the amendment in part 3._
 
 **Zod on the server only.** Cheapest correct option, and it is what shipped first. It leaves her
 learning about a typo one network round trip later, on the connection least able to afford it, for a
@@ -129,7 +135,8 @@ saving that is now measured at approximately nothing.
 - Every later form ticket adds a `schema.ts` beside its action and imports it from both sides.
 - A form whose submit path stops working with JavaScript disabled is a regression against this
   record, not a detail — `sign-in-form.test.tsx` asserts the native `action` and the named inputs for
-  that reason.
+  that reason. _Amended 2026-09-15: no longer a regression, since NFR4 was retired (part 3). The test
+  now pins the idiom rather than a requirement._
 - If `/publish` cannot meet NFR3's byte budget with this layer in it, the layer goes, not the
   budget. **Amended 2026-09-03 with #157**, which measured what that sentence had assumed. On that
   day `/publish` shipped **392 KB** gzip on first load: this layer is **81 KB** of it, the Sentry

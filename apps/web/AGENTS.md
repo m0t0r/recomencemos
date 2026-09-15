@@ -67,7 +67,7 @@ Two further things this is not. It is **not** a licence to cache the shell: `ref
 instrument here precisely because nothing is cached — and `revalidatePath("/account")` in the account
 surface is not the thing to copy either, since that re-renders one page's own data rather than the
 shell above every page. And it is **not** needed for the unhydrated path — without JavaScript a form
-post is a document navigation and the layout re-renders anyway (NFR4), so this closes a gap that only
+post is a document navigation and the layout re-renders anyway, so this closes a gap that only
 exists once the router is in play.
 
 The rule and the observation behind it are in `app/_components/app-header/app-header.tsx`, beside
@@ -179,9 +179,11 @@ rather than becoming a hole inside it.
 middleware an action opts into by naming its principals. Three rules, all in
 [ADR-0015](../../docs/adr/0015-both-doors-are-server-actions-and-the-browser-holds-no-auth-client.md):
 
-- **`.stateAction()` + React's `useActionState`.** Never next-safe-action's `useStateAction` or
-  `useAction` — the vendor's own form guide marks both as not working without JavaScript, which
-  would put NFR4 out of reach.
+- **`.stateAction()` + React's `useActionState`.** Prefer them to next-safe-action's `useStateAction`
+  and `useAction`. The vendor's own form guide marks those two as not working without JavaScript,
+  which used to put NFR4 out of reach. NFR4 no longer asks for a no-JavaScript path (amended
+  2026-09-15), so this is the idiom rather than a gate: a surface with a reason to use the vendor
+  hooks states it in its ticket.
 - **`returnActionError` for an expected refusal; `throw` for the unexpected.** That is "thrown is
   reported; returned is logged" made structural — a thrown error reaches `handleServerError` and
   costs a Sentry event, a returned one bypasses it and costs one `warn` line.
