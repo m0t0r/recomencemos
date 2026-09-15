@@ -222,8 +222,8 @@ describe("what she is told on the way back", () => {
 /**
  * **The Google door has a ceiling now, and its refusal is the one outcome that
  * door ever returns** (#323). A start that is allowed redirects to the provider,
- * so nothing else it answers is ever rendered — which is why this surface used to
- * discard the result entirely, and why the refusal needs a test of its own.
+ * so a refusal is the only result of that door the region can ever show, and it
+ * needs a test of its own.
  */
 describe("when the Google door refuses", () => {
   const REFUSAL =

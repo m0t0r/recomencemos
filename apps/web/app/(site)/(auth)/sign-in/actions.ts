@@ -117,12 +117,15 @@ export const requestMagicLink = actionClient
  * this action writes them onto its own response. Skipping that produces a
  * `state_mismatch` at the provider's callback.
  *
- * **Every start writes a row, and NFR26's ceiling is what bounds them** (#323).
- * Better Auth keeps the OAuth state in a `verification` row that lives ten
- * minutes, one per call. Its own limiter does not reach this action: that limiter
- * runs in the library's router, and this action calls `signInSocial` directly.
- * So the bound is ours, charged below, and expired rows are swept on the next
- * write to the table (see `databaseHooks.verification` in `@repo/domain`).
+ * **Every start writes a row, and NFR26's ceiling bounds the ones written
+ * here** (#323). Better Auth keeps the OAuth state in a `verification` row that
+ * lives ten minutes, one per call. Its own limiter does not reach this action:
+ * that limiter runs in the library's router, and this action calls
+ * `signInSocial` directly. So the bound on this path is ours, charged below.
+ * The directly reachable `/api/auth/sign-in/social` is the other path, and it
+ * stays under Better Auth's default `/sign-in*` rule. Expired rows from either
+ * are swept on the next write to the table (see `databaseHooks.verification`
+ * in `@repo/domain`).
  */
 export const startGoogleSignIn = actionClient
   .bindArgsSchemas([returnPathArg, sharedDeviceArg])
