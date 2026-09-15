@@ -67,6 +67,7 @@
       "inputs": [
         ".claude/hooks/**",
         "scripts/**",
+        "packages/errors/src/**",
         ".oxlintrc.json",
         "**/.oxlintrc.json",
         "apps/web/components.json",

@@ -53,19 +53,12 @@ export interface TerminalTransportOptions {
    * loud; this is the one that would not be, so it is refused at construction
    * rather than discovered from a support ticket.
    *
-   * **Required, and already parsed.** Defaulting it from the process was the
-   * first shape and it had a hole: {@link createTransport} reads the record it
-   * was given, so a default would silently fall back to the real process — and
-   * the case this guard exists for is precisely the one where those two
-   * disagree. Taking the parsed {@link Environment} rather than a string moves
-   * the typo case to where it belongs: `readEnvironment` stops the process on
-   * anything outside the set, so `staging`, `prod` and a misspelling never
-   * reach this check at all.
-   *
-   * **An unset variable is now an answer, and it is development** (ADR-0022).
-   * This used to refuse the `undefined` a plain `node` process has; what keeps
-   * the transport off a deploy now is the image, which sets
-   * `ENVIRONMENT=production` in git where a test pins it.
+   * **Required, and already parsed.** A default read from the process would
+   * let it disagree with the record {@link createTransport} was given, which is
+   * exactly the case this guard exists for. A value outside the set never
+   * reaches it: `readEnvironment` refuses `staging`, `prod` and a misspelling
+   * first. Unset reads as development, so what keeps this transport off a
+   * deploy is the image's `ENVIRONMENT=production` (ADR-0022).
    */
   readonly environment: Environment;
 }

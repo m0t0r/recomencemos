@@ -314,9 +314,10 @@ describe("the production image does not hand an attacker more than it must", () 
 
 /**
  * ADR-0022. Unset reads as development, so production is production only
- * because the image says so — in git, not in a `fly secret` somebody sets by
- * hand. Deleting either line below builds and deploys cleanly and then serves
- * no HSTS, which is why each is pinned.
+ * because the image says so. Deleting either line builds and deploys cleanly:
+ * without the builder's the deployed origin serves no HSTS, and without the
+ * runner's every runtime decision — the log line's `env`, Sentry's
+ * environment, the refusals of development values — reads development.
  */
 describe("the image names the environment it runs in", () => {
   /** One `FROM … AS <name>` stage's lines. Throws rather than matching nothing. */

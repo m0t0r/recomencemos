@@ -1,23 +1,17 @@
 /**
  * Where this process is running, read in one place (ADR-0022).
  *
- * `NODE_ENV` answers how the process was **built** — Next sets it from the
- * command, so a local `next start` and CI's `next build` both read as
- * production. Every "is this production?" decision in this repository asks this
- * reader instead, and nothing of ours compares `NODE_ENV` to decide one.
+ * Every server-side "is this production?" decision asks this rather than
+ * `NODE_ENV`, which names the build mode. Browser Sentry is the one decision
+ * that cannot: `ENVIRONMENT` is not inlined into a client bundle.
  *
- * **Unset reads as development, and production does not rely on that.** The
- * default serves the developer, who never sets anything — and it keeps HSTS off
- * `*.localhost`. Production gets the variable from the `Dockerfile`, in the stage
- * that builds and the stage that runs, where `deploy-environment.test.ts` pins it.
- * Two mechanisms, because a single default could not serve both.
+ * Unset reads as development. Production comes from the `Dockerfile`, which
+ * sets it in the stage that builds and the stage that runs;
+ * `deploy-environment.test.ts` pins both.
  *
- * **In `@repo/errors` because it is pure and needs nothing.** Every package that
- * makes such a decision already depends on this one, and the module adds no
- * dependency to it. The environment is always a parameter rather than a
- * `process.env` default, because this package is isomorphic — and in a browser
- * bundle `ENVIRONMENT` is not inlined, so it would read as development. That is
- * why browser Sentry still reads `NODE_ENV`.
+ * In `@repo/errors` because it is pure: every package with such a decision
+ * already depends on this one, and it adds no dependency here. The environment
+ * is always a parameter, because this package is isomorphic.
  */
 
 import { AppError } from "@repo/errors/app-error";

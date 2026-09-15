@@ -28,6 +28,7 @@
  * `PHOTO_PUBLIC_BASE` are declared on `build.env` in `turbo.json` as well as in
  * `globalPassThroughEnv` — the pass-through declaration exists to keep a value
  * *out* of the build hash, which is exactly wrong for a value the build reads.
+ * `ENVIRONMENT` is the one deliberate exception — see `isProduction`.
  */
 
 import { readEnvironment } from "@repo/errors/environment";
@@ -176,18 +177,14 @@ function sources(...candidates: readonly (string | undefined)[]): string[] {
  * the go-live scan finds; HSTS in development is a browser somebody has to
  * repair.
  *
- * **Not `NODE_ENV`, which says how the app was built rather than where it runs**
- * (ADR-0022). Next sets it to `production` for every `next build`, so a local
- * `pnpm build && pnpm start` sent HSTS for `*.localhost` while it was read. The
- * image sets `ENVIRONMENT=production` in its build stage, and that is where it
- * has to be: Next bakes `headers()` at build time.
+ * It is `ENVIRONMENT` rather than the build mode (ADR-0022), and the image sets
+ * it in its build stage, because Next bakes `headers()` at build time.
  *
- * **`ENVIRONMENT` is a pass-through in `turbo.json`, not a `build.env` input.**
- * Strict mode would otherwise filter it out of `next build`. It is not hashed
- * because the image build is the one place it is set, and that build runs where
- * Turborepo's cache is not in play. The price is local: a cached build replayed
- * after the variable changed keeps the headers it was built with, and
- * `turbo run build --force` is the way past it.
+ * **The one build-read value that is a pass-through rather than on
+ * `build.env`**, as ADR-0022 decides: the image build is the only place it is
+ * set, and that build runs where Turborepo's cache is not in play. The price is
+ * local — a cached build replayed after the variable changed keeps the headers
+ * it was built with, and `turbo run build --force` is the way past it.
  */
 function isProduction(environment: HeaderEnvironment): boolean {
   return readEnvironment(environment) === "production";
@@ -278,17 +275,11 @@ export function contentSecurityPolicy(environment: HeaderEnvironment): string {
    * `http://` URL does not match an `https://` origin, so it is **blocked**
    * rather than upgraded.
    *
-   * **Degrading rather than refusing is deliberate.** Throwing on a plaintext
-   * origin in production was rejected while production was read off
-   * `NODE_ENV`, because every **local** `pnpm build` would then have refused —
-   * a developer's `.env.local` points at the development object store, and
-   * `pnpm build` is what `pnpm page-weight` reads. Read off `ENVIRONMENT`, only
-   * a build told it is production would refuse, so that argument is weaker
-   * than it was. What still holds is that a refusal would turn a rehearsal
-   * against the development store into a build that will not run, for a gap
-   * the go-live runbook already checks: an absent `upgrade-insecure-requests`
-   * on the deployed origin means one of the three configured origins is
-   * `http://`.
+   * **Degrading rather than refusing is deliberate.** A refusal would turn a
+   * production rehearsal against the development store into a build that will
+   * not run, for a gap the go-live runbook already checks: an absent
+   * `upgrade-insecure-requests` on the deployed origin means one of the three
+   * configured origins is `http://`.
    */
   const admitsPlaintext = [photoDelivery, photoStore, sentryIngest].some((origin) =>
     origin?.startsWith("http:"),
