@@ -333,12 +333,56 @@ export type CeilingOutcome =
  * `user.email` in the clear beside it, so the salt would protect nothing while
  * adding a secret whose rotation resets every ceiling in the system.
  *
- * Lower-cased before hashing so `Ana@…` and `ana@…` charge one counter, matching
- * the `citext` column the same address is stored in.
+ * **An address is keyed by its mailbox, which folds more than the `citext`
+ * column does — and the difference is the point** (#324). The column records
+ * what she typed and signs her in as exactly that, so `ana+trabajo@…` stays an
+ * address of its own there. The counter bounds mail to one *inbox*, and it is
+ * the only bound that does: the per-IP one falls to anybody rotating
+ * connections. Keyed by the literal address, a fresh `+tag` on each request
+ * bought a fresh allowance, and the inbox had no ceiling at all.
+ *
+ * So the sub-address goes at every domain, and dots go **only at Gmail**. Gmail
+ * ignores every dot in a local part and answers at `googlemail.com` too, so
+ * folding them there never merges two people. Elsewhere a dot may be the whole
+ * difference between two mailboxes, and folding it would put strangers on one
+ * allowance. A tag nobody honours is the cheaper mistake: two people sharing
+ * five links an hour, against one person receiving unbounded mail.
+ *
+ * The `ip` and `account` scopes are only trimmed and lower-cased, as before.
  */
 export function principalKey({ scope, id }: CeilingPrincipal): string {
-  const digest = createHash("sha256").update(id.trim().toLowerCase()).digest("hex");
+  const normalised = id.trim().toLowerCase();
+  const key = scope === "address" ? mailboxOf(normalised) : normalised;
+  const digest = createHash("sha256").update(key).digest("hex");
   return `${scope}:${digest}`;
+}
+
+const GMAIL_DOMAINS = new Set(["gmail.com", "googlemail.com"]);
+
+/**
+ * The mailbox a trimmed, lower-cased address delivers to, or the address itself
+ * when it has no shape to fold.
+ *
+ * **It never throws.** The direct HTTP door hands this the raw request body, so
+ * an input with no `@`, or one whose local part folds to nothing, is keyed as it
+ * was typed rather than refused here — a throw would be a 500 on the sign-in
+ * path, and the endpoint's own schema is what refuses a malformed address.
+ *
+ * Split at the **last** `@`: a domain cannot hold one, and a quoted local part
+ * in theory can.
+ */
+function mailboxOf(address: string): string {
+  const at = address.lastIndexOf("@");
+  if (at === -1) return address;
+
+  const domain = address.slice(at + 1);
+  const tagless = address.slice(0, at).split("+", 1)[0] ?? "";
+
+  const gmail = GMAIL_DOMAINS.has(domain);
+  const local = gmail ? tagless.replaceAll(".", "") : tagless;
+  if (local === "") return address;
+
+  return `${local}@${gmail ? "gmail.com" : domain}`;
 }
 
 /**
