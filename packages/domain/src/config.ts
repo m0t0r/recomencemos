@@ -10,11 +10,13 @@
  * back to the other.
  *
  * Nothing here connects. That is the point: a pure function over an environment
- * record is testable without a database, and the failure it reports — a variable
- * nobody set — is the failure that actually happens.
+ * record is testable without a database, and the failures it reports — a
+ * variable nobody set, or set to a string that would not verify the server — are
+ * the failures that actually happen.
  */
 
 import { AppError } from "@repo/errors/app-error";
+import { readEnvironment } from "@repo/errors/environment";
 import { SERVICE_UNAVAILABLE } from "#user-messages";
 
 /** What the application uses. PgBouncer locally, PlanetScale's pooler in production. */
@@ -58,6 +60,23 @@ export interface ConnectionConfig {
 }
 
 /**
+ * The one `sslmode` that encrypts *and* checks whose certificate it is in `pg`
+ * 8, in `pg` 9 and in libpq alike. `require` verifies today only because `pg` 8
+ * treats it as an alias for this, and its own warning says 9 will not.
+ */
+const VERIFIED_SSLMODE = "verify-full";
+
+/**
+ * libpq's spelling for the operating system's trust store. `pg` reads every
+ * `sslrootcert` as a file path, so this one fails at connect with `ENOENT` —
+ * and Node verifies against its bundled CAs without it.
+ */
+const SYSTEM_ROOT_CERT = "system";
+
+/** Enough of a refused parameter to recognise it; a log line needs no more. */
+const MAX_QUOTED_LENGTH = 32;
+
+/**
  * **The connection string never reaches the error.** It carries a password, and
  * `redaction.ts` matches key *names* — a URL interpolated into `message` is a
  * secret at a key nothing is watching. The message names the variable to set,
@@ -65,18 +84,103 @@ export interface ConnectionConfig {
  */
 function connectionString(env: DatabaseEnv, variable: string): string {
   const value = env[variable]?.trim();
-  if (value) return value;
+  if (!value) {
+    throw new AppError({
+      code: "database_url_missing",
+      status: 503,
+      message:
+        `${variable} is unset or empty, so no database connection can be opened. ` +
+        "Locally: `cp apps/web/.env.example apps/web/.env.local` and `pnpm db:up`. " +
+        "In production it comes from `fly secrets`.",
+      userMessage: SERVICE_UNAVAILABLE,
+      context: { variable },
+    });
+  }
+
+  if (readEnvironment(env) === "production") refuseUnverifiedTls(variable, value);
+  return value;
+}
+
+interface TlsWeakness {
+  /** Completes "`DATABASE_URL` …" in the operator's message. */
+  readonly reason: string;
+  /** The offending parameter and at most its value — never the string it came from. */
+  readonly context: Readonly<Record<string, string>>;
+}
+
+/**
+ * In production, a string that would not verify the server's certificate is
+ * refused here rather than trusted to whoever pasted it (#327).
+ *
+ * PlanetScale refuses plaintext, so the quiet failure is an encrypted
+ * connection that checks nobody's certificate — which a machine in the path can
+ * intercept. Nothing in CI speaks TLS, so a `pg` major that changed what a
+ * string means would go green; this is the check that notices. Outside
+ * production nothing is asked: the local Docker database has no TLS at all.
+ *
+ * This is called by the pooled connection, the migrator and `admin:enrol`
+ * alike, because all three resolve here — and by `scripts/database-url-form.mjs`,
+ * which is how the go-live wizard asks the same question before staging a
+ * string, rather than keeping a second copy of the rule.
+ */
+function refuseUnverifiedTls(variable: string, value: string): void {
+  const weakness = tlsWeakness(value);
+  if (!weakness) return;
 
   throw new AppError({
-    code: "database_url_missing",
+    code: "database_url_tls_unverified",
     status: 503,
     message:
-      `${variable} is unset or empty, so no database connection can be opened. ` +
-      "Locally: `cp apps/web/.env.example apps/web/.env.local` and `pnpm db:up`. " +
-      "In production it comes from `fly secrets`.",
+      `${variable} ${weakness.reason}, so production will not open it. ` +
+      `It must carry sslmode=${VERIFIED_SSLMODE}, the one mode that verifies the server's ` +
+      `certificate, and must not carry sslrootcert=${SYSTEM_ROOT_CERT}, which the Postgres ` +
+      "client reads as a file path. Correct it with `fly secrets set`; " +
+      "docs/runbooks/recomencemos-go-live.md section 1 has the form.",
     userMessage: SERVICE_UNAVAILABLE,
-    context: { variable },
+    context: { variable, ...weakness.context },
   });
+}
+
+/**
+ * What is wrong with `value`, or nothing.
+ *
+ * **Every `sslmode` is read, not the first.** `URLSearchParams.get` returns the
+ * first occurrence and `pg` keeps the last, so `?sslmode=verify-full&sslmode=disable`
+ * would pass a `get` and connect in plaintext. A value this cannot parse as a
+ * URL is refused rather than waved through, for the same reason.
+ */
+function tlsWeakness(value: string): TlsWeakness | undefined {
+  let parameters: URLSearchParams;
+  try {
+    parameters = new URL(value).searchParams;
+  } catch {
+    return {
+      reason: "is not a URL, so whether it verifies the server cannot be read",
+      context: {},
+    };
+  }
+
+  const modes = parameters.getAll("sslmode");
+  if (modes.length === 0) {
+    return { reason: "carries no sslmode", context: { parameter: "sslmode" } };
+  }
+
+  const weakMode = modes.find((mode) => mode !== VERIFIED_SSLMODE);
+  if (weakMode !== undefined) {
+    return {
+      reason: "carries an sslmode that does not verify the server's certificate",
+      context: { parameter: "sslmode", value: weakMode.slice(0, MAX_QUOTED_LENGTH) },
+    };
+  }
+
+  if (parameters.getAll("sslrootcert").includes(SYSTEM_ROOT_CERT)) {
+    return {
+      reason: `carries sslrootcert=${SYSTEM_ROOT_CERT}`,
+      context: { parameter: "sslrootcert", value: SYSTEM_ROOT_CERT },
+    };
+  }
+
+  return undefined;
 }
 
 /** The pooled connection: what every request path uses. */

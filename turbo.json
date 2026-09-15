@@ -68,6 +68,8 @@
         ".claude/hooks/**",
         "scripts/**",
         "packages/errors/src/**",
+        "packages/domain/src/config.ts",
+        "packages/domain/src/user-messages.ts",
         ".oxlintrc.json",
         "**/.oxlintrc.json",
         "apps/web/components.json",
