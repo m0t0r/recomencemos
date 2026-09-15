@@ -294,15 +294,19 @@ concerns.
   bytes for the same navigation on two runs. Buffered prefetch responses it reports correctly, which
   is what makes the error easy to miss.
   **Binds:** 2, 4, 11.
-- **NFR4 — Publishing, editing and pausing without JavaScript.** With JavaScript unavailable or still loading,
-  a Worker completes **every** field except the photo and submitting produces a published profile —
-  **and the same holds for a change to one already published.** The photo is the single documented
-  exception and the form says so where it appears. _Amended 2026-09-02 with #139: this named publishing
-  alone. She corrects a wrong number on the same phone and the same connection she typed it on, over
-  the same fields, so the exemption had no argument behind it — and the photo stays the exception on
-  both paths._ **Pausing and resuming are one submit each, and hold to the same rule.** _Amended
-  2026-09-10 with #141: a switch that needed JavaScript would leave her able to publish on a broken
-  connection and unable to step away on the same one._ **Binds:** 2, 4, 24, 25.
+- **NFR4 — Forms are server-first; working without JavaScript is not a requirement.** Reads are
+  Server Components and mutations are Server Actions behind a native `<form action>`, because that
+  is this repository's idiom (ADR-0014, ADR-0015) and it costs nothing where it holds. **Nothing is
+  owed to a browser with JavaScript unavailable or not yet loaded**: no acceptance criterion asks for
+  it, no surface builds a `<noscript>` fallback or a no-JavaScript variant of a component for it, no
+  design is constrained by it, and seam 3 does not verify it with scripts blocked or by a native POST.
+  Where the idiom and a surface's design disagree, the design wins and the surface may require
+  JavaScript. The photo is no longer an exception, because nothing is left to except it from.
+  _Amended 2026-09-15 by the maintainer; the reason is under **Appended with retiring the
+  no-JavaScript requirement** at the end of this document. Until then this read: "With JavaScript
+  unavailable or still loading, a Worker completes every field except the photo and submitting
+  produces a published profile", widened with #139 to editing and with #141 to pausing._
+  **Binds:** 2, 4, 24, 25, as a default and never as a constraint.
 - **NFR5 — Browser floor.** Every platform feature on a Worker-critical path is **Baseline Widely
   Available** — 30 months past the date all four core browsers shipped it, verified against web.dev's
   definition rather than recalled. Concretely Chrome on Android 10+, Safari on iOS 16+, current
@@ -1023,7 +1027,9 @@ international processors.
 
 One per non-functional requirement the high-level design does not already satisfy. **The ones it does
 satisfy, stated rather than omitted:** NFR1 (no human review on the publish path), NFR4 (Server
-Components and a progressively-enhanced form are the default here), NFR5 (a floor, checked at review),
+Components and a progressively-enhanced form are the default here — _amended 2026-09-15: that
+"default" was a no-JavaScript guarantee on every Worker-critical form, and it was never free; NFR4 now
+asks for the default only_), NFR5 (a floor, checked at review),
 NFR8 and NFR9 (a route group and an opaque slug generator), NFR10 (pure projections, tested at seam
 1), NFR20 (per surface, in **UX design**), NFR23 (verified above), NFR24 (a `turbo.json` edit).
 
@@ -1447,8 +1453,8 @@ hash before the completion line. The Sentry egress is a different path, and it i
 
 The draft made `uploadPhoto` a multipart Server Action. **Next 16.3.2's Server Action body limit
 defaults to 1 MB** and `apps/web/next.config.ts` does not raise it, while a phone photo is 2–5 MB — so
-every real upload would fail at the framework boundary, with no domain log line, on the one flow NFR4
-already exempts. Raising `bodySizeLimit` would fix the symptom and leave the machine buffering
+every real upload would fail at the framework boundary, with no domain log line, on the one flow that
+needs JavaScript whatever NFR4 says. Raising `bodySizeLimit` would fix the symptom and leave the machine buffering
 multipart bodies in process, which is the memory-saturation shape that kills a single Fly machine.
 **The machine floor is 1 GB** (C34), stated here rather than left implied: Node plus Next plus a
 connection pool is tight on 512 MB before a request arrives, and this deep dive names the failure mode,
@@ -2143,7 +2149,8 @@ reversible act charges the person it protects for nothing. One sentence beside i
 limits she needs before she relies on it — **Offers already sent still reach her**, and **a pause
 cannot take back what someone has already read**. While paused, the page says _en pausa_ and since
 when, and the same switch ends it. It is a form in this repository's server-first idiom, so it works
-without JavaScript (NFR4). **The switch is not shown while the profile is taken down**; what
+without JavaScript (NFR4). _Amended 2026-09-15: that is what was built, and no longer a requirement
+it is held to._ **The switch is not shown while the profile is taken down**; what
 `/my-profile` says in that state is story 20's copy, not this row's.
 
 **A seventh state, on every surface that has a ceiling: `rate limited`** (C39). NFR26's refusal returns
@@ -3833,7 +3840,8 @@ reopened.**
 - **`publishedAt`.** Untouched on resume, for #139's reason, and stated beside #139's rule under the
   Worker table.
 - **The switch.** On `/my-profile`, one tap, no confirmation, one sentence naming its two limits, no
-  JavaScript required, hidden while the profile is taken down.
+  JavaScript required, hidden while the profile is taken down. _Amended 2026-09-15: "no JavaScript
+  required" is retired with NFR4's guarantee; the rest stands._
 - **The ceiling.** Pause and resume together **≤ 10/day per Account**, in `RateCounter`, with the
   count-and-wait refusal every other ceiling uses.
 - **The Admin.** Wherever an Admin sees a profile it reads _en pausa desde <fecha>_. The queue is
@@ -3878,3 +3886,54 @@ each time she stepped away in a table kept for 24 months, for a reconstruction n
 taken down is story 20's copy (#28). A Hirer has no public card, so nothing here has a Hirer-side
 equivalent. And there is no new ADR: DD8 already carries the principle, and a second statement of the
 same rule would be a second place for it to drift.
+
+### Appended with retiring the no-JavaScript requirement (2026-09-15)
+
+**NFR4 asked for work nobody decided on, and the maintainer has retired it.** Its guarantee — publish,
+edit and pause with JavaScript unavailable or still loading — is gone. What is left is the
+server-first idiom as a default, which NFR4 now states.
+
+**How it became a requirement without being decided.**
+
+- The intent's Q7 was about `browser-support`, and its answer was **delegated**. It proposed a
+  no-JavaScript publishing target and said Design would "confirm or reject that rather than
+  discovering it at Build".
+- This spec wrote it as NFR4 on the same day, with no record of that confirmation. **Deep dives**
+  then listed it among the requirements the high-level design "already satisfies", so it read as
+  free and was never put to the maintainer as a cost.
+- #139 and #141 widened it to editing and to pausing. Neither issue asked for that; the argument was
+  in the amendments.
+- Past its `Binds:` line it was then applied to `/sign-in`, the Offer form, the site header, the
+  streamed reads and the Admin door, and one ticket called it a `Must`, which no requirement in this
+  section carries.
+
+**What it was costing, as the tracker records it.**
+
+- #137 — a no-JavaScript post into an action that returns normally loops `next dev` until it dies,
+  so a refused publish could not show its refusal on that path.
+- #83 — Base UI's checkbox does nothing until hydration, so the shared-device answer needed the
+  design system's first no-JavaScript component variant.
+- #302 — the session menu's `<noscript>` fallback carried _Salir_ and nothing else, and fixing that
+  meant a second, script-free menu.
+- #163 — an ADR and a further widening to every streamed read.
+- #272 and #274 — two surfaces the maintainer chose in the UX lab would each have had to be
+  redesigned around it: a stepper that degrades to one form, and chips rebuilt as radio groups.
+
+**Why the argument behind it was weaker than it read.** She is on a cheap Android phone on mobile
+data, and a page does arrive before its scripts. But publishing is minutes of typing, so the scripts
+have run long before she submits, and JavaScript switched off entirely is not this population's
+condition. The window NFR4 protected is seconds long, and it was being paid for on every surface.
+
+**What stays.** ADR-0014's native `<form action>` and ADR-0015's `.stateAction()` with
+`useActionState` stay as this repository's idiom. Neither rests on NFR4 any more, so a surface with
+a reason to leave them states that reason rather than being refused. No-JavaScript behaviour already
+built is left in place and is no longer verified. Removing it takes a ticket with a reason of its
+own, never a side effect of other work. NFR3 and NFR5 are untouched.
+
+**What changes with it.** #83, #137, #163 and #302 are closed as not planned. #178, #272 and #274 lose
+their no-JavaScript criteria. #311 no longer asks the Pause switch to keep its native POST, and #27's
+reason for keeping `/offers/[id]` addressable is now only the delivery email. ADR-0014, ADR-0015,
+`apps/web/AGENTS.md` and `docs/policy/security.md` carry dated notes. The NFR4 citations in code
+comments and in `.impeccable/briefs/` still describe the old requirement, and README's "Still to
+replace" owns that row. The resolved flagged concern C37 and the #139 section above still read as
+they did then, and are kept as the record of those decisions.

@@ -120,4 +120,6 @@ ships.
 - A later story needing an authenticated action writes a local middleware over
   `AuthHandler.getSession`, not the vendor adapter.
 - Any new action is `.stateAction()` + `useActionState`. A pull request introducing `useStateAction`
-  or `useAction` is a regression against this record and against NFR4.
+  or `useAction` is a regression against this record and against NFR4. _Amended 2026-09-15: NFR4 no
+  longer requires a no-JavaScript path, so the second half of that sentence is retired. The idiom
+  stands, and a pull request with a reason to leave it states the reason._
