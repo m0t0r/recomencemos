@@ -1,0 +1,10 @@
+<CORSConfiguration>
+  <CORSRule>
+    <AllowedOrigin>https://web.recomencemos.localhost</AllowedOrigin>
+    <AllowedOrigin>https://*.web.recomencemos.localhost</AllowedOrigin>
+    <AllowedOrigin>http://localhost:3000</AllowedOrigin>
+    <AllowedMethod>PUT</AllowedMethod>
+    <AllowedHeader>content-type</AllowedHeader>
+    <AllowedHeader>if-none-match</AllowedHeader>
+  </CORSRule>
+</CORSConfiguration>
