@@ -211,10 +211,10 @@ updates:
   # development-tier data, and are in no deployment path. Nothing production
   # depends on this entry.
   #
-  # The two MinIO images come from `quay.io` since Docker Hub removed the
-  # `minio` namespace, and upstream has stopped publishing them, so this entry
-  # will never move those two again. `docker-compose.yaml` says why, and the
-  # replacement is its own finding.
+  # All four are on Docker Hub, which is what this entry reads without a
+  # registry block. An image that moves to another registry needs one here, or
+  # the weekly job fails authenticating against a repository that is gone —
+  # which is how the object store before #316 was noticed.
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:

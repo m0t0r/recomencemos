@@ -255,8 +255,8 @@ export function contentSecurityPolicy(environment: HeaderEnvironment): string {
    *
    * A local production build reads the same `.env.local` every dev server does,
    * so its policy admits `http://127.0.0.1:9000` — and this directive would
-   * then rewrite every presigned PUT and every review image to a scheme MinIO
-   * does not serve. A policy that admits an origin in one directive and orders
+   * then rewrite every presigned PUT and every review image to a scheme the
+   * development object store does not serve. A policy that admits an origin in one directive and orders
    * every request to it upgraded in another contradicts itself; the
    * contradiction is settled in favour of the admission, because the admission
    * is the value somebody configured.
@@ -270,7 +270,8 @@ export function contentSecurityPolicy(environment: HeaderEnvironment): string {
    * **Degrading rather than refusing is deliberate**, and the obvious
    * alternative was tried on paper and rejected: throwing on a plaintext origin
    * under `NODE_ENV === "production"` would fail every **local** `pnpm build`
-   * too, because a developer's `.env.local` points at MinIO — and `pnpm build`
+   * too, because a developer's `.env.local` points at the development object
+   * store — and `pnpm build`
    * is what `pnpm page-weight` reads, so the byte budget would become
    * unmeasurable. The operator-facing check lives in the go-live runbook
    * instead: an absent `upgrade-insecure-requests` on the deployed origin means

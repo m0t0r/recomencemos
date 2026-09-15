@@ -3,7 +3,7 @@
  * machine with no Docker and in CI.
  *
  * **`photos.store.test.ts` proves the store refuses; this proves we ask the
- * right store.** That file needs a running MinIO and is deliberately outside
+ * right store.** That file needs a running object store and is deliberately outside
  * the required checks, so without this one nothing green in CI would exercise
  * the split at all: a build that resolved both buckets to the same string, or
  * dropped the quarantine variable back to optional, would pass every gate.
@@ -179,7 +179,7 @@ describe("the types a presigned PUT may declare", () => {
  *
  * **It is the check, so it is worth its own cases.** Reached only through
  * `presignUpload` it would be exercised only by the opt-in store suite, which
- * needs a running MinIO and never runs in CI — so a change that widened it
+ * needs a running object store and never runs in CI — so a change that widened it
  * would go green everywhere a person looks.
  */
 describe("isUploadableContentType", () => {

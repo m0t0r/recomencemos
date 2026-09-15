@@ -711,7 +711,7 @@ attest "The quarantine bucket has public access OFF and no custom domain bound t
 #
 # A 404 on the second with anything but 200 on the first proves nothing at all —
 # a dead hostname answers exactly that way. `photos.store.test.ts` runs the same
-# pair against MinIO, which is where the shape comes from.
+# pair against the development object store, which is where the shape comes from.
 stage "The pair of requests: the origin is serving, and the quarantine key is not on it"
 say "Upload one real object to EACH bucket first. Nothing below proves anything without them."
 step "Photos bucket: upload any small image under photos/ — note the key you gave it."

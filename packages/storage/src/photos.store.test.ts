@@ -8,15 +8,16 @@
  *
  * **A store's refusal is not testable against a mock.** NFR6 is true because
  * the store refuses, so a double that refuses on our behalf would be asserting
- * our own belief about a configuration file. `docker-compose.yaml` runs MinIO,
- * which speaks the same S3 protocol Cloudflare R2 does, and `minio-init`
- * performs the same acts a human performs against R2 at runbook §3 — so what is
+ * our own belief about a configuration file. `docker-compose.yaml` runs Versity
+ * S3 Gateway, which speaks the same S3 protocol Cloudflare R2 does, and
+ * `object-store-init` performs the same acts a human performs against R2 at
+ * runbook §3 — so what is
  * exercised here is the production code path against something very close to
  * the production configuration.
  *
  * **Two buckets, and the second one is what makes that sentence true** (#251).
  * The pair used to be two prefixes in one bucket, with an anonymous policy on
- * one of them — which MinIO expresses and R2 cannot: public access there is a
+ * one of them — which an S3 bucket policy expresses and R2 cannot: public access there is a
  * single bucket-level switch with no per-prefix ACL. So the fixture was proving
  * a property production had no way to state. Quarantine now lives in a bucket
  * whose public access is simply never turned on, which is the same act in both
@@ -214,7 +215,7 @@ describe("the quarantine bucket", () => {
    * `PHOTO_PUBLIC_BASE` is a bucket root and a key carries its own prefix, so
    * `${base}/quarantine/<21 chars>` is a string anybody can construct. While
    * both prefixes lived in one bucket, whether that string served bytes turned
-   * on a per-prefix anonymous policy — which MinIO has and **R2 does not**:
+   * on a per-prefix anonymous policy — which an S3 bucket policy can state and **R2 cannot**:
    * public access there is one switch for the whole bucket. So the property
    * this file was proving locally was one production could not express.
    *

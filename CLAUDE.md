@@ -143,7 +143,7 @@ major rather than at a number nobody measured — if `pnpm db:up` fails on an ol
 where to look.
 
 **A service that runs once and exits does not belong under `--wait`.** Compose counts any stopped
-container as a failure there, exit 0 included, so `minio-init` sits behind a profile and `pnpm db:up`
+container as a failure there, exit 0 included, so `object-store-init` sits behind a profile and `pnpm db:up`
 runs it with `docker compose run --rm` after the wait instead. The comment on that service has the
 measurement. A new one-shot service follows the same shape rather than being added to the `up`.
 

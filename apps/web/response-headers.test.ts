@@ -28,7 +28,7 @@ import { configuredHeaders } from "./testing/configured-headers";
 /**
  * A production build's environment, in the shape the deploy provides it: two
  * photo origins on **different hosts**, which is the production case the local
- * one cannot exercise because MinIO serves both.
+ * one cannot exercise because one development store serves both.
  */
 const PRODUCTION: HeaderEnvironment = {
   NODE_ENV: "production",
@@ -37,7 +37,7 @@ const PRODUCTION: HeaderEnvironment = {
   NEXT_PUBLIC_SENTRY_DSN: "https://key@o4500.ingest.us.sentry.io/4501",
 };
 
-/** What `apps/web/.env.example` produces: one MinIO origin serving both roles. */
+/** What `apps/web/.env.example` produces: one object-store origin serving both roles. */
 const DEVELOPMENT: HeaderEnvironment = {
   NODE_ENV: "development",
   PHOTO_PUBLIC_BASE: "http://127.0.0.1:9000/recomencemos-photos",
@@ -234,8 +234,8 @@ describe("the photo path's two origins", () => {
     );
   });
 
-  /** Locally MinIO is both roles, and one origin repeated is one source expression. */
-  it("collapses the two to one where development serves both from MinIO", () => {
+  /** Locally one store is both roles, and one origin repeated is one source expression. */
+  it("collapses the two to one where development serves both from one store", () => {
     expect(directivesOf(DEVELOPMENT)["img-src"]).toEqual([
       "'self'",
       "data:",

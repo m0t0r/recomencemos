@@ -177,9 +177,11 @@ export async function presignUpload(
       // invalidates the signature. The browser therefore has to send it, which
       // is why the `fetch` on the publish surface does.
       //
-      // Measured against the MinIO in `docker-compose.yaml` rather than read
+      // Measured against the store in `docker-compose.yaml` rather than read
       // off a changelog: with the condition, the first PUT answers 200 and a
-      // replay answers 412; without it, the replay answers 200.
+      // replay answers 412; without it, the replay answers 200. First taken on
+      // the store that preceded #316, and re-taken on Versity S3 Gateway on
+      // 2026-09-15 — both halves are cases in `photos.store.test.ts`.
       IfNoneMatch: "*",
     }),
     {
@@ -197,12 +199,13 @@ export async function presignUpload(
       // `getSignedUrl` forwards the option through; this is the whole of the
       // fix.
       //
-      // Measured against the MinIO in `docker-compose.yaml` rather than read
+      // Measured against the store in `docker-compose.yaml` rather than read
       // off a changelog: without the option the signed headers are
       // `content-length;host;if-none-match` and the mismatched PUT answers 200;
       // with it they are `content-length;content-type;host;if-none-match`, the
       // mismatched PUT answers 403, and the matching one still answers 200.
-      // `photos.store.test.ts` holds all three.
+      // `photos.store.test.ts` holds all three. First taken on the store that
+      // preceded #316, and re-taken on Versity S3 Gateway on 2026-09-15.
       //
       // It binds the request to its own declaration and bounds nothing by
       // itself — the closed set the declaration comes from is
@@ -354,7 +357,9 @@ function objectMissing(caller: string, cause?: unknown): AppError {
  * hold, rather than for any other reason.
  *
  * **Read off the HTTP status and not off the name.** `PreconditionFailed` is
- * what the AWS SDK models and what MinIO answers with, but the error a caller
+ * what the AWS SDK models and what Versity S3 Gateway answers with — a stale
+ * `If-Match` there is a 412 whose body's `Code` is that name, measured on
+ * 2026-09-15 — but the error a caller
  * gets back is shaped by whichever store is behind the endpoint — and a
  * mismatch that fell through to the missing-object refusal would be reported to
  * an operator as divergence between the two stores, which is the wrong incident
