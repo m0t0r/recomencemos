@@ -34,6 +34,19 @@ s3 --request PUT --header "Content-Type: application/json" \
 # policy set by hand does not survive the next `pnpm db:up`.
 s3 --request DELETE "$ENDPOINT/recomencemos-photos-quarantine?policy"
 
+# **The browser's presigned PUT is cross-origin, so quarantine answers its CORS
+# preflight — for the development origins, with PUT and the two headers the
+# upload sends, and nothing else.** Without a rule the gateway refuses every
+# preflight with 403 and no photo ever arrives; the storage suite cannot see
+# that, because Node's `fetch` sends no preflight (#316). It is a grant about
+# who may *ask*, not who may write: the PUT still needs a valid signature.
+#
+# The gateway requires a `Content-MD5` on this call. The image has no
+# `openssl`, so busybox computes it: hex digest, back to bytes, then base64.
+cors_md5=$(md5sum /cors.xml | cut -d " " -f 1 | xxd -r -p | base64)
+s3 --request PUT --header "Content-Type: application/xml" --header "Content-MD5: $cors_md5" \
+  --data-binary @/cors.xml "$ENDPOINT/recomencemos-photos-quarantine?cors"
+
 # The policy as the store now holds it, so the run's output shows the grant.
 s3 "$ENDPOINT/recomencemos-photos?policy"
 echo
