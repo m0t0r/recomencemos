@@ -6,6 +6,7 @@
 | -------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [#16](https://github.com/m0t0r/recomencemos/issues/16)   | 2026-09-02 | The three tiers, locked as variant A (_Tres niveles_); the losers are on `prototype/16-ui-variants`                                                                                                                                                               |
 | [#265](https://github.com/m0t0r/recomencemos/issues/265) | 2026-09-11 | Her Pause: the switch, the _en pausa_ state, and its ceiling's rate-limited state                                                                                                                                                                                 |
+| [#311](https://github.com/m0t0r/recomencemos/issues/311) | 2026-09-15 | The switch loses its daily ceiling, and with it the rate-limited state #265 shaped                                                                                                                                                                                |
 | [#275](https://github.com/m0t0r/recomencemos/issues/275) | 2026-09-11 | Her whole side on one page — variant A (_Una página_) of the UX lab's idea 7 at `f68ab0f`. **Locked 2026-09-12, variant A (_Una columna_)**, picked by the owner from three phone-first variants on the real route; B and C are on `prototype/275-phone-variants` |
 
 **Reshaped for #265 and #275 without a discovery interview.** Both tickets carry their decisions,
@@ -88,20 +89,20 @@ same upload pipeline `/publish` uses, attaching the photo as soon as the upload 
 
 ## States and ranges
 
-| State               | What it shows                                                                                                                                                                                            |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loading`           | A skeleton in the sections' shapes — state line, card, rows — so nothing moves when it resolves                                                                                                          |
-| visible             | _Tu perfil está en el muro y cualquiera puede encontrarlo._, with no date; the switch reads _Pausar mi perfil_, off                                                                                      |
-| **paused**          | _En pausa desde <fecha>_; the same switch, on, ends it. The limits sentence stays                                                                                                                        |
-| taken down          | **The switch is not rendered.** What the page says instead is #28's                                                                                                                                      |
-| **rate limited**    | The ceiling's own sentence — the count and when she may try again — then which state the profile is in now (_Tu perfil sigue en pausa_ / _sigue en el muro_), beside the switch, announced               |
-| arrival             | `?published`, `?saved`, `?paused`, `?resumed`: one focused `role="status"` region, one sentence each. Only one can be true                                                                               |
-| Offers waiting      | **0:** one sentence, still linking `/offers`. **1–many:** up to three rows `[assumed]` and a count that says all of them                                                                                 |
-| Closed lines        | **0:** the section is absent `[assumed]` — an empty history is not a state to explain. **1–many:** newest first, one line each                                                                           |
-| photo               | `absent` / `pending` / `approved` / `rejected` keep today's sentences; picking adds _preparing_, _uploading_, _ready_ and the upload's refusals                                                          |
-| `error`             | Load failed: what failed and that a reload helps (`error.tsx`)                                                                                                                                           |
-| `permission denied` | Signed out → `/sign-in?returnPath=/my-profile`; no profile → `/publish`; not the owner → 404                                                                                                             |
-| no JavaScript       | Everything reads. **Pause and resume both work** — each is a form post and a redirect. The photo control says it needs JavaScript, in place of the control (NFR4's one exemption, `/publish`'s sentence) |
+| State               | What it shows                                                                                                                                                                                                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading`           | A skeleton in the sections' shapes — state line, card, rows — so nothing moves when it resolves                                                                                                                                                                                              |
+| visible             | _Tu perfil está en el muro y cualquiera puede encontrarlo._, with no date; the switch reads _Pausar mi perfil_, off                                                                                                                                                                          |
+| **paused**          | _En pausa desde <fecha>_; the same switch, on, ends it. The limits sentence stays                                                                                                                                                                                                            |
+| taken down          | **The switch is not rendered.** What the page says instead is #28's                                                                                                                                                                                                                          |
+| ~~rate limited~~    | _Removed 2026-09-15 with #311: the switch has no ceiling, so this state no longer exists._ It was the ceiling's own sentence — the count and when she may try again — then which state the profile is in now (_Tu perfil sigue en pausa_ / _sigue en el muro_), beside the switch, announced |
+| arrival             | `?published`, `?saved`, `?paused`, `?resumed`: one focused `role="status"` region, one sentence each. Only one can be true                                                                                                                                                                   |
+| Offers waiting      | **0:** one sentence, still linking `/offers`. **1–many:** up to three rows `[assumed]` and a count that says all of them                                                                                                                                                                     |
+| Closed lines        | **0:** the section is absent `[assumed]` — an empty history is not a state to explain. **1–many:** newest first, one line each                                                                                                                                                               |
+| photo               | `absent` / `pending` / `approved` / `rejected` keep today's sentences; picking adds _preparing_, _uploading_, _ready_ and the upload's refusals                                                                                                                                              |
+| `error`             | Load failed: what failed and that a reload helps (`error.tsx`)                                                                                                                                                                                                                               |
+| `permission denied` | Signed out → `/sign-in?returnPath=/my-profile`; no profile → `/publish`; not the owner → 404                                                                                                                                                                                                 |
+| no JavaScript       | Everything reads. **Pause and resume both work** — each is a form post and a redirect. The photo control says it needs JavaScript, in place of the control (NFR4's one exemption, `/publish`'s sentence)                                                                                     |
 
 **Ranges:** one profile; 1–6 Skills; 0–5 work-history lines; Offers waiting 0–10 in practice (a
 Hirer is capped at ten sends a day, and a person reviews each first); closed lines unbounded over
@@ -122,8 +123,9 @@ time, so the section shows the most recent few and links `/offers` for the rest 
   look. The form's own `onSubmit` then sends the action in a transition, as `/continue`'s code form
   does (#301). Which of the two endpoints the form posts to is decided by the current state, so a
   repeat tap is a no-op rather than an undo.
-- **Announcement:** the arrival region says the new state after the redirect; the rate-limited
-  sentence is announced where the switch is.
+- **Announcement:** the arrival region says the new state after the redirect; a fault's sentence is
+  announced where the switch is. _Amended 2026-09-15 with #311: that was the rate-limited sentence,
+  and the ceiling behind it is gone._
 - Headings are `<h2>`s, so a screen reader's heading list reads the page's sections.
 
 ## Constraints and open decisions

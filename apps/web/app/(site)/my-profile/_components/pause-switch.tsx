@@ -28,9 +28,9 @@
  * the reason `offer-row.tsx` gives about two results that both persist.
  *
  * **Success is a redirect**, and the page announces the new state in its focused
- * status region. **A refusal renders here**: the ceiling's own sentence — how
- * many taps today and when she may tap again — followed by which state the
- * profile is in now, which only this component knows; or a transport fault's.
+ * status region. **Anything else renders here**, in the switch's own status
+ * region: a refusal's own sentence, or a transport fault's. No ceiling refuses a
+ * tap (#311).
  */
 
 import { Alert, AlertDescription } from "@repo/design-system/components/alert";
@@ -39,13 +39,7 @@ import { Switch } from "@repo/design-system/components/switch";
 import * as React from "react";
 import { feedbackFor } from "@/app/_lib/form/feedback";
 import { pauseProfile, resumeProfile } from "../actions";
-import {
-  PAUSE_FAULT,
-  PAUSE_LIMITS,
-  PAUSE_SWITCH_LABEL,
-  STILL_PAUSED,
-  STILL_VISIBLE,
-} from "../_lib/messages";
+import { PAUSE_FAULT, PAUSE_LIMITS, PAUSE_SWITCH_LABEL } from "../_lib/messages";
 
 type PauseResult = Awaited<ReturnType<typeof pauseProfile>>;
 type ResumeResult = Awaited<ReturnType<typeof resumeProfile>>;
@@ -108,9 +102,6 @@ export function PauseSwitch({ paused }: { readonly paused: boolean }) {
         >
           <AlertDescription>
             <p className="text-pretty">{feedback.message}</p>
-            {feedback.retryAfter !== undefined ? (
-              <p className="text-pretty">{paused ? STILL_PAUSED : STILL_VISIBLE}</p>
-            ) : null}
           </AlertDescription>
         </Alert>
       ) : null}

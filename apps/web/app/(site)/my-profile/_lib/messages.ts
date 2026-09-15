@@ -142,15 +142,8 @@ export const PAUSED_CONFIRMATION = "Pusiste tu perfil en pausa.";
 export const RESUMED_CONFIRMATION = "Tu perfil volvió al muro.";
 /** Not "at the top": resuming leaves her where she was, and saying so is the point. */
 export const RESUMED_EXPLANATION = "Está en el mismo lugar donde estaba antes de la pausa.";
-/**
- * After the ceiling's refusal: which state the profile is in now. The spec asks
- * for it so she is never left guessing whether the last tap took, and only the
- * switch knows which way it sits, so the switch says it.
- */
-export const STILL_PAUSED = "Tu perfil sigue en pausa.";
-export const STILL_VISIBLE = "Tu perfil sigue en el muro.";
 
-/** A transport fault. The ceiling's own refusal carries its own sentence. */
+/** A transport fault. A refusal carries its own sentence. */
 export const PAUSE_FAULT =
   "No pudimos cambiar la pausa. Tu perfil sigue como dice arriba; inténtalo otra vez.";
 
@@ -218,8 +211,6 @@ export const MY_PROFILE_COPY = {
   RESUMED_CONFIRMATION,
   RESUMED_EXPLANATION,
   PAUSE_FAULT,
-  STILL_PAUSED,
-  STILL_VISIBLE,
   PHOTO_CONTROL_NOTE,
   PHOTO_ATTACHING,
   PHOTO_ATTACHED,

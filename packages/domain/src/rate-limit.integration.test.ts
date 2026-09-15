@@ -18,9 +18,10 @@
  */
 
 import { eq } from "drizzle-orm";
-import { chargeCeiling, CEILINGS, principalKey } from "#rate-limit";
+import { CEILINGED_ACTIONS, chargeCeiling, CEILINGS, principalKey } from "#rate-limit";
 import { rateCounter } from "#schema";
 import { test, type TestDatabase } from "#testing/fixtures";
+import { journalledSql } from "#testing/migrations";
 
 const ana = { scope: "address", id: "ana@example.co" } as const;
 
@@ -292,6 +293,43 @@ describe("the CHECK the first ceiling put on rate_counter.action", () => {
       database.db
         .insert(rateCounter)
         .values({ principal: "address:x", action: "acceptOffer", windowStart: noon, count: 1 }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("taking the Pause switch's ceiling out of the registry", () => {
+  /**
+   * **The migration has to apply over the counters that ceiling left behind**
+   * (#311). The snapshot is already past it, so the constraint is put back the
+   * way it stood before, a pause counter is written beside another action's,
+   * and the two migrations are replayed in journal order: the delete, then the
+   * narrowed `CHECK` — which Postgres refuses to add while a `profilePause` row
+   * remains.
+   */
+  test("clears the pause counters, keeps every other one, and refuses a new one", async ({
+    database,
+  }) => {
+    const asItStood = [...CEILINGED_ACTIONS, "profilePause"].map((action) => `'${action}'`);
+    await database.client.exec(
+      `ALTER TABLE "rate_counter" DROP CONSTRAINT "rate_counter_action_known";
+       ALTER TABLE "rate_counter" ADD CONSTRAINT "rate_counter_action_known"
+         CHECK ("rate_counter"."action" IN (${asItStood.join(", ")}));`,
+    );
+    await database.db.insert(rateCounter).values([
+      { principal: "account:ana", action: "profilePause", windowStart: noon, count: 10 },
+      { principal: "account:ana", action: "updateProfile", windowStart: noon, count: 2 },
+    ]);
+
+    await database.client.exec(await journalledSql("drop_pause_counters"));
+    await database.client.exec(await journalledSql("pause_has_no_ceiling"));
+
+    expect(await database.db.select({ action: rateCounter.action }).from(rateCounter)).toEqual([
+      { action: "updateProfile" },
+    ]);
+    await expect(
+      database.db
+        .insert(rateCounter)
+        .values({ principal: "account:ana", action: "profilePause", windowStart: noon, count: 1 }),
     ).rejects.toThrow();
   });
 });
