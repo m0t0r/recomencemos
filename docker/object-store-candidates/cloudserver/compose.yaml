@@ -1,0 +1,86 @@
+# Candidate: Scality CloudServer, for #299. Measured by `../measure.sh cloudserver`,
+# which runs this as the Compose project `store-cloudserver`. Not the dev stack:
+# nothing here reads or binds the shared `recomencemos` project's ports.
+#
+# **amd64 only.** Scality publishes the image to ghcr.io with a linux/amd64
+# manifest and nothing else — checked 2026-09-15 for 9.4.3 and 9.0.32-3 — so on
+# an Apple Silicon laptop this runs under emulation. The Docker Hub repositories
+# (`zenko/cloudserver`, `scality/cloudserver`) stopped moving in 2022 and 2019.
+
+services:
+  cloudserver:
+    image: ghcr.io/scality/cloudserver:9.4.3@sha256:a0e2d143fc7c2aa7c23e23aa6e80ad57de8c3ff74b6ac4d31b7381687bd9bb00
+    platform: linux/amd64
+    environment:
+      # The file backend: a metadata daemon, a data daemon and the S3 front, all
+      # started by the image's own `yarn start` inside this one container.
+      S3BACKEND: file
+      # Replaces the image's sample accounts with one declared account, so no
+      # `authdata.json` has to be mounted. Development-tier, loopback-bound, in
+      # git for the reason the MinIO pair is.
+      SCALITY_ACCESS_KEY_ID: recomencemos
+      SCALITY_SECRET_ACCESS_KEY: recomencemos
+      # The init container addresses this service by its Compose hostname, which
+      # the stock `restEndpoints` does not list; the entrypoint adds it.
+      ENDPOINT: cloudserver
+      # Off, because otherwise the server spends its life resolving
+      # `api.zenko.io` to register with Scality's hosted management plane —
+      # measured: `getaddrinfo ENOTFOUND api.zenko.io` on every start, retrying.
+      REMOTE_MANAGEMENT_DISABLE: "1"
+    ports:
+      - "127.0.0.1:49000:8000"
+    volumes:
+      - cloudserver-data:/usr/src/app/localData
+      - cloudserver-metadata:/usr/src/app/localMetadata
+    healthcheck:
+      # The image ships Node and no curl or wget. Readiness is served on the
+      # metrics port (8002, unpublished) at `/ready`, from loopback only;
+      # `/_/healthcheck` on the S3 port answers 400 InvalidURI in 9.4.3.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8002/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+  # Runs once, exits, and is what makes the two buckets different. Behind a
+  # profile for the reason `minio-init` is, and run by `measure.sh` with
+  # `docker compose run --rm init`.
+  init:
+    image: amazon/aws-cli:2.36.45@sha256:de71ba5460023cdafb0b163b8ba4553e221a5c23e4b851ab5543d29a85c98ef4
+    profiles: ["init"]
+    depends_on:
+      cloudserver:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: recomencemos
+      AWS_SECRET_ACCESS_KEY: recomencemos
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://cloudserver:8000
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+    volumes:
+      - ./public-read-policy.json:/policy/public-read.json:ro
+    # **Public read is a bucket policy on the whole photos bucket, granting
+    # `s3:GetObject` and nothing else**, and quarantine is set private with no
+    # policy at all. Per bucket, because that is the only place R2 can say it.
+    # Every step is idempotent: a bucket is created only when `head-bucket`
+    # says it is absent, and both remaining calls state an absolute value.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        aws configure set default.s3.addressing_style path
+        aws s3api head-bucket --bucket recomencemos-photos 2>/dev/null ||
+          aws s3api create-bucket --bucket recomencemos-photos
+        aws s3api head-bucket --bucket recomencemos-photos-quarantine 2>/dev/null ||
+          aws s3api create-bucket --bucket recomencemos-photos-quarantine
+        aws s3api put-bucket-policy --bucket recomencemos-photos --policy file:///policy/public-read.json
+        aws s3api put-bucket-acl --bucket recomencemos-photos-quarantine --acl private
+
+volumes:
+  cloudserver-data:
+  cloudserver-metadata:
