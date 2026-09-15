@@ -188,9 +188,6 @@ an issue on this repository is public and a run directory is one `git add -f` fr
 
 ## Still open
 
-- **The exchange path is not yet built**, so the auditor's most consequential scope is empty today
-  and the pre-announcement run in the go-live runbook §9 is the first one that will read it. Until
-  then a full run measures the doors, the Admin boundary, the projections and the egresses.
 - **`validate-findings.cjs` is the skill's, and `pnpm test` does not run it.** A run directory is
   gitignored, so there is nothing for a gate to read; the check runs once, by the orchestrator, at
   Phase 5.
