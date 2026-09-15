@@ -339,16 +339,16 @@ export type CeilingOutcome =
  * address of its own there. The counter bounds mail to one *inbox*, and it is
  * the only bound that does: the per-IP one falls to anybody rotating
  * connections. Keyed by the literal address, a fresh `+tag` on each request
- * bought a fresh allowance, and the inbox had no ceiling at all.
+ * would buy a fresh allowance, and the inbox would have no ceiling at all.
  *
  * So the sub-address goes at every domain, and dots go **only at Gmail**. Gmail
  * ignores every dot in a local part and answers at `googlemail.com` too, so
  * folding them there never merges two people. Elsewhere a dot may be the whole
  * difference between two mailboxes, and folding it would put strangers on one
  * allowance. A tag nobody honours is the cheaper mistake: two people sharing
- * five links an hour, against one person receiving unbounded mail.
+ * one address allowance, against one person receiving unbounded mail.
  *
- * The `ip` and `account` scopes are only trimmed and lower-cased, as before.
+ * The `ip` and `account` scopes are only trimmed and lower-cased.
  */
 export function principalKey({ scope, id }: CeilingPrincipal): string {
   const normalised = id.trim().toLowerCase();
@@ -357,7 +357,8 @@ export function principalKey({ scope, id }: CeilingPrincipal): string {
   return `${scope}:${digest}`;
 }
 
-const GMAIL_DOMAINS = new Set(["gmail.com", "googlemail.com"]);
+const GMAIL = "gmail.com";
+const GMAIL_DOMAINS = new Set([GMAIL, "googlemail.com"]);
 
 /**
  * The mailbox a trimmed, lower-cased address delivers to, or the address itself
@@ -382,7 +383,7 @@ function mailboxOf(address: string): string {
   const local = gmail ? tagless.replaceAll(".", "") : tagless;
   if (local === "") return address;
 
-  return `${local}@${gmail ? "gmail.com" : domain}`;
+  return `${local}@${gmail ? GMAIL : domain}`;
 }
 
 /**

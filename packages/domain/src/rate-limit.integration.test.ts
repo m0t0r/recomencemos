@@ -18,6 +18,7 @@
  */
 
 import { eq } from "drizzle-orm";
+import type { CeilingPrincipal } from "#rate-limit";
 import { CEILINGED_ACTIONS, chargeCeiling, CEILINGS, principalKey } from "#rate-limit";
 import { rateCounter } from "#schema";
 import { test, type TestDatabase } from "#testing/fixtures";
@@ -37,8 +38,13 @@ const noon = new Date("2026-08-27T12:00:00.000Z");
  * requires: the handle now arrives per test, so nothing at module scope holds
  * one.
  */
-async function chargeRepeatedly(database: TestDatabase, times: number, at: Date = noon) {
-  let outcome = await chargeCeiling(database.db, ana, "requestMagicLink", at);
+async function chargeRepeatedly(
+  database: TestDatabase,
+  times: number,
+  at: Date = noon,
+  principalFor: (charge: number) => CeilingPrincipal = () => ana,
+) {
+  let outcome = await chargeCeiling(database.db, principalFor(0), "requestMagicLink", at);
 
   for (let charge = 1; charge < times; charge += 1) {
     // Sequential on purpose, and not a missed `Promise.all`: this helper exists
@@ -47,7 +53,7 @@ async function chargeRepeatedly(database: TestDatabase, times: number, at: Date 
     // something else has its own case, "counts concurrent charges without
     // losing any".
     // oxlint-disable-next-line no-await-in-loop
-    outcome = await chargeCeiling(database.db, ana, "requestMagicLink", at);
+    outcome = await chargeCeiling(database.db, principalFor(charge), "requestMagicLink", at);
   }
 
   return outcome;
@@ -112,22 +118,15 @@ describe("chargeCeiling, against the committed migrations", () => {
     },
   );
 
-  /**
-   * **The ceiling protects the person receiving the mail**, and the per-IP one
-   * does not: an attacker rotating connections is bounded only by this counter.
-   * So a new tag on each request must spend the same allowance, or changing the
-   * tag is a way round the only limit that protects her inbox.
-   */
+  // A new tag on each request spends the same allowance as the bare address.
   test("spends one allowance however the address is tagged", async ({ database }) => {
-    for (let tag = 1; tag <= CEILINGS.requestMagicLink.address.max; tag += 1) {
-      const tagged = { scope: "address", id: `ana+${tag}@example.co` } as const;
-
-      // Sequential: the assertion is that each of the first five is allowed, in order.
-      // oxlint-disable-next-line no-await-in-loop
-      expect((await chargeCeiling(database.db, tagged, "requestMagicLink", noon)).allowed).toBe(
-        true,
-      );
-    }
+    const lastTagged = await chargeRepeatedly(
+      database,
+      CEILINGS.requestMagicLink.address.max,
+      noon,
+      (charge) => ({ scope: "address", id: `ana+${charge}@example.co` }),
+    );
+    expect(lastTagged.allowed).toBe(true);
 
     expect((await chargeCeiling(database.db, ana, "requestMagicLink", noon)).allowed).toBe(false);
   });
