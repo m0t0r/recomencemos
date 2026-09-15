@@ -159,6 +159,30 @@ describe("pausing and resuming", () => {
     expect((await rowOf(database, ana.accountId)).pausedAt).toBeNull();
   });
 
+  /**
+   * **As often as she likes** (#311). Eleven of each in one day is one past the
+   * ceiling the switch used to share. Nothing is counted either: the flips leave
+   * `rate_counter` exactly as they found it.
+   */
+  test("pauses and resumes eleven times in a day, and every call succeeds", async ({
+    database,
+  }) => {
+    const ana = await aWorker(database);
+    const countersBefore = await database.db.select().from(schema.rateCounter);
+
+    for (let flip = 0; flip < 11; flip += 1) {
+      // Sequential on purpose: a ceiling counts flips in order, and a pause and
+      // a resume run together would race each other on one row.
+      // oxlint-disable-next-line no-await-in-loop
+      expect(await pauseProfile(database.db, ana.accountId, PAUSED_AT)).toEqual({ ok: true });
+      // oxlint-disable-next-line no-await-in-loop
+      expect(await resumeProfile(database.db, ana.accountId)).toEqual({ ok: true });
+    }
+
+    expect((await rowOf(database, ana.accountId)).pausedAt).toBeNull();
+    expect(await database.db.select().from(schema.rateCounter)).toEqual(countersBefore);
+  });
+
   test("answers no_profile to an Account that never published", async ({ database }) => {
     const nobody = await signedInAccountId(database, "sin-perfil@recomencemos.test");
 

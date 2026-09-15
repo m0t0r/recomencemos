@@ -30,6 +30,7 @@
     "#testing/auth-stack": "./src/testing/auth-stack.ts",
     "#testing/database": "./src/testing/database.ts",
     "#testing/fixtures": "./src/testing/fixtures.ts",
+    "#testing/migrations": "./src/testing/migrations.ts",
     "#testing/parties": "./src/testing/parties.ts",
     "#user-messages": "./src/user-messages.ts"
   },

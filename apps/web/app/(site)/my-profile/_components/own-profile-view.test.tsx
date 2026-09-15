@@ -28,7 +28,6 @@ import {
   PUBLISHED_CONFIRMATION,
   RESUMED_CONFIRMATION,
   SAVED_CONFIRMATION,
-  STILL_VISIBLE,
   VISIBLE_LINE,
   WALL_LINK,
   waitingCount,
@@ -232,29 +231,11 @@ describe("her Pause", () => {
   });
 
   /**
-   * **The ceiling's refusal, and the state it left her in.** The refusal's own
-   * sentence carries the count and the wait; the switch adds which state the
-   * profile is in now, because only it knows.
-   */
-  it("says the ceiling's refusal and which state she is in now", async () => {
-    const refusal = "Usaste el botón de pausa 10 veces hoy, que es el máximo.";
-    pauseProfile.mockResolvedValue({
-      serverError: { code: "rate_limited", message: refusal, retryAfter: 720 },
-    });
-
-    render(<OwnProfileView profile={profile} offers={[]} arrival={null} />);
-    fireEvent.click(screen.getByRole("switch", { name: PAUSE_SWITCH_LABEL }));
-
-    expect(await screen.findByText(refusal)).toBeInTheDocument();
-    expect(screen.getByText(STILL_VISIBLE)).toBeInTheDocument();
-  });
-
-  /**
    * **What a hydrated tap sends, and what it gets back.** Driven through a
-   * transport fault rather than the ceiling, because the fault is the outcome
-   * that outlives the ceiling (#311). A fault is thrown on the server and
-   * reaches the browser as the generic code with operator English, which is
-   * exactly the message this surface must never render.
+   * transport fault, the outcome the switch renders now that no ceiling refuses
+   * a tap (#311). A fault is thrown on the server and reaches the browser as the
+   * generic code with operator English, which is exactly the message this
+   * surface must never render.
    */
   describe("a hydrated tap", () => {
     const FAULT = {

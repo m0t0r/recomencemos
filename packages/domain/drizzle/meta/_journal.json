@@ -176,6 +176,20 @@
       "when": 1789485797936,
       "tag": "0024_relax_account_issuer",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789491412986,
+      "tag": "0025_drop_pause_counters",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789491445645,
+      "tag": "0026_pause_has_no_ceiling",
+      "breakpoints": true
     }
   ]
 }

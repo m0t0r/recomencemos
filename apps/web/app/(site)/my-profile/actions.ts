@@ -16,9 +16,9 @@
  * profile moves is the session's, never a value in the body — there is no field
  * and no bound argument, so there is nothing for a caller to name.
  *
- * **Both charge one ceiling**, `profilePause`, ten a day per Account whichever
- * way she flips it. The charge comes before the body, so a tap refused by the
- * ceiling writes nothing and the page renders the count and the wait.
+ * **Neither charges a ceiling** (#311). A flip reaches only her own profile and
+ * spends neither of the two resources NFR26 bounds, so she may use the switch as
+ * often as she likes.
  *
  * **Success is a redirect back to the page, carrying which way it went**, so the
  * page can announce the new state in its focused status region — the same
@@ -38,8 +38,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { photoKeyArg } from "@/app/_lib/profile-form/schema";
-import { type AccountContext, accountActionClient } from "@/lib/account";
-import { rateLimit, returnActionError } from "@/lib/safe-action";
+import { accountActionClient } from "@/lib/account";
+import { returnActionError } from "@/lib/safe-action";
 
 /** What a photo that landed answers with: it is waiting on a person now. */
 export interface PhotoChanged {
@@ -91,16 +91,8 @@ export const changePhoto = accountActionClient
  */
 const switchInputSchema = z.preprocess(() => ({}), z.object({}));
 
-type SwitchInput = z.infer<typeof switchInputSchema>;
-
-const chargeTheSwitch = rateLimit<SwitchInput, AccountContext>({
-  action: "profilePause",
-  principals: [{ scope: "account", id: (_input, ctx) => ctx.session.accountId }],
-});
-
 export const pauseProfile = accountActionClient
   .inputSchema(switchInputSchema)
-  .useValidated(chargeTheSwitch)
   .stateAction(async ({ ctx }) => {
     const outcome = await profiles.pause(ctx.session.accountId, new Date());
 
@@ -113,7 +105,6 @@ export const pauseProfile = accountActionClient
 
 export const resumeProfile = accountActionClient
   .inputSchema(switchInputSchema)
-  .useValidated(chargeTheSwitch)
   .stateAction(async ({ ctx }) => {
     const outcome = await profiles.resume(ctx.session.accountId);
 
